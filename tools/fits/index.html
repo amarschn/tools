@@ -1,0 +1,330 @@
+<div class="input-group">
+    <label for="nominal">Nominal Dimension (mm)</label>
+    <input type="number" id="nominal" value="10" step="0.1">
+</div>
+
+<div class="input-group">
+    <label for="fit-type">Fit Type</label>
+    <select id="fit-type"></select>
+</div>
+
+<div class="results">
+    <div id="fit-description"></div>
+    <div id="hole-limits"></div>
+    <div id="shaft-limits"></div>
+    <div id="clearance-interference"></div>
+    <div id="applications"></div>
+</div>
+
+<svg id="tolerance-viz" width="100%" height="300"></svg>
+</div>
+
+<script>
+// Tolerance data (in μm, then converted to mm in calculations)
+const IT_GRADES = {
+    "1-3": { "7": 10, "6": 6 },
+    "3-6": { "7": 12, "6": 8 },
+    "6-10": { "7": 15, "6": 9 },
+    "10-18": { "7": 18, "6": 11 },
+    "18-30": { "7": 21, "6": 13 },
+    "30-50": { "7": 25, "6": 16 }
+};
+
+// Expanded fits data with additional engineering fits. 
+// Each fit entry includes:
+//   name - a descriptive title,
+//   type - clearance, interference, or transition,
+//   description - an explanation of the fit behavior,
+//   applications - typical uses.
+const FITS = {
+    "H7/h6": {
+        name: "H7/h6 - Sliding Fit",
+        type: "clearance",
+        description: "A free-running fit with minimal interference, ideal for components that require smooth motion.",
+        applications: ["Gears", "Pulleys", "Bearing end caps"]
+    },
+    "H7/j6": {
+        name: "H7/j6 - Close Running Fit",
+        type: "clearance",
+        description: "A close running fit that minimizes play while still ensuring motion.",
+        applications: ["Shaft bearings", "Light duty gears"]
+    },
+    "H7/k6": {
+        name: "H7/k6 - Transition Fit",
+        type: "transition",
+        description: "A balanced transition fit with the potential for slight clearance or interference, used for accurate alignment.",
+        applications: ["Gear hubs", "Pulleys", "Levers"]
+    },
+    "H7/p6": {
+        name: "H7/p6 - Light Press Fit",
+        type: "interference",
+        description: "A light interference fit that permits assembly with low press forces.",
+        applications: ["Bearing bushes", "Light duty pins"]
+    },
+    "H7/s6": {
+        name: "H7/s6 - Press Fit",
+        type: "interference",
+        description: "A medium interference fit ensuring a secure, permanent assembly.",
+        applications: ["Gears", "Pulleys", "Permanent assemblies"]
+    },
+    // Additional fits:
+    "H7/g6": {
+        name: "H7/g6 - Ultra Loose Fit",
+        type: "clearance",
+        description: "Provides extra clearance for high-speed or thermally expansive applications. The shaft is made slightly smaller, increasing free movement and reducing binding risks.",
+        applications: ["High-speed bearings", "Rotating machinery", "Temperature-sensitive joints"]
+    },
+    "H7/i6": {
+        name: "H7/i6 - Narrow Transition Fit (Clearance Biased)",
+        type: "transition",
+        description: "A narrow transition fit biased toward clearance. It offers a minimal gap for precision applications without significant interference.",
+        applications: ["Precision shafts", "Alignment mechanisms"]
+    },
+    "H7/l6": {
+        name: "H7/l6 - Narrow Transition Fit (Interference Biased)",
+        type: "transition",
+        description: "A narrow transition fit with a slight interference bias for a secure yet adjustable connection. It is useful when a slight binding is preferred for positional stability.",
+        applications: ["Gear assemblies", "Precision couplings"]
+    },
+    "H7/m6": {
+        name: "H7/m6 - Light Interference Fit",
+        type: "interference",
+        description: "A light interference fit that is tighter than standard press fits. It is ideal for permanent assemblies where disassembly is not intended.",
+        applications: ["Bearing seats", "Fixed connections", "Press-fits"]
+    },
+    "H7/n6": {
+        name: "H7/n6 - Heavy Interference Fit",
+        type: "interference",
+        description: "Designed for high-load, high-stress applications, this heavy interference fit ensures maximum rigidity and minimal movement between parts.",
+        applications: ["Heavy-duty gears", "Structural components", "High-stress shafts"]
+    }
+};
+
+// Returns the IT grade tolerance value (converted to mm) for a given size and grade number.
+function getITGrade(size, grade) {
+    for (const [range, grades] of Object.entries(IT_GRADES)) {
+        const [min, max] = range.split('-').map(Number);
+        if (size >= min && size <= max) {
+            return grades[grade] / 1000;
+        }
+    }
+    throw new Error(`Size ${size} mm not found in tolerance tables`);
+}
+
+// Parse the fit name into its hole and shaft components.
+function parseFit(fitName) {
+    const [hole, shaft] = fitName.split('/');
+    return {
+        hole: {
+            letter: hole[0],
+            grade: parseInt(hole.slice(1))
+        },
+        shaft: {
+            letter: shaft[0],
+            grade: parseInt(shaft.slice(1))
+        }
+    };
+}
+
+// Calculate the tolerance limits for hole and shaft based on the fit specification.
+function calculateLimits(nominal, fitName) {
+    const parsed = parseFit(fitName);
+    
+    // Get tolerance values for hole and shaft (assumed in μm, then converted to mm)
+    const holeTol = getITGrade(nominal, parsed.hole.grade);
+    const shaftTol = getITGrade(nominal, parsed.shaft.grade);
+
+    // For the hole, we assume the lower deviation is zero and the upper tolerance is positive.
+    const holeLimits = {
+        upper: holeTol,
+        lower: 0
+    };
+
+    let shaftLimits;
+    // Calculate shaft limits based on the shaft fit letter.
+    // The following cases have been defined:
+    // h: Conventional sliding fit with zero upper deviation.
+    // j: Symmetric (transition) fit split equally.
+    // k: Transition fit biased toward interference.
+    // p, s: Increased interference with an upward shift based on the hole tolerance.
+    // New cases:
+    // g: Ultra Loose Clearance Fit – shaft is shifted negatively to create extra clearance.
+    // i: Narrow Transition (clearance-biased) – average deviation leans toward clearance.
+    // l: Narrow Transition (interference-biased) – average deviation leans toward interference.
+    // m: Light Interference Fit – both limits positive but with a modest spread.
+    // n: Heavy Interference Fit – larger positive deviations to ensure maximum interference.
+    switch (parsed.shaft.letter) {
+        case 'h':
+            shaftLimits = { upper: 0, lower: -shaftTol };
+            break;
+        case 'j':
+            shaftLimits = { upper: shaftTol/2, lower: -shaftTol/2 };
+            break;
+        case 'k':
+            shaftLimits = { upper: shaftTol, lower: 0 };
+            break;
+        case 'p':
+            shaftLimits = { upper: holeTol/4 + shaftTol, lower: holeTol/4 };
+            break;
+        case 's':
+            shaftLimits = { upper: holeTol/2 + shaftTol, lower: holeTol/2 };
+            break;
+        case 'g':
+            // Ultra Loose Fit: greater negative deviations for increased clearance.
+            shaftLimits = { upper: -0.5 * shaftTol, lower: -1.5 * shaftTol };
+            break;
+        case 'i':
+            // Narrow transition, clearance biased: asymmetrical split with a bias toward clearance.
+            shaftLimits = { upper: shaftTol/4, lower: -3 * shaftTol/4 };
+            break;
+        case 'l':
+            // Narrow transition, interference biased: asymmetrical split with a bias toward interference.
+            shaftLimits = { upper: 3 * shaftTol/4, lower: -shaftTol/4 };
+            break;
+        case 'm':
+            // Light interference fit: both deviations are positive to enforce a slight press fit.
+            shaftLimits = { upper: 1.2 * shaftTol, lower: 0.2 * shaftTol };
+            break;
+        case 'n':
+            // Heavy interference fit: even higher positive deviations for maximum interference.
+            shaftLimits = { upper: 1.5 * shaftTol, lower: 0.5 * shaftTol };
+            break;
+        default:
+            throw new Error(`Shaft fit type ${parsed.shaft.letter} not supported`);
+    }
+
+    return { holeLimits, shaftLimits };
+}
+
+// Draw the tolerance visualization diagram.
+function updateVisualization(nominal, limits) {
+    const svg = document.getElementById('tolerance-viz');
+    svg.innerHTML = '';
+    
+    const width = svg.clientWidth;
+    const height = svg.clientHeight;
+    const scale = 2000; // pixels per mm
+    const centerY = height / 2;
+    
+    // Helper function to create SVG elements.
+    function createSVGElement(type, attributes) {
+        const element = document.createElementNS("http://www.w3.org/2000/svg", type);
+        for (const [key, value] of Object.entries(attributes)) {
+            element.setAttribute(key, value);
+        }
+        return element;
+    }
+    
+    // Draw nominal line.
+    svg.appendChild(createSVGElement('line', {
+        x1: 50,
+        x2: width - 50,
+        y1: centerY,
+        y2: centerY,
+        stroke: '#666',
+        'stroke-dasharray': '5,5'
+    }));
+    
+    // Draw hole tolerance zone.
+    svg.appendChild(createSVGElement('rect', {
+        x: width/2 - 100,
+        y: centerY - limits.holeLimits.upper * scale,
+        width: 200,
+        height: (limits.holeLimits.upper - limits.holeLimits.lower) * scale,
+        fill: '#60a5fa',
+        opacity: '0.5'
+    }));
+    
+    // Draw shaft tolerance zone.
+    svg.appendChild(createSVGElement('rect', {
+        x: width/2 - 100,
+        y: centerY - limits.shaftLimits.upper * scale,
+        width: 200,
+        height: (limits.shaftLimits.upper - limits.shaftLimits.lower) * scale,
+        fill: '#f97316',
+        opacity: '0.5'
+    }));
+    
+    // Add labels.
+    const labels = [
+        {text: `Nominal ${nominal} mm`, y: centerY},
+        {text: `Hole +${limits.holeLimits.upper.toFixed(3)}/-${limits.holeLimits.lower.toFixed(3)} mm`, 
+         y: centerY - limits.holeLimits.upper * scale - 10},
+        {text: `Shaft +${limits.shaftLimits.upper.toFixed(3)}/-${Math.abs(limits.shaftLimits.lower).toFixed(3)} mm`, 
+         y: centerY - limits.shaftLimits.lower * scale + 20}
+    ];
+    
+    labels.forEach(label => {
+        const text = createSVGElement('text', {
+            x: 10,
+            y: label.y,
+            'font-size': '12',
+            fill: '#000'
+        });
+        text.textContent = label.text;
+        svg.appendChild(text);
+    });
+}
+
+// Main calculation function: computes fit limits, clearance/interference ranges, and updates the UI.
+function calculateFit() {
+    const nominal = parseFloat(document.getElementById('nominal').value);
+    const fitType = document.getElementById('fit-type').value;
+    const fitData = FITS[fitType];
+
+    try {
+        const limits = calculateLimits(nominal, fitType);
+        
+        // Compute clearance/interference range.
+        const maxClearance = limits.holeLimits.upper - limits.shaftLimits.lower;
+        const minClearance = limits.holeLimits.lower - limits.shaftLimits.upper;
+        
+        // Update the descriptions and calculated limits.
+        document.getElementById('fit-description').innerHTML = 
+            `<strong>Type:</strong> <span class="fit-type fit-type-${fitData.type}">${fitData.type}</span><br>${fitData.description}`;
+        
+        document.getElementById('hole-limits').innerHTML = 
+            `<strong>Hole Limits:</strong> +${limits.holeLimits.upper.toFixed(3)}/-${limits.holeLimits.lower.toFixed(3)} mm`;
+        
+        document.getElementById('shaft-limits').innerHTML = 
+            `<strong>Shaft Limits:</strong> +${limits.shaftLimits.upper.toFixed(3)}/-${Math.abs(limits.shaftLimits.lower).toFixed(3)} mm`;
+        
+        let fitText;
+        if (fitData.type === 'clearance') {
+            fitText = `<strong>Clearance Range:</strong> ${minClearance.toFixed(3)} to ${maxClearance.toFixed(3)} mm`;
+        } else if (fitData.type === 'interference') {
+            fitText = `<strong>Interference Range:</strong> ${Math.abs(maxClearance).toFixed(3)} to ${Math.abs(minClearance).toFixed(3)} mm`;
+        } else {
+            fitText = `<strong>Fit Range:</strong> ${minClearance.toFixed(3)} to ${maxClearance.toFixed(3)} mm`;
+        }
+        document.getElementById('clearance-interference').innerHTML = fitText;
+        
+        document.getElementById('applications').innerHTML = 
+            `<strong>Typical Applications:</strong> ${fitData.applications.join(', ')}`;
+
+        updateVisualization(nominal, limits);
+
+    } catch (error) {
+        console.error('Calculation error:', error);
+        alert(`Calculation error: ${error.message}`);
+    }
+}
+
+// Initialize the page: populate the dropdown with all defined fits and trigger the initial calculation.
+document.addEventListener('DOMContentLoaded', () => {
+    const select = document.getElementById('fit-type');
+    for (const [fit, data] of Object.entries(FITS)) {
+        const option = document.createElement('option');
+        option.value = fit;
+        option.textContent = data.name;
+        select.appendChild(option);
+    }
+
+    select.addEventListener('change', calculateFit);
+    document.getElementById('nominal').addEventListener('input', calculateFit);
+
+    calculateFit();
+});
+</script>
+</body>
+</html>
