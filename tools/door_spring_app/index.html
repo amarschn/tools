@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Trap Door Gas Spring Calculator</title>
+
+  <!-- Load Chart.js from a CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Load Pyodide from a CDN -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; 
+      padding: 0;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    header, footer {
+      background: #343a40;
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    main {
+      max-width: 1000px;
+      margin: 1rem auto;
+      background: #fff;
+      border-radius: 5px;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* details element styling for collapsible sections */
+    details {
+      margin-bottom: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #dee2e6;
+    }
+    details summary {
+      cursor: pointer;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #495057;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+
+    label {
+      display: inline-block;
+      width: 220px;
+      margin-right: 0.5rem;
+      vertical-align: top;
+    }
+    input[type="number"] {
+      width: 80px;
+      margin-bottom: 0.5rem;
+    }
+    button {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    #visualCanvas {
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      display: block;
+      margin: 0 auto;
+      width: 600px;
+      height: 450px;
+    }
+    .results p {
+      margin: 0.3rem 0;
+    }
+    .charts-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: space-around;
+    }
+    .chart-box {
+      flex: 1 1 450px;
+      min-width: 300px;
+      max-width: 500px;
+    }
+    .chart-box canvas {
+      width: 100%;
+      height: 400px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Trap Door Gas Spring Calculator</h1>
+</header>
+
+<main>
+  <!-- 1) INPUT PARAMETERS -->
+  <details open>
+    <summary>1) Input Parameters</summary>
+    <label for="massDoor">Door Mass (kg):</label>
+    <input type="number" id="massDoor" value="15" step="0.1"><br>
+
+    <label for="lengthDoor">Door Length (m):</label>
+    <input type="number" id="lengthDoor" value="0.8" step="0.01"><br>
+
+    <label for="openAngle">Open Angle (deg):</label>
+    <input type="number" id="openAngle" value="90" step="1"><br>
+
+    <label for="doorMountFrac">Door Mount Fraction:</label>
+    <input type="number" id="doorMountFrac" value="0.7" step="0.01">
+    <small>(0 = hinge, 1 = free edge)</small><br>
+
+    <label for="cabMountX">Cab Mount X (m):</label>
+    <input type="number" id="cabMountX" value="0.4" step="0.01"><br>
+
+    <label for="cabMountY">Cab Mount Y (m):</label>
+    <input type="number" id="cabMountY" value="0.1" step="0.01"><br>
+
+    <label for="numSprings">Number of Springs:</label>
+    <input type="number" id="numSprings" value="1" step="1" min="1"><br>
+
+    <label for="springNominal">Spring Nominal Force (N):</label>
+    <input type="number" id="springNominal" value="200" step="10">
+    <small>(e.g. 100, 200, 300...)</small><br>
+
+    <label for="springVariation">Spring Variation ±(%):</label>
+    <input type="number" id="springVariation" value="10" step="1">
+    <small>(e.g. 10 means ±10% of nominal)</small><br>
+
+    <label for="handleFrac">Handle Fraction (0..1):</label>
+    <input type="number" id="handleFrac" value="0.9" step="0.01">
+    <small>(where 0=hinge, 1=free edge)</small><br>
+
+    <button id="computeBtn">Compute & Update</button>
+  </details>
+
+  <!-- 2) VISUALIZATION -->
+  <details>
+    <summary>2) Visualization</summary>
+    <p>
+      Shows the door in down (<strong>solid</strong>) and up (<strong>semi-transparent</strong>) positions.
+      Gravity is indicated by a downward arrow. The hinge is black, the handle is green, 
+      and the spring is blue. The drawing auto-scales and centers to fit large or small doors.
+    </p>
+    <canvas id="visualCanvas" width="600" height="450"></canvas>
+  </details>
+
+  <!-- 3) RESULTS + CHARTS -->
+  <details>
+    <summary>3) Results</summary>
+    <div class="results">
+      <p id="springLengthsText"></p>
+      <p id="strokeText"></p>
+      <p id="forceText"></p>
+      <p id="handleForceText"></p>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-box">
+        <h4>Total Spring Force vs. Angle</h4>
+        <canvas id="springForceChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h4>Handle Force vs. Angle</h4>
+        <canvas id="handleForceChart"></canvas>
+      </div>
+    </div>
+  </details>
+
+  <!-- 4) ADDITIONAL INFO -->
+  <details>
+    <summary>4) Additional Info</summary>
+    <p>
+      This calculator handles trap-door-style panels that rotate from horizontal 
+      (<em>down</em>) at <code>0&deg;</code> to a user-specified <code>openAngle</code>.
+      Key steps:
+    </p>
+    <ol>
+      <li><strong>Door Torque:</strong> 
+        <code>\( \tau_{door}(\theta) = W \times \frac{L}{2} \cos(\theta)\)</code>,
+        assuming uniform mass distribution.
+      </li>
+      <li><strong>Spring Length:</strong> 
+        We find the distance between the <em>door mount</em> (on the door at <code>doorMountFrac</code>)
+        and the <em>cabinet mount</em> (<code>cabMountX, cabMountY</code>) 
+        using basic geometry for each angle.
+      </li>
+      <li><strong>Min/Max Length & Stroke:</strong> 
+        We track the <em>shortest</em> and <em>longest</em> spring length from 
+        <code>0&deg;</code> to <code>openAngle</code>. The difference is the <em>stroke</em>. 
+      </li>
+      <li><strong>Spring Force Variation:</strong> 
+        Each spring is assumed to vary <code>±springVariation%</code> from its nominal. 
+        This is modeled linearly between <code>minLen</code> (fully compressed) and 
+        <code>maxLen</code> (fully extended).
+      </li>
+      <li><strong>Number of Springs:</strong> 
+        The total spring force is 
+        <code>SpringForceSingle &times; numSprings</code>.
+      </li>
+      <li><strong>Handle Force:</strong> 
+        The net torque (<code>doorTorque - springTorque</code>) 
+        is divided by the door radius at the handle, 
+        <code>handleFrac &times; L</code>.
+      </li>
+    </ol>
+    <p>
+      Real gas springs can have more complex, non-linear force curves, 
+      friction, or breakaway force. This tool is for approximate sizing & 
+      conceptual understanding.
+    </p>
+  </details>
+</main>
+
+<footer>
+  <p>&copy; 2025 - Trap Door Calculator with Auto-Scaling View</p>
+</footer>
+
+<script>
+  ///////////////////////////////////////////////////////////////////////////
+  // 1) Load Pyodide & calc.py
+  ///////////////////////////////////////////////////////////////////////////
+
+  let pyodide; // we'll store the Pyodide instance here
+
+  async function initPyodideAndPython() {
+    // 1. Load Pyodide
+    pyodide = await loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/"
+    });
+    console.log("Pyodide loaded!");
+
+    // 2. Fetch calc.py and run it in Pyodide.
+    //    Make sure calc.py is in the same folder as this index.html.
+    const resp = await fetch("calc.py");
+    const calcSource = await resp.text();
+    await pyodide.runPythonAsync(calcSource); 
+    console.log("calc.py loaded into Pyodide!");
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 2) Canvas Drawing (unchanged from your original code)
+  ///////////////////////////////////////////////////////////////////////////
+
+  function drawArrow(ctx, x1, y1, x2, y2, arrowSize=8) {
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+    const angle = Math.atan2(y2-y1, x2-x1);
+    ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2 - arrowSize*Math.cos(angle - Math.PI/6), y2 - arrowSize*Math.sin(angle - Math.PI/6));
+    ctx.lineTo(x2 - arrowSize*Math.cos(angle + Math.PI/6), y2 - arrowSize*Math.sin(angle + Math.PI/6));
+    ctx.lineTo(x2,y2);
+    ctx.fill();
+  }
+
+  function boundingBoxForAngle(lengthDoor, thetaDeg, doorMountFrac, cabMountX, cabMountY, handleFrac) {
+    const thetaRad = thetaDeg*Math.PI/180;
+    const doorEndX = lengthDoor*Math.cos(thetaRad);
+    const doorEndY = lengthDoor*Math.sin(thetaRad);
+    const doorMountX = doorMountFrac*lengthDoor*Math.cos(thetaRad);
+    const doorMountY = doorMountFrac*lengthDoor*Math.sin(thetaRad);
+    const handleX = handleFrac*lengthDoor*Math.cos(thetaRad);
+    const handleY = handleFrac*lengthDoor*Math.sin(thetaRad);
+
+    let points = [
+      {x:0, y:0}, 
+      {x:doorEndX, y:doorEndY},
+      {x:doorMountX, y:doorMountY},
+      {x:cabMountX, y:cabMountY},
+      {x:handleX,   y:handleY}
+    ];
+
+    let minX = Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    for (const pt of points) {
+      if(pt.x<minX) minX=pt.x;
+      if(pt.x>maxX) maxX=pt.x;
+      if(pt.y<minY) minY=pt.y;
+      if(pt.y>maxY) maxY=pt.y;
+    }
+    return {minX, maxX, minY, maxY};
+  }
+
+  function combinedBoundingBox(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac) {
+    const bbDown = boundingBoxForAngle(lengthDoor, 0, doorMountFrac, cabMountX, cabMountY, handleFrac);
+    const bbUp   = boundingBoxForAngle(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac);
+
+    const minX = Math.min(bbDown.minX, bbUp.minX);
+    const maxX = Math.max(bbDown.maxX, bbUp.maxX);
+    const minY = Math.min(bbDown.minY, bbUp.minY);
+    const maxY = Math.max(bbDown.maxY, bbUp.maxY);
+
+    return {minX, maxX, minY, maxY};
+  }
+
+  function drawDoorState(ctx, angleDeg, lengthDoor,
+    doorMountFrac, cabMountX, cabMountY, handleFrac,
+    scale, offsetX, offsetY,
+    colorDoor, colorSpring, colorHandle, alpha=1.0
+  ) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const thetaRad = angleDeg*Math.PI/180;
+    const hinge = {x:0, y:0};
+    const doorEnd = {
+      x: lengthDoor*Math.cos(thetaRad),
+      y: lengthDoor*Math.sin(thetaRad)
+    };
+    const doorMount = {
+      x: doorMountFrac*lengthDoor*Math.cos(thetaRad),
+      y: doorMountFrac*lengthDoor*Math.sin(thetaRad)
+    };
+    const handlePt = {
+      x: handleFrac*lengthDoor*Math.cos(thetaRad),
+      y: handleFrac*lengthDoor*Math.sin(thetaRad)
+    };
+    const cab = {x: cabMountX, y: cabMountY};
+
+    function tx(p){
+      return {
+        x: offsetX + p.x*scale,
+        y: offsetY - p.y*scale
+      };
+    }
+    const hingeC   = tx(hinge);
+    const doorEndC = tx(doorEnd);
+    const doorMountC = tx(doorMount);
+    const cabC     = tx(cab);
+    const handleC  = tx(handlePt);
+
+    // door line
+    ctx.strokeStyle = colorDoor;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(hingeC.x, hingeC.y);
+    ctx.lineTo(doorEndC.x, doorEndC.y);
+    ctx.stroke();
+
+    // spring line
+    ctx.strokeStyle = colorSpring;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(doorMountC.x, doorMountC.y);
+    ctx.lineTo(cabC.x, cabC.y);
+    ctx.stroke();
+
+    // door mount
+    ctx.fillStyle = colorSpring;
+    ctx.beginPath();
+    ctx.arc(doorMountC.x, doorMountC.y, 4, 0, 2*Math.PI);
+    ctx.fill();
+
+    // cabinet mount
+    ctx.beginPath();
+    ctx.arc(cabC.x, cabC.y, 4, 0, 2*Math.PI);
+    ctx.fill();
+
+    // handle
+    ctx.fillStyle = colorHandle;
+    ctx.beginPath();
+    ctx.arc(handleC.x, handleC.y, 5, 0, 2*Math.PI);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawDiagram(ctx, w, h,
+    lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+  ) {
+    ctx.clearRect(0,0,w,h);
+    const {minX, maxX, minY, maxY} = combinedBoundingBox(
+      lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+    );
+
+    const bbWidth  = maxX - minX;
+    const bbHeight = maxY - minY;
+
+    const margin = 20;
+    let scaleX = (w - 2*margin) / bbWidth;
+    let scaleY = (h - 2*margin) / bbHeight;
+    let scale = Math.min(scaleX, scaleY);
+    if(!Number.isFinite(scale)) scale=50; 
+
+    const bbCenterX = (minX + maxX)/2;
+    const bbCenterY = (minY + maxY)/2;
+    const canvasCenterX = w/2;
+    const canvasCenterY = h/2;
+
+    const offsetX = canvasCenterX - bbCenterX*scale;
+    const offsetY = canvasCenterY + bbCenterY*scale;
+
+    // Gravity arrow
+    ctx.strokeStyle = "#444";
+    ctx.fillStyle = "#444";
+    ctx.lineWidth = 2;
+    drawArrow(ctx, 50, 20, 50, 60, 8);
+    ctx.font="14px Arial";
+    ctx.fillText("Gravity", 55, 60);
+
+    // Door down
+    drawDoorState(ctx, 0, lengthDoor,
+      doorMountFrac, cabMountX, cabMountY, handleFrac,
+      scale, offsetX, offsetY,
+      "#444","blue","green",1.0
+    );
+
+    // Door up
+    drawDoorState(ctx, openAngle, lengthDoor,
+      doorMountFrac, cabMountX, cabMountY, handleFrac,
+      scale, offsetX, offsetY,
+      "#999","blue","green",0.5
+    );
+
+    // Angle arc near hinge
+    ctx.save();
+    ctx.strokeStyle="#666";
+    ctx.beginPath();
+    const hingeC = {x: offsetX, y: offsetY};
+    // arc from PI to PI+openAngle
+    ctx.arc(hingeC.x, hingeC.y, 40, Math.PI, Math.PI+(openAngle*Math.PI/180), false);
+    ctx.stroke();
+    ctx.fillStyle="#000";
+    ctx.font="14px Arial";
+    ctx.fillText(`${openAngle}°`, hingeC.x+45, hingeC.y+5);
+    ctx.restore();
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 3) Charts
+  ///////////////////////////////////////////////////////////////////////////
+
+  let springForceChart = null;
+  let handleForceChart = null;
+
+  function updateCharts(springData, handleData, angles) {
+    const ctx1 = document.getElementById("springForceChart").getContext("2d");
+    if(springForceChart) springForceChart.destroy();
+    springForceChart = new Chart(ctx1, {
+      type:'line',
+      data:{
+        labels: angles,
+        datasets:[{
+          label:'Spring Force (N)',
+          data: springData
+        }]
+      },
+      options:{
+        responsive:true,
+        scales:{
+          x:{title:{display:true, text:'Door Angle (°)'}},
+          y:{title:{display:true, text:'Spring Force (N)'}}
+        }
+      }
+    });
+
+    const ctx2 = document.getElementById("handleForceChart").getContext("2d");
+    if(handleForceChart) handleForceChart.destroy();
+    handleForceChart = new Chart(ctx2, {
+      type:'line',
+      data:{
+        labels: angles,
+        datasets:[{
+          label:'Handle Force (N) (+ Up / - Down)',
+          data: handleData
+        }]
+      },
+      options:{
+        responsive:true,
+        scales:{
+          x:{title:{display:true, text:'Door Angle (°)'}},
+          y:{title:{display:true, text:'Handle Force (N)'}}
+        }
+      }
+    });
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 4) Main compute function (calls Python)
+  ///////////////////////////////////////////////////////////////////////////
+
+  async function computeEverything() {
+    const massDoor   = parseFloat(document.getElementById("massDoor").value);
+    const lengthDoor = parseFloat(document.getElementById("lengthDoor").value);
+    const openAngle  = parseFloat(document.getElementById("openAngle").value);
+    const doorMountFrac = parseFloat(document.getElementById("doorMountFrac").value);
+    const cabMountX  = parseFloat(document.getElementById("cabMountX").value);
+    const cabMountY  = parseFloat(document.getElementById("cabMountY").value);
+    const numSprings = parseFloat(document.getElementById("numSprings").value);
+    const springNominal = parseFloat(document.getElementById("springNominal").value);
+    const springVariation = parseFloat(document.getElementById("springVariation").value);
+    const handleFrac = parseFloat(document.getElementById("handleFrac").value);
+
+    // Pass these to Python
+    pyodide.globals.set("mass_door", massDoor);
+    pyodide.globals.set("length_door", lengthDoor);
+    pyodide.globals.set("open_angle", openAngle);
+    pyodide.globals.set("door_mount_frac", doorMountFrac);
+    pyodide.globals.set("cab_mount_x", cabMountX);
+    pyodide.globals.set("cab_mount_y", cabMountY);
+    pyodide.globals.set("num_springs", numSprings);
+    pyodide.globals.set("spring_nominal", springNominal);
+    pyodide.globals.set("spring_variation", springVariation);
+    pyodide.globals.set("handle_frac", handleFrac);
+
+    // Call the Python function trapdoor_calculate() that we defined in calc.py
+    const pyResult = pyodide.runPython(`
+import json
+res = trapdoor_calculate(
+    mass_door,
+    length_door,
+    open_angle,
+    door_mount_frac,
+    cab_mount_x,
+    cab_mount_y,
+    num_springs,
+    spring_nominal,
+    spring_variation,
+    handle_frac
+)
+json.dumps(res)
+`);
+    const resultObj = JSON.parse(pyResult);
+
+    // Extract data for UI
+    const minLen = resultObj.minLen;
+    const maxLen = resultObj.maxLen;
+    const stroke = resultObj.stroke;
+    const maxForce = resultObj.maxForce;
+    const maxHandleForce = resultObj.maxHandleForce;
+    const angles = resultObj.angles;
+    const springForces = resultObj.springForces;
+    const handleForces = resultObj.handleForces;
+
+    // Update text
+    document.getElementById("springLengthsText").textContent =
+      `Spring Lengths: min = ${minLen.toFixed(3)} m, max = ${maxLen.toFixed(3)} m`;
+    document.getElementById("strokeText").textContent =
+      `Required Spring Stroke (max-min): ${stroke.toFixed(3)} m`;
+    document.getElementById("forceText").textContent =
+      `Max Total Spring Force (over motion): ${maxForce.toFixed(2)} N`;
+    document.getElementById("handleForceText").textContent =
+      `Max Handle Force (push/pull): ±${maxHandleForce.toFixed(2)} N`;
+
+    // Update charts
+    updateCharts(springForces, handleForces, angles);
+
+    // Draw diagram
+    const canvas = document.getElementById("visualCanvas");
+    const ctx = canvas.getContext("2d");
+    drawDiagram(ctx, canvas.width, canvas.height,
+      lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+    );
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 5) On Page Load
+  ///////////////////////////////////////////////////////////////////////////
+  window.addEventListener("DOMContentLoaded", async () => {
+    // 1. Initialize Pyodide
+    await initPyodideAndPython();
+    // 2. Hook the compute button
+    document.getElementById("computeBtn").addEventListener("click", computeEverything);
+    // 3. Do an initial compute so the page is populated
+    await computeEverything();
+  });
+</script>
+</body>
+</html>
