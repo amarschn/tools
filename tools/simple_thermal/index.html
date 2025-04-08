@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Thermal Dissipation Calculator</title>
+
+  <!-- Load Chart.js from a CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Load Pyodide from a CDN -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; 
+      padding: 0;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    header, footer {
+      background: #343a40;
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    main {
+      max-width: 1000px;
+      margin: 1rem auto;
+      background: #fff;
+      border-radius: 5px;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* details element styling for collapsible sections */
+    details {
+      margin-bottom: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #dee2e6;
+    }
+    details summary {
+      cursor: pointer;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #495057;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+
+    label {
+      display: inline-block;
+      width: 220px;
+      margin-right: 0.5rem;
+      vertical-align: top;
+    }
+    input[type="number"] {
+      width: 80px;
+      margin-bottom: 0.5rem;
+    }
+    select {
+      width: 140px;
+      margin-bottom: 0.5rem;
+    }
+    button {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .results p {
+      margin: 0.3rem 0;
+    }
+    .charts-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: space-around;
+    }
+    .chart-box {
+      flex: 1 1 450px;
+      min-width: 300px;
+      max-width: 500px;
+    }
+    .chart-box canvas {
+      width: 100%;
+      height: 400px;
+    }
+    .material-presets {
+      margin: 1rem 0;
+    }
+    .theory-equation {
+      background: #f8f9fa;
+      padding: 10px;
+      border-left: 4px solid #007bff;
+      margin: 15px 0;
+      font-family: monospace;
+    }
+    .legend {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-right: 20px;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      margin-right: 5px;
+    }
+    #visualCanvas {
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      display: block;
+      margin: 0 auto;
+      width: 600px;
+      height: 400px;
+    }
+    .col-2 {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .col {
+      flex: 1;
+      min-width: 300px;
+    }
+    .info-box {
+      background: #e9f7fe;
+      border-left: 4px solid #0d6efd;
+      padding: 10px 15px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Thermal Dissipation Calculator</h1>
+</header>
+
+<main>
+  <!-- 1) INPUT PARAMETERS -->
+  <details open>
+    <summary>1) Input Parameters</summary>
+    
+    <div class="col-2">
+      <div class="col">
+        <h3>Geometry</h3>
+        
+        <label for="geometryType">Geometry Type:</label>
+        <select id="geometryType">
+          <option value="plate">Rectangular Plate</option>
+          <option value="cylinder">Cylinder</option>
+        </select><br>
+        
+        <label for="orientation">Orientation:</label>
+        <select id="orientation">
+          <option value="vertical">Vertical</option>
+          <option value="horizontal_up">Horizontal (face up)</option>
+          <option value="horizontal_down">Horizontal (face down)</option>
+        </select><br>
+        
+        <div id="plate-dimensions">
+          <label for="length">Length (m):</label>
+          <input type="number" id="length" value="0.1" step="0.01" min="0.001"><br>
+          
+          <label for="width">Width (m):</label>
+          <input type="number" id="width" value="0.1" step="0.01" min="0.001"><br>
+          
+          <label for="thickness">Thickness (m):</label>
+          <input type="number" id="thickness" value="0.01" step="0.001" min="0.001"><br>
+        </div>
+        
+        <div id="cylinder-dimensions" style="display: none;">
+          <label for="diameter">Diameter (m):</label>
+          <input type="number" id="diameter" value="0.05" step="0.001" min="0.001"><br>
+          
+          <label for="cylinderLength">Length (m):</label>
+          <input type="number" id="cylinderLength" value="0.1" step="0.01" min="0.001"><br>
+        </div>
+      </div>
+      
+      <div class="col">
+        <h3>Material Properties</h3>
+        
+        <div class="material-presets">
+          <label for="materialPreset">Material Preset:</label>
+          <select id="materialPreset">
+            <option value="custom">Custom...</option>
+            <option value="aluminum" selected>Aluminum</option>
+            <option value="steel">Steel</option>
+            <option value="copper">Copper</option>
+            <option value="stainless-steel">Stainless Steel</option>
+            <option value="brass">Brass</option>
+            <option value="iron">Cast Iron</option>
+            <option value="plastic">Plastic (Generic)</option>
+          </select>
+        </div>
+        
+        <label for="thermalConductivity">Thermal Conductivity (W/m·K):</label>
+        <input type="number" id="thermalConductivity" value="237" step="0.1" min="0.01"><br>
+        
+        <label for="density">Density (kg/m³):</label>
+        <input type="number" id="density" value="2700" step="10" min="1"><br>
+        
+        <label for="specificHeat">Specific Heat (J/kg·K):</label>
+        <input type="number" id="specificHeat" value="900" step="10" min="1"><br>
+        
+        <label for="emissivity">Emissivity (0-1):</label>
+        <input type="number" id="emissivity" value="0.2" step="0.01" min="0.01" max="1"><br>
+        
+        <h3>Thermal Conditions</h3>
+        
+        <label for="initialTemp">Initial Temperature (°C):</label>
+        <input type="number" id="initialTemp" value="100" step="1"><br>
+        
+        <label for="ambientTemp">Ambient Temperature (°C):</label>
+        <input type="number" id="ambientTemp" value="25" step="1"><br>
+        
+        <label for="airVelocity">Air Velocity (m/s):</label>
+        <input type="number" id="airVelocity" value="0" step="0.1" min="0">
+        <small>(0 for natural convection)</small><br>
+        
+        <h3>Simulation Parameters</h3>
+        
+        <label
