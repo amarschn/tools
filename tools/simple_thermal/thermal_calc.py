@@ -343,7 +343,7 @@ def thermal_dissipation_calculate(
     # Dimensions
     length,
     width_or_diameter,
-    thickness=None,
+    thickness,
     # Material properties
     thermal_conductivity,
     density,
@@ -375,6 +375,7 @@ def thermal_dissipation_calculate(
             "diameter": width_or_diameter,
             "length": length
         }
+        # thickness is ignored for cylinder geometry
     
     material_properties = {
         "thermal_conductivity": thermal_conductivity,

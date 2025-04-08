@@ -35,7 +35,7 @@ def test_radiation():
     # Should be positive and in a reasonable range for these temperatures
     assert q > 0 and q < 100
 
-def test_full_calculation():
+def test_full_calculation_plate():
     # Test the full calculation for a steel plate
     result = thermal_calc.thermal_dissipation_calculate(
         # Geometry
@@ -73,9 +73,46 @@ def test_full_calculation():
     
     # More tests could be added to validate specific scenarios
     
+def test_full_calculation_cylinder():
+    # Test the full calculation for a steel cylinder
+    result = thermal_calc.thermal_dissipation_calculate(
+        # Geometry
+        geometry_type="cylinder",
+        orientation="horizontal_up",
+        # Dimensions
+        length=0.1,         # 10 cm
+        width_or_diameter=0.05,  # 5 cm diameter
+        thickness=0.0,      # Not used for cylinder
+        # Material properties (steel)
+        thermal_conductivity=50,  # W/m·K
+        density=7800,       # kg/m³
+        specific_heat=490,  # J/kg·K
+        emissivity=0.8,     # Dimensionless
+        # Thermal conditions
+        initial_temp=100,   # °C
+        ambient_temp=20,    # °C
+        air_velocity=0,     # m/s (natural convection)
+        # Simulation
+        time_steps=50,
+        total_time=1800     # 30 minutes
+    )
+    
+    # Make sure the result has all expected keys
+    assert "times" in result
+    assert "temperatures" in result
+    assert "heat_rates" in result
+    assert "time_constant" in result
+    
+    # Check the final temperature is lower than initial
+    assert result["final_temp"] < 100
+    
+    # Check the temperature is decreasing
+    assert result["temperatures"][0] > result["temperatures"][-1]
+
 if __name__ == "__main__":
     test_conduction()
     test_natural_convection_coefficient()
     test_radiation()
-    test_full_calculation()
+    test_full_calculation_plate()
+    test_full_calculation_cylinder()
     print("All tests passed.")
