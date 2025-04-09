@@ -8,3 +8,4 @@ Welcome to my collection of engineering calculators and mini-apps.
 - [Acoustics](./tools/simple-acoustics/)
 - [Thermal](./tools/simple_thermal)
 - [Wire sizing](./tools/wire-sizing/)
+- [MTBF](./tools/mtbf/)

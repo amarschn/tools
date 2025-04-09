@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Reliability Prediction Tool</title>
+
+  <!-- Load Chart.js from a CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Load Pyodide from a CDN -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    header, footer {
+      background: #343a40;
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    main {
+      max-width: 1000px;
+      margin: 1rem auto;
+      background: #fff;
+      border-radius: 5px;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    details {
+      margin-bottom: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #dee2e6;
+    }
+    details summary {
+      cursor: pointer;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #495057;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+    label {
+      display: inline-block;
+      width: 250px;
+      margin-right: 0.5rem;
+      vertical-align: top;
+    }
+    input[type="number"],
+    input[type="text"] {
+      width: 120px;
+      margin-bottom: 0.5rem;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .results p {
+      margin: 0.3rem 0;
+    }
+    .charts-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: space-around;
+    }
+    .chart-box {
+      flex: 1 1 450px;
+      min-width: 300px;
+      max-width: 500px;
+    }
+    .chart-box canvas {
+      width: 100%;
+      height: 400px;
+    }
+    footer {
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Reliability Prediction Tool</h1>
+</header>
+
+<main>
+  <!-- 1) INPUT PARAMETERS -->
+  <details open>
+    <summary>1) Input Parameters</summary>
+    <label for="componentMTBF">Component MTBFs (hours):</label>
+    <input type="text" id="componentMTBF" value="100, 200, 300">
+    <small>(Comma separated list)</small><br>
+
+    <label for="missionTime">Mission Time (hours):</label>
+    <input type="number" id="missionTime" value="100" step="1"><br>
+  </details>
+
+  <!-- 2) RELIABILITY ALLOCATION -->
+  <details>
+    <summary>2) Reliability Allocation (Optional)</summary>
+    <p>
+      If you have a target system reliability and want to see the individual component requirements,
+      fill in the following fields:
+    </p>
+    <label for="systemTarget">Target System Reliability:</label>
+    <input type="number" id="systemTarget" value="0.9" min="0" max="1" step="0.01"><br>
+
+    <label for="numComponents">Number of Components:</label>
+    <input type="number" id="numComponents" value="3" min="1" step="1"><br>
+  </details>
+
+  <button id="computeBtn">Compute & Update</button>
+
+  <!-- 3) RESULTS & CHARTS -->
+  <details open>
+    <summary>3) Results</summary>
+    <div class="results">
+      <p id="calcResultText"></p>
+      <p id="allocResultText"></p>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-box">
+        <h4>System Reliability vs. Time</h4>
+        <canvas id="reliabilityChart"></canvas>
+      </div>
+    </div>
+  </details>
+
+  <!-- 4) REFERENCES -->
+  <details>
+    <summary>4) References</summary>
+    <ul>
+      <li>
+        <a href="https://en.wikipedia.org/wiki/Reliability_engineering" target="_blank">Reliability Engineering (Wikipedia)</a>
+      </li>
+      <li>
+        <a href="https://en.wikipedia.org/wiki/Mean_time_between_failures" target="_blank">MTBF (Wikipedia)</a>
+      </li>
+    </ul>
+  </details>
+</main>
+
+<footer>
+  <p>&copy; 2025 - Reliability Prediction Tool</p>
+</footer>
+
+<script>
+  /////////////////////////////////////////////////////////////////////////
+  // 1) Load Pyodide & reliability.py
+  /////////////////////////////////////////////////////////////////////////
+  let pyodide; // Global Pyodide instance
+
+  async function initPyodideAndPython() {
+    // Load Pyodide
+    pyodide = await loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/"
+    });
+    console.log("Pyodide loaded!");
+
+    // Fetch reliability.py and run it in Pyodide.
+    const resp = await fetch("reliability.py");
+    const reliabilitySource = await resp.text();
+    await pyodide.runPythonAsync(reliabilitySource); 
+    console.log("reliability.py loaded into Pyodide!");
+  }
+
+  /////////////////////////////////////////////////////////////////////////
+  // 2) Create Chart for System Reliability vs. Time
+  /////////////////////////////////////////////////////////////////////////
+  let reliabilityChart = null;
+  function updateReliabilityChart(totalLambda, missionTime) {
+    const ctx = document.getElementById("reliabilityChart").getContext("2d");
+    const times = [];
+    const reliabilities = [];
+    const steps = 50;
+    for(let i = 0; i <= steps; i++){
+      const t = missionTime * i / steps;
+      times.push(t.toFixed(1));
+      reliabilities.push(Math.exp(-totalLambda * t));
+    }
+
+    if(reliabilityChart) reliabilityChart.destroy();
+    reliabilityChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: times,
+        datasets: [{
+          label: 'System Reliability',
+          data: reliabilities,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'Time (hours)' } },
+          y: { title: { display: true, text: 'Reliability' }, min: 0, max: 1 }
+        }
+      }
+    });
+  }
+
+  /////////////////////////////////////////////////////////////////////////
+  // 3) Main compute function (calls Python main() from reliability.py)
+  /////////////////////////////////////////////////////////////////////////
+  async function computeEverything() {
+    // Set inputs from UI
+    const componentMTBFStr = document.getElementById("componentMTBF").value;
+    const missionTime = parseFloat(document.getElementById("missionTime").value);
+
+    // Optional allocation inputs
+    const systemTargetInput = document.getElementById("systemTarget").value;
+    const numComponentsInput = document.getElementById("numComponents").value;
+    const systemTarget = systemTargetInput ? parseFloat(systemTargetInput) : null;
+    const numComponents = numComponentsInput ? parseInt(numComponentsInput) : null;
+
+    // Pass the values into Pyodide globals so that reliability.py can access them.
+    pyodide.globals.set("component_mtbf_str", componentMTBFStr);
+    pyodide.globals.set("mission_time", missionTime);
+    pyodide.globals.set("system_target_reliability", systemTarget);
+    pyodide.globals.set("num_components_allocation", numComponents);
+
+    // Call the Python main function defined in reliability.py
+    const pyResult = await pyodide.runPythonAsync(`main()`);
+    const resultObj = JSON.parse(pyResult);
+
+    // Extract calculation results
+    const calc = resultObj.calculation;
+    let calcText = "";
+    if(calc) {
+      calcText += `Total Failure Rate: ${calc.totalLambda.toFixed(4)} per hour • `;
+      calcText += `System MTBF: ${calc.systemMTBF.toFixed(2)} hours • `;
+      calcText += `System Reliability (at ${missionTime} hours): ${calc.systemReliability.toFixed(4)}<br>`;
+      calcText += `Individual Component Reliabilities: ${calc.individualReliabilities.map(r => r.toFixed(4)).join(", ")}`;
+      // Update reliability chart using the computed totalLambda.
+      updateReliabilityChart(calc.totalLambda, missionTime);
+    } else {
+      calcText = "Calculation results not available.";
+    }
+    document.getElementById("calcResultText").innerHTML = calcText;
+
+    // Extract allocation results if provided
+    const alloc = resultObj.allocation;
+    let allocText = "";
+    if(alloc) {
+      allocText += `Required Component Reliability: ${alloc.requiredComponentReliability.toFixed(4)} • `;
+      allocText += `Required Failure Rate: ${alloc.requiredLambda.toFixed(4)} per hour • `;
+      allocText += `Required Component MTBF: ${alloc.requiredMTBF.toFixed(2)} hours`;
+    } else {
+      allocText = "Reliability allocation not performed (fill in optional fields above to enable).";
+    }
+    document.getElementById("allocResultText").innerHTML = allocText;
+  }
+
+  /////////////////////////////////////////////////////////////////////////
+  // 4) On Page Load
+  /////////////////////////////////////////////////////////////////////////
+  window.addEventListener("DOMContentLoaded", async () => {
+    await initPyodideAndPython();
+    document.getElementById("computeBtn").addEventListener("click", computeEverything);
+    await computeEverything();
+  });
+</script>
+</body>
+</html>
