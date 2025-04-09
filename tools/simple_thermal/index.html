@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Thermal Dissipation Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Load Chart.js from a CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -12,10 +13,11 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0; 
+      margin: 0;
       padding: 0;
       background: #f8f9fa;
       color: #212529;
+      line-height: 1.6;
     }
     header, footer {
       background: #343a40;
@@ -42,6 +44,9 @@
       padding: 0.5rem 0;
       border-bottom: 1px solid #dee2e6;
     }
+    details:last-of-type {
+      border-bottom: none;
+    }
     details summary {
       cursor: pointer;
       font-size: 1.2rem;
@@ -49,6 +54,20 @@
       color: #495057;
       outline: none;
       margin-bottom: 0.5rem;
+      list-style: none; /* Remove default marker */
+      position: relative;
+      padding-left: 1.5rem;
+    }
+    details summary::before {
+        content: '▶'; /* Collapsed state */
+        position: absolute;
+        left: 0;
+        font-size: 0.9rem;
+        transform: rotate(0deg);
+        transition: transform 0.2s ease-in-out;
+    }
+    details[open] summary::before {
+        transform: rotate(90deg); /* Expanded state */
     }
 
     label {
@@ -56,6 +75,13 @@
       width: 220px;
       margin-right: 0.5rem;
       vertical-align: top;
+      font-weight: 500;
+      margin-bottom: 0.3rem;
+    }
+    input[type="number"], select {
+      padding: 0.3rem;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
     }
     input[type="number"] {
       width: 80px;
@@ -67,7 +93,7 @@
     }
     button {
       display: inline-block;
-      margin-top: 1rem;
+      margin: 0.5rem;
       padding: 0.5rem 1rem;
       border: none;
       border-radius: 4px;
@@ -75,18 +101,25 @@
       color: #fff;
       font-size: 1rem;
       cursor: pointer;
+      transition: background-color 0.2s ease;
     }
     button:hover {
       background: #0056b3;
     }
+    button:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+    }
     .results p {
-      margin: 0.3rem 0;
+      margin: 0.5rem 0;
+      font-size: 0.95rem;
     }
     .charts-container {
       display: flex;
       flex-wrap: wrap;
       gap: 2rem;
       justify-content: space-around;
+      margin-top: 1.5rem;
     }
     .chart-box {
       flex: 1 1 450px;
@@ -95,45 +128,53 @@
     }
     .chart-box canvas {
       width: 100%;
-      height: 400px;
+      max-height: 400px; /* Ensure charts don't get excessively tall */
     }
     .material-presets {
-      margin: 1rem 0;
+      margin: 0.5rem 0 1rem 0;
     }
     .theory-equation {
-      background: #f8f9fa;
-      padding: 10px;
+      background: #f1f3f5;
+      padding: 10px 15px;
       border-left: 4px solid #007bff;
       margin: 15px 0;
       font-family: monospace;
+      overflow-x: auto;
+      white-space: pre-wrap; /* Wrap long lines */
+      word-wrap: break-word;
     }
     .legend {
       display: flex;
       align-items: center;
+      justify-content: center;
       margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px 20px;
     }
     .legend-item {
       display: flex;
       align-items: center;
-      margin-right: 20px;
     }
     .legend-color {
       width: 20px;
       height: 20px;
       margin-right: 5px;
+      border: 1px solid #ccc;
     }
     #visualCanvas {
       border: 1px solid #ccc;
       background: #f0f0f0;
       display: block;
-      margin: 0 auto;
-      width: 600px;
-      height: 400px;
+      margin: 1rem auto;
+      width: 100%; /* Make responsive */
+      max-width: 600px;
+      height: auto; /* Maintain aspect ratio */
+      aspect-ratio: 3 / 2;
     }
     .col-2 {
       display: flex;
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 2rem; /* Increased gap */
     }
     .col {
       flex: 1;
@@ -144,6 +185,95 @@
       border-left: 4px solid #0d6efd;
       padding: 10px 15px;
       margin: 10px 0;
+      font-size: 0.9rem;
+    }
+    .status-message {
+        padding: 10px;
+        background-color: #e9ecef;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+
+    /* Loading indicator */
+    .loading {
+      position: relative;
+      min-height: 50px;
+      pointer-events: none; /* Prevent interaction while loading */
+    }
+    .loading::after {
+      content: "Computing...";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.85);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      z-index: 10;
+      border-radius: 4px;
+    }
+
+    /* Animation controls */
+    #animationControls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    #animationControls button {
+      width: 120px;
+      margin: 0;
+    }
+    #animationSpeed {
+      width: 120px;
+      vertical-align: middle;
+    }
+    #animationControls label {
+        width: auto; /* Override default label width */
+        margin-right: 5px;
+    }
+
+    /* Mobile responsiveness improvements */
+    @media (max-width: 768px) {
+      main {
+        padding: 1rem;
+      }
+      label {
+        width: 180px; /* Adjust label width */
+      }
+      .col-2 {
+          gap: 1rem;
+      }
+    }
+    @media (max-width: 480px) {
+      label {
+        width: 100%; /* Stack label and input */
+        margin-right: 0;
+      }
+      input[type="number"], select {
+        width: 100%;
+        margin-bottom: 1rem;
+      }
+      #animationControls {
+          flex-direction: column;
+      }
+      #animationControls button {
+          width: 100%;
+          max-width: 200px;
+      }
+      h1 {
+          font-size: 1.5rem;
+      }
+      details summary {
+          font-size: 1.1rem;
+      }
     }
   </style>
 </head>
@@ -153,50 +283,52 @@
 </header>
 
 <main>
+  <div id="status" class="status-message">Loading Pyodide and Python code... Please wait.</div>
+
   <!-- 1) INPUT PARAMETERS -->
   <details open>
     <summary>1) Input Parameters</summary>
-    
+
     <div class="col-2">
       <div class="col">
         <h3>Geometry</h3>
-        
+
         <label for="geometryType">Geometry Type:</label>
         <select id="geometryType">
           <option value="plate">Rectangular Plate</option>
           <option value="cylinder">Cylinder</option>
         </select><br>
-        
+
         <label for="orientation">Orientation:</label>
         <select id="orientation">
           <option value="vertical">Vertical</option>
-          <option value="horizontal_up">Horizontal (face up)</option>
-          <option value="horizontal_down">Horizontal (face down)</option>
+          <option value="horizontal_up">Horizontal (hot face up)</option>
+          <option value="horizontal_down">Horizontal (hot face down)</option>
         </select><br>
-        
+
         <div id="plate-dimensions">
           <label for="length">Length (m):</label>
-          <input type="number" id="length" value="0.1" step="0.01" min="0.001"><br>
-          
+          <input type="number" id="length" value="0.1" step="0.01" min="0.001" required><br>
+
           <label for="width">Width (m):</label>
-          <input type="number" id="width" value="0.1" step="0.01" min="0.001"><br>
-          
+          <input type="number" id="width" value="0.1" step="0.01" min="0.001" required><br>
+
           <label for="thickness">Thickness (m):</label>
-          <input type="number" id="thickness" value="0.01" step="0.001" min="0.001"><br>
+          <input type="number" id="thickness" value="0.01" step="0.001" min="0.001" required><br>
         </div>
-        
+
         <div id="cylinder-dimensions" style="display: none;">
           <label for="diameter">Diameter (m):</label>
-          <input type="number" id="diameter" value="0.05" step="0.001" min="0.001"><br>
-          
-          <label for="cylinderLength">Length (m):</label>
-          <input type="number" id="cylinderLength" value="0.1" step="0.01" min="0.001"><br>
+          <input type="number" id="diameter" value="0.05" step="0.001" min="0.001" required><br>
+
+          <label for="cylinderLength">Cylinder Length (m):</label>
+          <input type="number" id="cylinderLength" value="0.1" step="0.01" min="0.001" required><br>
         </div>
       </div>
-      
+
       <div class="col">
         <h3>Material Properties</h3>
-        
+
         <div class="material-presets">
           <label for="materialPreset">Material Preset:</label>
           <select id="materialPreset">
@@ -210,38 +342,800 @@
             <option value="plastic">Plastic (Generic)</option>
           </select>
         </div>
-        
+
         <label for="thermalConductivity">Thermal Conductivity (W/m·K):</label>
-        <input type="number" id="thermalConductivity" value="237" step="0.1" min="0.01"><br>
-        
+        <input type="number" id="thermalConductivity" value="237" step="0.1" min="0.01" required><br>
+
         <label for="density">Density (kg/m³):</label>
-        <input type="number" id="density" value="2700" step="10" min="1"><br>
-        
+        <input type="number" id="density" value="2700" step="10" min="1" required><br>
+
         <label for="specificHeat">Specific Heat (J/kg·K):</label>
-        <input type="number" id="specificHeat" value="900" step="10" min="1"><br>
-        
+        <input type="number" id="specificHeat" value="900" step="10" min="1" required><br>
+
         <label for="emissivity">Emissivity (0-1):</label>
-        <input type="number" id="emissivity" value="0.2" step="0.01" min="0.01" max="1"><br>
-        
+        <input type="number" id="emissivity" value="0.2" step="0.01" min="0.01" max="1" required><br>
+
         <h3>Thermal Conditions</h3>
-        
+
         <label for="initialTemp">Initial Temperature (°C):</label>
-        <input type="number" id="initialTemp" value="100" step="1"><br>
-        
+        <input type="number" id="initialTemp" value="100" step="1" required><br>
+
         <label for="ambientTemp">Ambient Temperature (°C):</label>
-        <input type="number" id="ambientTemp" value="25" step="1"><br>
-        
+        <input type="number" id="ambientTemp" value="25" step="1" required><br>
+
         <label for="airVelocity">Air Velocity (m/s):</label>
-        <input type="number" id="airVelocity" value="0" step="0.1" min="0">
-        <small>(0 for natural convection)</small><br>
-        
+        <input type="number" id="airVelocity" value="0" step="0.1" min="0" required>
+        <small>(0 = natural convection)</small><br>
+
         <h3>Simulation Parameters</h3>
-        
+
         <label for="simulationTime">Simulation Time (seconds):</label>
-        <input type="number" id="simulationTime" value="3600" step="60" min="60">
-        <small>(typical cooling time)</small><br>
-        
+        <input type="number" id="simulationTime" value="3600" step="60" min="60" required>
+        <small>(e.g., 3600s = 1hr)</small><br>
+
         <label for="timeSteps">Number of Steps:</label>
-        <input type="number" id="timeSteps" value="100" step="10" min="10" max="1000"><br>
-        
-        <button id="computeBtn">Compute & Update</button>
+        <input type="number" id="timeSteps" value="100" step="10" min="10" max="1000" required><br>
+
+        <button id="computeBtn" disabled>Compute & Update</button>
+      </div>
+    </div>
+  </details>
+
+  <!-- 2) VISUALIZATION -->
+  <details>
+    <summary>2) Visualization</summary>
+    <p>
+      Shows the object cooling over the simulation time. The color gradient represents temperature,
+      from red (initial) towards blue (ambient). Requires computation first.
+    </p>
+    <canvas id="visualCanvas" width="600" height="400"></canvas>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: red;"></div>
+        <span>Initial Temp</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background-color: blue;"></div>
+        <span>Ambient Temp</span>
+      </div>
+       <div class="legend-item">
+        <div class="legend-color" style="background: linear-gradient(to right, red, blue);"></div>
+        <span>Intermediate Temp</span>
+      </div>
+    </div>
+
+    <div id="animationControls" style="text-align: center; margin-top: 20px;">
+      <button id="playPauseBtn" disabled>Pause</button>
+      <button id="resetBtn" disabled>Reset</button>
+      <div>
+        <label for="animationSpeed">Speed:</label>
+        <input type="range" id="animationSpeed" min="1" max="5" value="3" style="vertical-align: middle;" disabled>
+      </div>
+    </div>
+  </details>
+
+  <!-- 3) RESULTS + CHARTS -->
+  <details open>
+    <summary>3) Results</summary>
+    <div class="results">
+      <p id="statusCompute">Run computation to see results.</p>
+      <p id="thermalMassText" style="display: none;">Thermal Mass: Calculating...</p>
+      <p id="totalAreaText" style="display: none;">Total Surface Area: Calculating...</p>
+      <p id="convectionText" style="display: none;">Convection: Calculating...</p>
+      <p id="coolingTimeText" style="display: none;">Time Constant: Calculating...</p>
+      <p id="finalTempText" style="display: none;">Final Temperature: Calculating...</p>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-box">
+        <h4>Temperature vs. Time</h4>
+        <canvas id="temperatureChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h4>Heat Transfer Rate vs. Time</h4>
+        <canvas id="heatRateChart"></canvas>
+      </div>
+    </div>
+  </details>
+
+  <!-- 4) THEORY & EQUATIONS -->
+  <details>
+    <summary>4) Theory & Equations</summary>
+    <h3>Heat Transfer Mechanisms</h3>
+
+    <p>
+      This calculator models the cooling of a hot object through two main surface heat transfer mechanisms:
+    </p>
+
+    <h4>1. Convection</h4>
+    <p>
+      Heat transfer between a surface and a moving fluid (in this case, air). This calculator handles both:
+    </p>
+    <ul>
+      <li><strong>Natural Convection:</strong> Air movement due to buoyancy forces (driven by temperature differences). Occurs when Air Velocity is set to 0 or very low (e.g., &lt; 0.1 m/s).</li>
+      <li><strong>Forced Convection:</strong> Air movement due to external forces (fan, wind, etc.). Occurs when Air Velocity is significant.</li>
+    </ul>
+
+    <div class="theory-equation">
+      q<sub>conv</sub> = h × A × (T<sub>surface</sub> - T<sub>ambient</sub>)
+    </div>
+
+    <p>Where:</p>
+    <ul>
+      <li>q<sub>conv</sub> = Convective heat transfer rate (W)</li>
+      <li>h = Convection heat transfer coefficient (W/m²·K)</li>
+      <li>A = Surface area (m²)</li>
+      <li>T<sub>surface</sub> = Object surface temperature (°C)</li>
+      <li>T<sub>ambient</sub> = Ambient air temperature (°C)</li>
+    </ul>
+
+    <p>
+      The convection coefficient (h) is estimated using correlations based on dimensionless numbers:
+    </p>
+    <ul>
+      <li><strong>Rayleigh Number (Ra):</strong> Governs natural convection ( buoyancy / (viscous × thermal diffusivity) ).</li>
+      <li><strong>Reynolds Number (Re):</strong> Governs forced convection ( inertial / viscous forces ).</li>
+      <li><strong>Nusselt Number (Nu):</strong> Ratio of convective to conductive heat transfer across the boundary layer. <code>h = Nu × k<sub>fluid</sub> / L<sub>char</sub></code></li>
+      <li><strong>Prandtl Number (Pr):</strong> Ratio of momentum diffusivity to thermal diffusivity for the fluid (air ~ 0.71).</li>
+    </ul>
+
+    <div class="info-box">
+      Example: Natural convection from a vertical plate:<br>
+      <code>Nu ≈ 0.59 × Ra<sup>1/4</sup></code> (Laminar flow, Ra &lt; 10<sup>9</sup>)<br>
+      <code>Nu ≈ 0.1 × Ra<sup>1/3</sup></code> (Turbulent flow, Ra &gt; 10<sup>9</sup>)
+    </div>
+
+    <h4>2. Radiation</h4>
+    <p>
+      Heat transfer through electromagnetic waves, emitted by any object above absolute zero temperature. It doesn't require a medium.
+    </p>
+
+    <div class="theory-equation">
+      q<sub>rad</sub> = ε × σ × A × (T<sub>surface_K</sub><sup>4</sup> - T<sub>ambient_K</sub><sup>4</sup>)
+    </div>
+
+    <p>Where:</p>
+    <ul>
+      <li>q<sub>rad</sub> = Radiative heat transfer rate (W)</li>
+      <li>ε = Emissivity (0-1, property of the surface)</li>
+      <li>σ = Stefan-Boltzmann constant (5.67 × 10<sup>-8</sup> W/m²·K<sup>4</sup>)</li>
+      <li>A = Surface area (m²)</li>
+      <li>T<sub>surface_K</sub>, T<sub>ambient_K</sub> = Absolute temperatures (Kelvin: K = °C + 273.15)</li>
+    </ul>
+
+    <h3>Lumped Capacitance Method</h3>
+    <p>
+      This calculator uses the lumped capacitance method for the temperature change over time. This method assumes the temperature within the object is uniform at any given time. This is a good approximation when internal conduction resistance is much smaller than surface convection resistance.
+    </p>
+    <p>The condition for this is typically Biot number (Bi) < 0.1, where <code>Bi = h × L<sub>c</sub> / k<sub>solid</sub></code> (L<sub>c</sub> = characteristic length = Volume / Area).</p>
+
+    <div class="theory-equation">
+      Energy Balance: Rate of change of internal energy = Rate of heat loss
+      <br>
+      ρ × V × c<sub>p</sub> × (dT/dt) = - q<sub>total</sub>
+      <br>
+      dT/dt = - (q<sub>conv</sub> + q<sub>rad</sub>) / (ρ × V × c<sub>p</sub>)
+    </div>
+
+    <p>Where:</p>
+    <ul>
+      <li>dT/dt = Rate of temperature change (°C/s or K/s)</li>
+      <li>q<sub>total</sub> = Total heat transfer rate (q<sub>conv</sub> + q<sub>rad</sub>) (W)</li>
+      <li>ρ = Density of the object material (kg/m³)</li>
+      <li>V = Volume of the object (m³)</li>
+      <li>c<sub>p</sub> = Specific heat capacity of the material (J/kg·K)</li>
+      <li>(ρ × V × c<sub>p</sub>) = Thermal Mass (J/K)</li>
+    </ul>
+     <p>The calculation proceeds step-by-step in time (using small time steps `dt`) to find the temperature `T` at each point in time.</p>
+
+    <h3>Time Constant (τ)</h3>
+    <p>
+      For simple cooling (constant h, no radiation), the temperature follows an exponential decay. The time constant (τ) represents the time it takes for the temperature difference (T - T<sub>ambient</sub>) to drop to approximately 36.8% (1/e) of its initial value.
+    </p>
+
+    <div class="theory-equation">
+      τ ≈ (ρ × V × c<sub>p</sub>) / (h<sub>avg</sub> × A)
+    </div>
+
+    <p>
+      In this calculator, 'h' can change with temperature, and radiation is included, so the cooling is not perfectly exponential. The reported time constant is estimated based on when the temperature difference reaches 36.8% of the initial difference during the simulation. Approximately 5 time constants are needed to reach ~99.3% of the final temperature change (near equilibrium).
+    </p>
+
+    <h3>Limitations</h3>
+    <ul>
+      <li>**Lumped Capacitance:** Assumes uniform internal temperature. Less accurate for large objects or materials with low thermal conductivity (k).</li>
+      <li>**Convection Correlations:** Uses simplified empirical formulas for 'h'. Actual 'h' can be complex and influenced by surrounding geometry.</li>
+      <li>**Radiation View Factor:** Assumes the object radiates primarily to the ambient surroundings (view factor = 1). Doesn't account for nearby hot/cold surfaces.</li>
+      <li>**Constant Properties:** Assumes material properties (k, ρ, c<sub>p</sub>, ε) and ambient temperature are constant.</li>
+      <li>**Geometry:** Limited to simple plate and cylinder shapes.</li>
+    </ul>
+
+    <p>
+      This tool is best used for comparative analysis and initial estimates rather than precise predictions for critical applications.
+    </p>
+  </details>
+</main>
+
+<footer>
+  <p>&copy; 2025 - Thermal Dissipation Calculator</p>
+</footer>
+
+<script>
+  ///////////////////////////////////////////////////////////////////////////
+  // Global Variables & Configuration
+  ///////////////////////////////////////////////////////////////////////////
+  let pyodide = null;
+  let pythonLoaded = false;
+  const statusDiv = document.getElementById("status");
+  const computeBtn = document.getElementById("computeBtn");
+  const resultsDiv = document.querySelector(".results");
+  const statusCompute = document.getElementById('statusCompute');
+
+  // Chart instances
+  let temperatureChart = null;
+  let heatRateChart = null;
+
+  // Animation variables
+  let animationTimer = null;
+  let isPaused = true; // Start paused
+  let currentAnimationFrame = 0;
+  let animationData = {
+      times: [],
+      temperatures: [],
+      initialTemp: 100,
+      ambientTemp: 25,
+      geometryType: 'plate',
+      dimensions: {},
+      totalFrames: 0
+  };
+  const visualCanvas = document.getElementById('visualCanvas');
+  const visualCtx = visualCanvas.getContext('2d');
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const animationSpeedSlider = document.getElementById('animationSpeed');
+
+  const materialPresets = {
+    "aluminum": { thermalConductivity: 237, density: 2700, specificHeat: 900, emissivity: 0.2 },
+    "steel": { thermalConductivity: 50, density: 7800, specificHeat: 490, emissivity: 0.8 },
+    "copper": { thermalConductivity: 401, density: 8960, specificHeat: 390, emissivity: 0.03 },
+    "stainless-steel": { thermalConductivity: 16, density: 8000, specificHeat: 500, emissivity: 0.85 },
+    "brass": { thermalConductivity: 109, density: 8500, specificHeat: 380, emissivity: 0.3 },
+    "iron": { thermalConductivity: 80, density: 7200, specificHeat: 450, emissivity: 0.85 },
+    "plastic": { thermalConductivity: 0.2, density: 1200, specificHeat: 1500, emissivity: 0.95 }
+  };
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Initialization
+  ///////////////////////////////////////////////////////////////////////////
+
+  async function initPyodideAndPython() {
+    try {
+      statusDiv.textContent = "Loading Pyodide runtime...";
+      console.log("Loading Pyodide...");
+      pyodide = await loadPyodide({
+        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/"
+      });
+      console.log("Pyodide loaded!");
+
+      statusDiv.textContent = "Loading Python calculation code...";
+      console.log("Fetching thermal_calc.py...");
+      const resp = await fetch("thermal_calc.py");
+      if (!resp.ok) {
+          throw new Error(`Failed to fetch thermal_calc.py: ${resp.statusText}`);
+      }
+      const calcSource = await resp.text();
+      console.log("Running thermal_calc.py in Pyodide...");
+      await pyodide.runPythonAsync(calcSource);
+      pythonLoaded = true;
+      console.log("thermal_calc.py loaded into Pyodide!");
+      statusDiv.textContent = "Ready. Adjust parameters and click 'Compute'.";
+      computeBtn.disabled = false; // Enable compute button
+      // Disable animation controls until first compute
+      playPauseBtn.disabled = true;
+      resetBtn.disabled = true;
+      animationSpeedSlider.disabled = true;
+
+
+    } catch (error) {
+        console.error("Initialization failed:", error);
+        statusDiv.textContent = `Error loading application: ${error.message}. Please refresh the page.`;
+        statusDiv.style.color = 'red';
+        computeBtn.disabled = true;
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // UI Update Functions
+  ///////////////////////////////////////////////////////////////////////////
+
+  function updateMaterialProperties() {
+    const preset = document.getElementById("materialPreset").value;
+    if (preset !== "custom" && materialPresets[preset]) {
+      const material = materialPresets[preset];
+      document.getElementById("thermalConductivity").value = material.thermalConductivity;
+      document.getElementById("density").value = material.density;
+      document.getElementById("specificHeat").value = material.specificHeat;
+      document.getElementById("emissivity").value = material.emissivity;
+    }
+  }
+
+  function updateGeometryFields() {
+    const geometryType = document.getElementById("geometryType").value;
+    const plateDims = document.getElementById("plate-dimensions");
+    const cylDims = document.getElementById("cylinder-dimensions");
+
+    if (geometryType === "plate") {
+      plateDims.style.display = "block";
+      cylDims.style.display = "none";
+      // Enable/disable required attributes if needed, or rely on visibility
+      plateDims.querySelectorAll('input').forEach(el => el.required = true);
+      cylDims.querySelectorAll('input').forEach(el => el.required = false);
+    } else { // cylinder
+      plateDims.style.display = "none";
+      cylDims.style.display = "block";
+      plateDims.querySelectorAll('input').forEach(el => el.required = false);
+      cylDims.querySelectorAll('input').forEach(el => el.required = true);
+    }
+  }
+
+  function updateCharts(timeData, tempData, heatRateData) {
+    // Convert time to minutes for display
+    const timeLabels = timeData.map(t => (t / 60).toFixed(1));
+
+    const tempCtx = document.getElementById("temperatureChart").getContext("2d");
+    if (temperatureChart) temperatureChart.destroy();
+    temperatureChart = new Chart(tempCtx, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [{
+          label: 'Temperature (°C)',
+          data: tempData,
+          borderColor: 'rgb(255, 99, 132)',
+          backgroundColor: 'rgba(255, 99, 132, 0.1)',
+          tension: 0.1,
+          pointRadius: 2,
+          borderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { title: { display: true, text: 'Time (minutes)' } },
+          y: { title: { display: true, text: 'Temperature (°C)' } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    const heatRateCtx = document.getElementById("heatRateChart").getContext("2d");
+    if (heatRateChart) heatRateChart.destroy();
+    heatRateChart = new Chart(heatRateCtx, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [{
+          label: 'Heat Transfer Rate (W)',
+          data: heatRateData,
+          borderColor: 'rgb(54, 162, 235)',
+          backgroundColor: 'rgba(54, 162, 235, 0.1)',
+          tension: 0.1,
+          pointRadius: 2,
+          borderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { title: { display: true, text: 'Time (minutes)' } },
+          y: { title: { display: true, text: 'Heat Rate (W)' } }
+        },
+         plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  function displayResults(results) {
+        statusCompute.style.display = 'none'; // Hide initial message
+        // Make result paragraphs visible
+        document.getElementById("thermalMassText").style.display = 'block';
+        document.getElementById("totalAreaText").style.display = 'block';
+        document.getElementById("convectionText").style.display = 'block';
+        document.getElementById("coolingTimeText").style.display = 'block';
+        document.getElementById("finalTempText").style.display = 'block';
+
+        const thermalMass = parseFloat(document.getElementById("density").value) * results.volume * parseFloat(document.getElementById("specificHeat").value);
+        document.getElementById("thermalMassText").textContent = `Thermal Mass: ${thermalMass.toFixed(1)} J/K`;
+        document.getElementById("totalAreaText").textContent = `Total Surface Area: ${results.total_area.toFixed(4)} m²`;
+        document.getElementById("convectionText").textContent = `Convection: ${results.convection_type} (Avg. h ≈ ${results.avg_convection_coeff.toFixed(2)} W/m²·K)`;
+        document.getElementById("coolingTimeText").textContent = `Time Constant (τ): ${results.time_constant ? (results.time_constant / 60).toFixed(2) + ' min' : 'Not reached/estimable'}`;
+        const timeToEqMin = results.time_to_equilibrium ? (results.time_to_equilibrium / 60).toFixed(2) + ' min' : 'N/A';
+        document.getElementById("finalTempText").innerHTML = `Final Temperature ≈ ${results.final_temp.toFixed(2)}°C (ΔT = ${results.final_delta_t.toFixed(2)}°C) <br><small>(Time to reach ~99% equilibrium ≈ ${timeToEqMin})</small>`;
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Visualization & Animation
+  ///////////////////////////////////////////////////////////////////////////
+
+ function drawObject(ctx, canvasW, canvasH, geometryType, dimensions, temp, initialTemp, ambientTemp) {
+    ctx.clearRect(0, 0, canvasW, canvasH); // Clear canvas
+
+    // Calculate color (linear interpolation between blue (ambient) and red (initial))
+    let tempFraction = 0;
+    if (initialTemp !== ambientTemp) {
+        tempFraction = Math.max(0, Math.min(1, (temp - ambientTemp) / (initialTemp - ambientTemp)));
+    }
+    const r = Math.round(255 * tempFraction);
+    const g = 0; // Keep it simple red-to-blue
+    const b = Math.round(255 * (1 - tempFraction));
+    const color = `rgb(${r}, ${g}, ${b})`;
+
+    // Drawing area with margin
+    const margin = 0.1 * Math.min(canvasW, canvasH); // 10% margin
+    const drawWidth = canvasW - 2 * margin;
+    const drawHeight = canvasH - 2 * margin;
+    const centerX = canvasW / 2;
+    const centerY = canvasH / 2;
+
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1.5;
+
+    if (geometryType === 'plate') {
+        const { length, width, thickness } = dimensions;
+        // Determine dominant dimensions for scaling
+        const maxXY = Math.max(length, width);
+        const scale = Math.min(drawWidth / length, drawHeight / width) * 0.8; // Scale to fit with some padding
+
+        const scaledL = length * scale;
+        const scaledW = width * scale;
+        // Perspective/thickness effect - keep it small relative to main dims
+        const persp = Math.min(scaledL, scaledW) * 0.1;
+
+        // Center the plate
+        const x = centerX - scaledL / 2;
+        const y = centerY - scaledW / 2;
+
+        // Draw back faces slightly offset for 3D effect
+        ctx.fillStyle = `rgb(${Math.max(0,r-30)}, ${g}, ${Math.min(255,b+30)})`; // Darker shade
+        ctx.beginPath();
+        ctx.moveTo(x + persp, y - persp);
+        ctx.lineTo(x + scaledL + persp, y - persp);
+        ctx.lineTo(x + scaledL + persp, y + scaledW - persp);
+        ctx.lineTo(x + persp, y + scaledW - persp);
+        ctx.closePath();
+        // ctx.fill(); // Optional: fill back faces
+
+        // Draw connecting sides
+        ctx.beginPath();
+        ctx.moveTo(x, y); ctx.lineTo(x + persp, y - persp);
+        ctx.moveTo(x + scaledL, y); ctx.lineTo(x + scaledL + persp, y - persp);
+        ctx.moveTo(x + scaledL, y + scaledW); ctx.lineTo(x + scaledL + persp, y + scaledW - persp);
+        // ctx.moveTo(x, y + scaledW); ctx.lineTo(x + persp, y + scaledW - persp); // Don't draw hidden edge
+        ctx.stroke();
+
+        // Draw front face
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.rect(x, y, scaledL, scaledW);
+        ctx.fill();
+        ctx.stroke();
+
+    } else if (geometryType === 'cylinder') {
+        const { diameter, length } = dimensions;
+        const radius = diameter / 2;
+        // Scale based on larger dimension
+        const scale = Math.min(drawWidth / length, drawHeight / diameter) * 0.8;
+        const scaledL = length * scale;
+        const scaledR = radius * scale;
+        const ellipseFactor = 0.3; // How much to squash the ends for perspective
+
+        // Center cylinder
+        const startX = centerX - scaledL / 2;
+        const endX = centerX + scaledL / 2;
+        const yTop = centerY - scaledR;
+        const yBottom = centerY + scaledR;
+
+        // Draw back ellipse
+         ctx.fillStyle = `rgb(${Math.max(0,r-30)}, ${g}, ${Math.min(255,b+30)})`; // Darker shade
+        ctx.beginPath();
+        ctx.ellipse(startX, centerY, scaledR * ellipseFactor, scaledR, Math.PI / 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw cylinder body (sides)
+        ctx.fillStyle = color; // Main color for body
+        ctx.beginPath();
+        ctx.moveTo(startX, yTop);
+        ctx.lineTo(endX, yTop);
+        ctx.ellipse(endX, centerY, scaledR * ellipseFactor, scaledR, Math.PI / 2, Math.PI * 1.5, Math.PI * 0.5); // Right end curve part
+        ctx.lineTo(startX, yBottom);
+        ctx.ellipse(startX, centerY, scaledR * ellipseFactor, scaledR, Math.PI / 2, Math.PI * 0.5, Math.PI * 1.5); // Left end curve part
+        ctx.closePath();
+        ctx.fill(); // Fill the main body
+        ctx.stroke(); // Outline the main body
+
+        // Draw front ellipse (over the body fill)
+        ctx.beginPath();
+        ctx.ellipse(endX, centerY, scaledR * ellipseFactor, scaledR, Math.PI / 2, 0, 2 * Math.PI);
+        ctx.fill(); // Use main color
+        ctx.stroke();
+    }
+
+    // Add temperature text display
+    ctx.fillStyle = '#000';
+    ctx.font = `${Math.min(16, canvasH * 0.05)}px Arial`; // Dynamic font size
+    ctx.textAlign = 'center';
+    ctx.fillText(`T = ${temp.toFixed(1)}°C`, centerX, canvasH - margin * 0.3);
+
+    ctx.restore();
+}
+
+
+  function getAnimationInterval() {
+      // Map speed slider (1-5) to interval (ms). Faster speed = lower interval.
+      const speed = parseInt(animationSpeedSlider.value);
+      // Exponential or linear mapping - let's try linear
+      // Speed 1 -> 500ms, Speed 5 -> 100ms
+      const maxInterval = 500;
+      const minInterval = 50;
+      return maxInterval - ((speed - 1) / 4) * (maxInterval - minInterval);
+  }
+
+  function drawAnimationFrame(frameIndex) {
+        if (!animationData.temperatures || frameIndex >= animationData.temperatures.length) {
+            console.warn("Animation frame index out of bounds or no data:", frameIndex);
+            stopAnimation(); // Stop if data is invalid
+            return;
+        }
+        const temp = animationData.temperatures[frameIndex];
+        drawObject(visualCtx, visualCanvas.width, visualCanvas.height,
+                   animationData.geometryType, animationData.dimensions,
+                   temp, animationData.initialTemp, animationData.ambientTemp);
+  }
+
+  function animateNextFrame() {
+        if (isPaused) return;
+
+        currentAnimationFrame++;
+        if (currentAnimationFrame >= animationData.totalFrames) {
+            currentAnimationFrame = animationData.totalFrames - 1; // Stay on last frame
+            pauseAnimation(); // Automatically pause at the end
+            playPauseBtn.textContent = "Play";
+             playPauseBtn.disabled = true; // Maybe disable play at end? Or allow replay? Let's allow replay.
+            resetBtn.disabled = false; // Ensure reset is enabled
+            return;
+        }
+        drawAnimationFrame(currentAnimationFrame);
+  }
+
+ function startAnimation() {
+    if (animationTimer) clearInterval(animationTimer); // Clear existing timer
+    if (animationData.totalFrames > 0) {
+        isPaused = false;
+        playPauseBtn.textContent = "Pause";
+        playPauseBtn.disabled = false;
+        resetBtn.disabled = false;
+        animationSpeedSlider.disabled = false;
+        animationTimer = setInterval(animateNextFrame, getAnimationInterval());
+        console.log("Animation started with interval:", getAnimationInterval());
+    } else {
+        console.log("No animation data to start.");
+        playPauseBtn.disabled = true; // Keep disabled if no data
+        resetBtn.disabled = true;
+        animationSpeedSlider.disabled = true;
+    }
+ }
+
+
+  function pauseAnimation() {
+    isPaused = true;
+    if (animationTimer) clearInterval(animationTimer);
+    animationTimer = null;
+    playPauseBtn.textContent = "Play";
+    // Keep buttons enabled unless at start/end?
+    console.log("Animation paused.");
+  }
+
+  function togglePlayPause() {
+        if (isPaused) {
+            // If at the end, reset before playing again
+            if (currentAnimationFrame >= animationData.totalFrames - 1) {
+                resetAnimation();
+            }
+            startAnimation();
+        } else {
+            pauseAnimation();
+        }
+  }
+
+  function resetAnimation() {
+        pauseAnimation(); // Stop timer first
+        currentAnimationFrame = 0;
+        if (animationData.totalFrames > 0) {
+             drawAnimationFrame(0); // Draw the first frame
+             playPauseBtn.textContent = "Play"; // Ready to play from start
+             playPauseBtn.disabled = false;
+             resetBtn.disabled = false; // Can reset again
+             animationSpeedSlider.disabled = false;
+        } else {
+             // If no data, keep controls disabled
+             playPauseBtn.disabled = true;
+             resetBtn.disabled = true;
+             animationSpeedSlider.disabled = true;
+             // Clear canvas? Or leave as is? Let's clear.
+             visualCtx.clearRect(0,0, visualCanvas.width, visualCanvas.height);
+             visualCtx.fillText("No data computed yet.", visualCanvas.width/2, visualCanvas.height/2);
+        }
+         console.log("Animation reset.");
+  }
+
+  function updateAnimationSpeed() {
+        // If playing, restart with new interval
+        if (!isPaused) {
+            startAnimation();
+        }
+        // No action needed if paused, interval will be used on next play
+         console.log("Animation speed changed, new interval:", getAnimationInterval());
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Main Computation Function
+  ///////////////////////////////////////////////////////////////////////////
+
+  async function computeEverything() {
+    if (!pythonLoaded || !pyodide) {
+      console.error("Pyodide not ready!");
+      statusDiv.textContent = "Error: Pyodide not initialized.";
+      return;
+    }
+
+    console.log("Starting thermal dissipation computation...");
+    statusCompute.style.display = 'none'; // Hide initial message
+    resultsDiv.classList.add("loading"); // Show loading overlay
+    computeBtn.disabled = true; // Disable button during computation
+
+    try {
+      // --- Gather Inputs ---
+      const geometryType = document.getElementById("geometryType").value;
+      const orientation = document.getElementById("orientation").value;
+
+      let length, width_or_diameter, thickness, currentDimensions;
+      if (geometryType === "plate") {
+        length = parseFloat(document.getElementById("length").value);
+        width_or_diameter = parseFloat(document.getElementById("width").value);
+        thickness = parseFloat(document.getElementById("thickness").value);
+        currentDimensions = { length, width: width_or_diameter, thickness };
+      } else { // cylinder
+        length = parseFloat(document.getElementById("cylinderLength").value);
+        width_or_diameter = parseFloat(document.getElementById("diameter").value);
+        thickness = 0.0; // Not used for cylinder geometry in Python func, pass placeholder
+        currentDimensions = { length, diameter: width_or_diameter };
+      }
+
+      // Validate dimensions
+      if (isNaN(length) || isNaN(width_or_diameter) || isNaN(thickness) || length <= 0 || width_or_diameter <= 0 || (geometryType === "plate" && thickness <= 0)) {
+         throw new Error("Invalid dimensions provided. Please check inputs.");
+      }
+
+
+      const thermalConductivity = parseFloat(document.getElementById("thermalConductivity").value);
+      const density = parseFloat(document.getElementById("density").value);
+      const specificHeat = parseFloat(document.getElementById("specificHeat").value);
+      const emissivity = parseFloat(document.getElementById("emissivity").value);
+
+      const initialTemp = parseFloat(document.getElementById("initialTemp").value);
+      const ambientTemp = parseFloat(document.getElementById("ambientTemp").value);
+      const airVelocity = parseFloat(document.getElementById("airVelocity").value);
+
+      const totalTime = parseFloat(document.getElementById("simulationTime").value);
+      const timeSteps = parseInt(document.getElementById("timeSteps").value);
+
+       // Validate other inputs
+       if (isNaN(thermalConductivity) || isNaN(density) || isNaN(specificHeat) || isNaN(emissivity) ||
+           isNaN(initialTemp) || isNaN(ambientTemp) || isNaN(airVelocity) || isNaN(totalTime) || isNaN(timeSteps) ||
+           thermalConductivity <= 0 || density <= 0 || specificHeat <= 0 || emissivity < 0.01 || emissivity > 1 ||
+           airVelocity < 0 || totalTime <= 0 || timeSteps < 10) {
+           throw new Error("Invalid material property, thermal condition, or simulation parameter provided.");
+       }
+       if (initialTemp === ambientTemp) {
+           console.warn("Initial temperature is the same as ambient. No heat transfer expected.");
+           // Allow computation, but it might be boring.
+       }
+
+
+      // --- Call Python Function ---
+      console.log("Calling Python function 'thermal_dissipation_calculate'...");
+      const calculateFunc = pyodide.globals.get('thermal_dissipation_calculate');
+      const resultPy = calculateFunc(
+        geometryType, orientation,
+        length, width_or_diameter, thickness, // Dimensions
+        thermalConductivity, density, specificHeat, emissivity, // Material
+        initialTemp, ambientTemp, airVelocity, // Conditions
+        timeSteps, totalTime // Simulation
+      );
+
+      // Convert PyProxy result to JavaScript Object
+      const result = resultPy.toJs({ dict_converter: Object.fromEntries });
+      resultPy.destroy(); // Clean up PyProxy
+      console.log("Python calculation finished. Results:", result);
+
+      // --- Update UI with Results ---
+      displayResults(result);
+      updateCharts(result.times, result.temperatures, result.heat_rates);
+
+      // --- Prepare and Reset Animation ---
+      animationData = {
+          times: result.times, // Use the downsampled data for animation sync w/ charts
+          temperatures: result.temperatures,
+          initialTemp: initialTemp,
+          ambientTemp: ambientTemp,
+          geometryType: geometryType,
+          dimensions: currentDimensions,
+          totalFrames: result.times.length
+      };
+       resetAnimation(); // Resets frame counter, draws frame 0, enables controls
+       // Decide whether to auto-play or wait for user
+       // Let's not auto-play. User can click Play.
+       pauseAnimation(); // Ensure it's paused initially after compute
+       playPauseBtn.textContent = "Play";
+
+
+    } catch (error) {
+      console.error("Computation failed:", error);
+      statusCompute.textContent = `Error during calculation: ${error.message}`;
+      statusCompute.style.display = 'block';
+      statusCompute.style.color = 'red';
+       // Optionally clear charts or show error state
+        if (temperatureChart) temperatureChart.destroy();
+        if (heatRateChart) heatRateChart.destroy();
+        temperatureChart = null; heatRateChart = null;
+        // Reset animation state on error
+        animationData.totalFrames = 0;
+        resetAnimation();
+
+
+    } finally {
+      resultsDiv.classList.remove("loading"); // Hide loading overlay
+      computeBtn.disabled = false; // Re-enable compute button
+      console.log("Computation attempt finished.");
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Event Listeners
+  ///////////////////////////////////////////////////////////////////////////
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Initial UI setup
+    updateMaterialProperties();
+    updateGeometryFields();
+    // Clear canvases initially
+    temperatureChart = null; heatRateChart = null; // Ensure null for initial check
+    updateCharts([], [], []); // Draw empty charts
+    visualCtx.clearRect(0, 0, visualCanvas.width, visualCanvas.height);
+    visualCtx.textAlign = 'center';
+    visualCtx.fillStyle = '#666';
+    visualCtx.fillText("Compute results to see visualization.", visualCanvas.width / 2, visualCanvas.height / 2);
+
+
+    // Attach event listeners
+    document.getElementById("computeBtn").addEventListener("click", computeEverything);
+    document.getElementById("materialPreset").addEventListener("change", updateMaterialProperties);
+    document.getElementById("geometryType").addEventListener("change", updateGeometryFields);
+
+    // Animation controls
+    playPauseBtn.addEventListener('click', togglePlayPause);
+    resetBtn.addEventListener('click', resetAnimation);
+    animationSpeedSlider.addEventListener('input', updateAnimationSpeed); // Use 'input' for live update
+
+    // Start Pyodide initialization
+    initPyodideAndPython();
+  });
+
+</script>
+
+</body>
+</html>
