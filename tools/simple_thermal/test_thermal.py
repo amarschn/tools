@@ -109,10 +109,48 @@ def test_full_calculation_cylinder():
     # Check the temperature is decreasing
     assert result["temperatures"][0] > result["temperatures"][-1]
 
+def test_steady_state_plate_natural():
+    # Test steady state calculation for a plate with known input power
+    result = thermal_calc.calculate_steady_state_temperature(
+        geometry={"type": "plate", "orientation": "vertical"},
+        dimensions={"length": 0.1, "width": 0.1, "thickness": 0.01},
+        material_properties={"emissivity": 0.8, "density": 1, "specific_heat": 1, "thermal_conductivity": 1}, # density/cp/k not used
+        thermal_conditions={"ambient_temp": 20, "air_velocity": 0},
+        heat_input=10.0 # Watts
+    )
+
+    assert "steady_state_temp" in result
+    assert result["steady_state_temp"] > 20 # Temp should be above ambient
+    assert abs(result["final_q_output"] - result["heat_input"]) < 0.1 # Check heat balance (within tolerance)
+    assert result["converged"] is True
+
+def test_steady_state_cylinder_forced():
+    # Test steady state calculation for a cylinder with forced convection
+    result = thermal_calc.calculate_steady_state_temperature(
+        geometry={"type": "cylinder", "orientation": "vertical"}, # Orientation less critical for forced on cylinder
+        dimensions={"diameter": 0.05, "length": 0.1},
+        material_properties={"emissivity": 0.3},
+        thermal_conditions={"ambient_temp": 25, "air_velocity": 2.0}, # 2 m/s air flow
+        heat_input=15.0 # Watts
+    )
+
+    assert "steady_state_temp" in result
+    assert result["steady_state_temp"] > 25
+    assert abs(result["final_q_output"] - result["heat_input"]) < 0.1
+    assert result["convection_type"] == "forced"
+    assert result["converged"] is True
+
+
 if __name__ == "__main__":
     test_conduction()
     test_natural_convection_coefficient()
     test_radiation()
     test_full_calculation_plate()
     test_full_calculation_cylinder()
+    test_full_calculation_plate() # This implicitly tests the transient path via the wrapper
+
+    # Add calls to new tests
+    test_steady_state_plate_natural()
+    test_steady_state_cylinder_forced()
+
     print("All tests passed.")
