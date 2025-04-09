@@ -7,3 +7,4 @@ Welcome to my collection of engineering calculators and mini-apps.
 - [Engineering Fits](./tools/fits/)
 - [Acoustics](./tools/simple-acoustics/)
 - [Thermal](./tools/simple_thermal)
+- [Wire sizing](./tools/wire-sizing/)
