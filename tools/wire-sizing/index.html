@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Wire Sizing Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Load Pyodide from a CDN -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
+  <!-- Chart.js might not be needed, but link kept for consistency/future -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8f9fa;
+      color: #212529;
+      line-height: 1.6;
+    }
+    header, footer {
+      background: #343a40;
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    main {
+      max-width: 1000px;
+      margin: 1rem auto;
+      background: #fff;
+      border-radius: 5px;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    details {
+      margin-bottom: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #dee2e6;
+    }
+    details:last-of-type { border-bottom: none; }
+    details summary {
+      cursor: pointer;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #495057;
+      outline: none;
+      margin-bottom: 0.5rem;
+      list-style: none; /* Remove default marker */
+      position: relative;
+      padding-left: 1.5rem;
+    }
+    details summary::before { content: '▶'; position: absolute; left: 0; font-size: 0.9rem; transform: rotate(0deg); transition: transform 0.2s ease-in-out; }
+    details[open] summary::before { transform: rotate(90deg); }
+
+    label { display: inline-block; width: 220px; margin-right: 0.5rem; vertical-align: top; font-weight: 500; margin-bottom: 0.3rem; }
+    input[type="number"], select { padding: 0.3rem; border: 1px solid #ced4da; border-radius: 4px; }
+    input[type="number"] { width: 100px; margin-bottom: 0.5rem; }
+    select { width: 180px; margin-bottom: 0.5rem; }
+    button { display: inline-block; margin: 0.5rem; padding: 0.5rem 1rem; border: none; border-radius: 4px; background: #007bff; color: #fff; font-size: 1rem; cursor: pointer; transition: background-color 0.2s ease; }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #6c757d; cursor: not-allowed; }
+
+    .results p { margin: 0.5rem 0; font-size: 0.95rem; }
+    .results .result-label { font-weight: bold; min-width: 200px; display: inline-block;}
+    .results .result-value { font-family: monospace; }
+    .results .pass { color: green; font-weight: bold; }
+    .results .fail { color: red; font-weight: bold; }
+    .results .error { color: red; font-weight: bold; margin-top: 10px; }
+
+
+    .theory-equation { background: #f1f3f5; padding: 10px 15px; border-left: 4px solid #007bff; margin: 15px 0; font-family: monospace; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+    .col-2 { display: flex; flex-wrap: wrap; gap: 2rem; }
+    .col { flex: 1; min-width: 300px; }
+    .info-box { background: #e9f7fe; border-left: 4px solid #0d6efd; padding: 10px 15px; margin: 10px 0; font-size: 0.9rem; }
+    .status-message { padding: 10px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; margin-bottom: 1rem; text-align: center; }
+
+    .loading { position: relative; min-height: 50px; pointer-events: none; }
+    .loading::after { content: "Calculating..."; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); display: flex; justify-content: center; align-items: center; font-weight: bold; z-index: 10; border-radius: 4px; }
+
+    /* Mode/Type specific UI hiding */
+    .check-size-only, .ac-params, .load-input-v, .load-input-i, .load-input-p { display: none; /* Controlled by JS */ }
+
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) { main { padding: 1rem; } label { width: 180px; } .col-2 { gap: 1rem; } }
+    @media (max-width: 480px) { label { width: 100%; margin-right: 0; } input[type="number"], select { width: 100%; margin-bottom: 1rem; } h1 { font-size: 1.5rem; } details summary { font-size: 1.1rem; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Wire Sizing Calculator (Ampacity & Voltage Drop)</h1>
+</header>
+
+<main>
+  <div id="status" class="status-message">Loading Pyodide and Python code... Please wait.</div>
+
+  <!-- 1) INPUT PARAMETERS -->
+  <details open>
+    <summary>1) Input Parameters</summary>
+
+    <div class="col-2">
+      <div class="col">
+        <h3>Calculation Mode</h3>
+        <label for="calcMode">Mode:</label>
+        <select id="calcMode">
+          <option value="calculate_size" selected>Calculate Minimum Wire Size</option>
+          <option value="check_size">Check Existing Wire Size</option>
+        </select><br>
+
+        <h3>Electrical Load</h3>
+        <label for="circuitType">Circuit Type:</label>
+        <select id="circuitType">
+          <option value="DC" selected>DC</option>
+          <option value="AC">AC (Single Phase)</option>
+        </select><br>
+
+        <label for="loadInputType">Define Load By:</label>
+        <select id="loadInputType">
+          <option value="VI" selected>Voltage & Current</option>
+          <option value="VP">Voltage & Power</option>
+          <option value="IP">Current & Power</option>
+        </select><br>
+
+        <div class="load-input-v">
+           <label for="voltage">Voltage (V):</label>
+           <input type="number" id="voltage" value="120" step="0.1" min="0" required><br>
+        </div>
+        <div class="load-input-i">
+           <label for="current">Current (A):</label>
+           <input type="number" id="current" value="15" step="0.01" min="0" required><br>
+        </div>
+        <div class="load-input-p">
+            <label for="power">Power (W):</label>
+            <input type="number" id="power" value="1800" step="1" min="0" required><br>
+        </div>
+
+        <div class="ac-params">
+            <label for="powerFactor">Power Factor:</label>
+            <input type="number" id="powerFactor" value="0.95" step="0.01" min="0.1" max="1.0" required><br>
+            <label for="frequency">Frequency (Hz):</label>
+            <input type="number" id="frequency" value="60" step="1" min="1"> <small>(Optional)</small><br>
+        </div>
+      </div>
+
+      <div class="col">
+        <h3>Operational & Installation</h3>
+         <label for="wireLength">Wire Run Length (meters):</label>
+         <input type="number" id="wireLength" value="20" step="0.1" min="0.1" required><br>
+
+         <label for="conductorMaterial">Conductor Material:</label>
+         <select id="conductorMaterial">
+           <option value="copper" selected>Copper</option>
+           <option value="aluminum">Aluminum</option>
+         </select><br>
+
+         <label for="insulationRating">Insulation Rating (°C):</label>
+         <select id="insulationRating">
+           <option value="60">60°C (e.g., TW)</option>
+           <option value="75" selected>75°C (e.g., THW, THWN)</option>
+           <option value="90">90°C (e.g., THHN, XHHW)</option>
+         </select><br>
+
+         <label for="ambientTemp">Max Ambient Temp (°C):</label>
+         <input type="number" id="ambientTemp" value="30" step="1" required><br>
+
+         <label for="installationMethod">Installation Method:</label>
+         <select id="installationMethod">
+            <!-- Note: Backend needs logic to handle these, maybe selecting different base tables -->
+           <option value="conduit" selected>In Conduit/Raceway</option>
+           <option value="free_air">Free Air</option>
+         </select><br>
+
+         <label for="numBundledConductors">Current-Carrying Conductors in Bundle:</label>
+         <input type="number" id="numBundledConductors" value="3" step="1" min="1" required><br>
+
+         <div class="check-size-only">
+            <label for="checkWireSize">Wire Size to Check:</label>
+            <select id="checkWireSize">
+                <!-- Populate common AWG sizes -->
+                <option value="18 AWG">18 AWG</option>
+                <option value="16 AWG">16 AWG</option>
+                <option value="14 AWG">14 AWG</option>
+                <option value="12 AWG" selected>12 AWG</option>
+                <option value="10 AWG">10 AWG</option>
+                <option value="8 AWG">8 AWG</option>
+                <option value="6 AWG">6 AWG</option>
+                <option value="4 AWG">4 AWG</option>
+                <option value="2 AWG">2 AWG</option>
+                <option value="1 AWG">1 AWG</option>
+                <option value="1/0 AWG">1/0 AWG</option>
+                <option value="2/0 AWG">2/0 AWG</option>
+                <option value="3/0 AWG">3/0 AWG</option>
+                <option value="4/0 AWG">4/0 AWG</option>
+                <option value="250 kcmil">250 kcmil</option>
+                <option value="300 kcmil">300 kcmil</option>
+                <option value="350 kcmil">350 kcmil</option>
+                <option value="400 kcmil">400 kcmil</option>
+                <option value="500 kcmil">500 kcmil</option>
+                <!-- Add more as needed -->
+            </select><br>
+         </div>
+
+        <button id="computeBtn" disabled>Calculate</button>
+      </div>
+    </div>
+     <div class="info-box">
+        <strong>Disclaimer:</strong> This tool provides estimates based on simplified standard data (e.g., NEC-like tables). Always consult applicable electrical codes, manufacturer specs, and a qualified professional for final design. Factors like termination ratings, detailed installation specifics, and transient conditions are not fully covered.
+     </div>
+  </details>
+
+  <!-- 2) RESULTS -->
+  <details open>
+    <summary>2) Results</summary>
+    <div class="results" id="results-output">
+      <p id="statusCompute">Select mode and parameters, then click 'Calculate'.</p>
+      <!-- Results will be populated here by JS -->
+    </div>
+  </details>
+
+  <!-- 3) THEORY & EQUATIONS -->
+  <details>
+    <summary>3) Theory & Concepts</summary>
+
+    <h3>Purpose</h3>
+    <p>This calculator estimates the appropriate wire size (gauge) based on the load current, insulation type, and installation conditions to prevent overheating (Ampacity) and checks the resulting voltage drop.</p>
+
+    <h3>Key Concepts</h3>
+    <h4>Ampacity</h4>
+    <p>The maximum current a conductor can carry continuously under specific conditions without exceeding its temperature rating. It depends on:</p>
+    <ul>
+        <li>Wire size (cross-sectional area)</li>
+        <li>Conductor material (Copper vs. Aluminum)</li>
+        <li>Insulation temperature rating (e.g., 60°C, 75°C, 90°C)</li>
+        <li>Ambient temperature</li>
+        <li>Installation method (in conduit vs. free air)</li>
+        <li>Number of adjacent current-carrying conductors (bundling)</li>
+    </ul>
+    <p>Base ampacity values are typically found in tables (like NEC 310.16). These values are then adjusted using correction factors.</p>
+    <div class="theory-equation">Corrected Ampacity = Base Ampacity × Temp Correction Factor × Bundling Adjustment Factor</div>
+    <p>The Corrected Ampacity must be ≥ Load Current.</p>
+
+    <h4>Derating Factors</h4>
+    <ul>
+        <li><strong>Ambient Temperature Correction:</strong> Wires in hotter environments can carry less current. Standard tables are often based on 30°C ambient. Factors adjust for different temperatures (e.g., NEC 310.15(B)(1)).</li>
+        <li><strong>Bundling Adjustment:</strong> When multiple current-carrying wires are grouped together (e.g., in conduit), their ability to dissipate heat is reduced. Adjustment factors decrease the allowable ampacity (e.g., NEC 310.15(C)(1)).</li>
+    </ul>
+
+     <h4>Resistance</h4>
+    <p>The opposition to current flow, causing voltage drop and heat generation (I²R loss). It depends on material, length, cross-sectional area, and temperature.</p>
+    <div class="theory-equation">R = ρ × (1 + α × (T<sub>op</sub> - T<sub>ref</sub>)) × Length / Area</div>
+    <p>Where ρ is resistivity, α is the temperature coefficient of resistance, T<sub>op</sub> is the operating temperature, T<sub>ref</sub> is the reference temperature for ρ and α (often 20°C).</p>
+
+    <h4>Voltage Drop</h4>
+    <p>The reduction in voltage along the length of the wire due to its resistance.</p>
+    <div class="theory-equation">V<sub>drop</sub> = Current × Resistance</div>
+    <p>(For AC with significant reactance (X), V<sub>drop</sub> ≈ I × Z = I × √(R² + X²). This calculator uses the simpler R-only method for basic estimation).</p>
+    <p>Excessive voltage drop can cause equipment malfunction. Common limits are 3-5%.</p>
+
+    <h4>Power Loss</h4>
+    <p>Energy dissipated as heat in the wire.</p>
+    <div class="theory-equation">P<sub>loss</sub> = Current² × Resistance = V<sub>drop</sub> × Current</div>
+
+    <h3>Calculation Modes</h3>
+    <ul>
+        <li><strong>Calculate Minimum Wire Size:</strong> Determines the required *base* ampacity by dividing the load current by the total derating factor. Then finds the smallest standard wire size with a base ampacity meeting this requirement.</li>
+        <li><strong>Check Existing Wire Size:</strong> Calculates the corrected ampacity for a *specified* wire size under the given conditions and compares it to the load current (Pass/Fail).</li>
+    </ul>
+
+    <h3>Limitations</h3>
+    <ul>
+      <li>Relies on simplified data tables derived from standards (e.g., NEC).</li>
+      <li>Basic voltage drop calculation ignores AC reactance.</li>
+      <li>Assumes steady-state operation (not pulsed loads).</li>
+      <li>Does not account for termination temperature ratings (NEC 110.14(C)).</li>
+      <li>Not a substitute for professional engineering or code compliance checks.</li>
+    </ul>
+  </details>
+</main>
+
+<footer>
+  <p>&copy; 2025 - Wire Sizing Calculator</p>
+</footer>
+
+<script>
+  ///////////////////////////////////////////////////////////////////////////
+  // Global Variables & Configuration
+  ///////////////////////////////////////////////////////////////////////////
+  let pyodide = null;
+  let pythonLoaded = false;
+  const statusDiv = document.getElementById("status");
+  const computeBtn = document.getElementById("computeBtn");
+  const resultsDiv = document.getElementById("results-output");
+  const statusCompute = document.getElementById('statusCompute');
+
+  // Input Elements
+  const calcModeSelect = document.getElementById('calcMode');
+  const circuitTypeSelect = document.getElementById('circuitType');
+  const loadInputTypeSelect = document.getElementById('loadInputType');
+  const voltageInput = document.getElementById('voltage');
+  const currentInput = document.getElementById('current');
+  const powerInput = document.getElementById('power');
+  const powerFactorInput = document.getElementById('powerFactor');
+  const checkWireSizeSelect = document.getElementById('checkWireSize'); // Add other inputs if needed frequently
+
+  // UI Sections
+  const acParamsDiv = document.querySelector('.ac-params');
+  const checkSizeDiv = document.querySelector('.check-size-only');
+  const voltageDiv = document.querySelector('.load-input-v');
+  const currentDiv = document.querySelector('.load-input-i');
+  const powerDiv = document.querySelector('.load-input-p');
+
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Initialization
+  ///////////////////////////////////////////////////////////////////////////
+
+  async function initPyodideAndPython() {
+    try {
+      statusDiv.textContent = "Loading Pyodide runtime...";
+      pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/" });
+      console.log("Pyodide loaded!");
+
+      statusDiv.textContent = "Loading Python wire calculation code...";
+      const resp = await fetch("wire_calc.py"); // Make sure this file exists
+      if (!resp.ok) throw new Error(`Failed to fetch wire_calc.py: ${resp.statusText}`);
+      const calcSource = await resp.text();
+      await pyodide.runPythonAsync(calcSource);
+      pythonLoaded = true;
+      console.log("wire_calc.py loaded into Pyodide!");
+      statusDiv.textContent = "Ready. Adjust parameters and click 'Calculate'.";
+      computeBtn.disabled = false;
+      updateUI(); // Initial UI setup
+    } catch (error) {
+        console.error("Initialization failed:", error);
+        statusDiv.textContent = `Error loading application: ${error.message}. Please refresh.`;
+        statusDiv.style.color = 'red';
+        computeBtn.disabled = true;
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // UI Update Functions
+  ///////////////////////////////////////////////////////////////////////////
+
+ function updateUI() {
+    const mode = calcModeSelect.value;
+    const circuitType = circuitTypeSelect.value;
+    const loadType = loadInputTypeSelect.value;
+
+    console.log(`Updating UI for Mode: ${mode}, Circuit: ${circuitType}, Load: ${loadType}`);
+
+    // Show/hide based on Calculation Mode
+    checkSizeDiv.style.display = (mode === 'check_size') ? 'block' : 'none';
+    checkWireSizeSelect.required = (mode === 'check_size');
+
+    // Show/hide based on Circuit Type
+    acParamsDiv.style.display = (circuitType === 'AC') ? 'block' : 'none';
+    powerFactorInput.required = (circuitType === 'AC');
+    // Frequency is optional, so no required attribute change needed
+
+    // Show/hide based on Load Input Type
+    voltageDiv.style.display = (loadType === 'VI' || loadType === 'VP') ? 'block' : 'none';
+    currentDiv.style.display = (loadType === 'VI' || loadType === 'IP') ? 'block' : 'none';
+    powerDiv.style.display   = (loadType === 'VP' || loadType === 'IP') ? 'block' : 'none';
+
+    // Manage required attributes for load inputs
+    voltageInput.required = (loadType === 'VI' || loadType === 'VP');
+    currentInput.required = (loadType === 'VI' || loadType === 'IP');
+    powerInput.required   = (loadType === 'VP' || loadType === 'IP');
+
+    // Clear previous results when inputs change significantly
+    resultsDiv.innerHTML = `<p id="statusCompute">Parameters changed. Click 'Calculate'.</p>`;
+
+ }
+
+ function displayResults(results) {
+    resultsDiv.innerHTML = ''; // Clear previous results or status message
+    statusCompute.style.display = 'none'; // Hide initial message if it was there
+
+    // Always display inputs used (helps debugging) - Optional
+    // resultsDiv.innerHTML += `<h4>Inputs Used</h4><pre>${JSON.stringify(results.inputs, null, 2)}</pre><hr>`;
+
+    resultsDiv.innerHTML += `<h4>Calculation Results</h4>`;
+
+    if (results.errors && results.errors.length > 0) {
+        resultsDiv.innerHTML += `<p class="error">Error(s): ${results.errors.join(', ')}</p>`;
+        return; // Stop processing if errors occurred
+    }
+
+    // --- Display common results ---
+    resultsDiv.innerHTML += `<p><span class="result-label">Load Current:</span> <span class="result-value">${results.load_current?.toFixed(2) ?? 'N/A'} A</span></p>`;
+    if (results.calculated_power) {
+         resultsDiv.innerHTML += `<p><span class="result-label">Calculated Power:</span> <span class="result-value">${results.calculated_power.toFixed(1)} W</span></p>`;
+    }
+    resultsDiv.innerHTML += `<p><span class="result-label">Temperature Correction Factor:</span> <span class="result-value">${results.temp_correction_factor?.toFixed(3) ?? 'N/A'}</span></p>`;
+    resultsDiv.innerHTML += `<p><span class="result-label">Bundling Adjustment Factor:</span> <span class="result-value">${results.bundling_adjustment_factor?.toFixed(3) ?? 'N/A'}</span></p>`;
+    resultsDiv.innerHTML += `<p><span class="result-label">Total Derating Factor:</span> <span class="result-value">${results.total_derating_factor?.toFixed(3) ?? 'N/A'}</span></p>`;
+
+
+    // --- Display mode-specific results ---
+    if (results.inputs.mode === "calculate_size") {
+        resultsDiv.innerHTML += `<hr>`;
+        resultsDiv.innerHTML += `<p><span class="result-label">Required Base Ampacity:</span> <span class="result-value">${results.required_base_ampacity?.toFixed(1) ?? 'N/A'} A</span></p>`;
+        if (results.recommended_wire_size) {
+             resultsDiv.innerHTML += `<p><span class="result-label">Recommended Wire Size:</span> <span class="result-value">${results.recommended_wire_size}</span></p>`;
+             resultsDiv.innerHTML += `<p><span class="result-label">Corrected Ampacity (@ Conditions):</span> <span class="result-value">${results.corrected_ampacity?.toFixed(1) ?? 'N/A'} A</span></p>`;
+        } else {
+             resultsDiv.innerHTML += `<p class="error">Could not find a suitable standard wire size.</p>`;
+        }
+
+    } else if (results.inputs.mode === "check_size") {
+        resultsDiv.innerHTML += `<hr>`;
+        resultsDiv.innerHTML += `<p><span class="result-label">Checked Wire Size:</span> <span class="result-value">${results.selected_wire_size}</span></p>`;
+        resultsDiv.innerHTML += `<p><span class="result-label">Corrected Ampacity (@ Conditions):</span> <span class="result-value">${results.corrected_ampacity?.toFixed(1) ?? 'N/A'} A</span></p>`;
+        if (results.check_result) {
+            const resultClass = results.check_result === "PASS" ? "pass" : "fail";
+            resultsDiv.innerHTML += `<p><span class="result-label">Ampacity Check:</span> <span class="result-value ${resultClass}">${results.check_result}</span></p>`;
+            if(results.ampacity_margin_percent !== undefined){
+                 resultsDiv.innerHTML += `<p><span class="result-label">Ampacity Margin:</span> <span class="result-value">${results.ampacity_margin_percent?.toFixed(1)} %</span></p>`;
+            }
+            if(results.ampacity_shortfall_percent !== undefined){
+                 resultsDiv.innerHTML += `<p><span class="result-label">Ampacity Shortfall:</span> <span class="result-value fail">${results.ampacity_shortfall_percent?.toFixed(1)} %</span></p>`;
+            }
+        }
+    }
+
+     // --- Display Voltage Drop / Loss (if calculated) ---
+     if (results.voltage_drop_v !== undefined) {
+         resultsDiv.innerHTML += `<hr>`;
+         resultsDiv.innerHTML += `<p><span class="result-label">Estimated Resistance (@ ${results.inputs.insulation_rating_c}°C):</span> <span class="result-value">${results.estimated_resistance_ohm?.toFixed(4) ?? 'N/A'} Ω</span></p>`;
+         resultsDiv.innerHTML += `<p><span class="result-label">Voltage Drop:</span> <span class="result-value">${results.voltage_drop_v?.toFixed(2) ?? 'N/A'} V</span></p>`;
+         if (results.voltage_drop_percent !== undefined) {
+              const vdropClass = results.voltage_drop_percent > 5 ? "fail" : (results.voltage_drop_percent > 3 ? "warn" : "pass"); // Example styling thresholds
+               resultsDiv.innerHTML += `<p><span class="result-label">Voltage Drop %:</span> <span class="result-value ${vdropClass}">${results.voltage_drop_percent?.toFixed(2) ?? 'N/A'} %</span></p>`;
+         }
+          resultsDiv.innerHTML += `<p><span class="result-label">Power Loss in Wire:</span> <span class="result-value">${results.power_loss_w?.toFixed(2) ?? 'N/A'} W</span></p>`;
+     }
+}
+
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Main Computation Function
+  ///////////////////////////////////////////////////////////////////////////
+
+  async function computeEverything() {
+    if (!pythonLoaded || !pyodide) {
+      console.error("Pyodide not ready!");
+      statusDiv.textContent = "Error: Pyodide not initialized.";
+      return;
+    }
+
+    console.log("Starting wire sizing computation...");
+    resultsDiv.innerHTML = ''; // Clear previous results
+    resultsDiv.classList.add("loading"); // Show loading overlay
+    computeBtn.disabled = true; // Disable button during computation
+
+    try {
+      // --- Gather Inputs ---
+      const mode = calcModeSelect.value;
+      const circuit_type = circuitTypeSelect.value;
+      const load_input_type = loadInputTypeSelect.value; // To know which inputs are primary
+
+      // Parse V, I, P - set to null if not relevant for the selected load type or empty/invalid
+      let voltage = null;
+      let current = null;
+      let power = null;
+
+      if (load_input_type === 'VI' || load_input_type === 'VP') {
+        const v = parseFloat(voltageInput.value);
+        if (!isNaN(v)) voltage = v;
+      }
+       if (load_input_type === 'VI' || load_input_type === 'IP') {
+        const i = parseFloat(currentInput.value);
+         if (!isNaN(i)) current = i;
+      }
+       if (load_input_type === 'VP' || load_input_type === 'IP') {
+        const p = parseFloat(powerInput.value);
+         if (!isNaN(p)) power = p;
+      }
+
+      let power_factor = 1.0;
+      if (circuit_type === 'AC') {
+        const pf = parseFloat(powerFactorInput.value);
+        if (!isNaN(pf) && pf >= 0.1 && pf <= 1.0) power_factor = pf;
+      }
+      // let frequency = circuit_type === 'AC' ? parseFloat(document.getElementById('frequency').value) : null; // Not used yet
+
+      const conductor_material = document.getElementById('conductorMaterial').value;
+      const insulation_rating_c = parseInt(document.getElementById('insulationRating').value);
+      const wire_length_m = parseFloat(document.getElementById('wireLength').value);
+      const ambient_temp_c = parseFloat(document.getElementById('ambientTemp').value);
+      const num_bundled_conductors = parseInt(document.getElementById('numBundledConductors').value);
+      const installation_method = document.getElementById('installationMethod').value;
+
+      let check_wire_size = null;
+      if (mode === 'check_size') {
+        check_wire_size = checkWireSizeSelect.value;
+      }
+
+      // Basic Client-side Validation (Python side should have more robust checks)
+      if (isNaN(insulation_rating_c) || isNaN(wire_length_m) || wire_length_m <= 0 || isNaN(ambient_temp_c) || isNaN(num_bundled_conductors) || num_bundled_conductors < 1) {
+          throw new Error("Invalid operational/installation parameters (Insulation, Length, Ambient Temp, Bundling).");
+      }
+       // Check if load definition is minimally valid
+       if ((load_input_type === 'VI' && (voltage === null || current === null)) ||
+           (load_input_type === 'VP' && (voltage === null || power === null)) ||
+           (load_input_type === 'IP' && (current === null || power === null))) {
+           throw new Error(`Invalid load definition for type ${load_input_type}. Ensure both required fields have valid numbers.`);
+       }
+
+
+      // --- Call Python Function ---
+      console.log(`Calling Python function 'calculate_wire_parameters' for mode: ${mode}...`);
+      const calculateFunc = pyodide.globals.get('calculate_wire_parameters');
+
+      // Call the Python function with all potential args
+      const resultPy = calculateFunc(
+        /* mode */                mode,
+        /* circuit_type */        circuit_type,
+        /* voltage */             voltage,
+        /* current */             current,
+        /* power */               power,
+        /* conductor_material */  conductor_material,     // Now in correct position
+        /* insulation_rating_c */ insulation_rating_c,    // Now in correct position
+        /* wire_length_m */       wire_length_m,          // Now in correct position
+        /* ambient_temp_c */      ambient_temp_c,         // Now in correct position
+        /* power_factor */        power_factor,           // Moved later (has default)
+        /* check_wire_size */     check_wire_size,        // Has default
+        /* num_bundled_conductors*/ num_bundled_conductors, // Has default
+        /* installation_method */ installation_method     // Has default
+        // Add frequency later if needed
+      );
+
+      
+
+      // Convert PyProxy result to JavaScript Object
+      const result = resultPy.toJs({ dict_converter: Object.fromEntries });
+      resultPy.destroy(); // Clean up PyProxy
+      console.log("Python calculation finished. Results:", result);
+
+       // Python function now returns errors within the dict
+       // if (result.error) { throw new Error(`Calculation Error: ${result.error}`); }
+
+      // --- Update UI with Results ---
+      displayResults(result);
+
+
+    } catch (error) {
+      console.error("Computation failed:", error);
+      // Display the error in the results area
+      resultsDiv.innerHTML = `<p id="statusCompute" class="error">Error: ${error.message}</p>`;
+
+    } finally {
+      resultsDiv.classList.remove("loading"); // Hide loading overlay
+      computeBtn.disabled = false; // Re-enable compute button
+      console.log("Computation attempt finished.");
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // Event Listeners
+  ///////////////////////////////////////////////////////////////////////////
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Initial UI setup is now handled in init function after Pyodide loads
+
+    // Attach event listeners
+    computeBtn.addEventListener("click", computeEverything);
+    calcModeSelect.addEventListener("change", updateUI);
+    circuitTypeSelect.addEventListener("change", updateUI);
+    loadInputTypeSelect.addEventListener("change", updateUI);
+
+    // Start Pyodide initialization
+    initPyodideAndPython();
+  });
+
+</script>
+
+</body>
+</html>
