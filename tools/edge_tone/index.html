@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en" class="bg-gray-50 dark:bg-gray-950">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whistle Acoustics Explorer (Pyodide)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .form-label {
+      @apply block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1;
+    }
+    .form-input {
+      @apply w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-400 dark:border-gray-600 rounded-md shadow-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition;
+    }
+    .card {
+      @apply bg-white dark:bg-gray-900 rounded-xl shadow-md p-6 border border-gray-200 dark:border-gray-800;
+    }
+    .btn {
+      @apply px-4 py-2 text-white font-semibold rounded-md shadow-sm transition-colors duration-200;
+    }
+    .btn-primary {
+      @apply bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+    }
+    /* Loading Overlay */
+    #loader {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.7);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      z-index: 1000; color: white;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 4px solid #fff;
+      width: 40px; height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="text-gray-800 dark:text-gray-300">
+
+<!-- Loading overlay -->
+<div id="loader">
+  <div class="spinner"></div>
+  <p id="loader-message" class="mt-4 text-lg">Initializing Pyodide runtime...</p>
+</div>
+
+
+<div class="container mx-auto p-4 md:p-8 max-w-7xl">
+  
+  <header class="text-center mb-8">
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Whistle Acoustics Explorer</h1>
+    <p class="mt-2 text-lg text-gray-600 dark:text-gray-400">An interactive tool for analyzing whistle resonance and edge-tone locking.</p>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <div class="lg:col-span-1 space-y-6">
+      <form id="params-form">
+        
+        <div class="card">
+          <h2 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-800 pb-2">Configuration</h2>
+          <div>
+            <label for="preset-selector" class="form-label">Load a Preset</label>
+            <select id="preset-selector" class="form-input">
+              <option value="custom">-- Custom --</option>
+              <option value="tin_whistle">Tin Whistle</option>
+              <option value="bottle_blow">Bottle Blow</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-800 pb-2">General Parameters</h2>
+          <div class="space-y-4">
+            <div>
+              <label for="model" class="form-label">Resonator Model</label>
+              <select name="model" id="model" class="form-input">
+                <option value="pipe" selected>Pipe (Open–Closed)</option>
+                <option value="helmholtz">Helmholtz</option>
+              </select>
+            </div>
+            <div>
+              <label for="T" class="form-label">Air Temperature T (K)</label>
+              <input type="number" step="0.1" name="T" id="T" value="293.15" class="form-input">
+            </div>
+            <div>
+              <label for="d" class="form-label">Jet Thickness d (m)</label>
+              <input type="number" step="0.0001" name="d" id="d" value="0.001" class="form-input">
+            </div>
+            <div>
+              <label for="stages" class="form-label">Edge-Tone Stages (St values)</label>
+              <input type="text" name="stages" id="stages" value="0.2,0.4,0.7,1.0,1.3" class="form-input">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+            <h2 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-800 pb-2">Resonator Geometry</h2>
+            <div id="pipe_fields" class="space-y-4">
+              <div>
+                <label for="L" class="form-label">Tube Length L (m)</label>
+                <input type="number" step="0.001" name="L" id="L" value="0.3" class="form-input">
+              </div>
+              <div>
+                <label for="end_corr" class="form-label">End Correction (m)</label>
+                <input type="number" step="0.0001" name="end_corr" id="end_corr" value="0.005" class="form-input">
+              </div>
+              <div>
+                <label for="n_max" class="form-label">Number of Modes (n)</label>
+                <input type="number" step="1" name="n_max" id="n_max" value="6" class="form-input">
+              </div>
+            </div>
+            <div id="helm_fields" class="space-y-4" style="display: none;">
+              <div>
+                <label for="A" class="form-label">Neck Area A (m²)</label>
+                <input type="number" step="1e-7" name="A" id="A" value="5e-5" class="form-input">
+              </div>
+              <div>
+                <label for="V" class="form-label">Cavity Volume V (m³)</label>
+                <input type="number" step="1e-7" name="V" id="V" value="30e-6" class="form-input">
+              </div>
+              <div>
+                <label for="L_eff" class="form-label">Effective Neck Length L_eff (m)</label>
+                <input type="number" step="0.0001" name="L_eff" id="L_eff" value="0.01" class="form-input">
+              </div>
+            </div>
+        </div>
+        
+        <button type="submit" class="w-full btn btn-primary">Analyze</button>
+
+      </form>
+    </div>
+
+    <div class="lg:col-span-2 space-y-8">
+      
+      <div class="card">
+         <h2 class="text-lg font-semibold mb-1 text-gray-900 dark:text-white">Visualization</h2>
+         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Locking occurs where edge-tone lines (dotted) intersect resonator modes (dashed).</p>
+        <div id="plot" style="width:100%; min-height:450px;"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-800 pb-2">Analysis Results</h2>
+        <div class="mb-4 space-y-1">
+            <p>Speed of Sound c = <strong id="c_result" class="text-indigo-600 dark:text-indigo-400">...</strong> m/s</p>
+            <p>Resonator Frequencies (Hz): 
+                <span id="modes_result" class="font-mono text-indigo-600 dark:text-indigo-400">
+                    ...
+                </span>
+            </p>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-gray-100 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-400">
+              <tr>
+                <th class="px-4 py-2">Mode</th>
+                <th class="px-4 py-2">Mode Freq (Hz)</th>
+                <th class="px-4 py-2">Stage</th>
+                <th class="px-4 py-2">St</th>
+                <th class="px-4 py-2">Locking Speed (m/s)</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
+              <!-- Results will be injected here by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async function() {
+    const loader = document.getElementById('loader');
+    const loaderMessage = document.getElementById('loader-message');
+    const form = document.getElementById('params-form');
+    
+    let pyodide = null;
+    let mainModule = null;
+    let presets = {};
+
+    // --- PYODIDE INITIALIZATION ---
+    async function initializePyodide() {
+        try {
+            pyodide = await loadPyodide();
+            
+            loaderMessage.textContent = 'Loading core logic (whistle_acoustics.py)...';
+            const whistleAcousticsResponse = await fetch('./whistle_acoustics.py');
+            if (!whistleAcousticsResponse.ok) throw new Error(`Failed to fetch whistle_acoustics.py (status: ${whistleAcousticsResponse.status})`);
+            const whistleAcousticsCode = await whistleAcousticsResponse.text();
+            pyodide.FS.writeFile('whistle_acoustics.py', whistleAcousticsCode);
+            
+            loaderMessage.textContent = 'Loading main app (main.py)...';
+            const mainResponse = await fetch('./main.py');
+            if (!mainResponse.ok) throw new Error(`Failed to fetch main.py (status: ${mainResponse.status})`);
+            const mainCode = await mainResponse.text();
+            pyodide.FS.writeFile('main.py', mainCode);
+
+            loaderMessage.textContent = 'Initializing Python modules...';
+            // Import the main python module
+            mainModule = pyodide.pyimport('main');
+            
+            // Get presets from Python
+            presets = mainModule.get_presets().toJs({ dict_converter: Object.fromEntries });
+            
+            loaderMessage.textContent = 'Ready!';
+            loader.style.display = 'none';
+        } catch (error) {
+            console.error("Pyodide initialization failed:", error);
+            loaderMessage.innerHTML = `
+                <p class="text-red-400 font-bold">Error during setup!</p>
+                <p class="text-sm mt-2">Could not load Python files.</p>
+                <p class="text-xs mt-1">Please ensure main.py and whistle_acoustics.py are in the same folder as this HTML file and that your browser can access them.</p>
+                <p class="text-xs mt-2 font-mono bg-gray-800 p-2 rounded">${error.message}</p>
+            `;
+        }
+    }
+
+    // --- UI LOGIC ---
+    function syncModelFields() {
+// ... existing code ... -->
+
