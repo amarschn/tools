@@ -35,7 +35,7 @@ def get_presets():
 def get_sanitized_params(js_params):
     """
     Extracts and sanitizes parameters passed from JavaScript.
-    js_params is a PyProxy object that behaves like a dictionary.
+    js_params is now a standard Python dictionary.
     """
     params = PRESETS["default"].copy() # Start with defaults
     
@@ -130,7 +130,11 @@ def calculate_acoustics(js_params):
     Main calculation function called from JavaScript.
     It takes a PyProxy object from JS, processes it, and returns a Python dict.
     """
-    params = get_sanitized_params(js_params)
+    # ----------- FIX WAS APPLIED HERE -----------
+    # Convert the JS object PyProxy into a true Python dictionary
+    params = get_sanitized_params(js_params.to_py())
+    # ------------------------------------------
+    
     c = speed_of_sound(params['T'])
     stages = [float(s) for s in params['stages'].split(',')]
     
