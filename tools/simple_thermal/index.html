@@ -2,619 +2,339 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Thermal Calculator</title> <!-- Changed title slightly -->
+  <title>Thermal & Heatsink Calculator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- Load Chart.js from a CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Load Pyodide from a CDN -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
-
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f8f9fa;
-      color: #212529;
-      line-height: 1.6;
-    }
-    header, footer {
-      background: #343a40;
-      color: #fff;
-      padding: 1rem;
-      text-align: center;
-    }
-    h1 {
-      margin: 0;
-      font-size: 1.75rem;
-    }
-    main {
-      max-width: 1000px;
-      margin: 1rem auto;
-      background: #fff;
-      border-radius: 5px;
-      padding: 1rem 2rem;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    details {
-      margin-bottom: 1rem;
-      padding: 0.5rem 0;
-      border-bottom: 1px solid #dee2e6;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background: #f8f9fa; color: #212529; line-height: 1.6; }
+    header, footer { background: #343a40; color: #fff; padding: 1rem; text-align: center; }
+    h1 { margin: 0; font-size: 1.75rem; }
+    main { max-width: 1200px; margin: 1rem auto; background: #fff; border-radius: 8px; padding: 1rem 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    details { margin-bottom: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #dee2e6; }
     details:last-of-type { border-bottom: none; }
-    details summary {
-      cursor: pointer;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: #495057;
-      outline: none;
-      margin-bottom: 0.5rem;
-      list-style: none; /* Remove default marker */
-      position: relative;
-      padding-left: 1.5rem;
-    }
+    details summary { cursor: pointer; font-size: 1.2rem; font-weight: 600; color: #495057; outline: none; margin-bottom: 0.5rem; list-style: none; position: relative; padding-left: 1.5rem; }
     details summary::before { content: '▶'; position: absolute; left: 0; font-size: 0.9rem; transform: rotate(0deg); transition: transform 0.2s ease-in-out; }
     details[open] summary::before { transform: rotate(90deg); }
-
-    label { display: inline-block; width: 220px; margin-right: 0.5rem; vertical-align: top; font-weight: 500; margin-bottom: 0.3rem; }
-    input[type="number"], select { padding: 0.3rem; border: 1px solid #ced4da; border-radius: 4px; }
-    input[type="number"] { width: 80px; margin-bottom: 0.5rem; }
-    select { width: 160px; margin-bottom: 0.5rem; } /* Slightly wider */
-    button { display: inline-block; margin: 0.5rem; padding: 0.5rem 1rem; border: none; border-radius: 4px; background: #007bff; color: #fff; font-size: 1rem; cursor: pointer; transition: background-color 0.2s ease; }
+    label { display: inline-block; width: 220px; margin-right: 0.5rem; vertical-align: middle; font-weight: 500; margin-bottom: 0.5rem; }
+    input[type="number"], select { padding: 0.4rem; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; }
+    input[type="number"] { width: 90px; }
+    select { width: 180px; }
+    button { display: inline-block; margin: 1rem 0.5rem 0.5rem 0; padding: 0.6rem 1.2rem; border: none; border-radius: 4px; background: #007bff; color: #fff; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s ease; }
     button:hover { background: #0056b3; }
     button:disabled { background: #6c757d; cursor: not-allowed; }
-
-    .results p { margin: 0.5rem 0; font-size: 0.95rem; }
-    .results .result-label { font-weight: bold; min-width: 180px; display: inline-block;}
-    .results .result-value { font-family: monospace; }
-
+    .results { display: flex; flex-wrap: wrap; gap: 2rem; }
+    .results-summary { flex: 1; min-width: 350px; }
+    .results-summary p { margin: 0.6rem 0; font-size: 0.95rem; }
+    .result-label { font-weight: bold; min-width: 200px; display: inline-block; color: #495057;}
+    .result-value { font-family: monospace; background-color: #f1f3f5; padding: 2px 5px; border-radius: 3px; }
+    .result-highlight { font-size: 1.2rem; font-weight: bold; color: #0056b3; }
     .charts-container { display: flex; flex-wrap: wrap; gap: 2rem; justify-content: space-around; margin-top: 1.5rem; }
-    .chart-box { flex: 1 1 450px; min-width: 300px; max-width: 500px; }
-    .chart-box canvas { width: 100%; max-height: 400px; }
-    .material-presets { margin: 0.5rem 0 1rem 0; }
-    .theory-equation { background: #f1f3f5; padding: 10px 15px; border-left: 4px solid #007bff; margin: 15px 0; font-family: monospace; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
-    .col-2 { display: flex; flex-wrap: wrap; gap: 2rem; }
-    .col { flex: 1; min-width: 300px; }
+    .chart-box { flex: 1 1 400px; min-width: 300px; max-width: 500px; }
+    .chart-box canvas { width: 100%; max-height: 350px; }
+    .theory-equation { background: #f1f3f5; padding: 10px 15px; border-left: 4px solid #007bff; margin: 15px 0; font-family: monospace; overflow-x: auto; }
+    .col-container { display: flex; flex-wrap: wrap; gap: 2rem; }
+    .col { flex: 1; min-width: 320px; }
     .info-box { background: #e9f7fe; border-left: 4px solid #0d6efd; padding: 10px 15px; margin: 10px 0; font-size: 0.9rem; }
     .status-message { padding: 10px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; margin-bottom: 1rem; text-align: center; }
-
-    .loading { position: relative; min-height: 50px; pointer-events: none; }
+    .loading { position: relative; min-height: 100px; pointer-events: none; }
     .loading::after { content: "Computing..."; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); display: flex; justify-content: center; align-items: center; font-weight: bold; z-index: 10; border-radius: 4px; }
-
-    /* Mode specific UI hiding */
-    .transient-only { /* display will be controlled by JS */ }
-    .steady-state-only { /* display will be controlled by JS */ }
-
-    /* Mobile responsiveness */
-    @media (max-width: 768px) { main { padding: 1rem; } label { width: 180px; } .col-2 { gap: 1rem; } }
-    @media (max-width: 480px) { label { width: 100%; margin-right: 0; } input[type="number"], select { width: 100%; margin-bottom: 1rem; } h1 { font-size: 1.5rem; } details summary { font-size: 1.1rem; } }
+    .transient-only, .steady-state-only, .plate-dims, .cylinder-dims, .heatsink-dims { display: none; } /* Hide all by default, JS will show */
+    @media (max-width: 768px) { main { padding: 1rem; } label { width: 180px; } .col-container { gap: 1rem; } }
+    @media (max-width: 480px) { label { width: 100%; margin-right: 0; } input[type="number"], select { width: 100% !important; margin-bottom: 1rem; } h1 { font-size: 1.5rem; } }
   </style>
 </head>
 <body>
-<header>
-  <h1>Thermal Calculator</h1>
-</header>
-
+<header><h1>Thermal & Heatsink Calculator</h1></header>
 <main>
   <div id="status" class="status-message">Loading Pyodide and Python code... Please wait.</div>
-
-  <!-- 1) INPUT PARAMETERS -->
-  <details open>
-    <summary>1) Input Parameters</summary>
-
-    <div class="col-2">
+  
+  <details open><summary>1) Input Parameters</summary>
+    <div class="col-container">
       <div class="col">
-        <h3>Calculation Mode</h3>
+        <h3>Calculation & Geometry</h3>
         <label for="calcMode">Mode:</label>
-        <select id="calcMode">
-          <option value="transient" selected>Transient Cooling</option>
-          <option value="steady_state">Steady State (with Heat Source)</option>
-        </select><br>
-
-        <h3>Geometry</h3>
-        <label for="geometryType">Geometry Type:</label>
-        <select id="geometryType">
-          <option value="plate">Rectangular Plate</option>
-          <option value="cylinder">Cylinder</option>
-        </select><br>
-
+        <select id="calcMode"><option value="transient" selected>Transient Cooling</option><option value="steady_state">Steady State</option></select><br>
+        <label for="geometryType">Geometry:</label>
+        <select id="geometryType"><option value="plate">Plate</option><option value="cylinder">Cylinder</option><option value="heatsink">Heatsink</option></select><br>
         <label for="orientation">Orientation:</label>
-        <select id="orientation">
-          <option value="vertical">Vertical</option>
-          <option value="horizontal_up">Horizontal (hot face up / top)</option>
-          <option value="horizontal_down">Horizontal (hot face down / bottom)</option>
-        </select><br>
+        <select id="orientation"><option value="vertical">Vertical</option><option value="horizontal_up">Horizontal (Top)</option><option value="horizontal_down">Horizontal (Bottom)</option></select><br>
+        <div class="info-box" id="heatsink-orientation-note" style="display:none;">For Heatsinks, 'Vertical' orientation is assumed for natural convection (most effective). Orientation mainly impacts Plate/Cylinder calculations.</div>
 
-        <div id="plate-dimensions">
-          <label for="length">Length (m):</label>
-          <input type="number" id="length" value="0.1" step="0.01" min="0.001" required><br>
-          <label for="width">Width (m):</label>
-          <input type="number" id="width" value="0.1" step="0.01" min="0.001" required><br>
-          <label for="thickness">Thickness (m):</label>
-          <input type="number" id="thickness" value="0.01" step="0.001" min="0.001" required><br>
+        <div class="plate-dims">
+          <h4>Plate Dimensions</h4>
+          <label for="length">Length (m):</label><input type="number" id="length" value="0.1" step="0.01" min="0.001"><br>
+          <label for="width">Width (m):</label><input type="number" id="width" value="0.1" step="0.01" min="0.001"><br>
+          <label for="thickness">Thickness (m):</label><input type="number" id="thickness" value="0.01" step="0.001" min="0.001"><br>
         </div>
-
-        <div id="cylinder-dimensions" style="display: none;">
-          <label for="diameter">Diameter (m):</label>
-          <input type="number" id="diameter" value="0.05" step="0.001" min="0.001" required><br>
-          <label for="cylinderLength">Cylinder Length (m):</label>
-          <input type="number" id="cylinderLength" value="0.1" step="0.01" min="0.001" required><br>
+        <div class="cylinder-dims">
+          <h4>Cylinder Dimensions</h4>
+          <label for="diameter">Diameter (m):</label><input type="number" id="diameter" value="0.05" step="0.001" min="0.001"><br>
+          <label for="cylinderLength">Length (m):</label><input type="number" id="cylinderLength" value="0.1" step="0.01" min="0.001"><br>
+        </div>
+        <div class="heatsink-dims">
+          <h4>Heatsink Dimensions</h4>
+          <label for="baseLength">Base Length (flow dir) (m):</label><input type="number" id="baseLength" value="0.1" step="0.01" min="0.001"><br>
+          <label for="baseWidth">Base Width (m):</label><input type="number" id="baseWidth" value="0.08" step="0.01" min="0.001"><br>
+          <label for="baseThickness">Base Thickness (m):</label><input type="number" id="baseThickness" value="0.005" step="0.001" min="0.001"><br>
+          <label for="finHeight">Fin Height (m):</label><input type="number" id="finHeight" value="0.03" step="0.001" min="0.001"><br>
+          <label for="finThickness">Fin Thickness (m):</label><input type="number" id="finThickness" value="0.001" step="0.0001" min="0.0001"><br>
+          <label for="numFins">Number of Fins:</label><input type="number" id="numFins" value="10" step="1" min="0"><br>
         </div>
       </div>
-
       <div class="col">
         <h3>Material Properties</h3>
-        <div class="material-presets">
-          <label for="materialPreset">Material Preset:</label>
-          <select id="materialPreset">
-            <option value="custom">Custom...</option>
-            <option value="aluminum" selected>Aluminum</option>
-            <option value="steel">Steel</option>
-            <option value="copper">Copper</option>
-            <option value="stainless-steel">Stainless Steel</option>
-            <option value="brass">Brass</option>
-            <option value="iron">Cast Iron</option>
-            <option value="plastic">Plastic (Generic)</option>
-          </select>
-        </div>
-        <label for="thermalConductivity">Thermal Conductivity (W/m·K):</label>
-        <input type="number" id="thermalConductivity" value="237" step="0.1" min="0.01" required><br>
-        <div class="transient-only"> <!-- Density/Cp only needed for transient -->
-            <label for="density">Density (kg/m³):</label>
-            <input type="number" id="density" value="2700" step="10" min="1" required><br>
-            <label for="specificHeat">Specific Heat (J/kg·K):</label>
-            <input type="number" id="specificHeat" value="900" step="10" min="1" required><br>
-        </div>
-        <label for="emissivity">Emissivity (0-1):</label>
-        <input type="number" id="emissivity" value="0.2" step="0.01" min="0.01" max="1" required><br>
+        <label for="materialPreset">Preset:</label>
+        <select id="materialPreset"><option value="custom">Custom...</option><option value="aluminum" selected>Aluminum</option><option value="steel">Steel</option><option value="copper">Copper</option><option value="stainless-steel">Stainless Steel</option></select><br>
+        <label for="thermalConductivity">Thermal Conductivity (W/m·K):</label><input type="number" id="thermalConductivity" value="237" step="1" min="0.01"><br>
+        <div class="transient-only"><label for="density">Density (kg/m³):</label><input type="number" id="density" value="2700" step="10" min="1"><br></div>
+        <div class="transient-only"><label for="specificHeat">Specific Heat (J/kg·K):</label><input type="number" id="specificHeat" value="900" step="10" min="1"><br></div>
+        <label for="emissivity">Emissivity (0-1):</label><input type="number" id="emissivity" value="0.2" step="0.01" min="0.01" max="1"><br>
 
         <h3>Thermal Conditions</h3>
-        <div class="transient-only">
-            <label for="initialTemp">Initial Temperature (°C):</label>
-            <input type="number" id="initialTemp" value="100" step="1" required><br>
-        </div>
-        <div class="steady-state-only">
-            <label for="heatInput">Heat Input Power (W):</label>
-            <input type="number" id="heatInput" value="10" step="0.1" min="0" required><br>
-        </div>
-        <label for="ambientTemp">Ambient Temperature (°C):</label>
-        <input type="number" id="ambientTemp" value="25" step="1" required><br>
-        <label for="airVelocity">Air Velocity (m/s):</label>
-        <input type="number" id="airVelocity" value="0" step="0.1" min="0" required>
-        <small>(0 = natural convection)</small><br>
-
+        <div class="transient-only"><label for="initialTemp">Initial Temp (°C):</label><input type="number" id="initialTemp" value="100" step="1"><br></div>
+        <div class="steady-state-only"><label for="heatInput">Heat Input (W):</label><input type="number" id="heatInput" value="10" step="0.1" min="0"><br></div>
+        <label for="ambientTemp">Ambient Temp (°C):</label><input type="number" id="ambientTemp" value="25" step="1"><br>
+        <label for="airVelocity">Air Velocity (m/s):</label><input type="number" id="airVelocity" value="0" step="0.1" min="0"><small> (0=natural)</small><br>
+        
         <div class="transient-only">
             <h3>Simulation Parameters</h3>
-            <label for="simulationTime">Simulation Time (s):</label>
-            <input type="number" id="simulationTime" value="3600" step="60" min="60" required>
-            <small>(e.g., 3600s = 1hr)</small><br>
-            <label for="timeSteps">Number of Steps:</label>
-            <input type="number" id="timeSteps" value="100" step="10" min="10" max="1000" required><br>
+            <label for="simulationTime">Sim Time (s):</label><input type="number" id="simulationTime" value="3600" step="60" min="60"><br>
+            <label for="timeSteps">Time Steps:</label><input type="number" id="timeSteps" value="100" step="10" min="10" max="1000"><br>
         </div>
-
         <button id="computeBtn" disabled>Compute</button>
       </div>
     </div>
   </details>
 
-  <!-- NO VISUALIZER SECTION -->
-
-  <!-- 2) RESULTS + CHARTS (Renumbered) -->
-  <details open>
-    <summary>2) Results</summary>
-    <div class="results" id="results-output">
-      <p id="statusCompute">Select mode and parameters, then click 'Compute'.</p>
-      <!-- Results will be populated here by JS -->
-    </div>
-
-    <div class="charts-container transient-only" id="charts-section"> <!-- Charts only shown in transient mode -->
-      <div class="chart-box">
-        <h4>Temperature vs. Time</h4>
-        <canvas id="temperatureChart"></canvas>
-      </div>
-      <div class="chart-box">
-        <h4>Heat Loss Rate vs. Time</h4>
-        <canvas id="heatRateChart"></canvas>
-      </div>
+  <details open><summary>2) Results</summary>
+    <div id="results-output"><p id="statusCompute">Select mode and parameters, then click 'Compute'.</p></div>
+    <div class="charts-container">
+      <div class="chart-box transient-only" id="temp-chart-container"><h4>Temperature vs. Time</h4><canvas id="temperatureChart"></canvas></div>
+      <div class="chart-box transient-only" id="hr-chart-container"><h4>Heat Loss Rate vs. Time</h4><canvas id="heatRateChart"></canvas></div>
+      <div class="chart-box steady-state-only" id="ss-chart-container"><h4>Steady State Heat Loss</h4><canvas id="steadyStateChart"></canvas></div>
     </div>
   </details>
 
-  <!-- 3) THEORY & EQUATIONS (Renumbered) -->
-  <details>
-    <summary>3) Theory & Equations</summary>
-    <!-- Theory content remains largely the same, but we can add a note about steady state -->
+  <details><summary>3) Theory & Equations</summary>
     <h3>Calculation Modes</h3>
-    <p>This calculator operates in two modes:</p>
-    <ul>
-        <li><strong>Transient Cooling:</strong> Simulates how the temperature of an object changes over time as it cools from an initial temperature towards the ambient temperature. It uses the Lumped Capacitance method.</li>
-        <li><strong>Steady State (with Heat Source):</strong> Calculates the final, stable temperature an object reaches when a constant heat power (W) is continuously added to it, balancing the heat input with heat loss to the surroundings via convection and radiation.</li>
-    </ul>
-
+    <p><strong>Transient Cooling:</strong> Simulates temperature change over time as an object cools towards ambient, using the Lumped Capacitance method.</p>
+    <p><strong>Steady State:</strong> Calculates the final, stable temperature when a constant heat input is balanced by heat loss to the surroundings.</p>
     <h3>Heat Transfer Mechanisms</h3>
-    <!-- Convection and Radiation sections are the same -->
     <h4>1. Convection</h4>
-     <p>Heat transfer between a surface and moving air. Handled for natural (buoyancy-driven) and forced (externally driven) flow.</p>
     <div class="theory-equation">q<sub>conv</sub> = h × A × (T<sub>surface</sub> - T<sub>ambient</sub>)</div>
-    <p>Where 'h' (W/m²·K) is the convection coefficient, estimated using dimensionless numbers (Ra, Re, Nu, Pr).</p>
-     <div class="info-box"> 'h' depends on geometry, orientation, air velocity, and the temperature difference itself.</div>
-
+    <p>'h' is the convection coefficient, estimated using correlations for natural (buoyancy-driven) or forced (fan/wind-driven) flow.</p>
     <h4>2. Radiation</h4>
-    <p>Heat transfer via electromagnetic waves.</p>
     <div class="theory-equation">q<sub>rad</sub> = ε × σ × A × (T<sub>surface_K</sub><sup>4</sup> - T<sub>ambient_K</sub><sup>4</sup>)</div>
-    <p>Where ε is emissivity, σ is the Stefan-Boltzmann constant, A is area, and temperatures are absolute (Kelvin).</p>
-
     <h3>Calculation Methods</h3>
-    <h4>Lumped Capacitance Method (Transient Cooling)</h4>
-    <p>Assumes uniform internal temperature (valid for Biot number Bi = hL<sub>c</sub>/k<sub>solid</sub> &lt; 0.1). Tracks temperature change over time using an energy balance:</p>
-    <div class="theory-equation">
-      Rate of energy change = - Heat loss rate <br>
-      (ρ × V × c<sub>p</sub>) × dT/dt = - (q<sub>conv</sub> + q<sub>rad</sub>)
+    <h4>Lumped Capacitance (Transient)</h4>
+    <div class="theory-equation">(ρ × V × c<sub>p</sub>) × dT/dt = - (q<sub>conv</sub> + q<sub>rad</sub>)</div>
+    <p>This assumes a uniform internal temperature, which is a good approximation for high-conductivity materials or small objects (Biot number < 0.1).</p>
+    <h4>Steady State Energy Balance</h4>
+    <div class="theory-equation">Q<sub>input</sub> = q<sub>conv</sub> + q<sub>rad</sub></div>
+    <p>The calculator iteratively solves for the surface temperature T<sub>ss</sub> where heat input equals the total heat loss from convection and radiation.</p>
+    <h4>Heatsink Modeling</h4>
+    <div class="info-box">
+      <p><strong>Natural Convection:</strong> Modeled as an array of vertical plates. The characteristic length for calculating the Rayleigh number is the <strong>fin spacing (s)</strong>.</p>
+      <p><strong>Forced Convection:</strong> Modeled as ducted flow through the fin channels. The velocity is adjusted for blockage (`V_channel = V_air * s / (s+t)`), and the characteristic length is the <strong>hydraulic diameter (D<sub>h</sub> = 2s)</strong>. A Nusselt number correlation for developing flow in a duct is used.</p>
     </div>
-    <p>Where ρ is density, V is volume, c<sub>p</sub> is specific heat. The term (ρVc<sub>p</sub>) is the Thermal Mass (J/K).</p>
-
-     <h4>Steady State Energy Balance (Steady State Mode)</h4>
-    <p>At steady state, the internal energy is constant (dT/dt = 0), so the heat input must exactly balance the heat loss:</p>
-     <div class="theory-equation">
-      Heat Input = Heat Loss <br>
-      Q<sub>input</sub> = q<sub>conv</sub> + q<sub>rad</sub> <br>
-      Q<sub>input</sub> = h(T<sub>ss</sub>) × A × (T<sub>ss</sub> - T<sub>ambient</sub>) + ε × σ × A × (T<sub>ss_K</sub><sup>4</sup> - T<sub>ambient_K</sub><sup>4</sup>)
-    </div>
-    <p>Where T<sub>ss</sub> is the unknown steady-state temperature. Since 'h' also depends on T<sub>ss</sub>, this equation is solved iteratively to find the value of T<sub>ss</sub> that satisfies the balance.</p>
-
-
-    <h3>Time Constant (τ) - Transient Mode Only</h3>
-    <p>Characterizes cooling speed. Time for the temperature difference (T - T<sub>ambient</sub>) to drop to ~36.8% (1/e) of its initial value.</p>
-    <div class="theory-equation">τ ≈ (Thermal Mass) / (Total Heat Transfer Coefficient × Area) ≈ (ρVc<sub>p</sub>) / (h<sub>avg</sub>A)</div>
-    <p>Calculated based on simulation results.</p>
-
     <h3>Limitations</h3>
     <ul>
-      <li>**Lumped Capacitance (Transient):** Assumes uniform internal temperature.</li>
-      <li>**Steady State:** Assumes heat input is uniform and instantly distributes, leading to a uniform surface temperature.</li>
-      <li>**Convection Correlations:** Uses simplified empirical formulas for 'h'.</li>
-      <li>**Radiation View Factor:** Assumes object radiates only to ambient surroundings (view factor=1).</li>
-      <li>**Constant Properties:** Assumes material properties (except for air properties used in h calculation) and ambient conditions are constant.</li>
-      <li>**Geometry:** Limited to simple shapes.</li>
+      <li>Assumes uniform temperature (Lumped Capacitance/Surface). Does not model temperature gradients within the object.</li>
+      <li>Heatsink model is simplified: it ignores fin efficiency, spreading resistance in the base, and airflow bypass.</li>
+      <li>Uses empirical correlations for convection and simplified view factors for radiation.</li>
     </ul>
   </details>
 </main>
-
-<footer>
-  <p>&copy; 2025 - Thermal Calculator</p>
-</footer>
+<footer><p>© 2025 - Thermal & Heatsink Calculator</p></footer>
 
 <script>
-  ///////////////////////////////////////////////////////////////////////////
-  // Global Variables & Configuration
-  ///////////////////////////////////////////////////////////////////////////
-  let pyodide = null;
-  let pythonLoaded = false;
+  let pyodide = null, pythonLoaded = false;
   const statusDiv = document.getElementById("status");
   const computeBtn = document.getElementById("computeBtn");
   const resultsDiv = document.getElementById("results-output");
-  const statusCompute = document.getElementById('statusCompute');
-  const calcModeSelect = document.getElementById('calcMode');
-
-  // Chart instances
-  let temperatureChart = null;
-  let heatRateChart = null;
+  let tempChart, heatRateChart, steadyStateChart; // Use global variables to track chart instances
 
   const materialPresets = {
     "aluminum": { thermalConductivity: 237, density: 2700, specificHeat: 900, emissivity: 0.2 },
     "steel": { thermalConductivity: 50, density: 7800, specificHeat: 490, emissivity: 0.8 },
     "copper": { thermalConductivity: 401, density: 8960, specificHeat: 390, emissivity: 0.03 },
     "stainless-steel": { thermalConductivity: 16, density: 8000, specificHeat: 500, emissivity: 0.85 },
-    "brass": { thermalConductivity: 109, density: 8500, specificHeat: 380, emissivity: 0.3 },
-    "iron": { thermalConductivity: 80, density: 7200, specificHeat: 450, emissivity: 0.85 },
-    "plastic": { thermalConductivity: 0.2, density: 1200, specificHeat: 1500, emissivity: 0.95 }
   };
 
-  ///////////////////////////////////////////////////////////////////////////
-  // Initialization
-  ///////////////////////////////////////////////////////////////////////////
-
-  async function initPyodideAndPython() {
+  async function initPyodide() {
     try {
-      statusDiv.textContent = "Loading Pyodide runtime...";
+      statusDiv.textContent = "Loading Pyodide runtime (~5-10MB)...";
       pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/" });
-      console.log("Pyodide loaded!");
-
       statusDiv.textContent = "Loading Python calculation code...";
       const resp = await fetch("thermal_calc.py");
       if (!resp.ok) throw new Error(`Failed to fetch thermal_calc.py: ${resp.statusText}`);
-      const calcSource = await resp.text();
-      await pyodide.runPythonAsync(calcSource);
+      await pyodide.runPythonAsync(await resp.text());
       pythonLoaded = true;
-      console.log("thermal_calc.py loaded into Pyodide!");
-      statusDiv.textContent = "Ready. Adjust parameters and click 'Compute'.";
+      statusDiv.style.display = 'none';
       computeBtn.disabled = false;
-      updateUIForMode(); // Initial UI setup based on default mode
+      updateUI(); 
     } catch (error) {
         console.error("Initialization failed:", error);
         statusDiv.textContent = `Error loading application: ${error.message}. Please refresh.`;
         statusDiv.style.color = 'red';
-        computeBtn.disabled = true;
     }
   }
 
-  ///////////////////////////////////////////////////////////////////////////
-  // UI Update Functions
-  ///////////////////////////////////////////////////////////////////////////
+  function updateUI() {
+    const mode = document.getElementById('calcMode').value;
+    const geoType = document.getElementById('geometryType').value;
+
+    document.querySelectorAll('.transient-only').forEach(el => el.style.display = (mode === 'transient') ? 'block' : 'none');
+    document.querySelectorAll('.steady-state-only').forEach(el => el.style.display = (mode === 'steady_state') ? 'block' : 'none');
+    document.querySelectorAll('.plate-dims').forEach(el => el.style.display = (geoType === 'plate') ? 'block' : 'none');
+    document.querySelectorAll('.cylinder-dims').forEach(el => el.style.display = (geoType === 'cylinder') ? 'block' : 'none');
+    document.querySelectorAll('.heatsink-dims').forEach(el => el.style.display = (geoType === 'heatsink') ? 'block' : 'none');
+    document.getElementById('heatsink-orientation-note').style.display = (geoType === 'heatsink') ? 'block' : 'none';
+
+    // --- FIX: Robustly destroy all charts when the UI changes ---
+    resultsDiv.innerHTML = `<p id="statusCompute">Adjust parameters and click 'Compute'.</p>`;
+    if (tempChart) { tempChart.destroy(); tempChart = null; }
+    if (heatRateChart) { heatRateChart.destroy(); heatRateChart = null; }
+    if (steadyStateChart) { steadyStateChart.destroy(); steadyStateChart = null; }
+  }
 
   function updateMaterialProperties() {
     const preset = document.getElementById("materialPreset").value;
-    if (preset !== "custom" && materialPresets[preset]) {
-      const material = materialPresets[preset];
-      document.getElementById("thermalConductivity").value = material.thermalConductivity;
-      // Only update density/Cp if preset provides them (some might not, though current ones do)
-      if (material.density) document.getElementById("density").value = material.density;
-      if (material.specificHeat) document.getElementById("specificHeat").value = material.specificHeat;
-      document.getElementById("emissivity").value = material.emissivity;
+    if (preset !== "custom") {
+      const mat = materialPresets[preset];
+      document.getElementById("thermalConductivity").value = mat.thermalConductivity;
+      document.getElementById("density").value = mat.density;
+      document.getElementById("specificHeat").value = mat.specificHeat;
+      document.getElementById("emissivity").value = mat.emissivity;
     }
   }
+  
+  // --- FIX: The flawed createChart function has been removed. ---
 
-  function updateGeometryFields() {
-    const geometryType = document.getElementById("geometryType").value;
-    const plateDims = document.getElementById("plate-dimensions");
-    const cylDims = document.getElementById("cylinder-dimensions");
-
-    plateDims.style.display = (geometryType === "plate") ? "block" : "none";
-    cylDims.style.display = (geometryType === "cylinder") ? "block" : "none";
-
-    // Update required attribute for validation based on visibility
-    plateDims.querySelectorAll('input').forEach(el => el.required = (geometryType === "plate"));
-    cylDims.querySelectorAll('input').forEach(el => el.required = (geometryType === "cylinder"));
-  }
-
-  function updateUIForMode() {
-        const mode = calcModeSelect.value;
-        console.log("Switching UI to mode:", mode);
-
-        document.querySelectorAll('.transient-only').forEach(el => {
-            el.style.display = (mode === 'transient') ? 'block' : 'none';
-            el.querySelectorAll('input, select').forEach(input => input.required = (mode === 'transient'));
-        });
-
-        document.querySelectorAll('.steady-state-only').forEach(el => {
-            el.style.display = (mode === 'steady_state') ? 'block' : 'none';
-             el.querySelectorAll('input, select').forEach(input => input.required = (mode === 'steady_state'));
-        });
-
-        // Show/hide charts section container
-        const chartsSection = document.getElementById('charts-section');
-        if (chartsSection) {
-            chartsSection.style.display = (mode === 'transient') ? 'flex' : 'none';
-        }
-
-         // Clear previous results when switching mode
-        resultsDiv.innerHTML = `<p id="statusCompute">Select mode and parameters, then click 'Compute'.</p>`;
-        if (temperatureChart) { temperatureChart.destroy(); temperatureChart = null; }
-        if (heatRateChart) { heatRateChart.destroy(); heatRateChart = null; }
-        if (mode === 'transient') { // Re-initialize empty charts for transient mode
-             updateCharts([], []);
-        }
-  }
-
-
-  function updateCharts(timeData, heatRateData) {
-    // Convert time to minutes for display labels
-    const timeLabels = timeData.map(t => (t / 60).toFixed(1));
-
-    const tempCtx = document.getElementById("temperatureChart").getContext("2d");
-    if (temperatureChart) temperatureChart.destroy();
-    temperatureChart = new Chart(tempCtx, {
-      type: 'line',
-      data: { labels: timeLabels, datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'rgb(255, 99, 132)', backgroundColor: 'rgba(255, 99, 132, 0.1)', tension: 0.1, pointRadius: 2, borderWidth: 1.5 }] },
-      options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Time (minutes)' } }, y: { title: { display: true, text: 'Temperature (°C)' } } }, plugins: { legend: { display: false } } }
-    });
-    // Separate update for actual data to avoid errors if called with empty arrays initially
-    if (timeData.length > 0) {
-         temperatureChart.data.datasets[0].data = arguments[0]; // Assuming first arg is temp data for this chart
-         temperatureChart.update();
+  function displayResults(res) {
+    resultsDiv.innerHTML = '';
+    
+    if (res.error) {
+        resultsDiv.innerHTML = `<p style="color: red; font-weight: bold;">Calculation Error: ${res.error}</p>`;
+        return;
     }
 
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'results-summary';
+    resultsDiv.appendChild(summaryDiv);
+    
+    let summaryHTML = '';
 
-    const heatRateCtx = document.getElementById("heatRateChart").getContext("2d");
-    if (heatRateChart) heatRateChart.destroy();
-    heatRateChart = new Chart(heatRateCtx, {
-      type: 'line',
-       data: { labels: timeLabels, datasets: [{ label: 'Heat Loss Rate (W)', data: heatRateData, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.1)', tension: 0.1, pointRadius: 2, borderWidth: 1.5 }] },
-      options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Time (minutes)' } }, y: { title: { display: true, text: 'Heat Loss Rate (W)' } } }, plugins: { legend: { display: false } } }
-    });
-     if (heatRateData.length > 0) {
-         heatRateChart.data.datasets[0].data = heatRateData;
-         heatRateChart.update();
-     }
-  }
+    if (res.mode === "transient") {
+        document.getElementById('temp-chart-container').style.display = 'block';
+        document.getElementById('hr-chart-container').style.display = 'block';
+        document.getElementById('ss-chart-container').style.display = 'none';
 
+        summaryHTML = `<h4>Transient Cooling Results</h4>
+            <p><span class="result-label">Final Temperature:</span> <span class="result-value result-highlight">${res.final_temp.toFixed(2)} °C</span></p>
+            <p><span class="result-label">Time Constant (τ):</span> <span class="result-value">${res.time_constant ? (res.time_constant / 60).toFixed(2) + ' min' : 'N/A'}</span></p>
+            <p><span class="result-label">Time to Equilibrium (~5τ):</span> <span class="result-value">${res.time_to_equilibrium ? (res.time_to_equilibrium / 60).toFixed(2) + ' min' : 'N/A'}</span></p>
+            <p><span class="result-label">Convection Type:</span> <span class="result-value">${res.convection_type}</span></p>
+            <p><span class="result-label">Avg. Convection Coeff:</span> <span class="result-value">${res.avg_convection_coeff.toFixed(2)} W/m²·K</span></p>
+            <hr><p><span class="result-label">Total Surface Area:</span> <span class="result-value">${res.total_area.toFixed(4)} m²</span></p>
+            <p><span class="result-label">Volume:</span> <span class="result-value">${res.volume.toExponential(3)} m³</span></p>`;
+        if(res.fin_spacing) summaryHTML += `<p><span class="result-label">Fin Spacing:</span> <span class="result-value">${(res.fin_spacing * 1000).toFixed(2)} mm</span></p>`;
+        
+        const timeLabels = res.times.map(t => (t / 60).toFixed(1));
+        
+        // --- FIX: Destroy existing charts before creating new ones ---
+        if (tempChart) tempChart.destroy();
+        tempChart = new Chart(document.getElementById("temperatureChart"), { type: 'line', data: { labels: timeLabels, datasets: [{ label: 'Temperature (°C)', data: res.temperatures, borderColor: '#dc3545', tension: 0.1, pointRadius: 1, borderWidth: 2 }] }, options: { scales: { x: { title: { display: true, text: 'Time (minutes)' } }, y: { title: { display: true, text: 'Temperature (°C)' } } } } });
+        
+        if (heatRateChart) heatRateChart.destroy();
+        heatRateChart = new Chart(document.getElementById("heatRateChart"), { type: 'line', data: { labels: timeLabels, datasets: [{ label: 'Heat Loss (W)', data: res.heat_rates, borderColor: '#007bff', tension: 0.1, pointRadius: 1, borderWidth: 2 }] }, options: { scales: { x: { title: { display: true, text: 'Time (minutes)' } }, y: { title: { display: true, text: 'Heat Loss Rate (W)' } } } } });
 
- function displayResults(results) {
-    resultsDiv.innerHTML = ''; // Clear previous results or status message
-    statusCompute.style.display = 'none';
+    } else if (res.mode === "steady_state") {
+        document.getElementById('temp-chart-container').style.display = 'none';
+        document.getElementById('hr-chart-container').style.display = 'none';
+        document.getElementById('ss-chart-container').style.display = 'block';
 
-    if (results.mode === "transient") {
-        resultsDiv.innerHTML = `
-            <h4>Transient Cooling Results</h4>
-            <p><span class="result-label">Convection Type:</span> <span class="result-value">${results.convection_type}</span></p>
-            <p><span class="result-label">Avg. Convection Coeff:</span> <span class="result-value">${results.avg_convection_coeff.toFixed(2)} W/m²·K</span></p>
-            <p><span class="result-label">Final Temperature:</span> <span class="result-value">${results.final_temp.toFixed(2)} °C</span></p>
-            <p><span class="result-label">Final Temp Difference (ΔT):</span> <span class="result-value">${results.final_delta_t.toFixed(2)} °C</span></p>
-            <p><span class="result-label">Time Constant (τ):</span> <span class="result-value">${results.time_constant ? (results.time_constant / 60).toFixed(2) + ' min' : 'N/A'}</span></p>
-            <p><span class="result-label">Time to Equilibrium (~5τ):</span> <span class="result-value">${results.time_to_equilibrium ? (results.time_to_equilibrium / 60).toFixed(2) + ' min' : 'N/A'}</span></p>
-            <p><span class="result-label">Total Surface Area:</span> <span class="result-value">${results.total_area.toFixed(4)} m²</span></p>
-            <p><span class="result-label">Volume:</span> <span class="result-value">${results.volume.toExponential(3)} m³</span></p>
-            <p><span class="result-label">Thermal Mass:</span> <span class="result-value">${(parseFloat(document.getElementById("density").value) * results.volume * parseFloat(document.getElementById("specificHeat").value)).toFixed(1)} J/K</span></p>
-        `;
-        // Update charts (pass temperature data first, then heat rate data)
-        updateCharts(results.temperatures, results.heat_rates);
-
-    } else if (results.mode === "steady_state") {
-         resultsDiv.innerHTML = `
-            <h4>Steady State Results</h4>
-            <p><span class="result-label">Steady State Temperature:</span> <span class="result-value">${results.steady_state_temp.toFixed(2)} °C</span></p>
-            <p><span class="result-label">Ambient Temperature:</span> <span class="result-value">${parseFloat(document.getElementById('ambientTemp').value).toFixed(2)} °C</span></p>
-            <p><span class="result-label">Temperature Rise (ΔT):</span> <span class="result-value">${(results.steady_state_temp - parseFloat(document.getElementById('ambientTemp').value)).toFixed(2)} °C</span></p>
-            <p><span class="result-label">Convection Type:</span> <span class="result-value">${results.convection_type}</span></p>
-            <p><span class="result-label">Final Convection Coeff:</span> <span class="result-value">${results.final_convection_coeff.toFixed(2)} W/m²·K</span></p>
+        summaryHTML = `<h4>Steady State Results</h4>
+            <p><span class="result-label">Steady State Temp:</span> <span class="result-value result-highlight">${res.steady_state_temp.toFixed(2)} °C</span></p>
+            <p><span class="result-label">Temperature Rise (ΔT):</span> <span class="result-value">${(res.steady_state_temp - parseFloat(document.getElementById('ambientTemp').value)).toFixed(2)} °C</span></p>
+            <p><span class="result-label">Convection Type:</span> <span class="result-value">${res.convection_type}</span></p>
+            <p><span class="result-label">Final Convection Coeff:</span> <span class="result-value">${res.final_convection_coeff.toFixed(2)} W/m²·K</span></p>
             <hr>
-            <p><span class="result-label">Heat Input:</span> <span class="result-value">${results.heat_input.toFixed(2)} W</span></p>
-            <p><span class="result-label">Heat Loss (Convection):</span> <span class="result-value">${results.final_q_conv.toFixed(2)} W</span></p>
-            <p><span class="result-label">Heat Loss (Radiation):</span> <span class="result-value">${results.final_q_rad.toFixed(2)} W</span></p>
-            <p><span class="result-label">Total Heat Loss:</span> <span class="result-value">${results.final_q_output.toFixed(2)} W</span></p>
-            <p><span class="result-label">Heat Balance Error:</span> <span class="result-value">${(results.heat_input - results.final_q_output).toExponential(2)} W</span></p>
-             <hr>
-            <p><span class="result-label">Total Surface Area:</span> <span class="result-value">${results.total_area.toFixed(4)} m²</span></p>
-            <p><span class="result-label">Solver Iterations:</span> <span class="result-value">${results.iterations}</span></p>
-            <p><span class="result-label">Converged:</span> <span class="result-value">${results.converged ? 'Yes' : 'No (Max iterations reached)'}</span></p>
-
-        `;
-        // No charts to update in steady state mode currently
-         if (temperatureChart) { temperatureChart.destroy(); temperatureChart = null; }
-         if (heatRateChart) { heatRateChart.destroy(); heatRateChart = null; }
-    } else {
-         resultsDiv.innerHTML = `<p style="color: red;">Error: Unknown result mode received.</p>`;
+            <p><span class="result-label">Heat Input:</span> <span class="result-value">${res.heat_input.toFixed(2)} W</span></p>
+            <p><span class="result-label">Heat Loss (Convection):</span> <span class="result-value">${res.final_q_conv.toFixed(2)} W</span></p>
+            <p><span class="result-label">Heat Loss (Radiation):</span> <span class="result-value">${res.final_q_rad.toFixed(2)} W</span></p>
+            <p><span class="result-label">Total Heat Loss:</span> <span class="result-value">${res.final_q_output.toFixed(2)} W</span></p>
+            <hr><p><span class="result-label">Total Surface Area:</span> <span class="result-value">${res.total_area.toFixed(4)} m²</span></p>`;
+        if(res.fin_spacing) summaryHTML += `<p><span class="result-label">Fin Spacing:</span> <span class="result-value">${(res.fin_spacing * 1000).toFixed(2)} mm</span></p>`;
+        summaryHTML += `<p><span class="result-label">Solver Converged:</span> <span class="result-value">${res.converged ? `Yes (${res.iterations} iter)` : 'No'}</span></p>`;
+        
+        // --- FIX: Destroy existing chart before creating a new one ---
+        if (steadyStateChart) steadyStateChart.destroy();
+        steadyStateChart = new Chart(document.getElementById("steadyStateChart"), { type: 'pie', data: { labels: ['Convection', 'Radiation'], datasets: [{ data: [res.final_q_conv, res.final_q_rad], backgroundColor: ['#007bff', '#6c757d'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } } });
     }
-}
+    summaryDiv.innerHTML = summaryHTML;
+  }
 
-
-  ///////////////////////////////////////////////////////////////////////////
-  // Main Computation Function
-  ///////////////////////////////////////////////////////////////////////////
-
-  async function computeEverything() {
-    if (!pythonLoaded || !pyodide) {
-      console.error("Pyodide not ready!");
-      statusDiv.textContent = "Error: Pyodide not initialized.";
-      return;
-    }
-
-    console.log("Starting thermal computation...");
-    resultsDiv.innerHTML = ''; // Clear previous results
-    resultsDiv.classList.add("loading"); // Show loading overlay
-    computeBtn.disabled = true; // Disable button during computation
+  async function compute() {
+    if (!pythonLoaded) return;
+    resultsDiv.innerHTML = '';
+    resultsDiv.classList.add("loading");
+    computeBtn.disabled = true;
 
     try {
-      // --- Gather Inputs common to both modes ---
-      const calculation_mode = calcModeSelect.value;
-      const geometryType = document.getElementById("geometryType").value;
-      const orientation = document.getElementById("orientation").value;
+      const geoType = document.getElementById("geometryType").value;
+      const getVal = id => parseFloat(document.getElementById(id).value);
 
-      let length, width_or_diameter, thickness;
-      if (geometryType === "plate") {
-        length = parseFloat(document.getElementById("length").value);
-        width_or_diameter = parseFloat(document.getElementById("width").value);
-        thickness = parseFloat(document.getElementById("thickness").value);
-      } else { // cylinder
-        length = parseFloat(document.getElementById("cylinderLength").value);
-        width_or_diameter = parseFloat(document.getElementById("diameter").value);
-        thickness = 0.0; // Placeholder
-      }
-       // Basic dimension validation
-      if (isNaN(length) || length <= 0 || isNaN(width_or_diameter) || width_or_diameter <= 0 || (geometryType === "plate" && (isNaN(thickness) || thickness <= 0))) {
-         throw new Error("Invalid dimensions provided. Length, width/diameter, and thickness (for plate) must be positive numbers.");
-      }
-
-
-      const thermalConductivity = parseFloat(document.getElementById("thermalConductivity").value); // Keep for props dict
-      const emissivity = parseFloat(document.getElementById("emissivity").value);
-      const ambientTemp = parseFloat(document.getElementById("ambientTemp").value);
-      const airVelocity = parseFloat(document.getElementById("airVelocity").value);
-
-      // --- Gather Mode-Specific Inputs ---
-      let density = 0, specificHeat = 0, initialTemp = 0;
-      let heatInput = 0;
-      let totalTime = 0, timeSteps = 0;
-
-      if (calculation_mode === "transient") {
-        density = parseFloat(document.getElementById("density").value);
-        specificHeat = parseFloat(document.getElementById("specificHeat").value);
-        initialTemp = parseFloat(document.getElementById("initialTemp").value);
-        totalTime = parseFloat(document.getElementById("simulationTime").value);
-        timeSteps = parseInt(document.getElementById("timeSteps").value);
-         if (isNaN(density) || density <= 0 || isNaN(specificHeat) || specificHeat <= 0 || isNaN(initialTemp) || isNaN(totalTime) || totalTime <= 0 || isNaN(timeSteps) || timeSteps < 10) {
-             throw new Error("Invalid input for transient mode (Density, Specific Heat, Initial Temp, Time, Steps).");
-         }
-
-      } else { // steady_state
-        heatInput = parseFloat(document.getElementById("heatInput").value);
-        // Density, specific heat, initial temp, time/steps are not needed, use placeholders
-        density = 1; specificHeat = 1; initialTemp = 0; totalTime = 1; timeSteps = 10;
-         if (isNaN(heatInput) || heatInput < 0) {
-             throw new Error("Invalid Heat Input Power provided. Must be zero or positive.");
-         }
-      }
-
-       // Other common validations
-       if (isNaN(emissivity) || emissivity < 0.01 || emissivity > 1 || isNaN(ambientTemp) || isNaN(airVelocity) || airVelocity < 0) {
-            throw new Error("Invalid input for Emissivity, Ambient Temp, or Air Velocity.");
-       }
-
-
-      // --- Call Python Function ---
-      console.log(`Calling Python function 'thermal_calculation_py' for mode: ${calculation_mode}...`);
+      const args = {
+        calculation_mode: document.getElementById("calcMode").value,
+        geometry_type: geoType,
+        orientation: document.getElementById("orientation").value,
+        length: getVal(geoType === "cylinder" ? "cylinderLength" : "length"),
+        width_or_diameter: getVal(geoType === "plate" ? "width" : "diameter"),
+        thickness: getVal("thickness"),
+        base_length: getVal("baseLength"),
+        base_width: getVal("baseWidth"),
+        base_thickness: getVal("baseThickness"),
+        fin_height: getVal("finHeight"),
+        fin_thickness: getVal("finThickness"),
+        num_fins: getVal("numFins"),
+        thermal_conductivity: getVal("thermalConductivity"),
+        density: getVal("density"),
+        specific_heat: getVal("specificHeat"),
+        emissivity: getVal("emissivity"),
+        initial_temp: getVal("initialTemp"),
+        ambient_temp: getVal("ambientTemp"),
+        air_velocity: getVal("airVelocity"),
+        heat_input: getVal("heatInput"),
+        time_steps: getVal("timeSteps"),
+        total_time: getVal("simulationTime"),
+      };
+      
       const calculateFunc = pyodide.globals.get('thermal_calculation_py');
-
-      // Call the single dispatcher function with all potential args
-      const resultPy = calculateFunc(
-        calculation_mode,
-        geometryType, orientation,
-        length, width_or_diameter, thickness,
-        thermalConductivity, density, specificHeat, emissivity,
-        initialTemp, ambientTemp, airVelocity,
-        heatInput,
-        timeSteps, totalTime
-      );
-
-      // Convert PyProxy result to JavaScript Object
+      const resultPy = calculateFunc(...Object.values(args));
       const result = resultPy.toJs({ dict_converter: Object.fromEntries });
-      resultPy.destroy(); // Clean up PyProxy
-      console.log("Python calculation finished. Results:", result);
-
-       if (result.error) { // Check if Python returned an error message
-           throw new Error(`Calculation Error from Python: ${result.error}`);
-       }
-
-      // --- Update UI with Results ---
+      resultPy.destroy();
+      
       displayResults(result);
-
 
     } catch (error) {
       console.error("Computation failed:", error);
-      resultsDiv.innerHTML = `<p id="statusCompute" style="color: red;">Error: ${error.message}</p>`;
-      // Ensure charts are cleared on error if they existed
-      if (temperatureChart) { temperatureChart.destroy(); temperatureChart = null; }
-      if (heatRateChart) { heatRateChart.destroy(); heatRateChart = null; }
-
-
+      resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
     } finally {
-      resultsDiv.classList.remove("loading"); // Hide loading overlay
-      computeBtn.disabled = false; // Re-enable compute button
-      console.log("Computation attempt finished.");
+      resultsDiv.classList.remove("loading");
+      computeBtn.disabled = false;
     }
   }
 
-  ///////////////////////////////////////////////////////////////////////////
-  // Event Listeners
-  ///////////////////////////////////////////////////////////////////////////
-
   document.addEventListener('DOMContentLoaded', () => {
-    // Initial UI setup
     updateMaterialProperties();
-    updateGeometryFields();
-    updateUIForMode(); // Set initial visibility based on default mode
-
-    // Attach event listeners
-    document.getElementById("computeBtn").addEventListener("click", computeEverything);
+    document.getElementById("computeBtn").addEventListener("click", compute);
     document.getElementById("materialPreset").addEventListener("change", updateMaterialProperties);
-    document.getElementById("geometryType").addEventListener("change", updateGeometryFields);
-    calcModeSelect.addEventListener("change", updateUIForMode);
-
-    // Start Pyodide initialization
-    initPyodideAndPython();
+    document.getElementById("geometryType").addEventListener("change", updateUI);
+    document.getElementById("calcMode").addEventListener("change", updateUI);
+    initPyodide();
   });
-
 </script>
-
 </body>
 </html>
