@@ -40,4 +40,34 @@ We welcome contributions to expand our collection of tools! The development proc
 
 For a comprehensive guide on our architecture, coding standards, and a detailed step-by-step contribution workflow, please see our [**AGENTS.md**](AGENTS.md) file.
 
+## Local Development and Testing
+
+To test your new tool locally before submitting a pull request, you need to run a local web server from the root of the project directory. This allows the browser to correctly load the necessary files, including the Pyodide environment and your Python code.
+
+### Steps to Test Locally
+
+1.  **Navigate to the project root:**
+    Open your terminal or command prompt and change to the root directory of the `tools` repository.
+    ```bash
+    cd path/to/your/tools
+    ```
+
+2.  **Start the local server:**
+    If you have Python 3 installed, you can use its built-in web server. Run the following command:
+    ```bash
+    python -m http.server
+    ```
+    If you are using Python 2, the command is slightly different:
+    ```bash
+    python -m SimpleHTTPServer
+    ```
+
+3.  **View your tool:**
+    Once the server is running, it will typically print a message like `Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/)`.
+    Open your web browser and go to:
+    ```text
+    http://localhost:8000
+    ```
+    From there, you can navigate to the tool you are developing (e.g., `http://localhost:8000/tools/your-new-tool/`). Any changes you save to your HTML, CSS, or JS files will be reflected when you refresh the page.
+
 ## License

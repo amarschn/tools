@@ -28,16 +28,17 @@ All tools (our "agents") in this repository should adhere to the following princ
 * **Usability First:** The primary function of each tool should be immediately obvious and easy to use. The user should be able to get a useful result with minimal friction.
 * **Progressive Disclosure:** Complexity should be hidden by default. Users who want to understand the "nitty-gritty" can use tooltips and expandable dropdowns to reveal detailed explanations, intermediate steps, and the specific equations used.
 * **Transparency:** Every calculation should be traceable. The exact equations, including references where applicable, must be accessible to the user. This builds trust and enhances the educational value.
-* **Modularity and Reusability:** Each tool is a standalone web page. However, the core calculation logic should be written as generic, well-documented Python functions in a shared library. This promotes code reuse and simplifies maintenance.
+* **Modularity and Reusability:** Each tool is a standalone web page. However, the core calculation logic should be written as generic, well-documented Python functions in a shared library - `/pycalcs`. This promotes code reuse and simplifies maintenance. There should be multiple python files within `/pycalcs`, each containing relevant code for a given field or discipline.
 * **Consistency:** All tools should share a similar, clean, and simple user interface. This creates a cohesive experience as users navigate between different calculators.
 * **Dependency-Free Core:** The core Python library functions should have minimal to no external dependencies to ensure they run smoothly with Pyodide and to avoid versioning conflicts.
 * **Visualizations:** Where appropriate, tools should include visualizations (plots, diagrams, etc.) to help users better understand the results and the underlying concepts.
+* **Exporting:** Engineering work is still done in Excel and other tools, and that is unlikely to change. Many of the tools in this repo will need some form of export function that can output an Excel document or similar with all calculations in that document to be used locally by a user for verification, modification, and private use.
 
 ## Architecture Overview
 
 The project is a static web app hosted on GitHub Pages, with calculations performed client-side using Pyodide.
 
-* **Frontend:** Each tool is a self-contained HTML file. We use a consistent CSS stylesheet for a uniform look and feel. JavaScript is used to handle user input, interact with the Pyodide environment, and update the UI.
+* **Frontend:** Each tool is a self-contained HTML file. We use a consistent CSS stylesheet for a uniform look and feel. JavaScript is used to handle user input, interact with the Pyodide environment, and update the UI. There should be a relatively straightforward navigation between different tools and within the base `tools` home page.
 * **Backend (Client-Side):** We use [Pyodide](https://pyodide.org/) to run Python code directly in the browser. This allows us to write complex calculation logic in Python without needing a server.
 * **Core Library (`/py/library.py`):** This is the heart of our project. It contains all the core Python functions for our calculations.
     * **Docstrings are CRITICAL:** Every function in this library *must* have a detailed docstring that includes:
@@ -46,7 +47,7 @@ The project is a static web app hosted on GitHub Pages, with calculations perfor
         * What the function returns.
         * The mathematical equations used, written in LaTeX format.
         * Any references to textbooks, papers, or standards.
-* **Tools (`/tools/`):** Each tool lives in its own directory (e.g., `/tools/beam_deflection/`) and consists of at least an `index.html` file.
+* **Tools (`/tools/`):** Each tool lives in its own directory (e.g., `/tools/beam_deflection/`) and consists of at least an `index.html` file. Many of these tools directories will have their own `AGENTS.md` file that further refines what is needed for that tool.
 
 ## Contribution Guidelines
 
@@ -62,17 +63,20 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
 ### Creating a New Tool
 
 1.  **Create a New Directory:** Add a new directory for your tool under `/tools/`. For example, `/tools/my-new-tool/`.
-2.  **Add Python Logic:**
+2.  **Define Requirements in a README.md file:** There must be a README.md file in each tool subdirectory in `/tools/` that contains:
+    * The purpose of the tool.
+    * The requirements of the tool.
+3.  **Add Python Logic:**
     * Identify the core calculations for your tool.
     * Write one or more Python functions to perform these calculations.
     * Add these functions to `/py/library.py`.
     * **Crucially, write excellent docstrings for your new functions.**
-3.  **Create the HTML (`index.html`):**
+4.  **Create the HTML (`index.html`):**
     * Use the existing tools as a template to maintain a consistent UI.
     * Create input fields for all necessary parameters.
     * Create a "Calculate" button.
     * Create elements to display the results.
-4.  **Add JavaScript:**
+5.  **Add JavaScript:**
     * Write the JavaScript code to:
         * Initialize Pyodide.
         * Load the Python functions from our library.
@@ -80,11 +84,33 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
         * Call the relevant Python function with the user's input.
         * Display the results in the designated HTML elements.
     * Implement tooltips and dropdowns to show the equations and step-by-step explanations.
-5.  **Testing:**
+6.  **Testing:**
     * Test your tool with a variety of inputs, including edge cases.
     * Verify that the results are correct.
     * Ensure the UI is responsive and easy to use.
-6.  **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
+7.  **Add the tool to the catalog**
+    * To make your new tool discoverable, you **must** register it in the `_catalog.json` file located in the project's root directory. This file is the central manifest that dynamically powers the main landing page, enabling all filtering, searching, and categorization.
+    * Add a new JSON object to the array for your tool. Please ensure your entry follows this exact structure:
+
+        ```json
+        {
+          "title": "Your New Tool's Name",
+          "path": "./tools/your-new-tool-folder/",
+          "description": "A concise, one-sentence description of what your tool does and why it's useful.",
+          "category": ["Primary Discipline", "Secondary Discipline (Optional)"],
+          "tags": ["keyword1", "keyword2", "concept3", "visualization"]
+        }
+        ```
+
+    * **`title`**: The official name of the tool.
+    * **`path`**: The relative path to your tool's `index.html` file from the root.
+    * **`description`**: A brief summary that will appear on the tool card.
+    * **`category`**: The primary engineering discipline(s). Try to use existing categories if they fit.
+    * **`tags`**: A list of relevant, lowercase keywords that users might search for.
+
+    ***This step is critical.*** Without it, your tool will exist in the repository but will not appear on the main tools hub.
+
+8.  **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
 
 ## Git Workflow
 
