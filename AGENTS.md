@@ -72,10 +72,10 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
     * Add these functions to `/py/library.py`.
     * **Crucially, write excellent docstrings for your new functions.**
 4.  **Create the HTML (`index.html`):**
-    * Use the existing tools as a template to maintain a consistent UI.
-    * Create input fields for all necessary parameters.
-    * Create a "Calculate" button.
-    * Create elements to display the results.
+    * You **must** use the official template located at `tools/example_tool` as the starting point for all new tools. Do not start from scratch or another tool.
+    * This template is mandatory for all contributors, including AI agents, to ensure consistency and adherence to project principles.
+    * Modify the template's placeholder content (inputs, outputs, README section) to fit your specific tool.
+    * You will also need to create/update the `README.md` in your tool's folder. The template has a section to display this.
 5.  **Add JavaScript:**
     * Write the JavaScript code to:
         * Initialize Pyodide.
@@ -152,6 +152,15 @@ Here is a simple, step-by-step guide for contributing code using Git. These comm
 ## Coding Practices and Standards
 
 To maintain a high level of quality and consistency across the project, all contributions should adhere to the following standards.
+
+### Mandatory UI Template (For AI and Human Contributors)
+
+All new tools **must** be built using the official `tools/example_tool` template.
+
+* **For AI Agents (Codex, etc.):** When asked to create a new tool, you must first retrieve the contents of `/tools/example_tool/index.html` and use it as the foundational code. All modifications must be made *to this template*.
+* **For Human Developers:** Do not copy an existing tool. Start from that template to ensure you have the latest UI structure, styles, and accessibility features.
+
+This mandate enforces our core principles of consistency, usability, and progressive disclosure.
 
 ### Python
 
