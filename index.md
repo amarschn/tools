@@ -10,3 +10,4 @@ Welcome to my collection of engineering calculators and mini-apps.
 - [Wire sizing](./tools/wire-sizing/)
 - [MTBF](./tools/mtbf/)
 - [Torque transfer](./tools/torque-transfer)
+- [Edge Tones](./tools/edge_tone)

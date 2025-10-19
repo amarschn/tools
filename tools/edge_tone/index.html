@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en" class="bg-slate-100 dark:bg-slate-900">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whistle Acoustics Explorer</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .form-label { @apply block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1; }
+    /* --- THIS IS THE KEY FIX --- */
+    .form-input { @apply w-full p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition **text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500**; }
+    .card { @apply bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700; }
+    .btn { @apply px-4 py-2 text-white font-semibold rounded-md shadow-sm transition-colors duration-200 flex items-center justify-center; }
+    .btn-primary { @apply bg-sky-600 hover:bg-sky-700; }
+    .btn-secondary { @apply bg-slate-500 hover:bg-slate-600; }
+  </style>
+</head>
+<body class="text-slate-800 dark:text-slate-200">
+
+<div id="loading-indicator" class="text-center p-8">
+  <h1 class="text-2xl font-bold">⏳ Initializing Python Runtime...</h1>
+  <p>This may take a moment on the first visit.</p>
+</div>
+
+<div id="app-content" class="container mx-auto p-4 md:p-8 max-w-7xl" style="display: none;">
+  
+  <header class="text-center mb-10">
+    <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">Whistle Acoustics Explorer</h1>
+    <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">An interactive tool for analyzing whistle resonance and edge-tone locking.</p>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <div class="lg:col-span-1 space-y-6">
+      <form method="post" id="params-form">
+        
+        <div class="card">
+          <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Configuration</h2>
+          <div>
+            <label for="preset-selector" class="form-label">Load a Preset</label>
+            <select id="preset-selector" class="form-input">
+              <option value="custom">-- Custom --</option>
+              <option value="tin_whistle">Tin Whistle</option>
+              <option value="bottle_blow">Bottle Blow</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">General Parameters</h2>
+          <div class="space-y-4">
+            <div>
+              <label for="model" class="form-label">Resonator Model</label>
+              <select name="model" id="model" class="form-input">
+                <option value="pipe">Pipe (Open–Closed)</option>
+                <option value="helmholtz">Helmholtz</option>
+              </select>
+            </div>
+            <div>
+              <label for="T" class="form-label">Air Temperature T (K)</label>
+              <input type="number" step="0.1" name="T" id="T" value="293.15" class="form-input">
+            </div>
+            <div>
+              <label for="d" class="form-label">Jet Thickness d (m)</label>
+              <input type="number" step="0.0001" name="d" id="d" value="0.001" class="form-input">
+            </div>
+            <div>
+              <label for="stages" class="form-label">Edge-Tone Stages (St values)</label>
+              <input type="text" name="stages" id="stages" value="0.2,0.4,0.7,1.0,1.3" class="form-input">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+            <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Resonator Geometry</h2>
+            <div id="pipe_fields" class="space-y-4">
+              <div>
+                <label for="L" class="form-label">Tube Length L (m)</label>
+                <input type="number" step="0.001" name="L" id="L" value="0.3" class="form-input">
+              </div>
+              <div>
+                <label for="end_corr" class="form-label">End Correction (m)</label>
+                <input type="number" step="0.0001" name="end_corr" id="end_corr" value="0.005" class="form-input">
+              </div>
+              <div>
+                <label for="n_max" class="form-label">Number of Modes (n)</label>
+                <input type="number" step="1" name="n_max" id="n_max" value="6" class="form-input">
+              </div>
+            </div>
+            <div id="helm_fields" class="space-y-4">
+              <div>
+                <label for="A" class="form-label">Neck Area A (m²)</label>
+                <input type="number" step="0.000001" name="A" id="A" value="0.00005" class="form-input">
+              </div>
+              <div>
+                <label for="V" class="form-label">Cavity Volume V (m³)</label>
+                <input type="number" step="0.000001" name="V" id="V" value="0.00003" class="form-input">
+              </div>
+              <div>
+                <label for="L_eff" class="form-label">Effective Neck Length L_eff (m)</label>
+                <input type="number" step="0.0001" name="L_eff" id="L_eff" value="0.01" class="form-input">
+              </div>
+            </div>
+        </div>
+        
+        <button type="submit" class="w-full btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-2">
+            <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+          </svg>
+          Analyze
+        </button>
+
+      </form>
+    </div>
+
+    <div class="lg:col-span-2 space-y-8">
+      
+      <div class="card">
+         <h2 class="text-lg font-semibold mb-1">Visualization</h2>
+         <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Locking occurs where edge-tone lines (dotted) intersect resonator modes (dashed).</p>
+        <div id="plot" style="width:100%; min-height:450px;"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Analysis Results</h2>
+        <div id="results-summary" class="mb-4 space-y-1">
+            <p>Speed of Sound c = <strong class="text-sky-500 dark:text-sky-400">...</strong> m/s</p>
+            <p>Resonator Frequencies (Hz): <span class="font-mono text-sky-500 dark:text-sky-400 text-sm">...</span></p>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-slate-100 dark:bg-slate-700/50 text-xs uppercase">
+              <tr>
+                <th class="px-4 py-2">Mode</th>
+                <th class="px-4 py-2">Mode Freq (Hz)</th>
+                <th class="px-4 py-2">Stage</th>
+                <th class="px-4 py-2">St</th>
+                <th class="px-4 py-2">Locking Speed (m/s)</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body" class="divide-y divide-slate-200 dark:divide-slate-700">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="text/javascript">
+  async function main() {
+    const pyodide = await loadPyodide();
+    const [whistleCode, appCode] = await Promise.all([
+        fetch("./whistle_acoustics.py").then(res => res.text()),
+        fetch("./app.py").then(res => res.text())
+    ]);
+
+    pyodide.FS.writeFile("whistle_acoustics.py", whistleCode, { encoding: "utf8" });
+    pyodide.FS.writeFile("app.py", appCode, { encoding: "utf8" });
+
+    const app = pyodide.pyimport("app");
+    const presets = app.get_presets().toJs(); 
+    const calculateAcoustics = app.calculate_acoustics;
+
+    document.getElementById("loading-indicator").style.display = 'none';
+    document.getElementById("app-content").style.display = 'block';
+
+    const form = document.getElementById('params-form');
+    const modelSel = document.getElementById('model');
+    const pipeFields = document.getElementById('pipe_fields');
+    const helmFields = document.getElementById('helm_fields');
+    const presetSelector = document.getElementById('preset-selector');
+
+    function syncModelFields() {
+      const isPipe = modelSel.value === 'pipe';
+      pipeFields.style.display = isPipe ? 'block' : 'none';
+      helmFields.style.display = !isPipe ? 'block' : 'none';
+    }
+
+    function applyPreset(name) {
+      if (!name || name === 'custom') return;
+      const data = presets.get(name); 
+      Object.keys(data).forEach(key => {
+        const el = document.getElementById(key);
+        if (el) el.value = data[key];
+      });
+      syncModelFields();
+    }
+
+    function updateUI(results) {
+        document.querySelector("#results-summary strong").textContent = results.get('c').toFixed(2);
+        const modes = results.get('resonator_modes').toJs();
+        document.querySelector("#results-summary span").textContent = modes.map(f => Math.round(f)).join(', ');
+
+        const tableBody = document.getElementById("results-table-body");
+        tableBody.innerHTML = ''; 
+        const tableData = results.get('table').toJs();
+        for (const row of tableData) {
+            tableBody.innerHTML += `
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <td class="px-4 py-2 font-mono">${row.get('mode_n')}</td>
+                <td class="px-4 py-2 font-mono">${row.get('mode_freq_Hz').toFixed(1)}</td>
+                <td class="px-4 py-2 font-mono">${row.get('stage')}</td>
+                <td class="px-4 py-2 font-mono">${row.get('St').toFixed(3)}</td>
+                <td class="px-4 py-2 font-mono font-bold text-orange-500">${row.get('U_lock_m_per_s').toFixed(2)}</td>
+              </tr>
+            `;
+        }
+        
+        const payload = JSON.parse(results.get('plot_payload'));
+        const plotConfig = { responsive: true, displaylogo: false };
+        Plotly.newPlot('plot', payload.data, payload.layout, plotConfig);
+    }
+    
+    async function analyze(event) {
+        if (event) event.preventDefault();
+        
+        const formData = new FormData(form);
+        const params = Object.fromEntries(formData.entries());
+        
+        const resultsProxy = calculateAcoustics(params);
+        updateUI(resultsProxy);
+        resultsProxy.destroy();
+    }
+
+    form.addEventListener('submit', analyze);
+    modelSel.addEventListener('change', syncModelFields);
+    presetSelector.addEventListener('change', () => applyPreset(presetSelector.value));
+
+    syncModelFields();
+    analyze(); 
+  }
+
+  main().catch(err => {
+      console.error("Failed to initialize the application:", err);
+      document.getElementById("loading-indicator").innerHTML = `<div class="text-center p-8"><h1 class="text-2xl font-bold text-red-500">❌ Application Error</h1><p>Could not load the Python environment. Check the browser console (F12) for details.</p></div>`;
+  });
+</script>
+
+</body>
+</html>
