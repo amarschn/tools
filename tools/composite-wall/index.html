@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Composite Wall Heat Loss - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #212529;
+            --primary-light: #f8f9fa;
+            --secondary-color: #495057;
+            --text-color: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --border-radius: 8px;
+            --accent-color: #0d6efd;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; }
+        h2 { font-size: 1.7rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.25rem; color: var(--secondary-color); }
+        h4 { font-size: 1rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.1rem; max-width: 70ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1em; }
+
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.25rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-group input:focus, .input-group select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light); }
+        .tooltip-trigger { display: inline-block; width: 18px; height: 18px; background-color: var(--border-color); color: var(--text-light); border-radius: 50%; text-align: center; font-size: 12px; font-weight: bold; line-height: 18px; cursor: help; position: absolute; right: -24px; top: 38px; }
+        .tooltip-trigger::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: var(--text-color); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 400; line-height: 1.4; width: 220px; opacity: 0; visibility: hidden; transition: opacity 0.2s; z-index: 5; }
+        .tooltip-trigger:hover::after, .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
+
+        .layer-group { padding: 16px; border: 1px dashed var(--border-color); border-radius: var(--border-radius); margin-bottom: 12px; background-color: #fdfdfd; }
+        .layer-group h4 { margin-bottom: 0.5rem; font-size: 1rem; color: var(--secondary-color); }
+
+        .btn { display: inline-block; padding: 10px 18px; border-radius: 6px; font-size: 0.95rem; font-weight: 600; border: none; cursor: pointer; transition: background-color 0.2s; }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-primary:hover { background-color: #16181a; }
+        .btn-secondary { background-color: var(--primary-light); color: var(--secondary-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: #e9ecef; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; }
+        .tab-link { border: none; background: none; padding: 10px 16px; font-weight: 600; cursor: pointer; color: var(--secondary-color); border-bottom: 2px solid transparent; }
+        .tab-link.active { color: var(--primary-color); border-color: var(--primary-color); }
+        .tab-content { display: none; }
+
+        .result-item { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .result-header strong { color: var(--primary-color); }
+        .equation-details { font-size: 0.9rem; color: var(--secondary-color); }
+        .inline-details > summary { cursor: pointer; list-style: none; }
+        .inline-details > summary::after { content: 'Show derivation'; font-size: 0.85rem; color: var(--secondary-color); }
+        .inline-details[open] > summary::after { content: 'Hide derivation'; }
+        .definition { border-bottom: 1px dotted var(--secondary-color); cursor: help; }
+
+        .interface-list { margin-top: 8px; padding-left: 20px; color: var(--secondary-color); font-size: 0.95rem; }
+
+        .footer { text-align: center; padding: 16px 0; font-size: 0.85rem; color: var(--text-light); }
+
+        .hidden { display: none; }
+
+        @media (max-width: 980px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0; }
+            .input-group { padding-right: 24px; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Composite Wall Heat Loss</h1>
+        <p class="tool-description" id="tool-description">
+            Estimate conduction and film resistances for a layered wall, compute its overall U-value, and inspect interface temperatures across each layer.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>Purpose</h3>
+                <p>This calculator helps building-science and thermal engineers evaluate heat loss through composite walls. It captures interior/exterior film resistances and up to three conduction layers to reveal overall heat flux and temperature drops.</p>
+                <h3>Workflow</h3>
+                <ul>
+                    <li>Provide the exposed area, boundary temperatures, and optional convection coefficients.</li>
+                    <li>Choose one to three solid layers and enter thickness and thermal conductivity for each.</li>
+                    <li>Review the resulting heat transfer rate, U-value, and layer interface temperatures.</li>
+                    <li>Inspect the automated resistance diagram in the visualization tab.</li>
+                </ul>
+                <h3>Key Assumptions</h3>
+                <ul>
+                    <li>One-dimensional steady conduction with uniform properties.</li>
+                    <li>No internal heat generation within the layers.</li>
+                    <li>Convection films are lumped resistances with uniform coefficients.</li>
+                </ul>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="input-group" data-param="area">
+                        <label for="area">Area (m²)</label>
+                        <input type="number" id="area" name="area" placeholder="e.g., 20" step="any" min="0" value="10">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group" data-param="interior_temperature">
+                        <label for="interior-temperature">Interior Temperature (°C)</label>
+                        <input type="number" id="interior-temperature" name="interior-temperature" placeholder="e.g., 21" step="any" value="21">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group" data-param="exterior_temperature">
+                        <label for="exterior-temperature">Exterior Temperature (°C)</label>
+                        <input type="number" id="exterior-temperature" name="exterior-temperature" placeholder="e.g., -5" step="any" value="-5">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group" data-param="interior_convection_coefficient">
+                        <label for="interior-h">Interior Convection Coefficient h<sub>i</sub> (W/m²·K)</label>
+                        <input type="number" id="interior-h" name="interior-h" placeholder="e.g., 8" step="any" min="0">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group" data-param="exterior_convection_coefficient">
+                        <label for="exterior-h">Exterior Convection Coefficient h<sub>o</sub> (W/m²·K)</label>
+                        <input type="number" id="exterior-h" name="exterior-h" placeholder="e.g., 25" step="any" min="0">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="layer-count">Number of Solid Layers</label>
+                        <select id="layer-count" name="layer-count">
+                            <option value="1">1 Layer</option>
+                            <option value="2">2 Layers</option>
+                            <option value="3" selected>3 Layers</option>
+                        </select>
+                    </div>
+
+                    <div id="layer-wrapper">
+                        <div class="layer-group" data-layer="1">
+                            <h4>Layer 1</h4>
+                            <div class="input-group" data-param="layer_thicknesses">
+                                <label for="layer-1-thickness">Thickness (m)</label>
+                                <input type="number" id="layer-1-thickness" placeholder="e.g., 0.2" step="any" min="0" value="0.2">
+                            </div>
+                            <div class="input-group" data-param="layer_conductivities">
+                                <label for="layer-1-k">Thermal Conductivity (W/m·K)</label>
+                                <input type="number" id="layer-1-k" placeholder="e.g., 0.038" step="any" min="0" value="0.038">
+                            </div>
+                        </div>
+
+                        <div class="layer-group" data-layer="2">
+                            <h4>Layer 2</h4>
+                            <div class="input-group" data-param="layer_thicknesses">
+                                <label for="layer-2-thickness">Thickness (m)</label>
+                                <input type="number" id="layer-2-thickness" placeholder="e.g., 0.02" step="any" min="0" value="0.02">
+                            </div>
+                            <div class="input-group" data-param="layer_conductivities">
+                                <label for="layer-2-k">Thermal Conductivity (W/m·K)</label>
+                                <input type="number" id="layer-2-k" placeholder="e.g., 0.21" step="any" min="0" value="0.21">
+                            </div>
+                        </div>
+
+                        <div class="layer-group" data-layer="3">
+                            <h4>Layer 3</h4>
+                            <div class="input-group" data-param="layer_thicknesses">
+                                <label for="layer-3-thickness">Thickness (m)</label>
+                                <input type="number" id="layer-3-thickness" placeholder="e.g., 0.01" step="any" min="0" value="0.01">
+                            </div>
+                            <div class="input-group" data-param="layer_conductivities">
+                                <label for="layer-3-k">Thermal Conductivity (W/m·K)</label>
+                                <input type="number" id="layer-3-k" placeholder="e.g., 0.72" step="any" min="0" value="0.72">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="plot">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Provide inputs and click calculate to see results.</p>
+                    </div>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <h3>Thermal Resistance Diagram</h3>
+                    <div id="plot-container">
+                        <p>Visualization will appear here once a calculation is completed.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">Loading Python documentation...</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        let toolDocumentation = {};
+        let pyToolModule;
+        let latestResults = null;
+        let currentLayers = 3;
+
+        const TOOL_MODULE_NAME = 'heat_transfer';
+        const TOOL_FUNCTION_NAME = 'composite_wall_analysis';
+
+        function openTab(event) {
+            const target = event.currentTarget.dataset.target;
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(target).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        document.querySelectorAll('.tab-link').forEach(btn => {
+            btn.addEventListener('click', openTab);
+        });
+
+        function updateLayerVisibility() {
+            const desiredLayers = Number(document.getElementById('layer-count').value);
+            currentLayers = desiredLayers;
+
+            document.querySelectorAll('.layer-group').forEach(group => {
+                const layerIndex = Number(group.dataset.layer);
+                group.classList.toggle('hidden', layerIndex > desiredLayers);
+            });
+        }
+
+        document.getElementById('layer-count').addEventListener('change', updateLayerVisibility);
+        updateLayerVisibility();
+
+        async function main() {
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage('micropip');
+
+            document.getElementById('calculate-btn').textContent = 'Loading Python...';
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            const pyUtils = pyodide.globals.get('utils');
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight: bold;">Initialization Error:</p>
+                    <p style="color: red;">${docMap.get('error')}</p>
+                `;
+                resetVisualization('Visualization unavailable due to initialization error.');
+                return;
+            }
+
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+
+            populateUiFromDocs();
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        function populateUiFromDocs() {
+            if (!toolDocumentation) return;
+            document.getElementById('tool-description').textContent = toolDocumentation.description;
+
+            document.querySelectorAll('.input-group[data-param]').forEach(group => {
+                const paramName = group.dataset.param;
+                const tooltip = group.querySelector('.tooltip-trigger');
+                if (!tooltip) return;
+
+                if (paramName === 'layer_thicknesses') {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters?.layer_thicknesses || 'Enter layer thickness in metres.');
+                } else if (paramName === 'layer_conductivities') {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters?.layer_conductivities || 'Enter thermal conductivity in W/m·K.');
+                } else if (toolDocumentation.parameters?.[paramName]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramName]);
+                }
+            });
+
+            const latexContent = toolDocumentation.latex
+                ? toolDocumentation.latex.replace(/\n/g, '<br>')
+                : 'No LaTeX provided.';
+            document.getElementById('background').innerHTML = `
+                <h3>Underlying Principles</h3>
+                <p>${toolDocumentation.description}</p>
+                <h4>Equations</h4>
+                <p>$$${latexContent}$$</p>
+                <h4>References</h4>
+                <p>${toolDocumentation.references || 'Incropera et al., Fundamentals of Heat and Mass Transfer.'}</p>
+            `;
+            typesetMath();
+        }
+
+        function coerceNumber(value) {
+            if (value === '' || value === null || value === undefined) {
+                return null;
+            }
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : NaN;
+        }
+
+        document.getElementById('calc-form').addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const area = coerceNumber(document.getElementById('area').value);
+            const interiorTemp = coerceNumber(document.getElementById('interior-temperature').value);
+            const exteriorTemp = coerceNumber(document.getElementById('exterior-temperature').value);
+            const hi = coerceNumber(document.getElementById('interior-h').value);
+            const ho = coerceNumber(document.getElementById('exterior-h').value);
+
+            const thicknesses = [];
+            const conductivities = [];
+
+            for (let i = 1; i <= currentLayers; i += 1) {
+                const thickness = coerceNumber(document.getElementById(`layer-${i}-thickness`).value);
+                const conductivity = coerceNumber(document.getElementById(`layer-${i}-k`).value);
+                thicknesses.push(thickness);
+                conductivities.push(conductivity);
+            }
+
+            try {
+                if (!Number.isFinite(area) || area === null) {
+                    throw new Error('Area must be a numeric value greater than zero.');
+                }
+                if (!Number.isFinite(interiorTemp) || interiorTemp === null || !Number.isFinite(exteriorTemp) || exteriorTemp === null) {
+                    throw new Error('Interior and exterior temperatures must be numeric values.');
+                }
+
+                thicknesses.forEach((value, index) => {
+                    if (!Number.isFinite(value) || value === null || value <= 0) {
+                        throw new Error(`Layer ${index + 1} thickness must be greater than zero.`);
+                    }
+                });
+
+                conductivities.forEach((value, index) => {
+                    if (!Number.isFinite(value) || value === null || value <= 0) {
+                        throw new Error(`Layer ${index + 1} conductivity must be greater than zero.`);
+                    }
+                });
+
+                const hiArg = Number.isFinite(hi) && hi !== null && hi > 0 ? hi : null;
+                const hoArg = Number.isFinite(ho) && ho !== null && ho > 0 ? ho : null;
+
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](
+                    area,
+                    interiorTemp,
+                    exteriorTemp,
+                    thicknesses,
+                    conductivities,
+                    hiArg,
+                    hoArg
+                ).toJs();
+
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                latestResults = results;
+                renderResults(results);
+            } catch (error) {
+                latestResults = null;
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight: bold;">Calculation Error:</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+                resetVisualization('Visualization unavailable due to calculation error.');
+            }
+        });
+
+        function renderResults(results) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+
+            if (document.getElementById('results-placeholder')) {
+                document.getElementById('results-placeholder').remove();
+            }
+
+            Object.entries(toolDocumentation.returns || {}).forEach(([key, definition]) => {
+                if (!(key in results)) return;
+
+                const value = results[key];
+                const substitution = results[`subst_${key}`];
+                const displayName = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+
+                let formattedValue = value;
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    formattedValue = value.toExponential(4);
+                } else if (Array.isArray(value)) {
+                    formattedValue = value.map((entry, idx) => `Interface ${idx + 1}: ${entry.toFixed(2)} °C`).join('<br>');
+                }
+
+                const detailsBlock = substitution
+                    ? `<details class="inline-details">
+                            <summary></summary>
+                            <div class="equation-details">
+                                <p><strong>Substituted:</strong> $$${substitution}$$</p>
+                            </div>
+                        </details>`
+                    : '';
+
+                const html = `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <p><strong><span class="definition" title="${definition}">${displayName}</span>:</strong> ${
+                                Array.isArray(value) ? '' : formattedValue
+                            }</p>
+                            ${Array.isArray(value) ? '' : detailsBlock}
+                        </div>
+                        ${
+                            Array.isArray(value)
+                                ? `<ul class="interface-list">${value.map((temp, idx) => `<li>Node ${idx + 1}: ${temp.toFixed(2)} °C</li>`).join('')}</ul>`
+                                : ''
+                        }
+                        ${
+                            Array.isArray(value) && substitution
+                                ? `<details class="inline-details">
+                                        <summary></summary>
+                                        <div class="equation-details">
+                                            <p><strong>Substituted:</strong> $$${substitution}$$</p>
+                                        </div>
+                                   </details>`
+                                : ''
+                        }
+                    </div>
+                `;
+
+                resultsDiv.insertAdjacentHTML('beforeend', html);
+            });
+
+            typesetMath();
+            renderVisualization(results);
+        }
+
+        function resetVisualization(message = 'Visualization will appear here once a calculation is completed.') {
+            const container = document.getElementById('plot-container');
+            container.innerHTML = `<p>${message}</p>`;
+        }
+
+        function renderVisualization(results) {
+            if (!window.Plotly) {
+                resetVisualization('Plotly failed to load. Refresh to retry the visualization.');
+                return;
+            }
+            if (!results || !Array.isArray(results.interface_temperatures)) {
+                resetVisualization('Unable to draw visualization for the provided data.');
+                return;
+            }
+
+            const container = document.getElementById('plot-container');
+            const interfaceTemps = results.interface_temperatures.map(Number);
+            const nodes = interfaceTemps.map((_, idx) => idx + 1);
+
+            const trace = {
+                x: nodes,
+                y: interfaceTemps,
+                mode: 'lines+markers',
+                line: { color: '#0d6efd', width: 3 },
+                marker: { size: 8, color: '#0d6efd' },
+                name: 'Interface Temperature',
+                hovertemplate: 'Node %{x}: %{y:.2f} °C<extra></extra>'
+            };
+
+            const layout = {
+                margin: { l: 60, r: 20, t: 40, b: 60 },
+                xaxis: {
+                    title: 'Interface Node',
+                    dtick: 1
+                },
+                yaxis: {
+                    title: 'Temperature (°C)'
+                },
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)'
+            };
+
+            const config = {
+                responsive: true,
+                displayModeBar: false
+            };
+
+            container.innerHTML = '';
+            window.Plotly.newPlot(container, [trace], layout, config);
+        }
+
+        main();
+    </script>
+</body>
+</html>
