@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reynolds Number Explorer - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #212529;
+            --primary-light: #f8f9fa;
+            --secondary-color: #495057;
+            --text-color: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --border-radius: 8px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; }
+        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.25rem; color: var(--secondary-color); }
+        h4 { font-size: 1rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.1rem; max-width: 70ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1em; }
+
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.25rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-group input:focus, .input-group select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light); }
+        .tooltip-trigger { display: inline-block; width: 18px; height: 18px; background-color: var(--border-color); color: var(--text-light); border-radius: 50%; text-align: center; font-size: 12px; font-weight: bold; line-height: 18px; cursor: help; position: absolute; right: -24px; top: 38px; }
+        .tooltip-trigger::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: var(--text-color); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 400; line-height: 1.4; width: 220px; opacity: 0; visibility: hidden; transition: opacity 0.2s; z-index: 5; }
+        .tooltip-trigger:hover::after, .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
+
+        .btn { display: inline-block; padding: 10px 18px; border-radius: 6px; font-size: 0.95rem; font-weight: 600; border: none; cursor: pointer; transition: background-color 0.2s; }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-primary:hover { background-color: #16181a; }
+        .btn-secondary { background-color: var(--primary-light); color: var(--secondary-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: #e9ecef; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+        .tab-link { border: none; background: none; padding: 10px 16px; font-weight: 600; cursor: pointer; color: var(--secondary-color); border-bottom: 2px solid transparent; }
+        .tab-link.active { color: var(--primary-color); border-color: var(--primary-color); }
+        .tab-content { display: none; }
+
+        .result-item { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .result-header strong { color: var(--primary-color); }
+        .equation-details { font-size: 0.9rem; color: var(--secondary-color); }
+        .inline-details > summary { cursor: pointer; list-style: none; }
+        .inline-details > summary::after { content: 'Show derivation'; font-size: 0.85rem; color: var(--secondary-color); }
+        .inline-details[open] > summary::after { content: 'Hide derivation'; }
+
+        .definition { border-bottom: 1px dotted var(--secondary-color); cursor: help; }
+
+        .footer { text-align: center; padding: 16px 0; font-size: 0.85rem; color: var(--text-light); }
+
+        .hidden { display: none; }
+
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0; }
+            .input-group { padding-right: 24px; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Reynolds Number Explorer</h1>
+        <p class="tool-description" id="tool-description">
+            Estimate the Reynolds number for internal or external flows, explore which transport properties were used, and classify the resulting flow regime.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>Purpose</h3>
+                <p>This tool supports introductory fluid mechanics design checks by providing a traceable Reynolds number calculation. Users can toggle between kinematic viscosity input or density and dynamic viscosity, making it easy to work with data from handbooks or laboratory measurements.</p>
+                <h3>Workflow</h3>
+                <ul>
+                    <li>Supply bulk flow velocity and a characteristic length scale.</li>
+                    <li>Select the transport property mode (kinematic viscosity or density with dynamic viscosity).</li>
+                    <li>Review the computed Reynolds number, the inferred flow regime, and the algebra behind the calculation.</li>
+                    <li>Export a JSON snapshot of the current results for documentation.</li>
+                </ul>
+                <h3>Scope & Assumptions</h3>
+                <ul>
+                    <li>Assumes steady, Newtonian, incompressible flow.</li>
+                    <li>Uses canonical threshold values (2300 and 4000) for laminar and turbulent regime guidance.</li>
+                    <li>No automatic unit conversion—ensure consistent SI inputs.</li>
+                </ul>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="input-group" data-param="velocity">
+                        <label for="velocity">Mean Velocity (m/s)</label>
+                        <input type="number" id="velocity" name="velocity" placeholder="e.g., 1.5" step="any" min="0" value="1.5">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group" data-param="characteristic_length">
+                        <label for="characteristic-length">Characteristic Length (m)</label>
+                        <input type="number" id="characteristic-length" name="characteristic-length" placeholder="e.g., 0.05" step="any" min="0" value="0.05">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="viscosity-mode">Transport Property Mode</label>
+                        <select id="viscosity-mode" name="viscosity-mode">
+                            <option value="kinematic">Kinematic viscosity</option>
+                            <option value="dynamic">Density and dynamic viscosity</option>
+                        </select>
+                    </div>
+                    <div class="input-group" data-param="kinematic_viscosity" id="kinematic-group">
+                        <label for="kinematic-viscosity">Kinematic Viscosity (m²/s)</label>
+                        <input type="number" id="kinematic-viscosity" name="kinematic-viscosity" placeholder="e.g., 1.5e-5" step="any" min="0" value="1.5e-5">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group hidden" data-param="density" id="density-group">
+                        <label for="density">Density (kg/m³)</label>
+                        <input type="number" id="density" name="density" placeholder="e.g., 998" step="any" min="0">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group hidden" data-param="dynamic_viscosity" id="dynamic-group">
+                        <label for="dynamic-viscosity">Dynamic Viscosity (Pa·s)</label>
+                        <input type="number" id="dynamic-viscosity" name="dynamic-viscosity" placeholder="e.g., 1.0e-3" step="any" min="0">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="plot">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Provide inputs and click calculate to see results.</p>
+                    </div>
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <h3>Visualization</h3>
+                    <div id="plot-container">
+                        <p>Plotting is not required for this calculator yet, but this panel is reserved for future regime diagrams.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">Loading Python documentation...</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        let toolDocumentation = {};
+        let pyToolModule;
+        let latestResults = null;
+
+        const TOOL_MODULE_NAME = 'fluids';
+        const TOOL_FUNCTION_NAME = 'reynolds_number_analysis';
+        const DEFAULT_PLOT_MESSAGE = 'Plotting is not required for this calculator yet, but this panel is reserved for future regime diagrams.';
+
+        function openTab(event) {
+            const target = event.currentTarget.dataset.target;
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(target).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        document.querySelectorAll('.tab-link').forEach(btn => {
+            btn.addEventListener('click', openTab);
+        });
+
+        function updateViscosityMode() {
+            const mode = document.getElementById('viscosity-mode').value;
+            const kinematicGroup = document.getElementById('kinematic-group');
+            const densityGroup = document.getElementById('density-group');
+            const dynamicGroup = document.getElementById('dynamic-group');
+
+            if (mode === 'kinematic') {
+                kinematicGroup.classList.remove('hidden');
+                densityGroup.classList.add('hidden');
+                dynamicGroup.classList.add('hidden');
+            } else {
+                kinematicGroup.classList.add('hidden');
+                densityGroup.classList.remove('hidden');
+                dynamicGroup.classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('viscosity-mode').addEventListener('change', updateViscosityMode);
+        updateViscosityMode();
+        resetVisualization();
+
+        async function main() {
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage('micropip');
+
+            document.getElementById('calculate-btn').textContent = 'Loading Python...';
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            const pyUtils = pyodide.globals.get('utils');
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight: bold;">Initialization Error:</p>
+                    <p style="color: red;">${docMap.get('error')}</p>
+                `;
+                resetVisualization('Visualization unavailable due to initialization error.');
+                return;
+            }
+
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+
+            populateUiFromDocs();
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        function populateUiFromDocs() {
+            if (!toolDocumentation) return;
+            document.getElementById('tool-description').textContent = toolDocumentation.description;
+
+            document.querySelectorAll('.input-group[data-param]').forEach(group => {
+                const paramName = group.dataset.param;
+                const tooltip = group.querySelector('.tooltip-trigger');
+                if (paramName && tooltip && toolDocumentation.parameters?.[paramName]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramName]);
+                }
+            });
+
+            const latexContent = toolDocumentation.latex
+                ? toolDocumentation.latex.replace(/\n/g, '<br>')
+                : 'No LaTeX provided.';
+            document.getElementById('background').innerHTML = `
+                <h3>Underlying Principles</h3>
+                <p>${toolDocumentation.description}</p>
+                <h4>Equations</h4>
+                <p>$$${latexContent}$$</p>
+            `;
+            typesetMath();
+        }
+
+        function coerceNumber(value) {
+            if (value === '' || value === null || value === undefined) {
+                return null;
+            }
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : NaN;
+        }
+
+        document.getElementById('calc-form').addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const velocity = coerceNumber(document.getElementById('velocity').value);
+            const length = coerceNumber(document.getElementById('characteristic-length').value);
+            const mode = document.getElementById('viscosity-mode').value;
+            const kinVisc = coerceNumber(document.getElementById('kinematic-viscosity').value);
+            const density = coerceNumber(document.getElementById('density').value);
+            const dynVisc = coerceNumber(document.getElementById('dynamic-viscosity').value);
+
+            try {
+                if (!Number.isFinite(velocity) || velocity === null) {
+                    throw new Error('Velocity must be a numeric value.');
+                }
+                if (!Number.isFinite(length) || length === null) {
+                    throw new Error('Characteristic length must be a numeric value.');
+                }
+
+                let args = [velocity, length, null, null, null];
+                if (mode === 'kinematic') {
+                    if (!Number.isFinite(kinVisc) || kinVisc === null) {
+                        throw new Error('Kinematic viscosity must be provided for this mode.');
+                    }
+                    args[2] = kinVisc;
+                } else {
+                    if (!Number.isFinite(density) || density === null) {
+                        throw new Error('Density must be provided when using dynamic viscosity.');
+                    }
+                    if (!Number.isFinite(dynVisc) || dynVisc === null) {
+                        throw new Error('Dynamic viscosity must be provided when using density.');
+                    }
+                    args[3] = density;
+                    args[4] = dynVisc;
+                }
+
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                latestResults = results;
+                renderResults(results);
+            } catch (error) {
+                latestResults = null;
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight: bold;">Calculation Error:</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+                resetVisualization('Visualization unavailable due to calculation error.');
+            }
+        });
+
+        function renderResults(results) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+
+            if (document.getElementById('results-placeholder')) {
+                document.getElementById('results-placeholder').remove();
+            }
+
+            Object.entries(toolDocumentation.returns || {}).forEach(([key, definition]) => {
+                if (!(key in results)) return;
+                const value = results[key];
+                const substitution = results[`subst_${key}`];
+                const displayName = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+
+                let formattedValue = value;
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    formattedValue = value.toExponential(4);
+                }
+
+                const equationBlock = substitution
+                    ? `<p><strong>Substituted:</strong> $$${substitution}$$</p>`
+                    : '';
+
+                const detailsBlock = equationBlock
+                    ? `<details class="inline-details">
+                            <summary></summary>
+                            <div class="equation-details">
+                                ${equationBlock}
+                            </div>
+                        </details>`
+                    : '';
+
+                const html = `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <p><strong><span class="definition" title="${definition}">${displayName}</span>:</strong> ${formattedValue}</p>
+                            ${detailsBlock}
+                        </div>
+                    </div>
+                `;
+                resultsDiv.insertAdjacentHTML('beforeend', html);
+            });
+
+            if (results.viscosity_path) {
+                const pathHtml = `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <p><strong>Property Source:</strong> ${results.viscosity_path === 'kinematic' ? 'Direct kinematic viscosity input' : 'Density and dynamic viscosity input'}</p>
+                        </div>
+                    </div>
+                `;
+                resultsDiv.insertAdjacentHTML('beforeend', pathHtml);
+            }
+
+            typesetMath();
+            renderVisualization(results.reynolds_number);
+        }
+
+        function exportValue(id) {
+            const value = coerceNumber(document.getElementById(id).value);
+            if (value === null || Number.isNaN(value)) {
+                return null;
+            }
+            return value;
+        }
+
+        document.getElementById('export-btn').addEventListener('click', () => {
+            if (!latestResults) {
+                alert('Run a calculation before exporting results.');
+                return;
+            }
+            const timestamp = new Date().toISOString();
+            const payload = {
+                timestamp,
+                inputs: {
+                    velocity: exportValue('velocity'),
+                    characteristic_length: exportValue('characteristic-length'),
+                    mode: document.getElementById('viscosity-mode').value,
+                    kinematic_viscosity: exportValue('kinematic-viscosity'),
+                    density: exportValue('density'),
+                    dynamic_viscosity: exportValue('dynamic-viscosity'),
+                },
+                results: latestResults,
+                documentation: {
+                    reference: toolDocumentation.references || 'Fox et al. (2015) Introduction to Fluid Mechanics.',
+                },
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `reynolds-number-${timestamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+
+        function resetVisualization(message = DEFAULT_PLOT_MESSAGE) {
+            const container = document.getElementById('plot-container');
+            container.innerHTML = `<p>${message}</p>`;
+        }
+
+        function renderVisualization(reynoldsNumber) {
+            const container = document.getElementById('plot-container');
+            if (!window.Plotly) {
+                resetVisualization('Plotly failed to load. Refresh to retry the visualization.');
+                return;
+            }
+
+            const re = Number(reynoldsNumber);
+            if (!Number.isFinite(re) || re <= 0) {
+                resetVisualization('Visualization requires a positive Reynolds number.');
+                return;
+            }
+
+            const minRe = 1;
+            const maxRe = 1e6;
+            const clampedRe = Math.min(Math.max(re, minRe), maxRe);
+            const outsideRange = re < minRe || re > maxRe;
+
+            const shapes = [
+                {
+                    type: 'rect',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: minRe,
+                    x1: 2300,
+                    y0: 0,
+                    y1: 1,
+                    fillcolor: 'rgba(56, 142, 240, 0.18)',
+                    layer: 'below',
+                    line: { width: 0 }
+                },
+                {
+                    type: 'rect',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: 2300,
+                    x1: 4000,
+                    y0: 0,
+                    y1: 1,
+                    fillcolor: 'rgba(255, 193, 7, 0.18)',
+                    layer: 'below',
+                    line: { width: 0 }
+                },
+                {
+                    type: 'rect',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: 4000,
+                    x1: maxRe,
+                    y0: 0,
+                    y1: 1,
+                    fillcolor: 'rgba(220, 53, 69, 0.18)',
+                    layer: 'below',
+                    line: { width: 0 }
+                }
+            ];
+
+            const annotations = [
+                {
+                    x: clampedRe,
+                    y: 0.75,
+                    xref: 'x',
+                    yref: 'paper',
+                    text: outsideRange
+                        ? `Re = ${re.toExponential(3)} (shown at boundary)`
+                        : `Re = ${re.toExponential(3)}`,
+                    showarrow: true,
+                    arrowhead: 6,
+                    arrowcolor: '#d9480f',
+                    ax: 0,
+                    ay: -35,
+                    bgcolor: 'rgba(255,255,255,0.85)'
+                }
+            ];
+
+            const trace = {
+                x: [clampedRe],
+                y: [0.5],
+                mode: 'markers',
+                marker: {
+                    size: 16,
+                    color: '#d9480f',
+                    line: { color: '#ffffff', width: 1.5 }
+                },
+                name: 'Computed Re',
+                hovertemplate: '<b>Re</b>: %{x:.3e}<extra></extra>'
+            };
+
+            const layout = {
+                margin: { l: 40, r: 20, t: 40, b: 60 },
+                xaxis: {
+                    type: 'log',
+                    title: 'Reynolds number (log scale)',
+                    range: [Math.log10(minRe), Math.log10(maxRe)],
+                    tickvals: [1e1, 1e2, 1e3, 1e4, 1e5, 1e6],
+                    ticktext: ['1e1', '1e2', '1e3', '1e4', '1e5', '1e6']
+                },
+                yaxis: {
+                    visible: false,
+                    range: [0, 1]
+                },
+                shapes,
+                annotations,
+                showlegend: false,
+                hovermode: 'closest',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)'
+            };
+
+            const config = {
+                responsive: true,
+                displayModeBar: false
+            };
+
+            container.innerHTML = '';
+            window.Plotly.newPlot(container, [trace], layout, config);
+        }
+
+        main();
+    </script>
+</body>
+</html>
