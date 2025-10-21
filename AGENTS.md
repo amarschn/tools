@@ -160,6 +160,7 @@ All new tools **must** be built using the official `tools/example_tool` template
 
 * **For AI Agents (Codex, etc.):** When asked to create a new tool, you must first retrieve the contents of `/tools/example_tool/index.html` and use it as the foundational code. All modifications must be made *to this template*.
 * **For Human Developers:** Do not copy an existing tool. Start from that template to ensure you have the latest UI structure, styles, and accessibility features.
+* **Layout Variants:** Example implementations of compact, stacked, and tabbed input layouts live in `tools/example_tool_compact`, `tools/example_tool_stacked`, and `tools/example_tool_tabbed`. Use them as references for alternate form factors while still basing new tools on the core template.
 
 This mandate enforces our core principles of consistency, usability, and progressive disclosure.
 
