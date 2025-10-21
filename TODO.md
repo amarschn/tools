@@ -72,6 +72,7 @@ This backlog consolidates platform work, template upgrades, and future tool idea
 - [ ] Basic unit converter (length, area, temperature, pressure) tied to the new unit system.
 - [ ] Material property lookup dashboard with filtering/export.
 - [ ] Engineering assumption checklist generator for reports.
+- [ ] Template lint script that verifies MathJax legends in equations
 
 ## Complex / Long-Term Initiatives
 
