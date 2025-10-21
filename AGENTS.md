@@ -188,31 +188,3 @@ This mandate enforces our core principles of consistency, usability, and progres
     * Providing sufficient color contrast.
     * Ensuring all functionality is usable with a keyboard.
 * **CSS:** All custom styles should be added to the shared stylesheet to maintain a consistent look and feel. Use descriptive class names and avoid inline styles.
-
-## Roadmap
-
-This is a living project with a lot of potential for growth. Here are some of the disciplines and tools we plan to add in the future. This list is not exhaustive, and we welcome new ideas!
-
-### Aerospace Engineering
-
-* [ ] Airfoil lift and drag calculator
-* [ ] Rocket equation calculator
-* [ ] Orbital mechanics simulator
-
-### Civil & Mechanical Engineering
-
-* [ ] Beam deflection and stress calculator
-* [ ] Mohr's circle visualization
-* [ ] Truss analysis tool
-
-### Chemical Engineering
-
-* [ ] Ideal gas law calculator
-* [ ] Reynolds number calculator
-* [ ] Reaction kinetics simulator
-
-### Mathematics
-
-* [ ] Matrix operations tool
-* [ ] 3D vector visualization
-* [ ] Fourier series plotter

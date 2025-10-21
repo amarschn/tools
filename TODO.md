@@ -1,105 +1,81 @@
-# Ideas for New Engineering Tools
+# Engineering Tools Backlog
 
-## Mechanical Engineering
+This backlog consolidates platform work, template upgrades, and future tool ideas that span from lightweight utilities to large, multi-module experiences.
 
-### Shaft Analysis Calculator
-- Calculate deflection, stress, and critical speed of rotating shafts.
-- Analyze different support configurations and loading conditions.
+## Platform Improvements
 
-### Gear Design Assistant
-- Calculate gear ratios, tooth stress, and contact forces.
-- Visualize gear meshing and provide recommendations.
+- [ ] Implement a reusable SI/Imperial unit toggle in the shared template and apply it across tools.
+- [ ] Design a schema-driven input renderer for tools with large parameter counts (auto-tooltips, validation, tabs).
+- [ ] Convert legacy tools to the standard template (`beam-bending`, `simple_thermal`, `door-spring-app`, `fits`, `mtbf`, `trajectory`, `wire-sizing`).
+- [ ] Establish automated docstring validation to enforce `---Parameters---` / `---Returns---` / `---LaTeX---` sections.
+- [ ] Build a shared visualization helper (Plotly/Chart.js adapters) to reduce duplicated plotting code.
+- [ ] Create integration tests that load each tool in Pyodide and exercise nominal + error paths.
+- [x] Deploy Reynolds Number Explorer (fluid mechanics sanity-check tool).
+- [x] Add Composite Wall Heat Loss calculator with interface temperature visualization.
 
-### Fastener Torque Calculator
-- Calculate recommended tightening torque based on bolt size, material, and lubrication.
-- Include preload analysis and thread stripping checks.
+## Aerospace Engineering Tools
 
-### Interference Fit Calculator
-- Calculate press/shrink fit forces and stresses.
-- Assess temperature effects on assembly/disassembly.
+- [ ] Airfoil lift and drag estimator with NACA parser and Cp plots.
+- [ ] Tsiolkovsky rocket equation planner (staging, propellant tables, delta-v budget).
+- [ ] Orbital mechanics sandbox (two-body propagator, transfer maneuvers, 3D visualization).
+- [ ] Hypersonic stagnation heating calculator for blunt bodies (complex).
 
-### Vibration Isolation Calculator
-- Design vibration isolators based on equipment weight and frequency.
-- Calculate natural frequency and transmissibility.
+## Civil & Mechanical Engineering Tools
 
-## Thermal & Fluid Tools
+- [ ] Beam deflection and combined stress calculator with superposition library.
+- [ ] Mohr's circle visualization with failure envelopes.
+- [ ] Truss analysis tool using method of joints + determinacy checker.
+- [ ] Shaft analysis module (critical speed, torsional stress, bearing loads).
+- [ ] Gear design assistant (AGMA stress, contact ratio, geometry factors).
+- [ ] Fastener torque and preload calculator with tightening strategies.
+- [ ] Interference-fit predictor including thermal assembly planning.
+- [ ] Vibration isolation selector (spring-damper tuning, transmissibility plots).
+- [ ] Structural bolted joint fatigue life estimator (complex).
 
-### Heat Exchanger Sizing Tool
-- Estimate required heat exchanger size based on fluid properties and heat load.
-- Calculate effectiveness and pressure drop.
+## Thermal & Fluid Sciences Tools
 
-### Pump/Fan Selection Assistant
-- Calculate required pump/fan specifications based on system requirements.
-- Account for system curves and operating points.
+- [ ] Heat exchanger sizing and rating assistant (LMTD, effectiveness-NTU).
+- [ ] Pump/fan selection tool that intersects system and pump curves.
+- [ ] Refrigeration cycle analyzer with property tables and COP visualization.
+- [ ] Pipe network solver (Darcy-Weisbach, minor losses, pumps in series/parallel).
+- [ ] Radiative view-factor calculator for common geometries (complex).
+- [ ] Natural convection correlation explorer (plates, cylinders, enclosures).
+- [x] Reynolds number explorer with regime classification (complete).
+- [x] Composite wall conduction calculator with film resistances (complete).
 
-### Refrigeration Cycle Calculator
-- Analyze basic vapor compression cycle performance.
-- Calculate COP, cooling capacity, and compressor work.
+## Chemical & Process Engineering Tools
 
-### Pipe Flow Calculator
-- Analyze pressure drop in pipe systems with various fittings.
-- Calculate Reynolds number, friction factor, and flow regime.
+- [ ] Ideal gas law explorer with common engineering unit options.
+- [ ] Reaction kinetics simulator (Arrhenius, CSTR/PFR sizing).
+- [ ] Distillation column McCabe-Thiele assistant (complex).
+- [ ] Process safety relief-valve sizing utility.
 
-## Electrical Tools
+## Electrical & Electronics Tools
 
-### Motor Selection Tool
-- Calculate required motor power based on load characteristics.
-- Analyze starting current, efficiency, and thermal considerations.
+- [ ] Motor selection and acceleration profile calculator.
+- [ ] Battery sizing and lifecycle estimator for duty-cycle driven loads.
+- [ ] Power-factor correction planner (economic payback included).
+- [ ] LED lighting design tool (photometric layout basics).
+- [ ] Solar PV & storage sizing with location-based irradiance.
+- [ ] High-speed PCB impedance calculator (microstrip/stripline, advanced).
 
-### Battery Sizing Calculator
-- Determine battery capacity needed based on the load profile.
-- Calculate runtime, depth of discharge, and cycle life.
+## Mathematics, Data & Controls Tools
 
-### Power Factor Correction Tool
-- Calculate capacitor size needed for power factor improvement.
-- Analyze the economic benefits of correction.
+- [ ] Matrix operations and linear solver workspace.
+- [ ] 3D vector visualization and coordinate transform helper.
+- [ ] Fourier series synthesizer with audio playback.
+- [ ] State-space control analysis tool (Bode, root locus, observer design).
+- [ ] Kalman filter tuning playground (complex).
 
-### LED Lighting Calculator
-- Determine required lumens for a space.
-- Calculate energy savings versus conventional lighting.
+## Simple Utility Tools
 
-### Solar Panel Sizing Tool
-- Estimate required solar panel capacity based on energy needs.
-- Account for location, orientation, and seasonal variations.
+- [ ] Basic unit converter (length, area, temperature, pressure) tied to the new unit system.
+- [ ] Material property lookup dashboard with filtering/export.
+- [ ] Engineering assumption checklist generator for reports.
 
-## Miscellaneous
+## Complex / Long-Term Initiatives
 
-### Materials Selection Assistant
-- Compare material properties for specific applications.
-- Consider cost, weight, and performance tradeoffs.
-
-### Tolerance Stack-up Calculator
-- Analyze dimensional tolerances in assemblies.
-- Calculate statistical and worst-case stack-ups.
-
-### Fatigue Life Estimator
-- Calculate fatigue life based on stress cycles and material properties.
-- Account for stress concentration factors and surface finish.
-
-### Project Cost Estimator
-- Provide a quick estimation of manufacturing costs based on materials, processes, and labor.
-- Compare different manufacturing approaches.
-
-### Reliability Prediction Tool
-- Calculate MTBF and reliability based on component data.
-- Perform basic reliability allocation and analysis.
-
-## Implementation Suggestions
-
-### For New Tools
-
-- **Start simple, add complexity later**
-  - Begin with core calculations and a minimal user interface.
-  - Incrementally add visualizations and advanced features.
-  
-- **Leverage shared libraries**
-  - Use common JavaScript libraries across tools (e.g., Chart.js, MathJax).
-  - Create a shared styling framework for a consistent look and feel.
-  
-- **Progressive enhancement**
-  - Ensure tools work at a basic level even without JavaScript.
-  - Add interactive features that enhance the experience but aren’t required.
-  
-- **Mobile-first approach**
-  - Design for small screens first.
-  - Expand the layout for larger screens with responsive design.
+- [ ] Multiphysics coupling framework (thermal + structural, modular solvers).
+- [ ] Parametric optimization harness (link tools with sweeps and Pareto plots).
+- [ ] BOM and cost estimator integrating outputs from multiple tools.
+- [ ] Cloud-backed project saving/sharing for collaborative review workflows.
