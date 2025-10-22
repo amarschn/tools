@@ -1,7 +1,5 @@
 # Engineering Tools
 
-Git test please delete this line
-
 A collection of browser-based engineering calculators designed for quick calculation, verification, and education.
 
 This repo is unapologetically a testbed for AI tools, with most of the code generated using LLM inputs. Some of the outputs are checked by human experts, some are not. No guarantee is made for correctness unless otherwise stated.
