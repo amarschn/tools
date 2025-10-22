@@ -987,7 +987,7 @@
         }
 
         function buildTemperatureTable(results) {
-            const profile = results.temperature_profile || [];
+            const profile = normalizeTemperatureProfile(results.temperature_profile);
             if (!profile.length) {
                 return '<p>No temperature profile available.</p>';
             }
@@ -1043,47 +1043,73 @@
                 resetVisualization('Plotly failed to load. Refresh to retry the visualization.');
                 return;
             }
-            const profile = results.temperature_profile || [];
+
+            const profile = normalizeTemperatureProfile(results.temperature_profile);
             if (profile.length < 2) {
                 resetVisualization('Run a calculation to view the temperature distribution across the wall.');
                 return;
             }
 
-            const x = profile.map(node => node.name);
-            const y = profile.map(node => node.temperature_c);
+            const xPositions = buildResistanceAxis(profile);
+            const labels = profile.map(node => node.name);
+            const temperatures = profile.map(node => Number(node.temperature_c) || 0);
             const hoverText = profile.map((node, index) => {
-                const resistance = node.resistance_k_per_w ? `${formatNumber(node.resistance_k_per_w)} K/W` : 'N/A';
-                return `<b>${node.name}</b><br>Node ${index}<br>Temperature: ${formatNumber(node.temperature_c)} °C<br>Resistance: ${resistance}`;
+                const resistance = Number(node.resistance_k_per_w);
+                return `<b>${node.name}</b><br>Node ${index}<br>Type: ${node.type}` +
+                    `<br>R element: ${resistance ? formatNumber(resistance) + ' K/W' : '—'}` +
+                    `<br>Temperature: ${formatNumber(node.temperature_c)} °C`;
             });
 
             const trace = {
-                x,
-                y,
+                type: 'scatter',
                 mode: 'lines+markers',
-                line: { color: '#2563eb', width: 3 },
-                marker: { size: 10, color: '#1d4ed8', line: { color: '#fff', width: 1.2 } },
+                x: xPositions,
+                y: temperatures,
+                line: {color: '#1d4ed8', width: 3, shape: 'linear'},
+                marker: {
+                    size: 11,
+                    color: profile.map(node => node.type === 'conduction' ? '#1d4ed8' : '#16a34a'),
+                    symbol: profile.map(node => node.type === 'conduction' ? 'circle' : 'diamond'),
+                    line: {color: '#fff', width: 1.5}
+                },
                 text: hoverText,
                 hovertemplate: '%{text}<extra></extra>',
                 name: 'Temperature profile'
             };
 
             const layout = {
-                margin: { l: 60, r: 20, t: 30, b: 80 },
+                margin: {l: 70, r: 30, t: 40, b: 120},
                 xaxis: {
-                    title: 'Interface',
+                    title: 'Cumulative thermal resistance (K/W)',
+                    tickvals: xPositions,
+                    ticktext: labels,
                     tickangle: -35,
+                    showgrid: true,
+                    gridcolor: '#e2e8f0',
+                    zeroline: false,
                     automargin: true
                 },
                 yaxis: {
                     title: 'Temperature (°C)',
+                    showgrid: true,
+                    gridcolor: '#e2e8f0',
+                    zeroline: false,
                     automargin: true
                 },
+                hovermode: 'closest',
                 showlegend: false,
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)'
+                paper_bgcolor: 'rgba(255,255,255,0)',
+                plot_bgcolor: '#ffffff'
             };
 
-            const config = { responsive: true, displayModeBar: false };
+            const config = {
+                responsive: true,
+                displaylogo: false,
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                toImageButtonOptions: {filename: 'composite-wall-temperature-profile'}
+            };
+
             container.innerHTML = '';
             window.Plotly.newPlot(container, [trace], layout, config);
         }
@@ -1102,6 +1128,47 @@
                 return value.toExponential(3);
             }
             return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+        }
+
+        function normalizeTemperatureProfile(rawProfile) {
+            if (!rawProfile) {
+                return [];
+            }
+            return Array.from(rawProfile, (node, index) => {
+                if (node && typeof node === 'object') {
+                    if (typeof node.get === 'function') {
+                        return {
+                            name: node.get('name'),
+                            type: node.get('type'),
+                            temperature_c: node.get('temperature_c'),
+                            resistance_k_per_w: node.get('resistance_k_per_w')
+                        };
+                    }
+                    return {
+                        name: node.name ?? `Interface ${index}`,
+                        type: node.type ?? 'conduction',
+                        temperature_c: Number(node.temperature_c ?? node.temperature ?? 0),
+                        resistance_k_per_w: Number(node.resistance_k_per_w ?? node.resistance ?? 0)
+                    };
+                }
+                return {
+                    name: `Interface ${index}`,
+                    type: 'conduction',
+                    temperature_c: Number(node) || 0,
+                    resistance_k_per_w: 0
+                };
+            });
+        }
+
+        function buildResistanceAxis(profile) {
+            const positions = [];
+            let cumulative = 0;
+            profile.forEach(node => {
+                positions.push(cumulative);
+                const increment = Number(node.resistance_k_per_w) || 0;
+                cumulative += increment || (node.type === 'convection' ? 0.001 : 0);
+            });
+            return positions;
         }
     </script>
 </body>
