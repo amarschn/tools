@@ -90,7 +90,7 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
     * Verify that the results are correct.
     * Ensure the UI is responsive and easy to use.
 7.  **Add the tool to the catalog**
-    * To make your new tool discoverable, you **must** register it in the `_catalog.json` file located in the project's root directory. This file is the central manifest that dynamically powers the main landing page, enabling all filtering, searching, and categorization.
+    * To make your new tool discoverable, you **must** register it in the `catalog.json` file located in the project's root directory. This file is the central manifest that dynamically powers the main landing page, enabling all filtering, searching, and categorization.
     * Add a new JSON object to the array for your tool. Please ensure your entry follows this exact structure:
 
         ```json
