@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor Hot-Spot Estimator - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #212529;
+            --primary-light: #f8f9fa;
+            --secondary-color: #495057;
+            --text-color: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --border-radius: 8px;
+            --accent-color: #0d6efd;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; }
+        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.25rem; color: var(--secondary-color); }
+        h4 { font-size: 1.1rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.1rem; max-width: 80ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: 1.1fr 1.9fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+        .readme-container { line-height: 1.55; }
+        .readme-heading { font-size: 1.05rem; font-weight: 600; margin: 1.1rem 0 0.4rem; color: var(--secondary-color); }
+        .readme-subheading { font-size: 0.98rem; font-weight: 600; margin: 0.9rem 0 0.35rem; color: var(--secondary-color); }
+        .readme-tertiary { font-size: 0.92rem; font-weight: 600; margin: 0.75rem 0 0.3rem; color: var(--secondary-color); }
+        .readme-container p { margin: 0.55rem 0; color: var(--text-light); }
+        .readme-list { margin: 0.45rem 0 0.45rem 1.1rem; padding-left: 1rem; color: var(--text-light); }
+
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.25rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.95rem; }
+        .input-group input[type="number"],
+        .input-group select,
+        .input-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            resize: vertical;
+        }
+        .input-group textarea { min-height: 200px; font-family: "Fira Code", "Source Code Pro", monospace; font-size: 0.95rem; }
+        .input-group input:focus,
+        .input-group select:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+        }
+        .input-hint {
+            margin-top: 6px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .tooltip-trigger {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            background-color: var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: -24px;
+            top: 38px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.3;
+            min-width: 200px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .tooltip-trigger:hover::after,
+        .tooltip-trigger:focus::after {
+            opacity: 1;
+            transform: translate(-50%, -4px);
+        }
+        .input-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        .btn:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+        .btn-primary { background-color: var(--accent-color); color: white; }
+        .btn-primary:hover { background-color: #0b5ed7; }
+        .btn-secondary { background-color: #e9ecef; color: var(--secondary-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: #dde2e6; }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab-link {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--secondary-color);
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .tab-link.active {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+        }
+        .tab-content { display: none; }
+
+        .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+        .result-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; background-color: rgba(248, 250, 252, 0.8); }
+        .result-card h4 { margin-bottom: 0.35rem; }
+        .result-value { font-size: 1.6rem; font-weight: 700; color: var(--primary-color); }
+        .result-subtext { font-size: 0.9rem; color: var(--text-light); margin-top: 0.35rem; }
+
+        .summary-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .summary-table th, .summary-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }
+        .summary-table th { color: var(--secondary-color); font-weight: 600; width: 40%; }
+
+        .plot-wrapper { width: 100%; overflow: hidden; border: 1px solid var(--border-color); border-radius: 8px; background-color: white; padding: 12px; }
+        .plot-wrapper svg { width: 100%; height: auto; display: block; }
+        .plot-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; color: var(--text-light); font-size: 0.9rem; }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .legend-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+
+        .background-equations { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+        .equation-card { background: rgba(248, 250, 252, 0.75); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-card .legend { margin-top: 6px; font-size: 0.85rem; color: var(--text-light); }
+        .equation-card .legend span { display: inline-block; margin-right: 12px; }
+
+        .notice { padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(13, 110, 253, 0.25); background-color: rgba(13, 110, 253, 0.08); color: var(--secondary-color); font-size: 0.9rem; }
+
+        .footer { text-align: center; padding: 18px 0; font-size: 0.85rem; background-color: var(--bg-card); border-top: 1px solid var(--border-color); }
+        .footer p { margin-bottom: 0; color: var(--text-light); }
+
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0px; }
+            .input-group { padding-right: 24px; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Motor Hot-Spot Estimator</h1>
+        <p class="tool-description" id="tool-description">
+            Estimate the unseen hot-spot temperature inside a motor winding using post-shutdown data.
+            Provide the sensor cool-down trace and an estimated heat-capacitance ratio to reconstruct the hot spot.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content readme-container" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="input-group">
+                        <label for="ambient-temp">Ambient Temperature (°C)</label>
+                        <input type="number" id="ambient-temp" name="ambient-temp" step="0.1" value="25.0">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="heat-capacity-ratio">Hot-Spot Thermal Mass Ratio (C<sub>h</sub>/C<sub>s</sub>)</label>
+                        <input type="number" id="heat-capacity-ratio" name="heat-capacity-ratio" step="0.05" min="0.05" max="3.0" placeholder="e.g., 0.35">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        <p class="input-hint" id="heat-capacity-hint">Enter an estimated ratio (start near 0.3 for concentrated copper hot spots).</p>
+                    </div>
+                    <div class="input-group">
+                        <label for="time-unit">Time Units</label>
+                        <select id="time-unit" name="time-unit">
+                            <option value="seconds" selected>Seconds</option>
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Select the unit used for the time column in your data.">?</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="data-series">Sensor Time Series (time, temperature)</label>
+                        <textarea id="data-series" name="data-series" placeholder="0, 118.5&#10;15, 120.4&#10;30, 118.7&#10;60, 114.2"></textarea>
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+                    <div class="input-actions">
+                        <button type="button" class="btn btn-secondary" id="sample-btn">Load Sample Data</button>
+                        <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'plot')">Visualization</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Paste your sensor data and press Calculate.</p>
+                    </div>
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 16px;">Export CSV</button>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <h3>Visualization</h3>
+                    <div class="notice" id="plot-guidance">
+                        Run a calculation to render the measured and reconstructed temperature curves.
+                    </div>
+                    <div id="plot-container"></div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">The two-node thermal network is summarised here once Pyodide loads the python documentation.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'heat_transfer';
+        const TOOL_FUNCTION_NAME = 'estimate_motor_hotspot_temperature';
+        const README_PATH = './README.md';
+        const TIME_UNITS = { seconds: 1, minutes: 60, hours: 3600 };
+        const DEFAULT_RATIO = 0.35;
+
+        let pyodideInstance;
+        let pyUtils;
+        let pyToolModule;
+        let toolDocumentation = {};
+        let latestResult = null;
+
+        function typesetMath() {
+            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        }
+
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        async function loadReadme() {
+            try {
+                const response = await fetch(README_PATH);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const markdown = await response.text();
+                document.getElementById('readme-content').innerHTML = markdownToHtml(markdown);
+            } catch (error) {
+                document.getElementById('readme-content').innerHTML = `<p style="color:red;">Unable to fetch README (${error.message}).</p>`;
+            }
+        }
+
+function markdownToHtml(markdown) {
+            const lines = markdown.split('\n');
+            let html = '';
+            let inList = false;
+            let paragraph = [];
+
+            const convertInline = (text) => text
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+            const flushParagraph = () => {
+                if (paragraph.length) {
+                    html += `<p>${convertInline(paragraph.join(' '))}</p>`;
+                    paragraph = [];
+                }
+            };
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+
+                if (!trimmed) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    flushParagraph();
+                    return;
+                }
+
+                if (trimmed.startsWith('# ')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    flushParagraph();
+                    html += `<p class="readme-heading">${convertInline(trimmed.substring(2).trim())}</p>`;
+                    return;
+                }
+
+                if (trimmed.startsWith('## ')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    flushParagraph();
+                    html += `<p class="readme-subheading">${convertInline(trimmed.substring(3).trim())}</p>`;
+                    return;
+                }
+
+                if (trimmed.startsWith('### ')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    flushParagraph();
+                    html += `<p class="readme-tertiary">${convertInline(trimmed.substring(4).trim())}</p>`;
+                    return;
+                }
+
+                if (trimmed.startsWith('- ')) {
+                    flushParagraph();
+                    if (!inList) {
+                        html += '<ul class="readme-list">';
+                        inList = true;
+                    }
+                    html += `<li>${convertInline(trimmed.substring(2).trim())}</li>`;
+                    return;
+                }
+
+                paragraph.push(trimmed);
+            });
+
+            if (inList) {
+                html += '</ul>';
+            }
+            flushParagraph();
+
+            return html;
+        }
+
+        async function main() {
+            loadReadme();
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
+            pyodideInstance = await loadPyodide();
+
+            document.getElementById('calculate-btn').textContent = 'Loading Python...';
+            await pyodideInstance.runPythonAsync(`
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f_utils:
+                    f_utils.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f_tool:
+                    f_tool.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            pyUtils = pyodideInstance.globals.get('utils');
+            pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                document.getElementById('results-display').innerHTML = `<p style="color:red;">${docMap.get('error')}</p>`;
+                return;
+            }
+
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+
+            populateUiFromDocs();
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        function populateUiFromDocs() {
+            const params = toolDocumentation.parameters || {};
+            const description = toolDocumentation.description || '';
+            document.getElementById('tool-description').textContent = description;
+
+            document.querySelector('#ambient-temp + .tooltip-trigger')
+                ?.setAttribute('data-tooltip', params.ambient_temperature || 'Ambient fluid temperature during the cool-down.');
+            document.querySelector('#heat-capacity-ratio + .tooltip-trigger')
+                ?.setAttribute('data-tooltip', params.heat_capacity_ratio || 'Ratio of hot-spot thermal capacitance (C_h) to the monitored mass (C_s). Smaller values emphasise a concentrated hot spot.');
+            document.querySelector('#data-series + .tooltip-trigger')
+                ?.setAttribute('data-tooltip', `${params.times || ''} ${params.sensor_temperatures || ''}`.trim() || 'Paste two columns: time, temperature. Commas, spaces, or tabs are accepted.');
+            const heatCapacityHint = document.getElementById('heat-capacity-hint');
+            if (heatCapacityHint) {
+                heatCapacityHint.textContent = params.heat_capacity_ratio
+                    || 'Start near 0.3 when the probe sits in heavy iron near a concentrated strand; increase toward 0.8–1.0 for distributed sensors.';
+            }
+
+            const latexRaw = toolDocumentation.latex ? toolDocumentation.latex.trim() : '';
+            const latexBlocks = latexRaw ? latexRaw.split(/\\n{2,}/).map(block => block.trim()).filter(Boolean) : [];
+            const variableLegend = [
+                '\\(T_h\\): Hot-spot temperature',
+                '\\(T_s\\): Sensor temperature',
+                '\\(T_\\infty\\): Ambient temperature',
+                '\\(C_h, C_s\\): Lumped heat capacities',
+                '\\(R_{hs}, R_{sa}\\): Thermal resistances to sensor and ambient',
+                '\\(r = C_h/C_s\\): Heat-capacitance ratio',
+            ];
+
+            const equationsHtml = latexBlocks.length
+                ? latexBlocks.map((expr, index) => {
+                    const needsWrapper = !expr.startsWith('\\begin');
+                    const expressionMarkup = needsWrapper ? `\\[ ${expr} \\]` : expr;
+                    return `
+                        <div class="equation-card">
+                            <strong>Equation (${index + 1})</strong>
+                            <span class="equation-expression">${expressionMarkup}</span>
+                            <div class="legend">
+                                ${variableLegend.map(item => `<span>${item}</span>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+                : '<p>No equations detected in the docstring.</p>';
+
+            const notesRaw = toolDocumentation.notes
+                ? toolDocumentation.notes.split(/\r?\n/)
+                : [];
+            const guidanceItems = [];
+            notesRaw.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed.length) {
+                    return;
+                }
+                if (/^[-•]\s*/.test(trimmed) || !guidanceItems.length) {
+                    guidanceItems.push(trimmed.replace(/^[-•]\s*/, ''));
+                } else {
+                    guidanceItems[guidanceItems.length - 1] += ` ${trimmed}`;
+                }
+            });
+            const guidanceSection = guidanceItems.length
+                ? `<h4>Practical Guidance</h4><ul>${guidanceItems.map(item => `<li>${item}</li>`).join('')}</ul>`
+                : '';
+
+            const referencesLines = toolDocumentation.references
+                ? toolDocumentation.references.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0)
+                : [];
+            const referencesSection = referencesLines.length
+                ? `<h4>References</h4><ol>${referencesLines.map(ref => `<li>${ref}</li>`).join('')}</ol>`
+                : '';
+
+            const descriptionHtml = description
+                ? `<p>${description.trim().replace(/\n+/g, '</p><p>')}</p>`
+                : '<p>No description provided.</p>';
+
+            const fitStrategyHtml = `
+                <h4>Model Fit Strategy</h4>
+                <p>The estimator first solves a coupled two-node exponential model that captures both the rapid hot-spot to sensor exchange and the slower sensor to ambient release.</p>
+                <p>When the captured data only show the soak-out rise and lack curvature, the calculator switches to a first-order approximation and flags the change in the results summary.</p>
+            `;
+
+            const backgroundHtml = `
+                <h3>Underlying Principles</h3>
+                ${descriptionHtml}
+                ${fitStrategyHtml}
+                ${guidanceSection}
+                <h4>Equations</h4>
+                <div class="background-equations">
+                    ${equationsHtml}
+                </div>
+                ${referencesSection}
+            `.trim();
+            document.getElementById('background').innerHTML = backgroundHtml;
+            typesetMath();
+        }
+
+        function parseTimeseries(text) {
+            const times = [];
+            const temps = [];
+            const numberPattern = /[+-]?\d*\.?\d+(?:[eE][+-]?\d+)?/g;
+
+            text.split(/\n+/).forEach((line, index) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    return;
+                }
+
+                const numericMatches = trimmed.match(numberPattern);
+
+                if (!numericMatches || numericMatches.length < 2) {
+                    const looksLikeHeader = /[a-zA-Z]/.test(trimmed);
+                    if (looksLikeHeader && times.length === 0 && temps.length === 0) {
+                        return;
+                    }
+                    throw new Error(`Unable to parse data on line ${index + 1}. Provide numeric time and temperature values.`);
+                }
+
+                const time = Number(numericMatches[0]);
+                const temp = Number(numericMatches[1]);
+
+                if (!Number.isFinite(time) || !Number.isFinite(temp)) {
+                    throw new Error(`Non-numeric entry on line ${index + 1}.`);
+                }
+
+                times.push(time);
+                temps.push(temp);
+            });
+
+            if (times.length < 4) {
+                throw new Error('Please provide at least four time/temperature pairs to fit the transient.');
+            }
+
+            return { times, temps };
+        }
+
+        function formatTemperature(value) {
+            return `${value.toFixed(2)} °C`;
+        }
+
+        function renderResults(result, measuredTemps, timesSeconds) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+
+            const hotspotTemp = result.hotspot_temperature;
+            const params = result.parameters || {};
+            const fitMetrics = result.fit_metrics || {};
+            const sensitivity = result.sensitivity || [];
+            const ratioLimits = result.ratio_limits || {};
+
+            const sensorInitial = result.sensor_initial_temperature ?? measuredTemps[0];
+            const ratio = params.heat_capacity_ratio ?? DEFAULT_RATIO;
+            const rmse = fitMetrics.rmse ?? Number.NaN;
+
+            const cardsHtml = `
+                <div class="result-grid">
+                    <div class="result-card">
+                        <h4>Estimated Hot-Spot Temperature</h4>
+                        <div class="result-value">${formatTemperature(hotspotTemp)}</div>
+                        <p class="result-subtext">Derived from the two-node RC network using the reported ratio C<sub>h</sub>/C<sub>s</sub> = ${ratio.toFixed(2)}.</p>
+                    </div>
+                    <div class="result-card">
+                        <h4>Initial Sensor Reading</h4>
+                        <div class="result-value">${formatTemperature(sensorInitial)}</div>
+                        <p class="result-subtext">Measured value at shutdown (first sample in the series).</p>
+                    </div>
+                    <div class="result-card">
+                        <h4>Model Fit (RMSE)</h4>
+                        <div class="result-value">${Number.isFinite(rmse) ? `${rmse.toFixed(3)} °C` : '—'}</div>
+                        <p class="result-subtext">Root-mean-square error between the reconstructed and measured sensor trace.</p>
+                    </div>
+                </div>
+            `;
+
+            const tauFast = params.time_constant_fast ?? (params.lambda_1 ? -1 / params.lambda_1 : Number.NaN);
+            const tauSlow = params.time_constant_slow ?? (params.lambda_2 ? -1 / params.lambda_2 : Number.NaN);
+            const resistanceRatio = params.resistance_ratio;
+
+            const tableHtml = `
+                <table class="summary-table">
+                    <tbody>
+                        <tr><th>Fast time constant</th><td>${Number.isFinite(tauFast) ? `${tauFast.toFixed(2)} s` : '—'}</td></tr>
+                        <tr><th>Slow time constant</th><td>${Number.isFinite(tauSlow) ? `${tauSlow.toFixed(2)} s` : '—'}</td></tr>
+                        <tr><th>Heat-capacitance ratio C<sub>h</sub>/C<sub>s</sub></th><td>${ratio.toFixed(2)}</td></tr>
+                        <tr><th>Resistance ratio R<sub>hs</sub>/R<sub>sa</sub></th><td>${Number.isFinite(resistanceRatio) ? resistanceRatio.toFixed(3) : '—'}</td></tr>
+                        <tr><th>Feasible ratio range</th><td>${ratioLimits.minimum?.toFixed(3) ?? '—'} &le; r &le; ${ratioLimits.maximum?.toFixed(3) ?? '—'}</td></tr>
+                    </tbody>
+                </table>
+            `;
+
+            let sensitivityHtml = '';
+            if (sensitivity.length) {
+                const rows = sensitivity.map(point => `
+                    <tr>
+                        <td>${point.heat_capacity_ratio.toFixed(3)}</td>
+                        <td>${formatTemperature(point.hotspot_temperature)}</td>
+                        <td>${point.resistance_ratio.toFixed(3)}</td>
+                    </tr>
+                `).join('');
+                sensitivityHtml = `
+                    <h4>Heat-Capacitance Sensitivity</h4>
+                    <p class="result-subtext">The hot-spot estimate varies monotonically with the assumed C<sub>h</sub>/C<sub>s</sub>. The table highlights nearby ratios.</p>
+                    <table class="summary-table">
+                        <thead>
+                            <tr><th>Ratio</th><th>Hot-Spot</th><th>R<sub>hs</sub>/R<sub>sa</sub></th></tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            }
+
+            const fallbackNote = result.model_mode === 'first_order_fallback'
+                ? '<p class="result-subtext" style="margin-top:12px;">Only the soak-out heating portion was available; used first-order approximation for the fast internal mode.</p>'
+                : '';
+            resultsDiv.innerHTML = cardsHtml + tableHtml + sensitivityHtml + fallbackNote;
+            typesetMath();
+        }
+
+        function renderPlot(timesSeconds, measuredTemps, sensorModel, hotspotModel) {
+            const container = document.getElementById('plot-container');
+            container.innerHTML = '';
+
+            if (!timesSeconds || !timesSeconds.length) {
+                container.innerHTML = '<p>No data to plot yet.</p>';
+                return;
+            }
+
+            const legend = `
+                <div class="plot-legend">
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#0d6efd;"></span>Measured sensor data</span>
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#20c997;"></span>Modelled sensor response</span>
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#e55353;"></span>Inferred hot-spot</span>
+                </div>
+            `;
+
+            const width = 700;
+            const height = 360;
+            const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+
+            const tMin = Math.min(...timesSeconds);
+            const tMax = Math.max(...timesSeconds);
+            const allTemps = [...measuredTemps, ...sensorModel, ...hotspotModel];
+            const yMin = Math.min(...allTemps);
+            const yMax = Math.max(...allTemps);
+            const yPadding = (yMax - yMin) * 0.08 || 5;
+
+            const xScale = t => margin.left + ((t - tMin) / (tMax - tMin || 1)) * (width - margin.left - margin.right);
+            const yScale = temp => margin.top + (yMax - temp + yPadding) / (yMax - yMin + 2 * yPadding || 1) * (height - margin.top - margin.bottom);
+
+            const buildPath = series => series.map((value, index) => {
+                const x = xScale(timesSeconds[index]);
+                const y = yScale(value);
+                return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+            }).join(' ');
+
+            const ticks = 6;
+            const xTicks = Array.from({ length: ticks }, (_, idx) => tMin + (idx / (ticks - 1)) * (tMax - tMin));
+            const yTicks = Array.from({ length: ticks }, (_, idx) => yMin - yPadding + (idx / (ticks - 1)) * (yMax - yMin + 2 * yPadding));
+
+            const svg = `
+                ${legend}
+                <div class="plot-wrapper">
+                    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Measured and modelled temperatures">
+                        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="${'var(--border-color)'}" stroke-width="1"/>
+                        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="${'var(--border-color)'}" stroke-width="1"/>
+                        ${xTicks.map(t => `
+                            <line x1="${xScale(t)}" y1="${height - margin.bottom}" x2="${xScale(t)}" y2="${height - margin.bottom + 6}" stroke="${'var(--border-color)'}"/>
+                            <text x="${xScale(t)}" y="${height - margin.bottom + 22}" text-anchor="middle" font-size="12">${t.toFixed(0)}</text>
+                        `).join('')}
+                        ${yTicks.map(temp => `
+                            <line x1="${margin.left - 6}" y1="${yScale(temp)}" x2="${margin.left}" y2="${yScale(temp)}" stroke="${'var(--border-color)'}"/>
+                            <text x="${margin.left - 10}" y="${yScale(temp) + 4}" text-anchor="end" font-size="12">${temp.toFixed(1)}</text>
+                        `).join('')}
+                        <path d="${buildPath(measuredTemps)}" fill="none" stroke="#0d6efd" stroke-width="2.2" stroke-linecap="round"/>
+                        <path d="${buildPath(sensorModel)}" fill="none" stroke="#20c997" stroke-width="2" stroke-dasharray="5 4"/>
+                        <path d="${buildPath(hotspotModel)}" fill="none" stroke="#e55353" stroke-width="2"/>
+                        <text x="${width / 2}" y="${height - 6}" text-anchor="middle" font-size="12">Time (s)</text>
+                        <text x="${margin.left - 45}" y="${margin.top - 6}" text-anchor="start" font-size="12" transform="rotate(-90 ${margin.left - 45} ${margin.top - 6})">Temperature (°C)</text>
+                    </svg>
+                </div>
+            `;
+
+            container.innerHTML = svg;
+        }
+
+        function exportResults() {
+            if (!latestResult) {
+                alert('Run a calculation before exporting.');
+                return;
+            }
+            const { timesSeconds, measuredTemps, sensorModel, hotspotModel } = latestResult;
+            const header = 'time_s,measured_sensor_c,modelled_sensor_c,inferred_hotspot_c';
+            const rows = timesSeconds.map((time, index) => [
+                time,
+                measuredTemps[index],
+                sensorModel[index],
+                hotspotModel[index]
+            ].map(value => value.toFixed(6)).join(','));
+            const csvContent = [header, ...rows].join('\\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'motor_hotspot_estimate.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function loadSampleData() {
+            const sample = [
+                '0, 118.7',
+                '20, 120.5',
+                '40, 119.6',
+                '80, 115.0',
+                '120, 110.8',
+                '180, 104.2',
+                '240, 98.9',
+                '360, 90.3',
+                '480, 84.7',
+                '600, 80.5'
+            ].join('\\n');
+            document.getElementById('data-series').value = sample;
+            document.getElementById('ambient-temp').value = 25;
+            document.getElementById('heat-capacity-ratio').value = DEFAULT_RATIO.toFixed(2);
+        }
+
+        document.getElementById('sample-btn').addEventListener('click', loadSampleData);
+        document.getElementById('export-btn').addEventListener('click', exportResults);
+
+        document.getElementById('calc-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const button = document.getElementById('calculate-btn');
+            button.disabled = true;
+            button.textContent = 'Calculating...';
+
+            try {
+                const ambientValue = Number(document.getElementById('ambient-temp').value);
+                if (!Number.isFinite(ambientValue)) {
+                    throw new Error('Ambient temperature must be a valid number.');
+                }
+
+                const ratioInput = document.getElementById('heat-capacity-ratio').value.trim();
+                let ratioValue = null;
+                if (ratioInput.length) {
+                    ratioValue = Number(ratioInput);
+                    if (!Number.isFinite(ratioValue) || ratioValue <= 0) {
+                        throw new Error('Heat-capacitance ratio must be a positive number.');
+                    }
+                }
+
+                const { times, temps } = parseTimeseries(document.getElementById('data-series').value);
+                const unit = document.getElementById('time-unit').value;
+                const timeFactor = TIME_UNITS[unit] ?? 1;
+                const timesSeconds = times.map(value => value * timeFactor);
+
+                const timesPy = pyodideInstance.toPy(timesSeconds);
+                const tempsPy = pyodideInstance.toPy(temps);
+
+                let pyResult;
+                if (ratioValue === null) {
+                    pyResult = pyToolModule[TOOL_FUNCTION_NAME](timesPy, tempsPy, ambientValue);
+                } else {
+                    pyResult = pyToolModule[TOOL_FUNCTION_NAME](timesPy, tempsPy, ambientValue, ratioValue);
+                }
+
+                const result = pyResult.toJs({ dict_converter: Object.fromEntries, create_proxies: false });
+                timesPy.destroy();
+                tempsPy.destroy();
+                pyResult.destroy();
+
+                const sensorModel = result.sensor_model;
+                const hotspotModel = result.hotspot_model;
+
+                if (!Array.isArray(sensorModel) || !Array.isArray(hotspotModel)) {
+                    throw new Error('Unexpected response from Python calculation.');
+                }
+
+                renderResults(result, temps, timesSeconds);
+                renderPlot(timesSeconds, temps, sensorModel, hotspotModel);
+
+                latestResult = {
+                    timesSeconds,
+                    measuredTemps: temps,
+                    sensorModel,
+                    hotspotModel,
+                };
+
+                document.getElementById('plot-guidance').style.display = 'none';
+            } catch (error) {
+                console.error('Calculation error:', error);
+                document.getElementById('results-display').innerHTML = `<p style="color:red;font-weight:bold;">${error.message}</p>`;
+                document.getElementById('plot-container').innerHTML = '';
+                latestResult = null;
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Calculate';
+            }
+        });
+
+        main();
+    </script>
+</body>
+</html>
