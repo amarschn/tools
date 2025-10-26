@@ -365,7 +365,7 @@ def estimate_motor_hotspot_temperature(
     ambient_temperature: float,
     heat_capacity_ratio: float | None = None,
 ) -> Dict[str, float | List[float] | Dict[str, float | List[float]]]:
-    """
+    r"""""
     Estimate an unseen motor hot-spot temperature from cool-down sensor data.
 
     The routine models the winding as two coupled thermal masses: the concentrated
@@ -391,6 +391,36 @@ def estimate_motor_hotspot_temperature(
     energy balance implied by the rise. The result is tagged with
     ``model_mode = 'first_order_fallback'`` so users can distinguish between the
     full two-mode fit and the reduced-order approximation.
+
+    ---Derivation---
+    1. Energy balances:
+       ``C_h dT_h/dt = -(T_h - T_s)/R_{hs}`` and
+       ``C_s dT_s/dt = (T_h - T_s)/R_{hs} - (T_s - T_∞)/R_{sa}``.
+       Rewriting in temperature rise form (``θ = T - T_∞``) removes the ambient
+       offset:
+       ``C_h dθ_h/dt = -(θ_h - θ_s)/R_{hs}``,
+       ``C_s dθ_s/dt = (θ_h - θ_s)/R_{hs} - θ_s/R_{sa}``.
+    2. Eliminate ``θ_h``. Differentiate the sensor equation and insert
+       ``dθ_h/dt`` from the hot-spot equation, then substitute ``θ_h`` solved
+       from the undifferentiated sensor balance. Dividing through by the thermal
+       capacitances and resistances yields
+       ``d²θ_s/dt² + (a + b + c)dθ_s/dt + a c θ_s = 0`` with
+       ``a = 1/(C_h R_{hs})``, ``b = 1/(C_s R_{hs})``, ``c = 1/(C_s R_{sa})``.
+    3. Characteristic response: the roots of ``λ² + S_1 λ + S_0 = 0`` (where
+       ``S_1 = a + b + c`` and ``S_0 = a c``) give the fast and slow decay rates
+       ``λ_1`` and ``λ_2``. The sensor rise follows
+       ``θ_s(t) = B_1 e^{λ_1 t} + B_2 e^{λ_2 t}``, with coefficients ``B_i``
+       fitted directly to the measured data.
+    4. Recover individual parameters: the user-supplied capacitance ratio
+       ``r = C_h/C_s`` enforces ``b = r a``. Combining ``S_1``, ``S_0``, and
+       the ratio yields the quadratic
+       ``(1 + r)a² - S_1 a + S_0 = 0``. Solving for ``a`` gives ``b = r a`` and
+       ``c = S_0/a``.
+    5. Hidden hot-spot temperature: back-substituting into the first balance and
+       using the already-fitted sensor exponentials produces
+       ``θ_h(t) = Σ_i a B_i e^{λ_i t}/(λ_i + a)``. Evaluating at ``t = 0`` and
+       restoring the ambient offset yields the reported hot-spot estimate
+       ``T_h(0) = T_∞ + Σ_i a B_i/(λ_i + a)``.
 
     A key input is the **heat-capacitance ratio** ``r = C_h / C_s``: the relative
     thermal inertia of the hot spot compared with the monitored mass. When the
@@ -448,21 +478,17 @@ def estimate_motor_hotspot_temperature(
         and the residual vector.
 
     ---LaTeX---
-    \\begin{align*}
-    C_h \\frac{\\mathrm{d}T_h}{\\mathrm{d}t} &= -\\frac{T_h - T_s}{R_{hs}},\\\\
-    C_s \\frac{\\mathrm{d}T_s}{\\mathrm{d}t} &= \\frac{T_h - T_s}{R_{hs}} - \\frac{T_s - T_\\infty}{R_{sa}},\\\\
-    \\theta_s &= T_s - T_\\infty,\\\\
-    \\frac{\\mathrm{d}^2 \\theta_s}{\\mathrm{d}t^2} + (a + b + c) \\frac{\\mathrm{d}\\theta_s}{\\mathrm{d}t} + a c\\,\\theta_s &= 0,\\\\
-    \\lambda_{1,2} &= \\frac{- (a + b + c) \\pm \\sqrt{(a + b + c)^2 - 4 a c}}{2},\\\\
-    r &= \\frac{C_h}{C_s} = \\frac{b}{a},\\\\
-    (1 + r)a^2 - S_1 a + S_0 &= 0,\\\\
-    a &= \\frac{S_1 + \\sqrt{S_1^2 - 4(1+r)S_0}}{2(1+r)},\\\\
-    T_h(0) &= T_\\infty + \\sum_{i=1}^2 \\frac{a B_i}{\\lambda_i + a},
-    \\end{align*}
-    where \\(a = 1/(C_h R_{hs})\\), \\(b = 1/(C_s R_{hs})\\), \\(c = 1/(C_s R_{sa})\\),
-    and \\(B_i\\) are the exponential coefficients of the sensor response.
-
-    ---Notes---
+    \begin{aligned}
+    \text{(1)}\quad C_h \frac{\mathrm{d}T_h}{\mathrm{d}t} &= -\frac{T_h - T_s}{R_{hs}},\\
+    \text{(2)}\quad C_s \frac{\mathrm{d}T_s}{\mathrm{d}t} &= \frac{T_h - T_s}{R_{hs}} - \frac{T_s - T_{\infty}}{R_{sa}}\\
+    \end{aligned}\\
+    \begin{aligned}
+    \text{Temperature rises: } &\theta_h = T_h - T_{\infty},\; \theta_s = T_s - T_{\infty}.\\
+    \text{Substituting gives } &C_h \frac{\mathrm{d}\theta_h}{\mathrm{d}t} = -\frac{\theta_h - \theta_s}{R_{hs}},\quad C_s \frac{\mathrm{d}\theta_s}{\mathrm{d}t} = \frac{\theta_h - \theta_s}{R_{hs}} - \frac{\theta_s}{R_{sa}}.\\
+    \text{Eliminating } \theta_h: &\frac{\mathrm{d}^2 \theta_s}{\mathrm{d}t^2} + (a + b + c) \frac{\mathrm{d}\theta_s}{\mathrm{d}t} + a c\,\theta_s = 0.\\
+    \text{Characteristic roots: } &\lambda_{1,2} = \frac{-S_1 \pm \sqrt{S_1^2 - 4 S_0}}{2},\quad S_1 = a + b + c,\; S_0 = a c.\\
+    \text{Capacity ratio: } &r = \frac{C_h}{C_s} = \frac{b}{a},\quad (1 + r)a^2 - S_1 a + S_0 = 0.\\
+    \text{Hot-spot reconstruction: } &\theta_h(t) = \sum_{i=1}^2 \frac{a B_i}{\lambda_i + a} e^{\lambda_i t},\quad T_h(0) = T_{\infty} + \sum_{i=1}^2 \frac{a B_i}{\lambda_i + a}.\n    \end{aligned}\n\n    ---Notes---
     - Estimate ``C_h`` by multiplying the mass of the hottest conductor turns by their specific heat.
       Estimate ``C_s`` from the mass of material well-coupled to the sensor; the ratio of these
       products approximates the heat-capacitance ratio ``r``.

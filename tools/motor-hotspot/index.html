@@ -66,6 +66,16 @@
         .readme-heading { font-size: 1.05rem; font-weight: 600; margin: 1.1rem 0 0.4rem; color: var(--secondary-color); }
         .readme-subheading { font-size: 0.98rem; font-weight: 600; margin: 0.9rem 0 0.35rem; color: var(--secondary-color); }
         .readme-tertiary { font-size: 0.92rem; font-weight: 600; margin: 0.75rem 0 0.3rem; color: var(--secondary-color); }
+        .readme-list { margin: 0.45rem 0 0.45rem 1.1rem; padding-left: 1rem; color: var(--text-light); }
+        .readme-container p { margin: 0.55rem 0; color: var(--text-light); }
+        .derivation-steps { margin: 0.75rem 0 0.75rem 1.1rem; padding-left: 0; line-height: 1.6; color: var(--text-light); }
+        .derivation-steps li { margin-bottom: 0.75rem; }
+        .derivation-steps strong { color: var(--secondary-color); }
+        .derivation-steps .equation-block { margin: 0.35rem 0; }
+        .readme-container { line-height: 1.55; }
+        .readme-heading { font-size: 1.05rem; font-weight: 600; margin: 1.1rem 0 0.4rem; color: var(--secondary-color); }
+        .readme-subheading { font-size: 0.98rem; font-weight: 600; margin: 0.9rem 0 0.35rem; color: var(--secondary-color); }
+        .readme-tertiary { font-size: 0.92rem; font-weight: 600; margin: 0.75rem 0 0.3rem; color: var(--secondary-color); }
         .readme-container p { margin: 0.55rem 0; color: var(--text-light); }
         .readme-list { margin: 0.45rem 0 0.45rem 1.1rem; padding-left: 1rem; color: var(--text-light); }
 
@@ -474,33 +484,48 @@ function markdownToHtml(markdown) {
                     || 'Start near 0.3 when the probe sits in heavy iron near a concentrated strand; increase toward 0.8–1.0 for distributed sensors.';
             }
 
-            const latexRaw = toolDocumentation.latex ? toolDocumentation.latex.trim() : '';
-            const latexBlocks = latexRaw ? latexRaw.split(/\\n{2,}/).map(block => block.trim()).filter(Boolean) : [];
-            const variableLegend = [
-                '\\(T_h\\): Hot-spot temperature',
-                '\\(T_s\\): Sensor temperature',
-                '\\(T_\\infty\\): Ambient temperature',
-                '\\(C_h, C_s\\): Lumped heat capacities',
-                '\\(R_{hs}, R_{sa}\\): Thermal resistances to sensor and ambient',
-                '\\(r = C_h/C_s\\): Heat-capacitance ratio',
-            ];
-
-            const equationsHtml = latexBlocks.length
-                ? latexBlocks.map((expr, index) => {
-                    const needsWrapper = !expr.startsWith('\\begin');
-                    const expressionMarkup = needsWrapper ? `\\[ ${expr} \\]` : expr;
-                    return `
-                        <div class="equation-card">
-                            <strong>Equation (${index + 1})</strong>
-                            <span class="equation-expression">${expressionMarkup}</span>
-                            <div class="legend">
-                                ${variableLegend.map(item => `<span>${item}</span>`).join('')}
-                            </div>
-                        </div>
-                    `;
-                }).join('')
-                : '<p>No equations detected in the docstring.</p>';
-
+            const equationsHtml = `
+                <div class="equation-card">
+                    <strong>1. Energy balances after switch-off</strong>
+                    <span class="equation-expression">\[ C_h \frac{\mathrm{d}T_h}{\mathrm{d}t} = -\frac{T_h - T_s}{R_{hs}},\quad C_s \frac{\mathrm{d}T_s}{\mathrm{d}t} = \frac{T_h - T_s}{R_{hs}} - \frac{T_s - T_\infty}{R_{sa}} \]</span>
+                    <p>Heat stored in each node equals the net heat flow through the thermal resistances between nodes and to ambient.</p>
+                    <div class="legend">
+                        <span>\(C_h\): hot-spot capacitance</span>
+                        <span>\(C_s\): sensor-mass capacitance</span>
+                        <span>\(R_{hs}\): hot-spot → sensor resistance</span>
+                        <span>\(R_{sa}\): sensor → ambient resistance</span>
+                    </div>
+                </div>
+                <div class="equation-card">
+                    <strong>2. Express temperatures as rises above ambient</strong>
+                    <span class="equation-expression">\[ \theta_h = T_h - T_\infty,\quad \theta_s = T_s - T_\infty \]</span>
+                    <p>The same derivatives apply, so the balances become \(\theta\)-only equations: \(C_h \\dot{\theta}_h = -(\theta_h-\theta_s)/R_{hs}\) and \(C_s \\dot{\theta}_s = (\theta_h-\theta_s)/R_{hs} - \theta_s/R_{sa}\).</p>
+                </div>
+                <div class="equation-card">
+                    <strong>3. Eliminate the hidden hot-spot temperature</strong>
+                    <span class="equation-expression">\[ \frac{\mathrm{d}^2\theta_s}{\mathrm{d}t^2} + (a + b + c) \frac{\mathrm{d}\theta_s}{\mathrm{d}t} + a c\,\theta_s = 0 \]</span>
+                    <p>Differentiate the sensor equation, substitute \(\dot{\theta}_h\) from the hot-spot balance, and remove \(\theta_h\) using the undifferentiated sensor equation. Here \(a = 1/(C_h R_{hs})\), \(b = 1/(C_s R_{hs})\), \(c = 1/(C_s R_{sa})\).</p>
+                </div>
+                <div class="equation-card">
+                    <strong>4. Characteristic roots and sensor response</strong>
+                    <span class="equation-expression">\[ \lambda_{1,2} = \frac{-S_1 \pm \sqrt{S_1^2 - 4S_0}}{2},\quad S_1 = a + b + c,\; S_0 = a c \]</span>
+                    <p>The measured rise is therefore \(\theta_s(t) = B_1 e^{\lambda_1 t} + B_2 e^{\lambda_2 t}\), where the coefficients \(B_i\) are obtained from the data fit.</p>
+                </div>
+                <div class="equation-card">
+                    <strong>5. Use the heat-capacitance ratio</strong>
+                    <span class="equation-expression">\[ r = \frac{C_h}{C_s} = \frac{b}{a},\qquad (1 + r)a^2 - S_1 a + S_0 = 0 \]</span>
+                    <p>Supplying \(r\) closes the system: solve the quadratic for \(a\), then recover \(b = r a\) and \(c = S_0/a\).</p>
+                </div>
+                <div class="equation-card">
+                    <strong>6. Reconstruct the hidden hot spot</strong>
+                    <span class="equation-expression">\[ \theta_h(t) = \sum_{i=1}^2 \frac{a B_i}{\lambda_i + a} e^{\lambda_i t},\qquad T_h(0) = T_\infty + \sum_{i=1}^2 \frac{a B_i}{\lambda_i + a} \]</span>
+                    <p>This converts the fitted sensor coefficients back into the unmeasured hot-spot peak at the instant the motor is de-energised.</p>
+                </div>
+                <div class="equation-card">
+                    <strong>7. Fallback indicator</strong>
+                    <p>If the data only capture the soak-out rise, the solver reports \(`model_mode = 'first_order_fallback'`\) and uses the single-mode equivalent while keeping the same energy balance.</p>
+                </div>
+            `;
             const notesRaw = toolDocumentation.notes
                 ? toolDocumentation.notes.split(/\r?\n/)
                 : [];
@@ -537,10 +562,22 @@ function markdownToHtml(markdown) {
                 <p>When the captured data only show the soak-out rise and lack curvature, the calculator switches to a first-order approximation and flags the change in the results summary.</p>
             `;
 
+            const derivationHtml = `
+                <h4>Step-by-Step Derivation</h4>
+                <ol class="derivation-steps">
+                    <li><strong>Energy balances.</strong> Once the motor is de-energised, heat stored in the winding redistributes between the hidden hot spot and the instrumented sensor mass.\[ C_h \frac{\mathrm{d}T_h}{\mathrm{d}t} = -\frac{T_h - T_s}{R_{hs}},\qquad C_s \frac{\mathrm{d}T_s}{\mathrm{d}t} = \frac{T_h - T_s}{R_{hs}} - \frac{T_s - T_\infty}{R_{sa}} \]</li>
+                    <li><strong>Temperature rise variables.</strong> Working with rises above ambient (\(\theta = T - T_\infty\)) keeps the algebra tidy and preserves the same derivatives: \[ C_h \frac{\mathrm{d}\theta_h}{\mathrm{d}t} = -\frac{\theta_h - \theta_s}{R_{hs}},\qquad C_s \frac{\mathrm{d}\theta_s}{\mathrm{d}t} = \frac{\theta_h - \theta_s}{R_{hs}} - \frac{\theta_s}{R_{sa}} \]</li>
+                    <li><strong>Eliminate the hidden node.</strong> Differentiate the sensor balance and substitute \dot\theta_h from the hot-spot equation. Solving the original sensor equation for \theta_h and substituting again collapses the system to a single sensor ODE: \[ \frac{\mathrm{d}^2 \theta_s}{\mathrm{d}t^2} + (a + b + c) \frac{\mathrm{d}\theta_s}{\mathrm{d}t} + (a c)\,\theta_s = 0, \] where \((a, b, c) = (1/(C_h R_{hs}),\;1/(C_s R_{hs}),\;1/(C_s R_{sa}))\).</li>
+                    <li><strong>Characteristic response.</strong> The roots of \((\lambda^2 + S_1\lambda + S_0 = 0)\) with \((S_1 = a + b + c,\; S_0 = a c)\) give the two decay rates, so the measured temperature rise follows \[ \theta_s(t) = B_1 e^{\lambda_1 t} + B_2 e^{\lambda_2 t}. \]</li>
+                    <li><strong>Recover hot-spot behaviour.</strong> Using the user-supplied capacitance ratio \(r = C_h/C_s\) (so \(b = r a\)) and the fitted coefficients, the hidden hot spot is \[ \theta_h(t) = \sum_{i=1}^2 \frac{a B_i}{\lambda_i + a} e^{\lambda_i t},\qquad T_h(0) = T_\infty + \sum_{i=1}^2 \frac{a B_i}{\lambda_i + a}. \] When the data only capture the soak-out rise, the code falls back to an equivalent single-mode approximation and flags the result.</li>
+                </ol>
+            `;
+
             const backgroundHtml = `
                 <h3>Underlying Principles</h3>
                 ${descriptionHtml}
                 ${fitStrategyHtml}
+                ${derivationHtml}
                 ${guidanceSection}
                 <h4>Equations</h4>
                 <div class="background-equations">
