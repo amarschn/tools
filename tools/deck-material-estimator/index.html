@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deck Material Estimator - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #1f2933;
+            --primary-light: #f0f4f8;
+            --secondary-color: #52606d;
+            --accent-color: #2563eb;
+            --bg-color: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #d8dee4;
+            --shadow: 0 14px 28px -16px rgba(15, 23, 42, 0.2);
+            --radius: 12px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 92%; max-width: 1120px; margin: 0 auto; padding: 18px 0 28px; }
+        h1, h2, h3, h4 { font-weight: 600; color: var(--primary-color); }
+        h1 { font-size: clamp(2.2rem, 4.2vw, 3rem); margin-bottom: 0.35rem; }
+        h2 { font-size: 1.6rem; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 1rem; }
+        h3 { font-size: 1.2rem; color: var(--secondary-color); margin-bottom: 0.85rem; }
+        h4 { font-size: 1rem; margin-top: 1.1rem; color: var(--secondary-color); }
+        p { color: var(--secondary-color); margin-bottom: 0.75rem; }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout { display: grid; grid-template-columns: minmax(340px, 0.95fr) minmax(380px, 1.05fr); gap: 18px; align-items: start; }
+        .card { background-color: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 18px; }
+
+        details.purpose-section { margin-bottom: 1.75rem; border: 1px solid var(--border-color); border-radius: var(--radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 18px 26px; font-size: 1.05rem; font-weight: 600; color: var(--secondary-color); cursor: pointer; list-style: none; }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--secondary-color); }
+        .purpose-section[open] summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 26px 24px; border-top: 1px solid var(--border-color); font-size: 0.95rem; }
+        .purpose-content p { margin-bottom: 0.75rem; }
+        .purpose-content pre { background: var(--primary-light); border-radius: 8px; padding: 14px; overflow-x: auto; }
+
+        .tool-inputs form { display: flex; flex-direction: column; gap: 10px; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 14px; }
+        .input-group { position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.88rem; }
+        .input-group input[type="number"], .input-group select {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px;
+            font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+        }
+        .tooltip-trigger {
+            display: inline-flex; justify-content: center; align-items: center;
+            width: 18px; height: 18px; border-radius: 50%; background: var(--primary-light);
+            color: var(--secondary-color); font-size: 11px; font-weight: 700; cursor: help;
+            position: absolute; right: -22px; top: 30px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--primary-color); color: white; padding: 10px 12px; border-radius: 8px;
+            font-size: 12px; line-height: 1.4; white-space: normal; min-width: 160px; max-width: 240px;
+            opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 15;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        .form-actions { display: flex; justify-content: flex-end; }
+        .form-actions .btn { min-width: 140px; }
+        .btn { cursor: pointer; border: none; border-radius: 8px; padding: 10px 16px; font-weight: 600; transition: transform 0.2s, box-shadow 0.2s; }
+        .btn-primary { background: var(--accent-color); color: white; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25); }
+        .btn-secondary { background: var(--primary-light); color: var(--secondary-color); }
+        .btn-secondary:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(82, 96, 109, 0.18); }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 8px 14px; border-radius: 18px; border: 1px solid transparent;
+            background: var(--primary-light); color: var(--secondary-color); font-weight: 600;
+        }
+        .tab-link.active { background: var(--accent-color); color: white; box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25); }
+        .tab-content { display: none; }
+
+        .result-item { border-bottom: 1px solid var(--border-color); padding: 14px 0; }
+        .result-item:last-child { border-bottom: none; }
+        .result-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .result-header p { margin: 0; font-size: 1rem; color: var(--primary-color); }
+        .inline-details summary { width: 24px; height: 24px; border-radius: 50%; background: var(--primary-light); border: 1px solid var(--border-color); }
+        .inline-details summary::marker { content: ''; }
+        .inline-details[open] summary { background: var(--accent-color); border-color: var(--accent-color); }
+        .inline-details summary::after { content: '≡'; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: inherit; width: 100%; height: 100%; }
+        .equation-details { margin-top: 8px; font-size: 0.9rem; color: var(--secondary-color); }
+
+        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--accent-color); }
+        .def::after {
+            content: attr(data-def); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--primary-color); color: #fff; padding: 8px 12px; border-radius: 8px;
+            font-size: 12px; line-height: 1.4; white-space: normal; min-width: 180px; max-width: 260px;
+            opacity: 0; visibility: hidden; transition: opacity 0.2s ease;
+        }
+        .def:hover::after { opacity: 1; visibility: visible; }
+
+        .equation-container { display: flex; flex-direction: column; gap: 14px; margin-top: 1rem; }
+        .equation-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 18px; background: rgba(255, 255, 255, 0.9); }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-card ul { list-style: none; padding-left: 0; margin: 0.5rem 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 4px 12px; font-size: 0.85rem; color: var(--secondary-color); }
+        .equation-card li span { font-weight: 600; color: var(--primary-color); }
+
+        .viz-wrapper { display: grid; gap: 18px; }
+        .bar-row { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; }
+        .bar-label { width: 120px; font-weight: 600; color: var(--secondary-color); }
+        .bar-track { flex: 1; height: 18px; border-radius: 10px; background: var(--primary-light); overflow: hidden; position: relative; }
+        .bar-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg, var(--accent-color), #60a5fa); }
+        .bar-value { min-width: 120px; text-align: right; font-variant-numeric: tabular-nums; color: var(--secondary-color); }
+
+        .footer { text-align: center; padding: 18px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--secondary-color); font-size: 0.9rem; margin-top: 28px; }
+
+        @media (max-width: 980px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0; top: 32px; }
+            .card { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Deck Material Estimator</h1>
+        <p id="tool-description" class="tool-description">
+            Estimate decking boards, framing lumber, posts, and footing concrete for a rectangular deck layout.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README content...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="input-grid">
+                        <div class="input-group" data-param="deck_length_ft">
+                            <label for="deck-length">Deck Length (ft)</label>
+                            <input type="number" id="deck-length" name="deck_length_ft" min="1" step="0.5" value="20">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="deck_width_ft">
+                            <label for="deck-width">Deck Width (ft)</label>
+                            <input type="number" id="deck-width" name="deck_width_ft" min="1" step="0.5" value="12">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="joist_spacing_in">
+                            <label for="joist-spacing">Joist Spacing (in)</label>
+                            <input type="number" id="joist-spacing" name="joist_spacing_in" min="8" step="1" value="16">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="beam_spacing_ft">
+                            <label for="beam-spacing">Beam Spacing (ft)</label>
+                            <input type="number" id="beam-spacing" name="beam_spacing_ft" min="3" step="0.5" value="6">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="post_spacing_ft">
+                            <label for="post-spacing">Post Spacing (ft)</label>
+                            <input type="number" id="post-spacing" name="post_spacing_ft" min="3" step="0.5" value="6">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="waste_allowance_percent">
+                            <label for="waste-allowance">Waste Allowance (%)</label>
+                            <input type="number" id="waste-allowance" name="waste_allowance_percent" min="0" max="30" step="1" value="10">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="decking_type">
+                            <label for="decking-type">Decking Profile</label>
+                            <select id="decking-type" name="decking_type">
+                                <option value="" disabled selected>Loading options...</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="framing_type">
+                            <label for="framing-type">Joist &amp; Beam Lumber</label>
+                            <select id="framing-type" name="framing_type">
+                                <option value="" disabled selected>Loading options...</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="post_type">
+                            <label for="post-type">Post Size</label>
+                            <select id="post-type" name="post_type">
+                                <option value="" disabled selected>Loading options...</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group" data-param="concrete_choice">
+                            <label for="concrete-choice">Footing Concrete</label>
+                            <select id="concrete-choice" name="concrete_choice">
+                                <option value="" disabled selected>Loading options...</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button type="button" class="tab-link active" data-target="results">Results</button>
+                    <button type="button" class="tab-link" data-target="visualization">Visualization</button>
+                    <button type="button" class="tab-link" data-target="background">Background &amp; Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Enter deck details and press Calculate.</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="export-btn" style="margin-top: 18px;">Export Results</button>
+                </div>
+
+                <div id="visualization" class="tab-content">
+                    <h3>Material Breakdown</h3>
+                    <div id="plot-container">
+                        <p>Run a calculation to see cost and weight breakdowns.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <div id="background-content">
+                        <p>Equations and references will appear here after the docstring loads.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. Calculations provided for planning and educational use.</p>
+    </footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'decking';
+        const TOOL_FUNCTION_NAME = 'estimate_deck_materials';
+
+        let pyodideInstance, pyUtils, pyToolModule;
+        let toolDocumentation = { parameters: {}, returns: {}, latex: '', variables: '' };
+        let latestResults = null;
+
+        function normaliseMap(value) {
+            if (value instanceof Map) {
+                const obj = {};
+                for (const [key, entry] of value.entries()) {
+                    obj[key] = normaliseMap(entry);
+                }
+                return obj;
+            }
+            if (value && typeof value === 'object' && typeof value.toJs === 'function') {
+                return normaliseMap(value.toJs());
+            }
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                const obj = {};
+                for (const [key, entry] of Object.entries(value)) {
+                    obj[key] = normaliseMap(entry);
+                }
+                return obj;
+            }
+            return value;
+        }
+
+        function openTab(event) {
+            const target = event.currentTarget.dataset.target;
+            document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(section => section.style.display = 'none');
+            document.getElementById(target).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            if (target === 'background') { typesetMath(); }
+        }
+
+        document.querySelectorAll('.tab-link').forEach(btn => btn.addEventListener('click', openTab));
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        async function loadReadme() {
+            try {
+                const response = await fetch('README.md');
+                const text = await response.text();
+                const container = document.getElementById('readme-content');
+                const paragraphs = text.trim().split(/\n{2,}/).map(block => {
+                    const normalised = block.replace(/\r/g, '');
+                    if (normalised.startsWith('# ')) {
+                        return `<h3>${normalised.substring(2).trim()}</h3>`;
+                    }
+                    if (normalised.startsWith('## ')) {
+                        return `<h4>${normalised.substring(3).trim()}</h4>`;
+                    }
+                    if (normalised.startsWith('- ')) {
+                        const items = normalised.split('\n').map(item => `<li>${item.replace(/^-\\s*/, '')}</li>`).join('');
+                        return `<ul>${items}</ul>`;
+                    }
+                    return `<p>${normalised.replace(/\n/g, '<br>')}</p>`;
+                }).join('');
+                container.innerHTML = paragraphs || '<p>README.md is empty.</p>';
+            } catch (error) {
+                document.getElementById('readme-content').innerHTML = `<p style="color:#c92a2a;">Failed to load README: ${error.message}</p>`;
+            }
+        }
+
+        async function initialisePyodide() {
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
+            pyodideInstance = await loadPyodide();
+            await pyodideInstance.loadPackage('micropip');
+
+            document.getElementById('calculate-btn').textContent = 'Preparing Python...';
+            await pyodideInstance.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            pyUtils = pyodideInstance.globals.get('utils');
+            pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has && docMap.has('error')) {
+                throw new Error(docMap.get('error'));
+            }
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+
+            populateUiFromDocstring();
+            await populateCatalogues();
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        function populateUiFromDocstring() {
+            document.getElementById('tool-description').textContent = toolDocumentation.description || '';
+
+            document.querySelectorAll('.input-group[data-param]').forEach(group => {
+                const param = group.dataset.param;
+                const tooltip = group.querySelector('.tooltip-trigger');
+                const definition = toolDocumentation.parameters?.[param];
+                if (tooltip) {
+                    tooltip.setAttribute('data-tooltip', definition || 'Parameter description unavailable.');
+                }
+            });
+
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').filter(line => line.trim().length > 0)
+                : [];
+            const variableList = (toolDocumentation.variables || '')
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.includes(':'))
+                .map(line => {
+                    const [symbol, detail] = line.split(':', 2);
+                    return `<li><span>${symbol.trim()}</span>: ${detail.trim()}</li>`;
+                })
+                .join('');
+
+            const equationCards = latexLines.map((expr, index) => `
+                <div class="equation-card">
+                    <strong>Equation (${index + 1})</strong>
+                    <div class="equation-expression">\\[ ${expr} \\]</div>
+                    <ul>${variableList}</ul>
+                </div>
+            `).join('');
+
+            const background = document.getElementById('background-content');
+            background.innerHTML = `
+                <p>${(toolDocumentation.description || '').replace(/\n/g, '<br>')}</p>
+                <h4>Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations supplied.</p>'}
+                </div>
+                <h4>References</h4>
+                <p>${(toolDocumentation.references || 'No references supplied.').replace(/\n/g, '<br>')}</p>
+            `;
+            typesetMath();
+        }
+
+        async function populateCatalogues() {
+            if (!pyToolModule) return;
+            const catalogueProxy = pyToolModule.list_catalogues();
+            const catalogueMap = catalogueProxy.toJs();
+            const catalogues = normaliseMap(catalogueMap);
+            if (typeof catalogueProxy.destroy === 'function') {
+                catalogueProxy.destroy();
+            }
+
+            const deckingSelect = document.getElementById('decking-type');
+            fillSelect(deckingSelect, catalogues.decking);
+
+            const framingSelect = document.getElementById('framing-type');
+            fillSelect(framingSelect, catalogues.framing);
+
+            const postSelect = document.getElementById('post-type');
+            fillSelect(postSelect, catalogues.posts);
+
+            const concreteSelect = document.getElementById('concrete-choice');
+            fillSelect(concreteSelect, catalogues.concrete);
+        }
+
+        function fillSelect(selectElement, optionsObj) {
+            selectElement.innerHTML = '';
+            const previousValue = selectElement.value;
+
+            if (!optionsObj || typeof optionsObj !== 'object') {
+                const option = document.createElement('option');
+                option.value = '';
+                option.disabled = true;
+                option.textContent = 'Options unavailable';
+                selectElement.appendChild(option);
+                return;
+            }
+
+            Object.entries(optionsObj).forEach(([value, label], index) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = label;
+                if ((previousValue && value === previousValue) || (!previousValue && index === 0)) {
+                    option.selected = true;
+                }
+                selectElement.appendChild(option);
+            });
+        }
+
+        function formatValue(key, value) {
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return value;
+            }
+            const absVal = Math.abs(value);
+            const options = {
+                maximumFractionDigits: absVal < 10 ? 3 : absVal < 100 ? 2 : 1,
+            };
+            if (Math.abs(value - Math.round(value)) < 1e-6) {
+                options.maximumFractionDigits = 0;
+            }
+            return value.toLocaleString(undefined, options);
+        }
+
+        function buildResultRow(key, label, definition, valueText, equation, substitution) {
+            const detailsHtml = substitution
+                ? `<details class="inline-details">
+                        <summary title="Show equation"></summary>
+                        <div class="equation-details">
+                            ${equation ? `<p><strong>Equation:</strong> $$${equation}$$</p>` : ''}
+                            <p><strong>Substituted:</strong> $$${substitution}$$</p>
+                        </div>
+                   </details>`
+                : '';
+            return `
+                <div class="result-item">
+                    <div class="result-header">
+                        <p><strong><span class="def" data-def="${definition || 'Definition unavailable.'}">${label}</span>:</strong> ${valueText}</p>
+                        ${detailsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResults(results) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').filter(line => line.trim().length > 0)
+                : [];
+            let equationIndex = 0;
+
+            Object.entries(toolDocumentation.returns || {}).forEach(([key, definition]) => {
+                const rawValue = results[key];
+                const displayName = key.replace(/_/g, ' ')
+                    .replace(/\b([a-z])/g, match => match.toUpperCase());
+                const formattedValue = formatValue(key, rawValue);
+                const substitution = results[`subst_${key}`];
+                let equation = '';
+                if (substitution && equationIndex < latexLines.length) {
+                    equation = latexLines[equationIndex];
+                    equationIndex += 1;
+                }
+                resultsDiv.innerHTML += buildResultRow(
+                    key,
+                    displayName,
+                    definition,
+                    formattedValue,
+                    equation,
+                    substitution
+                );
+            });
+
+            if (!resultsDiv.innerHTML) {
+                resultsDiv.innerHTML = '<p>No results available.</p>';
+            }
+            typesetMath();
+        }
+
+        function renderVisualization(results) {
+            const plotContainer = document.getElementById('plot-container');
+            const costBreakdown = [
+                { key: 'decking_cost_usd', label: 'Decking', color: '#2563eb' },
+                { key: 'joist_cost_usd', label: 'Joists & Rim', color: '#1d4ed8' },
+                { key: 'beam_cost_usd', label: 'Beams', color: '#3b82f6' },
+                { key: 'post_cost_usd', label: 'Posts', color: '#60a5fa' },
+                { key: 'concrete_cost_usd', label: 'Concrete', color: '#93c5fd' },
+            ];
+            const weightBreakdown = [
+                { key: 'decking_weight_lb', label: 'Decking', color: '#047857' },
+                { key: 'joist_weight_lb', label: 'Joists & Rim', color: '#059669' },
+                { key: 'beam_weight_lb', label: 'Beams', color: '#10b981' },
+                { key: 'post_weight_lb', label: 'Posts', color: '#34d399' },
+                { key: 'concrete_weight_lb', label: 'Concrete', color: '#6ee7b7' },
+            ];
+
+            const totalCost = costBreakdown
+                .map(item => Number(results[item.key]) || 0)
+                .reduce((acc, val) => acc + val, 0);
+            const totalWeight = weightBreakdown
+                .map(item => Number(results[item.key]) || 0)
+                .reduce((acc, val) => acc + val, 0);
+
+            function renderBarRows(breakdown, total, unit) {
+                if (!total || total <= 0) {
+                    return '<p>Insufficient data to build this panel.</p>';
+                }
+                return breakdown.map(item => {
+                    const value = Number(results[item.key]) || 0;
+                    const share = Math.max(0, value / total);
+                    return `
+                        <div class="bar-row">
+                            <span class="bar-label">${item.label}</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: ${(share * 100).toFixed(1)}%; background: ${item.color};"></div>
+                            </div>
+                            <span class="bar-value">${formatValue(item.key, value)} ${unit} (${(share * 100).toFixed(1)}%)</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            plotContainer.innerHTML = `
+                <div class="viz-wrapper">
+                    <div>
+                        <h4>Cost Allocation</h4>
+                        ${renderBarRows(costBreakdown, totalCost, 'USD')}
+                    </div>
+                    <div>
+                        <h4>Weight Allocation</h4>
+                        ${renderBarRows(weightBreakdown, totalWeight, 'lb')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function exportResults() {
+            if (!latestResults) {
+                alert('Run a calculation before exporting.');
+                return;
+            }
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const blob = new Blob([JSON.stringify(latestResults, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `deck-material-estimate-${timestamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('export-btn').addEventListener('click', exportResults);
+
+        document.getElementById('calc-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (!pyToolModule) {
+                alert('Python runtime still loading. Please wait a moment and try again.');
+                return;
+            }
+            try {
+                const payload = [
+                    document.getElementById('deck-length').value,
+                    document.getElementById('deck-width').value,
+                    document.getElementById('joist-spacing').value,
+                    document.getElementById('beam-spacing').value,
+                    document.getElementById('post-spacing').value,
+                    document.getElementById('decking-type').value,
+                    document.getElementById('framing-type').value,
+                    document.getElementById('post-type').value,
+                    document.getElementById('waste-allowance').value,
+                    document.getElementById('concrete-choice').value,
+                ];
+
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...payload).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                latestResults = results;
+                renderResults(results);
+                renderVisualization(results);
+            } catch (error) {
+                console.error('Calculation error:', error);
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color:#c92a2a;font-weight:600;">Calculation error: ${error.message}</p>
+                `;
+            } finally {
+                typesetMath();
+            }
+        });
+
+        (async function bootstrap() {
+            await loadReadme();
+            try {
+                await initialisePyodide();
+            } catch (error) {
+                console.error('Initialisation error:', error);
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color:#c92a2a;font-weight:600;">Failed to load Python module.</p>
+                    <p style="color:#c92a2a;">${error.message}</p>
+                `;
+            }
+        })();
+    </script>
+</body>
+</html>
