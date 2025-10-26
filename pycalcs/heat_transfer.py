@@ -365,7 +365,7 @@ def estimate_motor_hotspot_temperature(
     ambient_temperature: float,
     heat_capacity_ratio: float | None = None,
 ) -> Dict[str, float | List[float] | Dict[str, float | List[float]]]:
-    r"""""
+    r"""
     Estimate an unseen motor hot-spot temperature from cool-down sensor data.
 
     The routine models the winding as two coupled thermal masses: the concentrated
