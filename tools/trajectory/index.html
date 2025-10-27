@@ -108,6 +108,9 @@
         .result-item:last-child { border-bottom: none; }
         .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .result-header strong { font-size: 1.05rem; color: var(--primary-color); }
+        .result-angle-block { padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); }
+        .result-angle-block:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .result-angle-block h4 { margin-bottom: 0.75rem; color: var(--secondary-color); }
         .inline-details summary {
             list-style: none; cursor: pointer; width: 24px; height: 24px;
             border-radius: 50%; background-color: var(--primary-light); display: inline-flex;
@@ -189,7 +192,7 @@
                         </div>
                         <div class="input-group" data-param="launch_angle_deg">
                             <label for="launch-angle">Launch Angle (deg)</label>
-                            <input type="number" id="launch-angle" name="launch_angle_deg" min="1" max="89" step="0.1" value="35">
+                            <input type="text" id="launch-angle" name="launch_angle_deg" placeholder="e.g., 30, 45, 60" value="35, 45, 55">
                             <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
                         </div>
                         <div class="input-group" data-param="initial_height_m">
@@ -447,97 +450,179 @@
             `;
         }
 
-        function renderResults(results) {
+        function renderResults(resultCases) {
             const resultsDiv = document.getElementById('results-display');
             resultsDiv.innerHTML = '';
 
-            const latexLines = toolDocumentation.latex
-                ? toolDocumentation.latex.split('\\n').map(line => line.trim()).filter(Boolean)
-                : [];
+            if (!Array.isArray(resultCases) || resultCases.length === 0) {
+                resultsDiv.innerHTML = '<p>No results available.</p>';
+                return;
+            }
 
-            let equationIndex = 0;
-            Object.entries(toolDocumentation.returns || {}).forEach(([key, definition]) => {
-                const rawValue = results[key];
-                const displayName = key.replace(/_/g, ' ')
-                    .replace(/\b([a-z])/g, match => match.toUpperCase());
-                const formattedValue = formatValue(rawValue);
-                const substitution = results[`subst_${key}`];
-                let equation = '';
-                if (equationIndex < latexLines.length) {
-                    equation = latexLines[equationIndex];
-                }
-                resultsDiv.innerHTML += buildResultRow(
-                    key,
-                    displayName,
-                    definition,
-                    formattedValue,
-                    equation,
-                    substitution
-                );
-                equationIndex += 1;
+            const returnsMeta = toolDocumentation.returns || {};
+
+            resultCases.forEach(({ angleDeg, data }) => {
+                const latexLines = toolDocumentation.latex
+                    ? toolDocumentation.latex.split('\\n').map(line => line.trim()).filter(Boolean)
+                    : [];
+                let equationIndex = 0;
+
+                const rows = Object.entries(returnsMeta).map(([key, definition]) => {
+                    const rawValue = data[key];
+                    if (rawValue === undefined || rawValue === null || typeof rawValue === 'object') {
+                        return '';
+                    }
+                    const displayName = key.replace(/_/g, ' ')
+                        .replace(/\b([a-z])/g, match => match.toUpperCase());
+                    const formattedValue = formatValue(rawValue);
+                    const substitution = data[`subst_${key}`];
+                    let equation = '';
+                    if (equationIndex < latexLines.length) {
+                        equation = latexLines[equationIndex];
+                    }
+                    equationIndex += 1;
+                    return buildResultRow(
+                        key,
+                        displayName,
+                        definition,
+                        formattedValue,
+                        equation,
+                        substitution
+                    );
+                }).join('');
+
+                resultsDiv.innerHTML += `
+                    <div class="result-angle-block">
+                        <h4>Launch Angle ${formatValue(angleDeg)}°</h4>
+                        ${rows || '<p>No scalar results available.</p>'}
+                    </div>
+                `;
             });
 
-            if (!resultsDiv.innerHTML) {
-                resultsDiv.innerHTML = '<p>No results available.</p>';
-            }
             typesetMath();
         }
 
-        function renderVisualization(results) {
+        function renderVisualization(resultCases) {
             const plotContainer = document.getElementById('plot-container');
             if (typeof Plotly === 'undefined') {
                 plotContainer.innerHTML = '<p>Plotly library failed to load; cannot render trajectory.</p>';
                 return;
             }
-            const points = results.trajectory_points;
-            if (!Array.isArray(points) || points.length < 2) {
+            if (!Array.isArray(resultCases) || resultCases.length === 0) {
                 plotContainer.innerHTML = '<p>Insufficient data to plot the trajectory.</p>';
                 return;
             }
 
-            const xValues = points.map(pt => pt.x);
-            const yValues = points.map(pt => pt.y);
+            const colours = ['#2563eb', '#16a34a', '#f97316', '#9333ea', '#0ea5e9', '#ec4899', '#0f766e'];
+            let maxRange = 0;
+            const traces = [];
+            const annotations = [];
 
-            const apex = points.reduce((best, pt) => (pt.y > best.y ? pt : best), points[0]);
-            const impact = points[points.length - 1];
+            resultCases.forEach(({ angleDeg, data }, index) => {
+                const points = data.trajectory_points || [];
+                if (!Array.isArray(points) || points.length < 2) {
+                    return;
+                }
+                const xValues = points.map(pt => pt.x);
+                const yValues = points.map(pt => pt.y);
+                const color = colours[index % colours.length];
+                const angleLabel = `${formatValue(angleDeg)}°`;
+                maxRange = Math.max(maxRange, ...xValues);
 
-            plotContainer.innerHTML = '<div class="viz-wrapper"><div id="trajectory-plot" class="viz-canvas"></div><div class="viz-summary"><h4>Flight Highlights</h4><ul><li><strong>Time to Apex:</strong> ' +
-                `${formatValue(results.time_to_peak_s)} s</li><li><strong>Total Flight Time:</strong> ${formatValue(results.time_of_flight_s)} s</li>` +
-                `<li><strong>Peak Height:</strong> ${formatValue(results.peak_height_m)} m</li><li><strong>Range:</strong> ${formatValue(results.range_m)} m</li>` +
-                `<li><strong>Impact Speed:</strong> ${formatValue(results.impact_speed_mps)} m/s</li>` +
-                `<li><strong>Impact Angle:</strong> ${formatValue(results.impact_angle_deg)}°</li></ul></div></div>`;
+                traces.push({
+                    x: xValues,
+                    y: yValues,
+                    mode: 'lines',
+                    name: angleLabel,
+                    line: { color, width: 3 },
+                    hovertemplate: `Angle: ${angleLabel}<br>Range: %{x:.2f} m<br>Height: %{y:.2f} m<br>Time: %{customdata:.2f} s<extra></extra>`,
+                    customdata: points.map(pt => pt.t)
+                });
 
-            const trajectoryTrace = {
-                x: xValues,
-                y: yValues,
-                mode: 'lines',
-                name: 'Trajectory',
-                line: { color: '#2563eb', width: 3 },
-                hovertemplate: 'Range: %{x:.2f} m<br>Height: %{y:.2f} m<br>Time: %{customdata:.2f} s<extra></extra>',
-                customdata: points.map(pt => pt.t)
-            };
+                const apex = points.reduce((best, pt) => (pt.y > best.y ? pt : best), points[0]);
+                const impact = points[points.length - 1];
 
-            const apexTrace = {
-                x: [apex.x],
-                y: [apex.y],
-                mode: 'markers+text',
-                name: 'Apex',
-                marker: { color: '#f97316', size: 10, symbol: 'circle' },
-                text: [`Apex<br>${formatValue(apex.y)} m`],
-                textposition: 'top center',
-                hovertemplate: 'Apex<br>Range: %{x:.2f} m<br>Height: %{y:.2f} m<extra></extra>'
-            };
+                traces.push({
+                    x: [apex.x],
+                    y: [apex.y],
+                    mode: 'markers',
+                    name: `${angleLabel} Apex`,
+                    showlegend: false,
+                    marker: { color, size: 9, symbol: 'circle' },
+                    hovertemplate: `Angle: ${angleLabel}<br>Apex<br>Range: %{x:.2f} m<br>Height: %{y:.2f} m<extra></extra>`
+                });
 
-            const impactTrace = {
-                x: [impact.x],
-                y: [impact.y],
-                mode: 'markers+text',
-                name: 'Impact',
-                marker: { color: '#0f766e', size: 10, symbol: 'diamond' },
-                text: [`Impact<br>${formatValue(results.impact_speed_mps)} m/s`],
-                textposition: 'bottom center',
-                hovertemplate: 'Impact<br>Range: %{x:.2f} m<br>Height: %{y:.2f} m<extra></extra>'
-            };
+                traces.push({
+                    x: [impact.x],
+                    y: [impact.y],
+                    mode: 'markers',
+                    name: `${angleLabel} Impact`,
+                    showlegend: false,
+                    marker: { color, size: 9, symbol: 'diamond' },
+                    hovertemplate: `Angle: ${angleLabel}<br>Impact<br>Range: %{x:.2f} m<br>Height: %{y:.2f} m<extra></extra>`
+                });
+
+                annotations.push({
+                    x: apex.x,
+                    y: apex.y,
+                    xanchor: 'left',
+                    yanchor: 'bottom',
+                    text: `${angleLabel} apex: ${formatValue(apex.y)} m`,
+                    showarrow: false,
+                    font: { color }
+                });
+            });
+
+            if (!traces.length) {
+                plotContainer.innerHTML = '<p>Insufficient data to plot the trajectory.</p>';
+                return;
+            }
+
+            const summaryList = resultCases.map(({ angleDeg, data }) => {
+                const angleLabel = `${formatValue(angleDeg)}°`;
+                return `
+                    <li>
+                        <strong>${angleLabel}</strong> — Range ${formatValue(data.range_m)} m,
+                        Peak ${formatValue(data.peak_height_m)} m,
+                        ToF ${formatValue(data.time_of_flight_s)} s,
+                        Impact ${formatValue(data.impact_speed_mps)} m/s
+                    </li>
+                `;
+            }).join('');
+
+            plotContainer.innerHTML = `
+                <div class="viz-wrapper">
+                    <div id="trajectory-plot" class="viz-canvas"></div>
+                    <div class="viz-summary">
+                        <h4>Flight Highlights</h4>
+                        <ul>${summaryList}</ul>
+                    </div>
+                </div>
+            `;
+
+            const shapes = [
+                {
+                    type: 'line',
+                    x0: 0,
+                    x1: (maxRange > 0 ? maxRange * 1.05 : 1),
+                    y0: 0,
+                    y1: 0,
+                    line: { color: '#64748b', width: 2 }
+                }
+            ];
+
+            const firstPoint = resultCases[0]?.data?.trajectory_points?.[0];
+            if (firstPoint) {
+                annotations.push({
+                    x: firstPoint.x,
+                    y: firstPoint.y,
+                    xanchor: 'left',
+                    yanchor: 'bottom',
+                    text: `Launch height: ${formatValue(firstPoint.y)} m`,
+                    showarrow: false,
+                    font: { color: '#475569' }
+                });
+            }
 
             const layout = {
                 margin: { t: 30, r: 20, b: 60, l: 70 },
@@ -555,31 +640,12 @@
                 },
                 legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, x: 0 },
                 hovermode: 'closest',
-                shapes: [
-                    {
-                        type: 'line',
-                        x0: 0,
-                        x1: Math.max(...xValues) * 1.02,
-                        y0: 0,
-                        y1: 0,
-                        line: { color: '#64748b', width: 2 }
-                    }
-                ],
-                annotations: [
-                    {
-                        x: 0,
-                        y: points[0].y,
-                        xanchor: 'left',
-                        yanchor: 'bottom',
-                        text: `Launch height: ${formatValue(points[0].y)} m`,
-                        showarrow: false,
-                        font: { color: '#475569' }
-                    }
-                ],
+                shapes,
+                annotations,
                 responsive: true
             };
 
-            Plotly.newPlot('trajectory-plot', [trajectoryTrace, apexTrace, impactTrace], layout, { displaylogo: false, responsive: true });
+            Plotly.newPlot('trajectory-plot', traces, layout, { displaylogo: false, responsive: true });
         }
 
         function exportResults() {
@@ -607,27 +673,60 @@
                 return;
             }
             try {
-                const payload = [
-                    document.getElementById('initial-speed').value,
-                    document.getElementById('launch-angle').value,
-                    document.getElementById('initial-height').value,
-                    document.getElementById('gravity').value,
-                ];
+                const initialSpeedValue = document.getElementById('initial-speed').value;
+                const launchAnglesValue = document.getElementById('launch-angle').value;
+                const initialHeightValue = document.getElementById('initial-height').value;
+                const gravityValue = document.getElementById('gravity').value;
 
-                const resultProxy = pyToolModule[TOOL_FUNCTION_NAME](...payload);
-                const resultMap = resultProxy.toJs();
-                const results = normaliseMap(resultMap);
-                if (typeof resultProxy.destroy === 'function') {
-                    resultProxy.destroy();
+                const speed = parseFloat(initialSpeedValue);
+                const height = parseFloat(initialHeightValue);
+                const gravity = parseFloat(gravityValue);
+
+                if ([speed, height, gravity].some(value => Number.isNaN(value))) {
+                    throw new Error('Initial speed, launch height, and gravity must be numeric.');
                 }
 
-                if (results.error) {
-                    throw new Error(results.error);
+                const angleTokens = launchAnglesValue.split(',').map(token => token.trim()).filter(token => token.length > 0);
+                if (angleTokens.length === 0) {
+                    throw new Error('Enter at least one launch angle (comma-separated).');
                 }
 
-                latestResults = results;
-                renderResults(results);
-                renderVisualization(results);
+                const angleValues = angleTokens.map(token => {
+                    const angle = Number(token);
+                    if (!Number.isFinite(angle)) {
+                        throw new Error(`Invalid launch angle: "${token}".`);
+                    }
+                    if (!(angle > 0 && angle < 90)) {
+                        throw new Error(`Launch angle must be between 0 and 90 degrees (received ${token}).`);
+                    }
+                    return angle;
+                });
+
+                const resultsByAngle = [];
+                for (const angleDeg of angleValues) {
+                    const resultProxy = pyToolModule[TOOL_FUNCTION_NAME](speed, angleDeg, height, gravity);
+                    const resultMap = resultProxy.toJs();
+                    const result = normaliseMap(resultMap);
+                    if (typeof resultProxy.destroy === 'function') {
+                        resultProxy.destroy();
+                    }
+                    if (result.error) {
+                        throw new Error(`Angle ${angleDeg}°: ${result.error}`);
+                    }
+                    resultsByAngle.push({ angleDeg, data: result });
+                }
+
+                latestResults = {
+                    inputs: {
+                        initial_speed_mps: speed,
+                        initial_height_m: height,
+                        gravity_mps2: gravity
+                    },
+                    solutions: resultsByAngle
+                };
+
+                renderResults(resultsByAngle);
+                renderVisualization(resultsByAngle);
             } catch (error) {
                 console.error('Calculation error:', error);
                 document.getElementById('results-display').innerHTML = `

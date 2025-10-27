@@ -28,13 +28,16 @@ def plan_projectile_trajectory(
 
     The planner assumes a rigid body launched with a specified speed and angle,
     neglecting aerodynamic drag.  Inputs and outputs are expressed in SI units
-    so the tool can run identically in Pyodide and conventional Python.
+    so the tool can run identically in Pyodide and conventional Python.  Invoke
+    the helper once per launch angle when sweeping a family of trajectories.
 
     ---Parameters---
     initial_speed_mps : float
         Launch speed magnitude measured at t = 0 (m/s). Must be greater than zero.
     launch_angle_deg : float
         Launch angle above the horizontal (deg). Restricted to 0° < θ < 90°.
+        UI workflows may accept comma-separated angles; invoke this helper once
+        per entry when evaluating a sweep.
     initial_height_m : float
         Height of the launch point relative to the landing plane (m). Defaults to 0.
     gravity_mps2 : float

@@ -9,5 +9,6 @@
 - Accept initial speed, launch angle, launch height, and gravity input in SI units.
 - Derive horizontal/vertical velocity components, peak height, flight time, range, and impact conditions.
 - Generate equation substitutions for every reported result to support step-by-step review.
-- Produce sampled trajectory points so the frontend can render a scaled plot of the flight path.
+- Accept comma-separated launch angles, evaluating each and plotting all trajectories together.
+- Produce sampled trajectory points so the frontend can render scaled plots of the flight paths.
 - Source all calculation logic from `/pycalcs/ballistics.py` via Pyodide to maintain a single source of truth.
