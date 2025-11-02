@@ -41,7 +41,7 @@ The project is a static web app hosted on GitHub Pages, with calculations perfor
 
 * **Frontend:** Each tool is a self-contained HTML file. We use a consistent CSS stylesheet for a uniform look and feel. JavaScript is used to handle user input, interact with the Pyodide environment, and update the UI. There should be a relatively straightforward navigation between different tools and within the base `tools` home page.
 * **Backend (Client-Side):** We use [Pyodide](https://pyodide.org/) to run Python code directly in the browser. This allows us to write complex calculation logic in Python without needing a server.
-* **Core Library (`/py/library.py`):** This is the heart of our project. It contains all the core Python functions for our calculations.
+* **Core Library (`/pycalcs/`):** This package is the heart of our project. It contains the reusable Python functions that power every tool, split into discipline-focused modules (e.g., `structures.py`, `fluids.py`). Shared helpers live in `utils.py`. Keep the package import-safe so that running `from pycalcs import structures` (or similar) inside Pyodide loads the right module without side-effects.
     * **Docstrings are CRITICAL:** Every function in this library *must* have a detailed docstring that includes:
         * A clear description of what the function does.
         * A list of parameters with their types and descriptions.
@@ -70,12 +70,13 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
 3.  **Add Python Logic:**
     * Identify the core calculations for your tool.
     * Write one or more Python functions to perform these calculations.
-    * Add these functions to `/py/library.py`.
+    * Add these functions to the appropriate module under `/pycalcs/` (create a new file if the discipline is not represented yet) and expose them via a clear, importable function.
     * **Crucially, write excellent docstrings for your new functions.**
 4.  **Create the HTML (`index.html`):**
     * You **must** use the official template located at `tools/example_tool` as the starting point for all new tools. Do not start from scratch or another tool.
     * This template is mandatory for all contributors, including AI agents, to ensure consistency and adherence to project principles.
     * Modify the template's placeholder content (inputs, outputs, README section) to fit your specific tool.
+    * Update the script constants so the frontend loads the correct Python: set `TOOL_MODULE_NAME` to your `pycalcs/<module>.py` filename (without the `.py`) and `TOOL_FUNCTION_NAME` to the callable you expose. Every form control `id` the template references (`#param1`, `#param2`, etc.) must match the parameter names defined in the docstring so tooltips populate automatically.
     * You will also need to create/update the `README.md` in your tool's folder. The template has a section to display this.
 5.  **Add JavaScript:**
     * Write the JavaScript code to:
@@ -169,6 +170,32 @@ This mandate enforces our core principles of consistency, usability, and progres
 * **Style:** All Python code must follow the [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/).
 * **Type Hinting:** Use type hints for all function signatures (arguments and return values). This improves readability and helps prevent bugs. Example: `def calculate_area(length: float, width: float) -> float:`.
 * **Docstrings:** As stated in the architecture overview, detailed docstrings are mandatory for all functions in the core library.
+* **Docstring structure:** `pycalcs/utils.py:get_documentation` splits docstrings on `---Parameters---`, `---Returns---`, and `---LaTeX---`, then expects each parameter/return entry to use an unindented `name : type` line followed by indented description lines. The keys you return from the calculation must exactly match the names listed in `---Returns---`. Optional substituted-step strings should be named `subst_<return_key>` so the template can surface them. Start every new tool by copying and adapting the pattern below (from `pycalcs/example.py`):
+
+```python
+def calculate_tool(input_a: float, input_b: float) -> dict[str, float]:
+    """
+    Single-sentence summary of what the function solves.
+
+    Longer context and any assumptions or references go here.
+
+    ---Parameters---
+    input_a : float
+        One-line purpose, then further detail on units or limits.
+    input_b : float
+        Repeat the same pattern for each argument.
+
+    ---Returns---
+    result_primary : float
+        Output meaning and units.
+    result_secondary : float
+        Clearly state derived values or checks.
+
+    ---LaTeX---
+    Equation_1 = \\frac{Input_A}{Input_B}
+    Equation_2 = Input_A \\times Input_B
+    """
+```
 * **Error Handling:** Functions should raise specific exceptions for invalid inputs or calculation errors (e.g., `ValueError`, `ZeroDivisionError`). Do not use generic `Exception`. The JavaScript code will be responsible for catching these errors and displaying a user-friendly message.
 
 ### JavaScript
@@ -188,4 +215,17 @@ This mandate enforces our core principles of consistency, usability, and progres
     * Using `label` elements for all form inputs.
     * Providing sufficient color contrast.
     * Ensuring all functionality is usable with a keyboard.
-* **CSS:** All custom styles should be added to the shared stylesheet to maintain a consistent look and feel. Use descriptive class names and avoid inline styles.
+* **CSS:** The example template currently ships with an inline `<style>` block; start from it, keep component-specific tweaks inside that block, and only introduce shared rules in the forthcoming global stylesheet (see Roadmap). Use descriptive class names and avoid one-off inline `style=""` attributes so future extraction stays easy.
+
+### Testing & Verification
+
+* **Numerical checks:** Add or update `tests/` cases (use `pytest`) that exercise new `pycalcs` functions across nominal, edge, and failure inputs. If you introduce a regression-safe fixture (e.g., compare against a known textbook example), document the reference in the test docstring.
+* **Docstring parser smoke test:** Run `python -c "from pycalcs import utils, <module>; print(utils.get_documentation('<module>', '<function>'))"` to confirm the docstring splits cleanly before committing.
+* **Frontend sanity:** Open the tool in a local static server (e.g., `python -m http.server`) and verify tooltips, tab switching, and error handling. Capture at least one screenshot or screen recording when submitting a PR if the UI meaningfully changes.
+* **Export/visual checks:** When the tool supports exports or plots, download the artifact and ensure units, labels, and legends align with the on-screen values.
+
+## Roadmap
+
+1. **Build shared styling primitives:** Extract the inline CSS from the example tool into a versioned global stylesheet and update all tools to consume it.
+2. **Harden automated validation:** Add a lightweight pytest suite for `pycalcs/` along with CI checks that run formatting, docstring parsing smoke tests, and basic numerical regression cases.
+3. **Expand catalog coverage:** Prioritise high-impact disciplines (controls, civil structures, power electronics) and backfill READMEs and exports for existing tools before shipping new calculators.
