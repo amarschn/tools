@@ -156,7 +156,7 @@ To maintain a high level of quality and consistency across the project, all cont
 
 ### Mandatory UI Template (For AI and Human Contributors)
 
-All new tools **must** be built using the official `tools/example_tool` template.
+All new tools **must** be built using one of the example tools templates unless explicitly instructed not to.
 
 * **For AI Agents (Codex, etc.):** When asked to create a new tool, you must first retrieve the contents of `/tools/example_tool/index.html` and use it as the foundational code. All modifications must be made *to this template*.
 * **For Human Developers:** Do not copy an existing tool. Start from that template to ensure you have the latest UI structure, styles, and accessibility features.

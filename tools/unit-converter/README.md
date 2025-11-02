@@ -5,7 +5,10 @@
 Offer a fast, trustworthy way to translate engineering quantities between SI,
 imperial, and other frequently used unit systems. The tool exposes the shared
 conversion logic so future calculators can reuse the same single source of
-truth while engineers can validate calculations interactively.
+truth while engineers can validate calculations interactively.  
+
+This directory now ships the single chosen interface (see `ui_dual-minimal/`)
+alongside the shared module (`shared/dual-core.js`) and tests.
 
 ## Requirements
 
@@ -14,9 +17,12 @@ truth while engineers can validate calculations interactively.
 - Surface the available units for the chosen quantity using their symbols and
   descriptive names.
 - Convert a numeric value from one unit to another using
-  `pycalcs.units.convert_units`.
+  `pycalcs.units.convert_units`. Every concept should update results instantly
+  as the user types or changes a selection.
 - Display the converted value, the intermediate SI-base value, and (when
   applicable) the pure multiplicative factor between the two units.
+- Expose both “from” and “to” numeric fields, keep them synchronised, and
+  surface SI base data with relatable comparisons.
 - Render any errors from the conversion helper as user-friendly messages.
 - Provide contextual documentation parsed from the function docstrings in
   `pycalcs.units`, following the standard AGENTS template pattern.
