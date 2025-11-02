@@ -3,94 +3,407 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unit Converter - Dual Minimalist</title>
+    <title>Engineering Unit Converter</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <style>
         :root {
-            --bg: #f5f7fa;
+            --bg: #fefefe;
             --surface: #ffffff;
-            --border: #e4e7f0;
-            --muted: #7c879b;
+            --border: #e6e8ef;
+            --muted: #7c8497;
             --text: #1f2430;
             --accent: #0d9488;
-            --accent-soft: rgba(13, 148, 136, 0.12);
-            --shadow: 0 22px 48px rgba(37, 50, 71, 0.12);
+            --accent-soft: rgba(13, 148, 136, 0.1);
+            --shadow: 0 18px 45px rgba(31, 37, 45, 0.08);
             --radius-lg: 28px;
             --radius-md: 16px;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
             min-height: 100vh;
-            background: linear-gradient(160deg, #f2f5fb 0%, #fafcfd 60%, #f1f4f6 100%);
+            background: linear-gradient(145deg, #f5f7fb 0%, #fdfefe 50%, #f2f5f7 100%);
             font-family: "Inter", system-ui, sans-serif;
             color: var(--text);
-            display: flex;
-            justify-content: center;
-            padding: 42px 18px 60px;
+            margin: 0;
         }
-        .frame {
+
+        header.navbar {
+            background-color: var(--surface);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 8px 24px rgba(37, 50, 71, 0.08);
+        }
+
+        .nav-container {
+            width: min(1240px, 100%);
+            margin: 0 auto;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-brand {
+            color: var(--accent);
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 1rem;
+        }
+
+        .nav-brand:hover {
+            text-decoration: underline;
+        }
+
+        main.container {
+            width: min(1240px, 100%);
+            margin: 0 auto;
+            padding: 32px 18px 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .dual-shell {
             width: min(1240px, 100%);
             background: var(--surface);
             border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
             box-shadow: var(--shadow);
-            border: 1px solid rgba(255, 255, 255, 0.65);
+            display: grid;
+            grid-template-columns: 1fr 1fr 0.9fr;
             overflow: hidden;
         }
-        header {
-            padding: 40px 48px 32px;
-            border-bottom: 1px solid var(--border);
+
+        .dual-panel {
+            padding: 32px 30px 34px;
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 24px;
         }
-        header h1 {
-            font-size: 2.1rem;
+
+        .dual-panel-header h1 {
+            font-size: 1.72rem;
             font-weight: 700;
+            margin-bottom: 8px;
         }
-        header p {
-            font-size: 1rem;
+
+        .dual-panel-header p {
             color: var(--muted);
-            max-width: 780px;
-            line-height: 1.55;
+            font-size: 0.94rem;
+            line-height: 1.5;
         }
-        iframe {
-            width: 100%;
-            height: 860px;
-            border: none;
-            display: block;
+
+        .quantity-chip-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 8px;
         }
-        .notice {
-            padding: 20px 48px 28px;
-            border-top: 1px solid var(--border);
-            font-size: 0.92rem;
-            color: var(--muted);
+
+        .quantity-chip {
+            padding: 9px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #fafbfc;
+            font-size: 0.83rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.16s ease;
         }
-        .notice a {
+
+        .quantity-chip:hover {
+            border-color: rgba(13, 148, 136, 0.35);
             color: var(--accent);
-            text-decoration: none;
+        }
+
+        .quantity-chip.is-active {
+            background: var(--accent-soft);
+            border-color: rgba(13, 148, 136, 0.5);
+            color: var(--accent);
+        }
+
+        .value-stack label {
+            display: block;
+            font-size: 0.84rem;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .value-stack input[type="number"] {
+            width: 100%;
+            padding: 13px 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            font-size: 1.12rem;
+            font-weight: 600;
+            color: var(--text);
+            background: #fbfcfe;
+        }
+
+        .value-stack input[type="number"]:focus {
+            outline: none;
+            border-color: rgba(13, 148, 136, 0.48);
+            box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18);
+        }
+
+        .search-stack input[type="search"] {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #f9fafb;
+            color: var(--text);
+        }
+
+        .unit-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .unit-chip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            background: #f7f8fb;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text);
+            transition: all 0.14s ease;
+        }
+
+        .unit-chip:hover {
+            border-color: rgba(13, 148, 136, 0.25);
+        }
+
+        .unit-chip.is-active {
+            background: rgba(13, 148, 136, 0.12);
+            border-color: rgba(13, 148, 136, 0.45);
+            color: var(--accent);
+        }
+
+        .dual-info {
+            padding: 34px 28px 36px;
+            background: #fafbfc;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .info-note {
+            font-size: 0.85rem;
+            color: rgba(15, 118, 110, 0.85);
+            display: none;
+        }
+
+        .info-note[data-state="error"] {
+            color: #dc2626;
+        }
+
+        .info-card {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            padding: 16px 18px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+        }
+
+        .info-card.info-compact {
+            padding: 12px 16px;
+        }
+
+        .info-card h3 {
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .info-primary {
+            font-size: 1.05rem;
             font-weight: 600;
         }
-        @media (max-width: 960px) {
-            iframe { height: 920px; }
-            header { padding: 32px 28px 24px; }
-            .notice { padding: 18px 28px 26px; }
+
+        .info-secondary {
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .comparison-card {
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #ffffff;
+        }
+
+        .comparison-label {
+            font-size: 0.83rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .comparison-values {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--accent);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .comparison-secondary {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .comparison-ratio {
+            margin-top: 6px;
+            font-size: 0.75rem;
+            color: rgba(15, 118, 110, 0.8);
+            letter-spacing: 0.08em;
+        }
+
+        @media (max-width: 1080px) {
+            .dual-shell {
+                grid-template-columns: 1fr;
+            }
+            .dual-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .dual-info {
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
         }
     </style>
 </head>
 <body>
-    <div class="frame">
-        <header>
-            <h1>Unit Converter – Dual Minimalist</h1>
-            <p>
-                This is the selected unit conversion interface. Both columns stay synchronised, searches are instant,
-                and the sidebar highlights SI base values plus relatable comparisons. The dual shared logic lives in
-                <code>shared/dual-core.js</code> so other tools can tap into the same behaviour.
-            </p>
-        </header>
-        <iframe src="./ui_dual-minimal/index.html" title="Dual Minimalist Converter"></iframe>
-        <div class="notice">
-            Need to tweak the logic? Update <code>shared/dual-core.js</code> or <code>pycalcs/units.py</code> and refresh.
-            The iframe simply embeds <code>ui_dual-minimal/index.html</code>.
-        </div>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="/index.html" target="_top" class="nav-brand">← Engineering Tools</a>
+            <span>Engineering Unit Converter</span>
+        </nav>
+    </header>
+
+    <main class="container">
+    <div class="dual-shell" data-dual>
+        <section class="dual-panel" data-side="left">
+            <div class="dual-panel-header">
+                <h1>Unit Converter</h1>
+                <p>All the essentials—clean typography, quick filtering, and dual inputs that stay synchronised while you work.</p>
+            </div>
+
+            <div class="quantity-chip-row" data-role="quantity-row"></div>
+
+            <div class="value-stack">
+                <label for="left-value">From value</label>
+                <input id="left-value" data-role="value-input" data-side="left" type="number" value="1" step="any">
+            </div>
+
+            <div class="search-stack">
+                <input type="search" data-role="search-input" data-side="left" placeholder="Filter source units…" autocomplete="off">
+            </div>
+
+            <ul class="unit-list" data-role="unit-list" data-side="left"></ul>
+        </section>
+
+        <section class="dual-panel" data-side="right">
+            <div class="dual-panel-header">
+                <h1>To value</h1>
+                <p>Switch units or edit the number directly—results and comparisons update instantly for both perspectives.</p>
+            </div>
+
+            <div class="value-stack">
+                <label for="right-value">To value</label>
+                <input id="right-value" data-role="value-input" data-side="right" type="number" value="1" step="any">
+            </div>
+
+            <div class="search-stack">
+                <input type="search" data-role="search-input" data-side="right" placeholder="Filter target units…" autocomplete="off">
+            </div>
+
+            <ul class="unit-list" data-role="unit-list" data-side="right"></ul>
+        </section>
+
+        <aside class="dual-info">
+            <div class="info-note" data-role="info-message"></div>
+
+            <div class="info-card">
+                <h3>Quantity</h3>
+                <div class="info-primary" data-role="info-quantity">—</div>
+            </div>
+
+            <div class="info-card info-compact">
+                <h3>Symbol</h3>
+                <div class="info-primary" data-role="info-symbol">—</div>
+            </div>
+
+            <div class="info-card info-compact">
+                <h3>Property Type</h3>
+                <div class="info-secondary" data-role="info-nature">—</div>
+            </div>
+
+            <div class="info-card">
+                <h3>Dimensions</h3>
+                <div class="info-primary" data-role="info-dimensions">—</div>
+            </div>
+
+            <div class="info-card">
+                <h3>SI base</h3>
+                <div class="info-primary" data-role="info-base">—</div>
+            </div>
+
+            <div class="info-card">
+                <h3>Units</h3>
+                <div class="info-secondary" data-role="info-units">—</div>
+            </div>
+
+            <div class="info-card" data-role="info-factor-card">
+                <h3>Multiplier</h3>
+                <div class="info-primary" data-role="info-factor-value">—</div>
+            </div>
+
+            <div class="info-card">
+                <h3>Comparables</h3>
+                <div class="comparison-grid" data-role="info-comparisons"></div>
+            </div>
+
+            <div class="info-note" data-role="info-updated"></div>
+        </aside>
     </div>
+    </main>
+
+    <script type="module">
+        import { initDualConverter } from "./shared/dual-core.js";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const container = document.querySelector("[data-dual]");
+            initDualConverter({ container });
+        });
+    </script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Callable, Dict
 
@@ -71,6 +72,9 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "yd": _linear_unit("yd", "yard", 0.9144),
         "mi": _linear_unit("mi", "statute mile", 1609.344),
         "nmi": _linear_unit("nmi", "nautical mile", 1852.0),
+        "au": _linear_unit("au", "astronomical unit", 149_597_870_700.0),
+        "ly": _linear_unit("ly", "light-year", 9.460_730_472_580_8e15),
+        "pc": _linear_unit("pc", "parsec", 3.085_677_581_491_3673e16),
     },
     "area": {
         "m^2": _linear_unit("m^2", "square metre", 1.0),
@@ -125,6 +129,8 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "psi": _linear_unit("psi", "pound per square inch", 6894.757293168),
         "psf": _linear_unit("psf", "pound per square foot", 47.88025898033584),
         "torr": _linear_unit("torr", "torr", 133.32236842105263),
+        "ksi": _linear_unit("ksi", "kilopound per square inch", 6.894757293168e6),
+        "Msi": _linear_unit("Msi", "megapound per square inch", 6.894757293168e9),
     },
     "energy": {
         "J": _linear_unit("J", "joule", 1.0),
@@ -134,6 +140,11 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "kWh": _linear_unit("kWh", "kilowatt-hour", 3.6e6),
         "BTU": _linear_unit("BTU", "British thermal unit (IT)", 1055.05585262),
         "ft·lbf": _linear_unit("ft·lbf", "foot-pound-force", 1.3558179483314004),
+        "eV": _linear_unit("eV", "electronvolt", 1.602176634e-19),
+        "keV": _linear_unit("keV", "kiloelectronvolt", 1.602176634e-16),
+        "MeV": _linear_unit("MeV", "megaelectronvolt", 1.602176634e-13),
+        "GeV": _linear_unit("GeV", "gigaelectronvolt", 1.602176634e-10),
+        "Cal": _linear_unit("Cal", "nutritional calorie", 4184.0),
     },
     "power": {
         "W": _linear_unit("W", "watt", 1.0),
@@ -141,6 +152,42 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "MW": _linear_unit("MW", "megawatt", 1e6),
         "hp_mech": _linear_unit("hp_mech", "horsepower (mechanical)", 745.6998715822702),
         "hp_metric": _linear_unit("hp_metric", "horsepower (metric)", 735.49875),
+    },
+    "current": {
+        "A": _linear_unit("A", "ampere", 1.0),
+        "kA": _linear_unit("kA", "kiloampere", 1e3),
+        "mA": _linear_unit("mA", "milliampere", 1e-3),
+        "µA": _linear_unit("µA", "microampere", 1e-6),
+        "nA": _linear_unit("nA", "nanoampere", 1e-9),
+    },
+    "voltage": {
+        "V": _linear_unit("V", "volt", 1.0),
+        "kV": _linear_unit("kV", "kilovolt", 1e3),
+        "MV": _linear_unit("MV", "megavolt", 1e6),
+        "mV": _linear_unit("mV", "millivolt", 1e-3),
+        "µV": _linear_unit("µV", "microvolt", 1e-6),
+    },
+    "capacitance": {
+        "F": _linear_unit("F", "farad", 1.0),
+        "mF": _linear_unit("mF", "millifarad", 1e-3),
+        "µF": _linear_unit("µF", "microfarad", 1e-6),
+        "nF": _linear_unit("nF", "nanofarad", 1e-9),
+        "pF": _linear_unit("pF", "picofarad", 1e-12),
+    },
+    "magnetic_flux_density": {
+        "T": _linear_unit("T", "tesla", 1.0),
+        "mT": _linear_unit("mT", "millitesla", 1e-3),
+        "µT": _linear_unit("µT", "microtesla", 1e-6),
+        "nT": _linear_unit("nT", "nanotesla", 1e-9),
+        "G": _linear_unit("G", "gauss", 1e-4),
+    },
+    "radiation_dose": {
+        "Sv": _linear_unit("Sv", "sievert", 1.0),
+        "mSv": _linear_unit("mSv", "millisievert", 1e-3),
+        "µSv": _linear_unit("µSv", "microsievert", 1e-6),
+        "rem": _linear_unit("rem", "roentgen equivalent man", 0.01),
+        "Gy": _linear_unit("Gy", "gray", 1.0),
+        "rad": _linear_unit("rad", "radiation absorbed dose", 0.01),
     },
     "density": {
         "kg/m^3": _linear_unit("kg/m^3", "kilogram per cubic metre", 1.0),
@@ -178,6 +225,39 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "rad": _linear_unit("rad", "radian", 1.0),
         "deg": _linear_unit("deg", "degree", 3.141592653589793 / 180.0),
         "grad": _linear_unit("grad", "gradian", 3.141592653589793 / 200.0),
+        "amin": _linear_unit("amin", "arcminute", 3.141592653589793 / (180.0 * 60.0)),
+        "asec": _linear_unit("asec", "arcsecond", 3.141592653589793 / (180.0 * 3600.0)),
+    },
+    "time": {
+        "s": _linear_unit("s", "second", 1.0),
+        "ms": _linear_unit("ms", "millisecond", 1e-3),
+        "µs": _linear_unit("µs", "microsecond", 1e-6),
+        "ns": _linear_unit("ns", "nanosecond", 1e-9),
+        "min": _linear_unit("min", "minute", 60.0),
+        "h": _linear_unit("h", "hour", 3600.0),
+        "d": _linear_unit("d", "day", 86400.0),
+        "wk": _linear_unit("wk", "week", 604800.0),
+        "yr": _linear_unit("yr", "year", 31_557_600.0),
+    },
+    "linear_stiffness": {
+        "N/m": _linear_unit("N/m", "newton per metre", 1.0),
+        "kN/m": _linear_unit("kN/m", "kilonewton per metre", 1e3),
+        "lbf/in": _linear_unit("lbf/in", "pound-force per inch", 175.126835),
+        "MN/m": _linear_unit("MN/m", "meganewton per metre", 1e6),
+    },
+    "rotational_stiffness": {
+        "N·m/rad": _linear_unit("N·m/rad", "newton metre per radian", 1.0),
+        "kN·m/rad": _linear_unit("kN·m/rad", "kilonewton metre per radian", 1e3),
+        "lbf·ft/deg": _linear_unit(
+            "lbf·ft/deg",
+            "pound-foot per degree",
+            1.3558179483314004 / (math.pi / 180.0),
+        ),
+        "kN·m/deg": _linear_unit(
+            "kN·m/deg",
+            "kilonewton metre per degree",
+            1e3 / (math.pi / 180.0),
+        ),
     },
 }
 

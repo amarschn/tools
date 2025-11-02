@@ -11,6 +11,14 @@ const BASE_UNITS = {
   density: "kg/m^3",
   temperature: "K",
   angle: "rad",
+  time: "s",
+  current: "A",
+  voltage: "V",
+  capacitance: "F",
+  magnetic_flux_density: "T",
+  radiation_dose: "Sv",
+  linear_stiffness: "N/m",
+  rotational_stiffness: "N·m/rad",
 };
 
 const QUANTITY_LABELS = {
@@ -26,7 +34,86 @@ const QUANTITY_LABELS = {
   density: "Density",
   temperature: "Temperature",
   angle: "Angle",
+  time: "Time",
+  current: "Current",
+  voltage: "Voltage",
+  capacitance: "Capacitance",
+  magnetic_flux_density: "Magnetic Flux Density",
+  radiation_dose: "Radiation Dose",
+  linear_stiffness: "Linear Stiffness",
+  rotational_stiffness: "Rotational Stiffness",
 };
+
+const DIMENSION_MAP = {
+  length: "L",
+  area: "L²",
+  volume: "L³",
+  mass: "M",
+  force: "M·L·T⁻²",
+  torque: "M·L²·T⁻²",
+  pressure: "M·L⁻¹·T⁻²",
+  energy: "M·L²·T⁻²",
+  power: "M·L²·T⁻³",
+  density: "M·L⁻³",
+  temperature: "Θ",
+  angle: "—",
+  time: "T",
+  current: "I",
+  voltage: "M·L²·T⁻³·I⁻¹",
+  capacitance: "M⁻¹·L⁻²·T⁴·I²",
+  magnetic_flux_density: "M·T⁻²·I⁻¹",
+  radiation_dose: "L²·T⁻²",
+  linear_stiffness: "M·T⁻²",
+  rotational_stiffness: "M·L²·T⁻²",
+};
+
+const QUANTITY_SYMBOLS = {
+  length: "L",
+  area: "A",
+  volume: "V",
+  mass: "m",
+  force: "F",
+  torque: "τ",
+  pressure: "p",
+  energy: "E",
+  power: "P",
+  density: "ρ",
+  temperature: "T",
+  angle: "θ",
+  time: "t",
+  current: "I",
+  voltage: "V",
+  capacitance: "C",
+  magnetic_flux_density: "B",
+  radiation_dose: "H",
+  linear_stiffness: "k",
+  rotational_stiffness: "k_θ",
+};
+
+const PROPERTY_NATURE = {
+  length: "Extensive",
+  area: "Extensive",
+  volume: "Extensive",
+  mass: "Extensive",
+  force: "Extensive",
+  torque: "Extensive",
+  pressure: "Intensive",
+  energy: "Extensive",
+  power: "Intensive",
+  density: "Intensive",
+  temperature: "Intensive",
+  angle: "Intensive",
+  time: "Extensive",
+  current: "Extensive",
+  voltage: "Intensive",
+  capacitance: "Extensive",
+  magnetic_flux_density: "Intensive",
+  radiation_dose: "Intensive",
+  linear_stiffness: "Extensive",
+  rotational_stiffness: "Extensive",
+};
+
+const ABSOLUTE_TEMPERATURE_UNITS = new Set(["K", "°R"]);
 
 const COMPARABLES = {
   length: [
@@ -36,6 +123,9 @@ const COMPARABLES = {
     { label: "City bus length", value: 12.0 },
     { label: "Marathon distance", value: 42195.0 },
     { label: "Geostationary orbit altitude", value: 35786000.0 },
+    { label: "Sun–Earth distance (1 au)", value: 149_597_870_700.0 },
+    { label: "One light-year", value: 9.460_730_472_580_8e15 },
+    { label: "Milky Way diameter", value: 9.5e20 },
   ],
   area: [
     { label: "Sheet of A4 paper", value: 0.06237 },
@@ -80,11 +170,12 @@ const COMPARABLES = {
     { label: "Deep ocean (Mariana Trench)", value: 1086000000.0 },
   ],
   energy: [
+    { label: "Visible photon (green)", value: 3.6e-19 },
+    { label: "1 electronvolt", value: 1.602176634e-19 },
     { label: "AAA battery", value: 5400.0 },
     { label: "Smartphone charge", value: 18000.0 },
-    { label: "1 kg TNT", value: 4184000.0 },
-    { label: "Home electricity (1 day)", value: 8640000.0 },
-    { label: "Lightning strike", value: 5000000000.0 },
+    { label: "1 kg TNT", value: 4.184e6 },
+    { label: "Lightning strike", value: 5e9 },
   ],
   power: [
     { label: "Human at rest", value: 100.0 },
@@ -116,42 +207,95 @@ const COMPARABLES = {
     { label: "180°", value: Math.PI },
     { label: "Full turn", value: 2 * Math.PI },
   ],
+  time: [
+    { label: "Rapid blink", value: 0.25 },
+    { label: "Heartbeat", value: 0.86 },
+    { label: "Breath", value: 4.0 },
+    { label: "Coffee brew", value: 240.0 },
+    { label: "Work shift", value: 8 * 3600.0 },
+    { label: "Gregorian year", value: 31_557_600.0 },
+  ],
+  current: [
+    { label: "Smartphone fast charge", value: 3.0 },
+    { label: "Household circuit (US 15 A)", value: 15.0 },
+    { label: "Electric vehicle DC fast charger", value: 250.0 },
+    { label: "Industrial welder", value: 500.0 },
+    { label: "Lightning leader", value: 30_000.0 },
+  ],
+  voltage: [
+    { label: "AA battery", value: 1.5 },
+    { label: "USB power delivery max", value: 48.0 },
+    { label: "Residential mains (US)", value: 120.0 },
+    { label: "Residential mains (EU)", value: 230.0 },
+    { label: "EV DC fast charge", value: 800.0 },
+    { label: "High-voltage transmission", value: 345_000.0 },
+  ],
+  capacitance: [
+    { label: "Ceramic decoupling capacitor", value: 1e-6 },
+    { label: "Electrolytic capacitor", value: 1e-3 },
+    { label: "Supercapacitor cell", value: 10.0 },
+    { label: "Camera flash capacitor", value: 1e-2 },
+    { label: "Grid storage module", value: 3000.0 },
+  ],
+  magnetic_flux_density: [
+    { label: "Earth surface", value: 50e-6 },
+    { label: "Fridge magnet", value: 5e-3 },
+    { label: "MRI scanner", value: 3.0 },
+    { label: "Particle accelerator dipole", value: 8.0 },
+    { label: "Neodymium magnet surface", value: 1.4 },
+  ],
+  radiation_dose: [
+    { label: "Banana equivalent", value: 0.0000001 },
+    { label: "Dental X-ray", value: 0.000005 },
+    { label: "Annual background (global avg)", value: 0.0024 },
+    { label: "Chest CT", value: 0.007 },
+    { label: "Occupational limit (year)", value: 0.05 },
+    { label: "Acute illness threshold", value: 1.0 },
+  ],
+  linear_stiffness: [
+    { label: "Microcantilever sensor", value: 0.1 },
+    { label: "Guitar string", value: 600.0 },
+    { label: "Office chair gas spring", value: 12_000.0 },
+    { label: "Passenger car suspension (per corner)", value: 30_000.0 },
+    { label: "Bridge stay cable", value: 200_000.0 },
+    { label: "Press brake tooling", value: 500_000.0 },
+  ],
+  rotational_stiffness: [
+    { label: "Precision tripod head", value: 5 * (180 / Math.PI) },
+    { label: "Door closer hinge", value: 50 * (180 / Math.PI) },
+    { label: "Steering column torsion bar", value: 1_000 * (180 / Math.PI) },
+    { label: "Wind turbine yaw joint", value: 25_000 * (180 / Math.PI) },
+    { label: "Large bearing mount", value: 100_000 * (180 / Math.PI) },
+  ],
 };
 
-const DEFAULT_COMPARABLE_LIMIT = 6;
+const DEFAULT_COMPARABLE_LIMIT = 8;
 
-function formatNumber(value) {
+function formatNumber(value, precision = 6) {
   const num = Number(value);
   if (!Number.isFinite(num)) return "—";
-  const abs = Math.abs(num);
-  if ((abs >= 1000 || abs < 1e-3) && abs !== 0) {
-    return num.toExponential(5).replace(/(\.0+)?e/, "e");
+  if (num === 0) return "0";
+  const stringValue = Number(num.toPrecision(precision)).toString();
+  if (/e/.test(stringValue)) {
+    return num.toExponential(precision - 1);
   }
-  return Number.parseFloat(num.toFixed(6)).toString();
+  return stringValue;
 }
 
 function formatForInput(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
-  const abs = Math.abs(num);
-  if ((abs >= 1e7 || abs !== 0 && abs < 1e-4)) {
-    return num.toExponential(8);
-  }
-  let asString = num.toPrecision(12);
-  if (asString.indexOf("e") === -1) {
-    asString = asString.replace(/(\.\d*?[1-9])0+$/g, "$1").replace(/\.0+$/, "");
-  }
-  return asString;
+  return num.toString();
 }
 
-function ratioDescription(ratio) {
+function ratioDescription(ratio, precision = 2) {
   if (!Number.isFinite(ratio) || ratio === 0) return "—";
   const abs = Math.abs(ratio);
   if (abs === 1) return "Roughly the same magnitude";
   if (abs > 1) {
-    return `${abs.toFixed(2)}× your value`;
+    return `${formatNumber(abs, precision)}× your value`;
   }
-  return `${(1 / abs).toFixed(2)}× smaller than your value`;
+  return `${formatNumber(1 / abs, precision)}× smaller than your value`;
 }
 
 function titleCase(text) {
@@ -183,12 +327,16 @@ export function initDualConverter({
     infoFactorCard: container.querySelector("[data-role='info-factor-card']"),
     infoFactorValue: container.querySelector("[data-role='info-factor-value']"),
     infoMessage: container.querySelector("[data-role='info-message']"),
+    infoDimensions: container.querySelector("[data-role='info-dimensions']"),
+    infoSymbol: container.querySelector("[data-role='info-symbol']"),
+    infoNature: container.querySelector("[data-role='info-nature']"),
     comparisons: container.querySelector("[data-role='info-comparisons']"),
     infoUpdated: container.querySelector("[data-role='info-updated']"),
   };
 
+  const optionalRefs = new Set(["infoDimensions", "infoSymbol", "infoNature"]);
   const missingRef = Object.entries(refs)
-    .filter(([, node]) => !node)
+    .filter(([key, node]) => !node && !optionalRefs.has(key))
     .map(([key]) => key);
 
   if (missingRef.length > 0) {
@@ -210,11 +358,24 @@ export function initDualConverter({
     },
     catalog: {},
     lastResult: null,
+    precision: 6,
+    raw: {
+      left: "1",
+      right: "1",
+    },
   };
 
   let pyodideInstance;
   let unitsModule;
   let syncing = false;
+
+  function isIncompleteRaw(value) {
+    if (value === null || value === undefined) return false;
+    const raw = String(value);
+    if (raw === "" || raw === "-" || raw === "." || raw === "-.") return true;
+    if (/^-?\d*\.$/.test(raw)) return true;
+    return false;
+  }
 
   function buildCandidatePaths(target) {
     const candidates = new Set();
@@ -277,6 +438,8 @@ export function initDualConverter({
     state.activeSide = "left";
     refs.leftInput.value = formatForInput(state.leftValue);
     refs.rightInput.value = formatForInput(state.rightValue);
+    state.raw.left = refs.leftInput.value;
+    state.raw.right = refs.rightInput.value;
   }
 
   function renderQuantityChips() {
@@ -306,10 +469,15 @@ export function initDualConverter({
     const button = document.createElement("button");
     button.type = "button";
     button.className = "unit-chip" + (isActive ? " is-active" : "");
-    button.innerHTML = `
-      <span class="unit-symbol">${symbol}</span>
-      <span class="unit-description">${description}</span>
-    `;
+    const trimmedSymbol = symbol.trim();
+    const trimmedDescription = (description || "").trim();
+    const descIsDuplicate =
+      !trimmedDescription ||
+      trimmedDescription.toLowerCase() === trimmedSymbol.toLowerCase();
+
+    button.innerHTML = descIsDuplicate
+      ? `<span class="unit-symbol">${trimmedSymbol}</span>`
+      : `<span class="unit-symbol">${trimmedSymbol}</span><span class="unit-description">— ${trimmedDescription}</span>`;
     button.addEventListener("click", () => onSelect(symbol));
     li.appendChild(button);
     return li;
@@ -384,18 +552,17 @@ export function initDualConverter({
 
       const comparison = document.createElement("div");
       comparison.className = "comparison-card";
-      const ratioSource =
-        activeSide === "left"
-          ? leftConverted / leftValue
-          : rightConverted / rightValue;
+      const ratioSource = activeSide === "left"
+        ? (leftValue === 0 ? Number.NaN : leftConverted / leftValue)
+        : (rightValue === 0 ? Number.NaN : rightConverted / rightValue);
 
       comparison.innerHTML = `
         <div class="comparison-label">${item.label}</div>
         <div class="comparison-values">
-          <span>${Number.isFinite(rightConverted) ? formatNumber(rightConverted) : "—"} ${rightUnit || ""}</span>
-          <span class="comparison-secondary">${Number.isFinite(leftConverted) ? formatNumber(leftConverted) : "—"} ${leftUnit || ""}</span>
+          <span>${Number.isFinite(rightConverted) ? formatNumber(rightConverted, state.precision) : "—"} ${rightUnit || ""}</span>
+          <span class="comparison-secondary">${Number.isFinite(leftConverted) ? formatNumber(leftConverted, state.precision) : "—"} ${leftUnit || ""}</span>
         </div>
-        <div class="comparison-ratio">${ratioDescription(ratioSource)}</div>
+        <div class="comparison-ratio">${ratioDescription(ratioSource, 3)}</div>
       `;
       list.appendChild(comparison);
     });
@@ -405,9 +572,18 @@ export function initDualConverter({
     if (refs.infoQuantity) {
       refs.infoQuantity.textContent = titleCase(state.quantity);
     }
+    if (refs.infoDimensions) {
+      refs.infoDimensions.textContent = DIMENSION_MAP[state.quantity] || "—";
+    }
+    if (refs.infoSymbol) {
+      refs.infoSymbol.textContent = QUANTITY_SYMBOLS[state.quantity] || "—";
+    }
+    if (refs.infoNature) {
+      refs.infoNature.textContent = PROPERTY_NATURE[state.quantity] || "—";
+    }
     if (refs.infoBase) {
       const baseUnit = BASE_UNITS[state.quantity] || "SI";
-      refs.infoBase.textContent = `${formatNumber(result.base_value)} ${baseUnit}`;
+      refs.infoBase.textContent = `${formatNumber(result.base_value, state.precision)} ${baseUnit}`;
     }
     if (refs.infoUnits) {
       refs.infoUnits.textContent = `${state.leftUnit || "—"} ↔ ${state.rightUnit || "—"}`;
@@ -415,7 +591,7 @@ export function initDualConverter({
     if (refs.infoFactorCard && refs.infoFactorValue) {
       if (result.has_multiplier_only) {
         refs.infoFactorCard.style.display = "";
-        refs.infoFactorValue.textContent = formatNumber(result.multiplier);
+        refs.infoFactorValue.textContent = formatNumber(result.multiplier, state.precision);
       } else {
         refs.infoFactorCard.style.display = "none";
       }
@@ -451,12 +627,14 @@ export function initDualConverter({
       syncing = true;
       if (sourceSide === "left") {
         state.rightValue = Number(result.converted_value);
-        refs.rightInput.value = formatForInput(state.rightValue);
-        refs.leftInput.value = formatForInput(fromValue);
+        const formatted = formatForInput(state.rightValue);
+        refs.rightInput.value = formatted;
+        state.raw.right = formatted;
       } else {
         state.leftValue = Number(result.converted_value);
-        refs.leftInput.value = formatForInput(state.leftValue);
-        refs.rightInput.value = formatForInput(fromValue);
+        const formatted = formatForInput(state.leftValue);
+        refs.leftInput.value = formatted;
+        state.raw.left = formatted;
       }
       syncing = false;
 
@@ -472,8 +650,23 @@ export function initDualConverter({
 
   function handleValueInput(side, rawValue) {
     if (syncing) return;
-    const numeric = Number(rawValue);
+    const raw = String(rawValue ?? "");
+    state.raw[side] = raw;
+    if (isIncompleteRaw(raw)) {
+      setMessage("info", "");
+      return;
+    }
+    const numeric = Number(raw);
     if (!Number.isFinite(numeric)) return;
+    const unit = side === "left" ? state.leftUnit : state.rightUnit;
+    if (
+      state.quantity === "temperature" &&
+      ABSOLUTE_TEMPERATURE_UNITS.has(unit || "") &&
+      numeric < 0
+    ) {
+      setMessage("error", "Absolute temperature units cannot be negative.");
+      return;
+    }
     if (side === "left") {
       state.leftValue = numeric;
     } else {
@@ -493,7 +686,6 @@ export function initDualConverter({
       const utilsCandidates = buildCandidatePaths("pycalcs/utils.py");
 
       await pyodideInstance.runPythonAsync(`
-import json
 from pyodide.http import pyfetch
 
 async def fetch_to_file(paths, destination):
