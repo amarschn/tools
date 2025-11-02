@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Projectile Trajectory Planner - Engineering Tools</title>
 
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                packages: {'[+]': ['ams']}
+            },
+            chtml: {
+                linebreaks: { automatic: true, width: 'container' }
+            },
+            svg: {
+                linebreaks: { automatic: true, width: 'container' }
+            }
+        };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -59,8 +74,8 @@
         .purpose-content ul { margin-left: 1.1rem; margin-bottom: 0.85rem; }
 
         .tool-inputs form { display: flex; flex-direction: column; gap: 12px; }
-        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px 16px; }
-        .input-group { position: relative; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px 22px; }
+        .input-group { position: relative; padding-right: 28px; }
         .input-group label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.88rem; }
         .input-group input[type="number"] {
             width: 100%; padding: 11px 12px; border: 1px solid var(--border-color); border-radius: 9px;
@@ -73,7 +88,7 @@
             display: inline-flex; justify-content: center; align-items: center;
             width: 18px; height: 18px; border-radius: 50%; background: var(--primary-light);
             color: var(--secondary-color); font-size: 11px; font-weight: 700; cursor: help;
-            position: absolute; right: -24px; top: 32px;
+            position: absolute; right: 4px; top: 36px;
         }
         .tooltip-trigger::after {
             content: attr(data-tooltip); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
@@ -126,16 +141,26 @@
             background: rgba(237, 242, 247, 0.8);
             border: 1px solid var(--border-color);
             border-radius: 10px;
-            padding: 12px 16px;
+            padding: 14px 18px;
         }
         .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
-        .equation-expression { display: block; margin-bottom: 8px; }
-        .equation-card ul {
-            list-style: none; padding-left: 0; margin: 0;
-            display: grid; gap: 6px 18px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            font-size: 0.85rem; color: var(--secondary-color);
+        .equation-expression {
+            display: block;
+            margin-bottom: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
         }
-        .equation-card .math-inline { font-weight: 600; color: var(--accent-color); }
+        .variable-legend {
+            list-style: none;
+            padding-left: 0;
+            margin: 10px 0 0;
+            display: grid;
+            gap: 6px 18px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+        .variable-legend .math-inline { font-weight: 600; color: var(--accent-color); }
 
         .viz-wrapper { display: grid; gap: 18px; }
         .viz-canvas {
@@ -155,7 +180,7 @@
 
         @media (max-width: 980px) {
             .tool-layout { grid-template-columns: 1fr; }
-            .tooltip-trigger { right: 0; top: 34px; }
+            .tooltip-trigger { right: 4px; top: 40px; }
             .card { padding: 18px; }
         }
     </style>
@@ -255,6 +280,7 @@
         let pyodideInstance, pyUtils, pyToolModule;
         let toolDocumentation = { parameters: {}, returns: {}, latex: '', variables: '', references: '' };
         let latestResults = null;
+        let equationBlocks = [];
 
         function normaliseMap(value) {
             if (value instanceof Map) {
@@ -380,25 +406,37 @@
                     tooltip.setAttribute('data-tooltip', definition || 'Parameter description unavailable.');
                 }
             });
-
-            const latexLines = toolDocumentation.latex
-                ? toolDocumentation.latex.split('\\n').map(line => line.trim()).filter(Boolean)
-                : [];
-            const variableList = (toolDocumentation.variables || '')
+            equationBlocks = [];
+            let latexLines = [];
+            if (toolDocumentation.latex) {
+            const cleanedLatex = toolDocumentation.latex.replace(/\\r/g, '');
+            const alignedBlocks = cleanedLatex.match(/\\begin\{aligned\}[\\s\\S]*?\\end\{aligned\}/g);
+            if (alignedBlocks && alignedBlocks.length) {
+                latexLines = alignedBlocks.map(block => block.trim());
+            } else {
+                latexLines = cleanedLatex
+                    .split(/\\n{2,}/)
+                    .map(block => block.trim())
+                    .filter(Boolean);
+            }
+            equationBlocks = latexLines;
+            }
+            const variableItems = (toolDocumentation.variables || '')
                 .split('\\n')
                 .map(line => line.trim())
                 .filter(line => line.includes(':'))
                 .map(line => {
                     const [symbol, detail] = line.split(':', 2);
                     return `<li><span class="math-inline">\\(${symbol.trim()}\\)</span>: ${detail.trim()}</li>`;
-                })
-                .join('');
+                });
+            const variablesHtml = variableItems.length
+                ? `<ul class="variable-legend">${variableItems.join('')}</ul>`
+                : '<p>No variable definitions supplied.</p>';
 
             const equationCards = latexLines.map((expr, index) => `
                 <div class="equation-card">
                     <strong>Equation (${index + 1})</strong>
                     <span class="equation-expression">\\[ ${expr} \\]</span>
-                    <ul>${variableList}</ul>
                 </div>
             `).join('');
 
@@ -409,6 +447,8 @@
                 <div class="equation-container">
                     ${equationCards || '<p>No equations supplied.</p>'}
                 </div>
+                <h4>Variable Legend</h4>
+                ${variablesHtml}
                 <h4>References</h4>
                 <p>${(toolDocumentation.references || 'No references supplied.').replace(/\\n/g, '<br>')}</p>
             `;
@@ -462,9 +502,6 @@
             const returnsMeta = toolDocumentation.returns || {};
 
             resultCases.forEach(({ angleDeg, data }) => {
-                const latexLines = toolDocumentation.latex
-                    ? toolDocumentation.latex.split('\\n').map(line => line.trim()).filter(Boolean)
-                    : [];
                 let equationIndex = 0;
 
                 const rows = Object.entries(returnsMeta).map(([key, definition]) => {
@@ -477,8 +514,8 @@
                     const formattedValue = formatValue(rawValue);
                     const substitution = data[`subst_${key}`];
                     let equation = '';
-                    if (equationIndex < latexLines.length) {
-                        equation = latexLines[equationIndex];
+                    if (equationIndex < equationBlocks.length) {
+                        equation = equationBlocks[equationIndex];
                     }
                     equationIndex += 1;
                     return buildResultRow(
