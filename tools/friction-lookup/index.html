@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coefficient of Friction Lookup</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --bg: #fefefe;
+            --surface: #ffffff;
+            --border: #e6e8ef;
+            --muted: #7c8497;
+            --text: #1f2430;
+            --accent: #0d9488;
+            --accent-soft: rgba(13, 148, 136, 0.1);
+            --shadow: 0 18px 45px rgba(31, 37, 45, 0.08);
+            --radius-lg: 28px;
+            --radius-md: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(145deg, #f5f7fb 0%, #fdfefe 50%, #f2f5f7 100%);
+            font-family: "Inter", system-ui, sans-serif;
+            color: var(--text);
+        }
+
+        header.navbar {
+            background-color: var(--surface);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 8px 24px rgba(37, 50, 71, 0.08);
+        }
+
+        .nav-container {
+            width: min(1240px, 100%);
+            margin: 0 auto;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-brand {
+            color: var(--accent);
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 1rem;
+        }
+
+        .nav-brand:hover {
+            text-decoration: underline;
+        }
+
+        main.container {
+            width: min(1240px, 100%);
+            margin: 0 auto;
+            padding: 32px 18px 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .page-header {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            text-align: left;
+        }
+
+        .page-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .page-header p {
+            color: var(--muted);
+            font-size: 0.96rem;
+            max-width: 68ch;
+            line-height: 1.5;
+        }
+
+        .dual-shell {
+            width: min(1240px, 100%);
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-columns: 1fr 1.1fr 0.9fr;
+            overflow: hidden;
+        }
+
+        .dual-panel {
+            padding: 32px 30px 34px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .dual-panel:last-of-type {
+            border-right: none;
+        }
+
+        .dual-panel-header h1 {
+            font-size: 1.72rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .dual-panel-header p {
+            color: var(--muted);
+            font-size: 0.94rem;
+            line-height: 1.5;
+        }
+
+        .search-stack input[type="search"] {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #f9fafb;
+            color: var(--text);
+        }
+
+        .search-stack input[type="search"]:focus {
+            outline: none;
+            border-color: rgba(13, 148, 136, 0.45);
+            box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+        }
+
+        .unit-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .unit-chip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            background: #f7f8fb;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text);
+            transition: all 0.14s ease;
+        }
+
+        .unit-chip:hover {
+            border-color: rgba(13, 148, 136, 0.25);
+        }
+
+        .unit-chip.is-active {
+            background: rgba(13, 148, 136, 0.12);
+            border-color: rgba(13, 148, 136, 0.45);
+            color: var(--accent);
+        }
+
+        .unit-symbol {
+            display: block;
+        }
+
+        .unit-description {
+            font-weight: 500;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        .quantity-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .quantity-chip {
+            padding: 9px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #fafbfc;
+            font-size: 0.83rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.16s ease;
+        }
+
+        .quantity-chip:hover {
+            border-color: rgba(13, 148, 136, 0.35);
+            color: var(--accent);
+        }
+
+        .quantity-chip.is-active {
+            background: var(--accent-soft);
+            border-color: rgba(13, 148, 136, 0.5);
+            color: var(--accent);
+        }
+
+        .section-label {
+            font-size: 0.88rem;
+            color: var(--muted);
+            margin-bottom: 10px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .result-badges {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .result-card {
+            background: #f7f9ff;
+            border: 1px solid rgba(13, 148, 136, 0.18);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .result-card h3 {
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(13, 148, 136, 0.8);
+        }
+
+        .result-primary {
+            font-size: 1.65rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .result-secondary {
+            font-size: 0.88rem;
+            color: var(--muted);
+        }
+
+        .dual-info {
+            padding: 34px 28px 36px;
+            background: #fafbfc;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .info-note {
+            font-size: 0.85rem;
+            color: rgba(15, 118, 110, 0.85);
+            display: none;
+        }
+
+        .info-note[data-state="error"] {
+            color: #dc2626;
+        }
+
+        .info-card {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            padding: 16px 18px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+        }
+
+        .info-card h3 {
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .info-primary {
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+
+        .info-secondary {
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .info-list {
+            list-style: disc;
+            margin-left: 18px;
+            margin-top: 8px;
+            color: var(--muted);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .equation-line {
+            text-align: center;
+            padding: 6px 0;
+        }
+
+        @media (max-width: 1080px) {
+            .dual-shell {
+                grid-template-columns: 1fr;
+            }
+            .dual-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .dual-info {
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="/index.html" target="_top" class="nav-brand">← Engineering Tools</a>
+            <span>Coefficient of Friction Lookup</span>
+        </nav>
+    </header>
+
+    <main class="container">
+        <header class="page-header">
+            <h1>Friction Reference</h1>
+            <p id="tool-description" data-role="doc-description">
+                Load the handbook data to explore representative static and kinetic coefficients of friction between engineering surfaces.
+            </p>
+        </header>
+
+        <div class="dual-shell" data-friction>
+            <section class="dual-panel" data-side="left">
+                <div class="dual-panel-header">
+                    <h1>Choose Surface A</h1>
+                    <p>Select the primary material or surface finish you want to evaluate.</p>
+                </div>
+
+                <div class="search-stack">
+                    <input type="search" data-role="material-search" placeholder="Filter materials…" autocomplete="off">
+                </div>
+
+                <ul class="unit-list" data-role="material-list"></ul>
+            </section>
+
+            <section class="dual-panel" data-side="middle">
+                <div class="dual-panel-header">
+                    <h1>Pair &amp; Condition</h1>
+                    <p>Pick the mating surface and operating condition to populate the friction envelope.</p>
+                </div>
+
+                <div>
+                    <h3 class="section-label">Compatible Surfaces</h3>
+                    <ul class="unit-list" data-role="pair-list"></ul>
+                </div>
+
+                <div>
+                    <h3 class="section-label">Surface Condition</h3>
+                    <div class="quantity-chip-row" data-role="condition-row"></div>
+                </div>
+
+                <div class="result-badges">
+                    <article class="result-card">
+                        <h3>Static μ</h3>
+                        <div class="result-primary" data-role="result-static-typical">—</div>
+                        <div class="result-secondary" data-role="result-static-range">Static range —</div>
+                    </article>
+                    <article class="result-card">
+                        <h3>Kinetic μ</h3>
+                        <div class="result-primary" data-role="result-kinetic-typical">—</div>
+                        <div class="result-secondary" data-role="result-kinetic-range">Kinetic range —</div>
+                    </article>
+                </div>
+            </section>
+
+            <aside class="dual-info">
+                <div class="info-note" data-role="info-message"></div>
+
+                <div class="info-card">
+                    <h3>Selected Pair</h3>
+                    <div class="info-primary" data-role="info-pair-label">No pairing selected</div>
+                    <div class="info-secondary" data-role="info-condition"></div>
+                </div>
+
+                <div class="info-card">
+                    <h3>Notes</h3>
+                    <p class="info-secondary" data-role="info-notes">Choose a material combination to view assumptions and caveats.</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>Typical Applications</h3>
+                    <ul class="info-list" data-role="info-applications"></ul>
+                </div>
+
+                <div class="info-card">
+                    <h3>Comparable Pairings</h3>
+                    <ul class="info-list" data-role="info-comparables"></ul>
+                </div>
+
+                <div class="info-card">
+                    <h3>Reference</h3>
+                    <p class="info-secondary" data-role="info-reference">—</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>Equations</h3>
+                    <div data-role="doc-equations"></div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initFrictionLookup } from "./shared/friction-core.js";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const container = document.querySelector("[data-friction]");
+            initFrictionLookup({ container });
+        });
+    </script>
+</body>
+</html>

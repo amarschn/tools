@@ -66,38 +66,25 @@ def plan_projectile_trajectory(
         Magnitude of the impact flight-path angle measured below the horizontal (deg).
 
     ---LaTeX---
-    \\begin{aligned}
-    v_{x0} &= v_0 \\cos(\\theta)
-    \\end{aligned}
-    \\begin{aligned}
-    v_{y0} &= v_0 \\sin(\\theta)
-    \\end{aligned}
-    \\begin{aligned}
-    t_{\\text{peak}} &= \\frac{v_{y0}}{g}
-    \\end{aligned}
-    \\begin{aligned}
-    y_{\\text{peak}} &= y_0 + v_{y0} t_{\\text{peak}} \\\\
-                     &\\quad - \\tfrac{1}{2} g t_{\\text{peak}}^2
-    \\end{aligned}
-    \\begin{aligned}
-    x_{\\text{peak}} &= v_{x0} t_{\\text{peak}}
-    \\end{aligned}
-    \\begin{aligned}
-    t_{\\text{flight}} &= \\frac{v_{y0}}{g} \\\\
-                       &\\quad + \\frac{\\sqrt{v_{y0}^2 + 2 g y_0}}{g}
-    \\end{aligned}
-    \\begin{aligned}
-    x_{\\text{range}} &= v_{x0} t_{\\text{flight}}
-    \\end{aligned}
-    \\begin{aligned}
-    v_{y,\\text{impact}} &= v_{y0} - g t_{\\text{flight}}
-    \\end{aligned}
-    \\begin{aligned}
-    v_{\\text{impact}} &= \\sqrt{v_{x0}^2 + v_{y,\\text{impact}}^2}
-    \\end{aligned}
-    \\begin{aligned}
-    \\gamma_{\\text{impact}} &= \\tan^{-1}\\left( \\frac{|v_{y,\\text{impact}}|}{v_{x0}} \\right )
-    \\end{aligned}
+    v_{x0} = v_0 \\cos(\\theta)
+
+    v_{y0} = v_0 \\sin(\\theta)
+
+    t_{\\text{peak}} = \\frac{v_{y0}}{g}
+
+    y_{\\text{peak}} = y_0 + v_{y0} t_{\\text{peak}} - \\tfrac{1}{2} g t_{\\text{peak}}^2
+
+    x_{\\text{peak}} = v_{x0} t_{\\text{peak}}
+
+    t_{\\text{flight}} = \\frac{v_{y0}}{g} + \\frac{\\sqrt{v_{y0}^2 + 2 g y_0}}{g}
+
+    x_{\\text{range}} = v_{x0} t_{\\text{flight}}
+
+    v_{y,\\text{impact}} = v_{y0} - g t_{\\text{flight}}
+
+    v_{\\text{impact}} = \\sqrt{v_{x0}^2 + v_{y,\\text{impact}}^2}
+
+    \\gamma_{\\text{impact}} = \\arctan\\!\\left( \\frac{|v_{y,\\text{impact}}|}{v_{x0}} \\right)
 
     ---Variables---
     v_0: launch speed magnitude (m/s)
@@ -224,7 +211,7 @@ def plan_projectile_trajectory(
             f"}} = {impact_speed:.3f}"
         ),
         "subst_impact_angle_deg": (
-            "\\gamma_{\\text{impact}} = \\tan^{-1}"
+            "\\gamma_{\\text{impact}} = \\arctan"
             f"\\left(\\frac{{{abs(impact_vertical_velocity):.3f}}}{{{vx0:.3f}}}\\right)"
             f" = {impact_angle_deg:.3f}^\\circ"
         ),

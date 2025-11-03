@@ -11,12 +11,6 @@
                 inlineMath: [['$', '$'], ['\\(', '\\)']],
                 displayMath: [['$$', '$$'], ['\\[', '\\]']],
                 packages: {'[+]': ['ams']}
-            },
-            chtml: {
-                linebreaks: { automatic: true, width: 'container' }
-            },
-            svg: {
-                linebreaks: { automatic: true, width: 'container' }
             }
         };
     </script>
@@ -161,6 +155,39 @@
             color: var(--secondary-color);
         }
         .variable-legend .math-inline { font-weight: 600; color: var(--accent-color); }
+        .study-questions { margin-top: 1.5rem; }
+        .question-list { display: grid; gap: 12px; margin-top: 0.75rem; }
+        .question-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+            background: rgba(237, 242, 247, 0.65);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        }
+        .question-card summary {
+            list-style: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--secondary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .question-card summary::-webkit-details-marker { display: none; }
+        .question-card summary::after {
+            content: 'Show';
+            margin-left: auto;
+            font-size: 0.85rem;
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+        .question-card[open] summary::after { content: 'Hide'; }
+        .question-card p {
+            margin-top: 10px;
+            color: var(--secondary-color);
+            font-size: 0.94rem;
+            line-height: 1.55;
+        }
 
         .viz-wrapper { display: grid; gap: 18px; }
         .viz-canvas {
@@ -261,9 +288,33 @@
 
                 <div id="background" class="tab-content">
                     <h3>Underlying Principles</h3>
-                    <div id="background-content">
-                        <p>Equations and references will load after the docstring is parsed.</p>
+                    <div id="background-description">
+                        <p>Core assumptions, equations, and guiding questions will appear once the Python docstring loads.</p>
                     </div>
+                    <section class="study-questions">
+                        <h4>Guiding Questions</h4>
+                        <div id="background-questions" class="question-list">
+                            <p>Guiding questions will load alongside the documentation.</p>
+                        </div>
+                    </section>
+                    <section>
+                        <h4>Equations</h4>
+                        <div id="equation-container" class="equation-container">
+                            <p>No equations available yet.</p>
+                        </div>
+                    </section>
+                    <section>
+                        <h4>Variable Legend</h4>
+                        <div id="variable-legend">
+                            <p>Variable definitions will appear here.</p>
+                        </div>
+                    </section>
+                    <section>
+                        <h4>References</h4>
+                        <div id="references-list">
+                            <p>No references supplied.</p>
+                        </div>
+                    </section>
                 </div>
             </section>
         </div>
@@ -281,6 +332,20 @@
         let toolDocumentation = { parameters: {}, returns: {}, latex: '', variables: '', references: '' };
         let latestResults = null;
         let equationBlocks = [];
+        const guidingQuestions = [
+            {
+                prompt: 'How does launch angle shift the balance between peak altitude and downrange distance?',
+                answer: 'Equations (1) and (2) show that the launch angle redistributes the initial velocity between horizontal and vertical components. As theta increases, \\(v_{y0}\\) grows while \\(v_{x0}\\) shrinks, so high angles boost the apex height in Equation (4) but reduce the range in Equation (7).'
+            },
+            {
+                prompt: 'What changes when the projectile starts from an elevated platform?',
+                answer: 'Launching from height adds the \\(y_0\\) term inside the square root of the time-of-flight expression in Equation (6). A positive \\(y_0\\) lengthens the total air time, which in turn increases the peak range and horizontal range reported in Equations (5) and (7).'
+            },
+            {
+                prompt: 'Why does the tool allow the gravity input to vary?',
+                answer: 'Gravity scales every time term in Equations (3) and (6) and appears in the impact relations (8-10). Lower gravity environments produce longer flights and smaller impact speeds, so exposing \\(g\\) lets you explore trajectories on the Moon or Mars with the same formulas.'
+            }
+        ];
 
         function normaliseMap(value) {
             if (value instanceof Map) {
@@ -356,15 +421,16 @@
             await pyodideInstance.loadPackage('micropip');
 
             button.textContent = 'Preparing Python...';
+            const cacheBuster = `?v=${Date.now()}`;
             await pyodideInstance.runPythonAsync(`
                 import micropip
                 from pyodide.http import pyfetch
 
-                response_utils = await pyfetch('../../pycalcs/utils.py')
+                response_utils = await pyfetch('../../pycalcs/utils.py${cacheBuster}')
                 with open('utils.py', 'w') as f:
                     f.write(await response_utils.string())
 
-                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py${cacheBuster}')
                 with open('${TOOL_MODULE_NAME}.py', 'w') as f:
                     f.write(await response_tool.string())
 
@@ -421,37 +487,89 @@
             }
             equationBlocks = latexLines;
             }
-            const variableItems = (toolDocumentation.variables || '')
-                .split('\\n')
-                .map(line => line.trim())
-                .filter(line => line.includes(':'))
-                .map(line => {
-                    const [symbol, detail] = line.split(':', 2);
-                    return `<li><span class="math-inline">\\(${symbol.trim()}\\)</span>: ${detail.trim()}</li>`;
-                });
-            const variablesHtml = variableItems.length
-                ? `<ul class="variable-legend">${variableItems.join('')}</ul>`
-                : '<p>No variable definitions supplied.</p>';
+            const descriptionContainer = document.getElementById('background-description');
+            if (descriptionContainer) {
+                const description = toolDocumentation.description || '';
+                const paragraphs = description
+                    .split(/\\n{2,}/)
+                    .map(block => `<p>${block.replace(/\\n/g, '<br>')}</p>`)
+                    .join('');
+                descriptionContainer.innerHTML = paragraphs || '<p>No description supplied.</p>';
+            }
 
-            const equationCards = latexLines.map((expr, index) => `
-                <div class="equation-card">
-                    <strong>Equation (${index + 1})</strong>
-                    <span class="equation-expression">\\[ ${expr} \\]</span>
-                </div>
-            `).join('');
+            const equationContainer = document.getElementById('equation-container');
+            if (equationContainer) {
+                equationContainer.innerHTML = '';
+                if (!latexLines.length) {
+                    const message = document.createElement('p');
+                    message.textContent = 'No equations supplied.';
+                    equationContainer.appendChild(message);
+                } else {
+                    latexLines.forEach((expr, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'equation-card';
 
-            const background = document.getElementById('background-content');
-            background.innerHTML = `
-                <p>${(toolDocumentation.description || '').replace(/\\n/g, '<br>')}</p>
-                <h4>Equations</h4>
-                <div class="equation-container">
-                    ${equationCards || '<p>No equations supplied.</p>'}
-                </div>
-                <h4>Variable Legend</h4>
-                ${variablesHtml}
-                <h4>References</h4>
-                <p>${(toolDocumentation.references || 'No references supplied.').replace(/\\n/g, '<br>')}</p>
-            `;
+                        const label = document.createElement('strong');
+                        label.textContent = `Equation (${index + 1})`;
+                        card.appendChild(label);
+
+                        const expression = document.createElement('span');
+                        expression.className = 'equation-expression';
+                        expression.textContent = `\\[ ${expr} \\]`;
+                        card.appendChild(expression);
+
+                        equationContainer.appendChild(card);
+                    });
+                }
+            }
+
+            const legendContainer = document.getElementById('variable-legend');
+            if (legendContainer) {
+                legendContainer.innerHTML = '';
+                const variableLines = (toolDocumentation.variables || '')
+                    .split('\\n')
+                    .map(line => line.trim())
+                    .filter(line => line.includes(':'));
+                if (!variableLines.length) {
+                    const message = document.createElement('p');
+                    message.textContent = 'No variable definitions supplied.';
+                    legendContainer.appendChild(message);
+                } else {
+                    const list = document.createElement('ul');
+                    list.className = 'variable-legend';
+                    variableLines.forEach(line => {
+                        const [symbolRaw, detailRaw] = line.split(':', 2);
+                        const symbol = symbolRaw.trim();
+                        const detail = (detailRaw || '').trim();
+
+                        const item = document.createElement('li');
+
+                        const symSpan = document.createElement('span');
+                        symSpan.className = 'math-inline';
+                        symSpan.textContent = `\\(${symbol}\\)`;
+                        item.appendChild(symSpan);
+
+                        const descText = document.createTextNode(`: ${detail}`);
+                        item.appendChild(descText);
+
+                        list.appendChild(item);
+                    });
+                    legendContainer.appendChild(list);
+                }
+            }
+
+            const referencesContainer = document.getElementById('references-list');
+            if (referencesContainer) {
+                const referenceLines = (toolDocumentation.references || '')
+                    .split('\\n')
+                    .map(line => line.trim())
+                    .filter(Boolean);
+                referencesContainer.innerHTML = referenceLines.length
+                    ? `<ul>${referenceLines.map(item => `<li>${item}</li>`).join('')}</ul>`
+                    : '<p>No references supplied.</p>';
+            }
+
+            renderGuidingQuestions();
             typesetMath();
         }
 
@@ -683,6 +801,23 @@
             };
 
             Plotly.newPlot('trajectory-plot', traces, layout, { displaylogo: false, responsive: true });
+        }
+
+        function renderGuidingQuestions() {
+            const container = document.getElementById('background-questions');
+            if (!container) {
+                return;
+            }
+            if (!guidingQuestions.length) {
+                container.innerHTML = '<p>No guiding questions available yet.</p>';
+                return;
+            }
+            container.innerHTML = guidingQuestions.map(({ prompt, answer }) => `
+                <details class="question-card">
+                    <summary>${prompt}</summary>
+                    <p>${answer}</p>
+                </details>
+            `).join('');
         }
 
         function exportResults() {
