@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scale Explorer Prototype - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0f172a;
+            --secondary-color: #334155;
+            --accent-color: #6366f1;
+            --border-color: #e2e8f0;
+            --bg-color: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-muted: #6b7280;
+            --shadow: 0 14px 28px rgba(99, 102, 241, 0.12);
+            --radius: 14px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06); }
+        .nav-container { width: 92%; max-width: 1160px; margin: 0 auto; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+        .nav-brand { font-size: 1.45rem; font-weight: 600; color: var(--primary-color); text-decoration: none; }
+
+        .container { width: 92%; max-width: 1160px; margin: 0 auto; padding: 28px 0 44px; }
+        h1 { font-size: 2.3rem; margin-bottom: 0.65rem; }
+        h2 { font-size: 1.6rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 1.2rem; }
+        h3 { font-size: 1.15rem; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        p { color: var(--text-muted); margin-bottom: 0.8rem; }
+
+        details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); margin-bottom: 1.8rem; overflow: hidden; }
+        details > summary { padding: 18px 24px; cursor: pointer; font-weight: 600; color: var(--secondary-color); display: flex; justify-content: space-between; align-items: center; }
+        details > summary::after { content: 'Expand'; font-size: 0.85rem; color: var(--text-muted); }
+        details[open] > summary::after { content: 'Hide'; }
+        .purpose-content { padding: 0 24px 24px; border-top: 1px solid var(--border-color); }
+
+        .tool-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr); gap: 32px; }
+        .card { background-color: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 28px 30px; }
+
+        .input-group { margin-bottom: 1.3rem; }
+        .input-group label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.95rem; color: var(--secondary-color); margin-bottom: 8px; }
+        .input-group select, .input-group input[type="number"] {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: #fff;
+        }
+        .input-group select:focus, .input-group input[type="number"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+        }
+        .tooltip-trigger {
+            display: inline-flex;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            align-items: center;
+            justify-content: center;
+            background: var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: help;
+            position: relative;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-color);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            width: max-content;
+            max-width: 240px;
+            line-height: 1.3;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 12;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; }
+
+        .btn {
+            border: none;
+            border-radius: 10px;
+            padding: 12px 22px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.12s ease, box-shadow 0.2s ease;
+        }
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 12px 22px rgba(99, 102, 241, 0.25);
+        }
+        .btn-primary:hover { transform: translateY(-1px); }
+
+        .tab-strip { display: inline-flex; gap: 10px; margin-bottom: 1.2rem; }
+        .tab-link {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: transparent;
+            padding: 8px 18px;
+            font-size: 0.95rem;
+            color: var(--secondary-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .tab-link.active {
+            background-color: var(--accent-color);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 8px 16px rgba(99, 102, 241, 0.22);
+        }
+
+        .scale-summary { display: flex; flex-direction: column; gap: 16px; }
+        .scale-header {
+            display: flex; align-items: center; justify-content: space-between;
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 14px 18px;
+            background: rgba(99, 102, 241, 0.06);
+        }
+        .scale-header h4 { font-size: 1rem; color: var(--secondary-color); }
+        .scale-header span { font-size: 0.9rem; color: var(--text-muted); }
+
+        .scale-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 18px;
+        }
+        .equation-container {
+            display: grid;
+            gap: 12px;
+            margin-top: 1rem;
+        }
+        .equation-card {
+            background: rgba(248, 250, 255, 0.85);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .scale-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px 20px;
+            background: rgba(248, 250, 255, 0.85);
+            position: relative;
+            overflow: hidden;
+        }
+        details.context {
+            margin-top: 0.6rem;
+            border: 1px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 8px 10px;
+            background: rgba(99, 102, 241, 0.08);
+        }
+        details.context summary { cursor: pointer; font-size: 0.85rem; color: var(--secondary-color); }
+        details.context p { margin-top: 0.4rem; font-size: 0.9rem; color: var(--text-muted); }
+        .scale-card::before {
+            content: attr(data-index);
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: rgba(99, 102, 241, 0.35);
+        }
+        .scale-card h4 { font-size: 0.95rem; color: var(--secondary-color); margin-bottom: 0.35rem; }
+        .scale-card .value { font-size: 1.35rem; font-weight: 700; color: var(--primary-color); }
+        .scale-card .unit-label { font-size: 0.9rem; margin-top: 0.35rem; color: var(--text-muted); }
+        .scale-card .trend {
+            margin-top: 0.55rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            border-radius: 999px;
+            padding: 4px 10px;
+            background-color: rgba(99, 102, 241, 0.12);
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        footer { background: var(--bg-card); border-top: 1px solid var(--border-color); text-align: center; font-size: 0.85rem; color: var(--text-muted); padding: 18px 0; margin-top: auto; }
+
+        @media (max-width: 980px) { .tool-layout { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1>Scale Explorer Prototype</h1>
+        <p class="tool-description" id="tool-description">Loading documentation…</p>
+
+        <details>
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README…</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Band Selection</h2>
+                <form id="calc-form">
+                    <div class="input-group">
+                        <label for="scale_case">
+                            Scale band
+                            <span class="tooltip-trigger" id="tooltip-scale_case" data-tooltip="Loading…">?</span>
+                        </label>
+                        <select id="scale_case" name="scale_case"></select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="anchor_unit">
+                            Anchor unit
+                            <span class="tooltip-trigger" id="tooltip-anchor_unit" data-tooltip="Loading…">?</span>
+                        </label>
+                        <select id="anchor_unit" name="anchor_unit"></select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="value">
+                            Value
+                            <span class="tooltip-trigger" id="tooltip-value" data-tooltip="Loading…">?</span>
+                        </label>
+                        <input type="number" step="any" id="value" name="value" placeholder="Enter magnitude in the anchor unit">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+
+                <div id="band-description" style="margin-top:1rem; font-size:0.95rem; color:var(--secondary-color);"></div>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tab-strip">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="background">Background</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display:block;">
+                    <h3>Order-of-Magnitude Overview</h3>
+                    <div class="scale-summary" id="results-summary">
+                        <p id="results-placeholder">Choose a band, anchor unit, and value to explore equivalent magnitudes.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content" style="display:none;">
+                    <h3>Underlying Principles</h3>
+                    <div id="background-description">
+                        <p>Documentation and equations will appear after load.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>&copy; 2025 Engineering Tools. All tools are for educational purposes.</footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'unit_prototypes';
+        const TOOL_FUNCTION_NAME = 'cascade_unit_scales';
+        const PARAM_IDS = ['scale_case', 'anchor_unit', 'value'];
+
+        let pyodideInstance;
+        let pyUtils;
+        let pyToolModule;
+        let toolDocumentation = {};
+        let scaleMetadata = {};
+
+        function mapToObject(maybeMap) {
+            if (maybeMap instanceof Map) {
+                return Object.fromEntries(
+                    Array.from(maybeMap, ([key, value]) => [key, mapToObject(value)])
+                );
+            }
+            return maybeMap;
+        }
+
+        function openTab(targetId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = tab.id === targetId ? 'block' : 'none';
+            });
+            document.querySelectorAll('.tab-link').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.target === targetId);
+            });
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        document.querySelectorAll('.tab-link').forEach(btn => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                openTab(btn.dataset.target);
+            });
+        });
+
+        async function loadReadme() {
+            try {
+                const response = await fetch('./README.md');
+                const text = await response.text();
+                const formatted = text
+                    .replace(/^# (.*$)/gim, '<h3>$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h4>$1</h4>')
+                    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+                    .replace(/^- (.*$)/gim, '<li>$1</li>')
+                    .replace(/\n{2,}/g, '</p><p>')
+                    .replace(/<li>(.*?)<\/li>/gim, '<ul><li>$1</li></ul>');
+                document.getElementById('readme-content').innerHTML = `<p>${formatted}</p>`;
+            } catch (error) {
+                document.getElementById('readme-content').innerHTML = '<p>Unable to load README.</p>';
+            }
+        }
+
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+            Object.entries(toolDocumentation.parameters).forEach(([key, description]) => {
+                const tooltip = document.getElementById(`tooltip-${key}`);
+                if (tooltip) {
+                    tooltip.setAttribute('data-tooltip', description);
+                }
+            });
+        }
+
+        function populateBackground() {
+            const container = document.getElementById('background-description');
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\\n').filter(line => line.trim())
+                : [];
+            const descriptionHtml = toolDocumentation.description
+                ? toolDocumentation.description.replace(/\\n/g, '<br>')
+                : 'No description provided.';
+            const equationCards = latexLines.map((expr, idx) => `
+                <div class="equation-card">
+                    <strong>Equation (${idx + 1})</strong>
+                    <div class="equation-expression">\\[ ${expr} \\]</div>
+                </div>
+            `).join('');
+            container.innerHTML = `
+                <p>${descriptionHtml}</p>
+                <h4 style="margin-top:1rem;">Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations provided.</p>'}
+                </div>
+            `;
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function populateScaleCases(metadata) {
+            const select = document.getElementById('scale_case');
+            select.innerHTML = '';
+            Object.entries(metadata).forEach(([key, meta], index) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = meta.label;
+                if (index === 0) option.selected = true;
+                select.appendChild(option);
+            });
+            select.addEventListener('change', () => {
+                updateAnchorUnits(select.value);
+                setBandDescription(select.value);
+            });
+            if (select.value) {
+                updateAnchorUnits(select.value);
+                setBandDescription(select.value);
+            }
+        }
+
+        function updateAnchorUnits(caseKey) {
+            const select = document.getElementById('anchor_unit');
+            select.innerHTML = '';
+            const meta = scaleMetadata[caseKey];
+            if (!meta) return;
+            const units = meta.units.split(',').map(unit => unit.trim());
+            units.forEach((symbol, index) => {
+                const option = document.createElement('option');
+                option.value = symbol;
+                option.textContent = symbol;
+                if (index === 0) option.selected = true;
+                select.appendChild(option);
+            });
+        }
+
+        function setBandDescription(caseKey) {
+            const meta = scaleMetadata[caseKey];
+            if (!meta) return;
+            document.getElementById('band-description').textContent = meta.description;
+        }
+
+        function formatValue(value) {
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return value;
+            }
+            if (Math.abs(value) >= 1e5 || Math.abs(value) <= 1e-4) {
+                return value.toExponential(4);
+            }
+            return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+        }
+
+        function renderResults(results) {
+            const summary = document.getElementById('results-summary');
+            summary.innerHTML = '';
+
+            const returns = toolDocumentation.returns || {};
+            const caseKey = document.getElementById('scale_case').value;
+            const meta = scaleMetadata[caseKey] || {};
+            const units = meta.units ? meta.units.split(',').map(unit => unit.trim()) : [];
+
+            const header = document.createElement('div');
+            header.className = 'scale-header';
+            header.innerHTML = `
+                <div>
+                    <h4>${meta.label || 'Selected band'}</h4>
+                    <span>${meta.description || ''}</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:600;">Anchor unit:</span>
+                    <span>${document.getElementById('anchor_unit').value}</span>
+                </div>
+            `;
+            summary.appendChild(header);
+
+            const grid = document.createElement('div');
+            grid.className = 'scale-grid';
+
+            const valueKeys = ['value_unit_1', 'value_unit_2', 'value_unit_3'];
+            const unitLabelKeys = ['unit_label_1', 'unit_label_2', 'unit_label_3'];
+
+            valueKeys.forEach((key, index) => {
+                const value = results[key];
+                const unitLabel = results[unitLabelKeys[index]] || units[index] || '';
+                const definition = returns[key] || '';
+                const substitution = results[`subst_${key}`];
+                const card = document.createElement('div');
+                card.className = 'scale-card';
+                card.dataset.index = `U${index + 1}`;
+                const trendLabel = index === 0 ? 'Base scale' : index === 1 ? 'Step-up' : 'Upper band';
+                card.innerHTML = `
+                    <h4>${unitLabel}</h4>
+                    <div class="value">${formatValue(value)}</div>
+                    <div class="unit-label">${definition}</div>
+                    <span class="trend">${trendLabel}</span>
+                    ${substitution ? `<details class="context" style="margin-top:0.65rem;">
+                        <summary style="cursor:pointer;font-size:0.85rem;color:var(--secondary-color);">Substitution</summary>
+                        <p style="margin-top:0.4rem;">$$${substitution}$$</p>
+                    </details>` : ''}
+                `;
+                grid.appendChild(card);
+            });
+
+            summary.appendChild(grid);
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        async function initializePyodide() {
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide…';
+            pyodideInstance = await loadPyodide();
+            await pyodideInstance.loadPackage('micropip');
+
+            document.getElementById('calculate-btn').textContent = 'Loading Python…';
+            const bootstrapScript = `
+import micropip
+from pyodide.http import pyfetch
+
+response_utils = await pyfetch('../../pycalcs/utils.py')
+with open('utils.py', 'w') as f:
+    f.write(await response_utils.string())
+
+response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+    f.write(await response_tool.string())
+
+import utils
+import ${TOOL_MODULE_NAME}
+`;
+            await pyodideInstance.runPythonAsync(bootstrapScript);
+
+            pyUtils = pyodideInstance.globals.get('utils');
+            pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                throw new Error(docMap.get('error'));
+            }
+
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+            document.getElementById('tool-description').textContent = toolDocumentation.description || '';
+            populateTooltips();
+            populateBackground();
+
+            scaleMetadata = mapToObject(pyToolModule.list_scale_cases().toJs());
+            populateScaleCases(scaleMetadata);
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        document.getElementById('calc-form').addEventListener('submit', (event) => {
+            event.preventDefault();
+            try {
+                const args = PARAM_IDS.map(id => document.getElementById(id).value || '');
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+                renderResults(results);
+            } catch (error) {
+                document.getElementById('results-summary').innerHTML = `
+                    <div class="scale-card" style="border-color:#ef4444;background:rgba(239, 68, 68, 0.08);">
+                        <h4 style="color:#b91c1c;">Calculation Error</h4>
+                        <p style="margin-top:0.5rem;color:#b91c1c;">${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+
+        loadReadme();
+        initializePyodide().catch((error) => {
+            document.getElementById('results-summary').innerHTML = `
+                <div class="scale-card" style="border-color:#ef4444;background:rgba(239, 68, 68, 0.08);">
+                    <h4 style="color:#b91c1c;">Initialization Error</h4>
+                    <p style="margin-top:0.5rem;color:#b91c1c;">${error.message}</p>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

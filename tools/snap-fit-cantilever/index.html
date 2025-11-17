@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantilever Snap-Fit Calculator - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #212529;
+            --primary-light: #f8f9fa;
+            --secondary-color: #495057;
+            --text-color: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --border-radius: 8px;
+            --accent: #0d6efd;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; }
+        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.25rem; color: var(--secondary-color); }
+        h4 { font-size: 1.05rem; color: var(--secondary-color); margin-top: 1rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        /* --- 2. Navigation --- */
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        /* --- 3. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.25rem; color: var(--secondary-color); }
+        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        /* --- 3b. Purpose/README Section --- */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+
+        /* --- 4. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; }
+        .inputs-intro { font-size: 0.9rem; color: var(--text-light); margin-bottom: 16px; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .input-group { margin-bottom: 0; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; color: var(--primary-color); }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-group input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); }
+        
+        /* --- 5. Input Tooltip --- */
+        .tooltip-trigger {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 18px;
+            height: 18px;
+            background-color: var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+            position: absolute;
+            right: -24px;
+            top: 38px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(33, 37, 41, 0.92);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.4;
+            max-width: 240px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 20;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; }
+
+        /* --- 6. Buttons --- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+        }
+        .btn-primary { background-color: var(--accent); color: #fff; box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2); margin-top: 20px; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(13, 110, 253, 0.25); }
+        .btn-secondary { background-color: #f1f3f5; color: var(--secondary-color); border: 1px solid var(--border-color); }
+
+        /* --- 7. Tabbed Output --- */
+        .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+        .tab-link {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            background-color: #f1f3f5;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        .tab-link.active {
+            background-color: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* --- 8. Results styling --- */
+        #results-display { display: flex; flex-direction: column; gap: 14px; }
+        .result-item {
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: rgba(248, 249, 250, 0.8);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+        }
+        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .result-header p { margin: 0; color: var(--primary-color); font-weight: 600; }
+        .inline-details summary {
+            list-style: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            background-color: #fff;
+        }
+        .inline-details[open] summary { background-color: var(--accent); color: #fff; border-color: var(--accent); }
+        .equation-details { margin-top: 12px; font-size: 0.9rem; color: var(--secondary-color); }
+
+        /* --- 9. Equations --- */
+        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
+        .equation-card {
+            background: rgba(248, 250, 252, 0.75);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
+        .equation-card .equation-summary { font-size: 0.9rem; color: var(--text-light); margin-bottom: 8px; }
+        .equation-card ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            display: grid;
+            gap: 6px 18px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
+
+        /* --- 10. Footer --- */
+        .footer { margin-top: auto; padding: 16px 0; text-align: center; font-size: 0.85rem; color: var(--text-light); }
+
+        @media (max-width: 1024px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0; top: 36px; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Cantilever Snap-Fit Calculator</h1>
+        <p class="tool-description" id="tool-description">
+            Estimate installation deflection, user forces, and engagement loads for a rectangular cantilever snap-fit following the BASF Snap-Fit design guidance.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <p class="inputs-intro">
+                    Enter values in base SI units (metres, Pascals, Newtons, degrees). Angles are measured from the direction of travel toward the contact face.
+                </p>
+                <form id="calc-form">
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="length">Cantilever free length (m)</label>
+                            <input type="number" id="length" name="length" step="0.001" min="0" value="0.02">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-length">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="thickness">Beam thickness (m)</label>
+                            <input type="number" id="thickness" name="thickness" step="0.0005" min="0" value="0.002">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-thickness">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="width">Beam width (m)</label>
+                            <input type="number" id="width" name="width" step="0.001" min="0" value="0.01">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-width">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="install_deflection">Installation deflection (m)</label>
+                            <input type="number" id="install_deflection" name="install_deflection" step="0.0005" min="0" value="0.003">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-install_deflection">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="service_deflection">Engaged deflection (m)</label>
+                            <input type="number" id="service_deflection" name="service_deflection" step="0.0005" min="0" value="0.001">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-service_deflection">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="removal_deflection">Removal deflection (m)</label>
+                            <input type="number" id="removal_deflection" name="removal_deflection" step="0.0005" min="0" value="0.003">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-removal_deflection">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="modulus">Tensile modulus (Pa)</label>
+                            <input type="number" id="modulus" name="modulus" step="1e7" min="0" value="2500000000">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-modulus">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="allowable_strain">Allowable strain (fraction)</label>
+                            <input type="number" id="allowable_strain" name="allowable_strain" step="0.005" min="0" value="0.04">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-allowable_strain">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="install_angle_deg">Lead-in angle (deg)</label>
+                            <input type="number" id="install_angle_deg" name="install_angle_deg" step="0.5" min="0" max="89" value="20">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-install_angle_deg">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="removal_angle_deg">Release face angle (deg)</label>
+                            <input type="number" id="removal_angle_deg" name="removal_angle_deg" step="0.5" min="0" max="89" value="30">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-removal_angle_deg">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="friction_coefficient">Friction coefficient (-)</label>
+                            <input type="number" id="friction_coefficient" name="friction_coefficient" step="0.01" min="0" value="0.2">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-friction_coefficient">?</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="plot">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content active">
+                    <h3>Key Results</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Enter geometry, material and interface details, then press Calculate.</p>
+                    </div>
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <h3>Visualization</h3>
+                    <div id="plot-container">
+                        <p>A stiffness-versus-deflection visualization is planned for a future release. The numeric results below capture the same relationships.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">
+                        After the Python module loads, this section summarises the governing relationships and provides equation references straight from the engineering docstring.
+                    </p>
+                    <h4>Equations</h4>
+                    <div class="equation-container" id="equation-container">
+                        <p>Equations will appear after initialization.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        // --- 0. Globals & Config ---
+        let toolDocumentation = {};
+        let latexExpressions = [];
+        let pyUtils, pyToolModule;
+
+        const TOOL_MODULE_NAME = 'snapfits';
+        const TOOL_FUNCTION_NAME = 'calculate_cantilever_snap_fit';
+        const PARAM_ORDER = [
+            'length',
+            'thickness',
+            'width',
+            'install_deflection',
+            'service_deflection',
+            'removal_deflection',
+            'modulus',
+            'allowable_strain',
+            'install_angle_deg',
+            'removal_angle_deg',
+            'friction_coefficient',
+        ];
+
+        const EQUATION_LEGENDS = [
+            [
+                { symbol: 'k', text: 'Cantilever tip stiffness (N/m)' },
+                { symbol: 'E', text: 'Tensile modulus (Pa)' },
+                { symbol: 'b', text: 'Snap width (m)' },
+                { symbol: 't', text: 'Snap thickness (m)' },
+                { symbol: 'L', text: 'Free length (m)' },
+            ],
+            [
+                { symbol: 'F', text: 'Transverse tip load (N)' },
+                { symbol: 'k', text: 'Cantilever tip stiffness (N/m)' },
+                { symbol: '\\delta', text: 'Applied tip deflection (m)' },
+            ],
+            [
+                { symbol: '\\sigma', text: 'Maximum bending stress (Pa)' },
+                { symbol: 'F', text: 'Transverse tip load (N)' },
+                { symbol: 'L', text: 'Free length (m)' },
+                { symbol: 'b', text: 'Snap width (m)' },
+                { symbol: 't', text: 'Snap thickness (m)' },
+            ],
+            [
+                { symbol: '\\varepsilon', text: 'Maximum fiber strain (-)' },
+                { symbol: '\\sigma', text: 'Bending stress (Pa)' },
+                { symbol: 'E', text: 'Tensile modulus (Pa)' },
+            ],
+            [
+                { symbol: '\\delta_{\\text{allow}}', text: 'Allowable tip deflection (m)' },
+                { symbol: '\\varepsilon_{\\text{allow}}', text: 'Allowable strain (-)' },
+                { symbol: 'L', text: 'Free length (m)' },
+                { symbol: 't', text: 'Snap thickness (m)' },
+            ],
+            [
+                { symbol: 'F_{\\text{axial}}', text: 'User axial force (N)' },
+                { symbol: 'F', text: 'Transverse tip load (N)' },
+                { symbol: '\\theta', text: 'Contact angle (deg)' },
+                { symbol: '\\mu', text: 'Coefficient of friction (-)' },
+            ],
+        ];
+
+        const EQUATION_DESCRIPTIONS = [
+            'Cantilever stiffness derived from Euler–Bernoulli bending for a rectangular section.',
+            'Hook tip load equals spring constant times imposed deflection.',
+            'Extreme-fibre bending stress from tip load and section geometry.',
+            'Linear elastic relationship between bending stress and strain.',
+            'Allowable tip travel based on the specified strain limit.',
+            'Resultant user force on an inclined, frictional ramp during insert or removal.',
+        ];
+
+        const RESULT_EQUATION_INDEX = {
+            spring_constant: 0,
+            install_tip_force: 1,
+            service_tip_force: 1,
+            removal_tip_force: 1,
+            install_stress: 2,
+            service_stress: 2,
+            removal_stress: 2,
+            install_strain: 3,
+            service_strain: 3,
+            removal_strain: 3,
+            allowable_deflection: 4,
+            install_axial_force: 5,
+            retention_axial_force: 5,
+            removal_axial_force: 5,
+        };
+
+        // --- Utility helpers ---
+        function openTab(event, tabName) {
+            document.querySelectorAll(".tab-content").forEach((tab) => {
+                tab.classList.toggle("active", tab.id === tabName);
+            });
+            document.querySelectorAll(".tab-link").forEach((link) => {
+                link.classList.toggle("active", link.dataset.target === tabName);
+            });
+        }
+        document.querySelectorAll(".tab-link").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                openTab(event, event.currentTarget.dataset.target);
+            });
+        });
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function formatValue(value) {
+            if (typeof value !== "number" || Number.isNaN(value)) {
+                return "—";
+            }
+            if (!Number.isFinite(value)) {
+                return value > 0 ? "&infin;" : value < 0 ? "-&infin;" : "—";
+            }
+            const absVal = Math.abs(value);
+            if (absVal !== 0 && (absVal >= 1e4 || absVal < 1e-3)) {
+                return value.toExponential(4);
+            }
+            return value.toFixed(4);
+        }
+
+        function toTitleCase(key) {
+            return key
+                .split("_")
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(" ");
+        }
+
+        async function loadReadme() {
+            const container = document.getElementById("readme-content");
+            try {
+                const response = await fetch("./README.md");
+                if (!response.ok) throw new Error("README not found");
+                const markdown = await response.text();
+                container.innerHTML = markdown
+                    .split("\n\n")
+                    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
+                    .join("");
+            } catch (error) {
+                container.innerHTML = `<p style="color:#c92a2a;">Unable to load README: ${error.message}</p>`;
+            }
+        }
+
+        async function main() {
+            const button = document.getElementById("calculate-btn");
+            button.textContent = "Loading Pyodide...";
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage("micropip");
+
+            button.textContent = "Loading Python...";
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            pyUtils = pyodide.globals.get("utils");
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
+            const jsDoc = docMap.toJs();
+            if (jsDoc.has("error")) {
+                const message = jsDoc.get("error");
+                console.error("Docstring Error:", message);
+                document.getElementById("results-display").innerHTML = `
+                    <p style="color:red; font-weight:bold;">Initialization Error:</p>
+                    <p style="color:red;">${message}</p>
+                `;
+                return;
+            }
+
+            const docEntries = jsDoc instanceof Map ? jsDoc : Object.entries(jsDoc);
+            toolDocumentation = Object.fromEntries(docEntries);
+            if (toolDocumentation.parameters) {
+                const paramEntries = toolDocumentation.parameters instanceof Map
+                    ? toolDocumentation.parameters
+                    : Object.entries(toolDocumentation.parameters);
+                toolDocumentation.parameters = Object.fromEntries(paramEntries);
+            }
+            if (toolDocumentation.returns) {
+                const returnEntries = toolDocumentation.returns instanceof Map
+                    ? toolDocumentation.returns
+                    : Object.entries(toolDocumentation.returns);
+                toolDocumentation.returns = Object.fromEntries(returnEntries);
+            }
+            latexExpressions = toolDocumentation.latex
+                ? toolDocumentation.latex.split("\\n").map((line) => line.trim()).filter((line) => line.length > 0)
+                : [];
+
+            populateUiFromDocs();
+            button.textContent = "Calculate";
+            loadReadme();
+        }
+        main();
+
+        function populateUiFromDocs() {
+            if (!toolDocumentation || !toolDocumentation.parameters) return;
+
+            const description = toolDocumentation.description || "";
+            document.getElementById("tool-description").textContent = description;
+
+            PARAM_ORDER.forEach((param) => {
+                const tooltip = document.getElementById(`tooltip-${param}`);
+                if (tooltip && toolDocumentation.parameters[param]) {
+                    tooltip.setAttribute("data-tooltip", toolDocumentation.parameters[param]);
+                }
+            });
+
+            const background = document.getElementById("background-description");
+            background.innerHTML = `
+                ${description.replace(/\n/g, "<br>")}
+                <br><br>
+                This tool applies the small-deflection cantilever beam relationships and the frictional ramp model
+                published in the BASF <em>Snap-Fit Design Manual</em> (2016). All calculations assume linear elastic behaviour,
+                rectangular sections, and contact angles referenced from the insertion or pull-off direction.
+            `;
+
+            const equationContainer = document.getElementById("equation-container");
+            equationContainer.innerHTML = "";
+            latexExpressions.forEach((expression, index) => {
+                const legendItems = (EQUATION_LEGENDS[index] || [])
+                    .map((item) => `<li><span class="math-inline">\\(${item.symbol}\\)</span>: ${item.text}</li>`)
+                    .join("");
+                const legendHtml = legendItems || "<li>Variable definitions to be provided.</li>";
+                const summaryText = EQUATION_DESCRIPTIONS[index] || '';
+
+                const card = document.createElement("div");
+                card.className = "equation-card";
+                card.innerHTML = `
+                    <strong>Equation (${index + 1})</strong>
+                    <span class="equation-expression">\\[ ${expression} \\]</span>
+                    ${summaryText ? `<p class="equation-summary">${summaryText}</p>` : ""}
+                    <ul>${legendHtml}</ul>
+                `;
+                equationContainer.appendChild(card);
+            });
+            typesetMath();
+        }
+
+        const form = document.getElementById("calc-form");
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (!pyToolModule) {
+                return;
+            }
+
+            const formData = new FormData(form);
+            const args = PARAM_ORDER.map((param) => {
+                const value = Number(formData.get(param));
+                return Number.isFinite(value) ? value : 0;
+            });
+
+            try {
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                const resultsDiv = document.getElementById("results-display");
+                resultsDiv.innerHTML = "";
+                document.getElementById("results-placeholder")?.remove();
+
+                const returnDefs = toolDocumentation.returns || {};
+                const returnKeys = Object.keys(returnDefs);
+
+                returnKeys.forEach((key) => {
+                    const definition = returnDefs[key];
+                    const value = results[key];
+                    const formatted = formatValue(value);
+                    const substString = results[`subst_${key}`];
+                    const eqIndex = RESULT_EQUATION_INDEX[key];
+                    const equation = (typeof eqIndex === "number" ? latexExpressions[eqIndex] : "") || "";
+
+                    const displayName = toTitleCase(key);
+                    const equationBlock = equation
+                        ? `
+                            <p><strong>Equation:</strong> $$${equation}$$</p>
+                            ${substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : ""}
+                        `
+                        : substString
+                            ? `<p><strong>Substituted:</strong> $$${substString}$$</p>`
+                            : "";
+
+                    const card = document.createElement("div");
+                    card.className = "result-item";
+                    card.innerHTML = `
+                        <div class="result-header">
+                            <p><span class="def" data-def="${definition}">${displayName}</span>: ${formatted}</p>
+                            ${equationBlock ? `<details class="inline-details"><summary>&Sigma;</summary><div class="equation-details">${equationBlock}</div></details>` : ""}
+                        </div>
+                    `;
+                    resultsDiv.appendChild(card);
+                });
+
+                typesetMath();
+            } catch (error) {
+                console.error("Python calculation error:", error);
+                document.getElementById("results-display").innerHTML = `
+                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

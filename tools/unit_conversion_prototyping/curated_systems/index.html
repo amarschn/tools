@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curated Systems Prototype - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #1f2937;
+            --secondary-color: #475569;
+            --accent-color: #10b981;
+            --border-color: #e2e8f0;
+            --bg-color: #f8fafc;
+            --bg-card: #ffffff;
+            --text-light: #6b7280;
+            --shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container { width: 94%; max-width: 1180px; margin: 0 auto; padding: 28px 0 48px; }
+        h1 { font-size: 2.3rem; margin-bottom: 0.75rem; }
+        h2 { font-size: 1.65rem; margin-bottom: 1.15rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.2rem; color: var(--secondary-color); margin-bottom: 0.5rem; }
+        p { color: var(--text-light); margin-bottom: 0.85rem; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05); }
+        .nav-container { display: flex; align-items: center; justify-content: space-between; height: 64px; width: 92%; max-width: 1180px; margin: 0 auto; }
+        .nav-brand { color: var(--primary-color); font-weight: 600; font-size: 1.45rem; text-decoration: none; }
+
+        .tool-description { font-size: 1.05rem; max-width: 75ch; }
+        .tool-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.3fr); gap: 32px; margin-top: 20px; }
+        .card { background-color: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 26px 30px; }
+
+        details { border: 1px solid var(--border-color); border-radius: var(--radius); background-color: var(--bg-card); overflow: hidden; margin-bottom: 1.8rem; }
+        details > summary { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; cursor: pointer; font-weight: 600; color: var(--secondary-color); }
+        details > summary::after { content: 'Expand'; font-size: 0.85rem; color: var(--text-light); }
+        details[open] > summary::after { content: 'Hide'; }
+        .purpose-content { padding: 0 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content ul { padding-left: 18px; }
+
+        fieldset { border: none; margin: 0 0 1.4rem; padding: 0; }
+        legend { font-weight: 600; font-size: 0.95rem; color: var(--secondary-color); margin-bottom: 0.6rem; display: inline-flex; align-items: center; gap: 8px; }
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: var(--border-color);
+            color: var(--text-light);
+            font-size: 0.75rem;
+            cursor: help;
+            position: relative;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--primary-color);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            max-width: 240px;
+            width: max-content;
+            line-height: 1.3;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 10;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; }
+
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .scenario-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 18px;
+            background: rgba(240, 253, 250, 0.4);
+            cursor: pointer;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+        }
+        .scenario-card.selected {
+            border-color: var(--accent-color);
+            box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
+            transform: translateY(-2px);
+        }
+        .scenario-card h4 { font-size: 1.05rem; margin-bottom: 0.4rem; color: var(--primary-color); }
+        .scenario-card p { font-size: 0.9rem; margin-bottom: 0.25rem; }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            background-color: rgba(15, 118, 110, 0.12);
+            color: #0f766e;
+        }
+
+        .direction-toggle {
+            display: inline-flex;
+            background: rgba(226, 232, 240, 0.6);
+            border-radius: 999px;
+            padding: 4px;
+            gap: 4px;
+        }
+        .direction-button {
+            border: none;
+            background: transparent;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--secondary-color);
+            transition: all 0.15s ease;
+        }
+        .direction-button.active {
+            background: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 6px 14px rgba(16, 185, 129, 0.25);
+        }
+
+        .input-group { margin-bottom: 1.3rem; }
+        .input-group label { display: inline-block; font-weight: 600; font-size: 0.95rem; margin-bottom: 8px; color: var(--secondary-color); }
+        .input-group input[type="number"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .input-group input[type="number"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 22px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.12s ease, box-shadow 0.2s ease;
+        }
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.25);
+        }
+        .btn-primary:hover { transform: translateY(-1px); }
+
+        .tab-strip { display: flex; gap: 8px; margin-bottom: 1.2rem; }
+        .tab-link {
+            padding: 8px 18px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--secondary-color);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .tab-link.active {
+            background-color: var(--accent-color);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.25);
+        }
+
+        .results-stage { display: grid; gap: 20px; }
+        .system-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+        }
+        .equation-container {
+            display: grid;
+            gap: 12px;
+            margin-top: 1rem;
+        }
+        .equation-card {
+            background: rgba(248, 250, 252, 0.72);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .system-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px 20px;
+            background: rgba(248, 250, 252, 0.6);
+        }
+        .system-card h4 { display: flex; align-items: center; justify-content: space-between; font-size: 1.05rem; color: var(--secondary-color); margin-bottom: 0.35rem; }
+        .system-card .value { font-size: 1.35rem; font-weight: 700; color: var(--primary-color); }
+        .system-card .unit { font-size: 0.95rem; color: var(--text-light); margin-top: 0.35rem; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            background-color: rgba(16, 185, 129, 0.15);
+            color: var(--accent-color);
+        }
+        details.context {
+            margin-top: 0.6rem;
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: rgba(240, 253, 244, 0.4);
+        }
+        details.context summary { cursor: pointer; font-size: 0.85rem; color: var(--secondary-color); }
+        details.context p { margin-top: 0.45rem; font-size: 0.9rem; }
+
+        footer { background: var(--bg-card); border-top: 1px solid var(--border-color); text-align: center; font-size: 0.85rem; color: var(--text-light); padding: 18px 0; margin-top: auto; }
+
+        @media (max-width: 960px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1>Curated Systems Prototype</h1>
+        <p class="tool-description" id="tool-description">Loading documentation…</p>
+
+        <details>
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README…</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Scenario Setup</h2>
+                <form id="calc-form">
+                    <fieldset>
+                        <legend>
+                            Scenario
+                            <span class="tooltip-trigger" id="tooltip-scenario" data-tooltip="Loading…">?</span>
+                        </legend>
+                        <div class="scenario-grid" id="scenario-options"></div>
+                        <input type="hidden" id="scenario" name="scenario">
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>
+                            Direction
+                            <span class="tooltip-trigger" id="tooltip-direction" data-tooltip="Loading…">?</span>
+                        </legend>
+                        <div class="direction-toggle" id="direction-toggle">
+                            <button type="button" class="direction-button" data-value="imperial_to_metric">Imperial → Metric</button>
+                            <button type="button" class="direction-button" data-value="metric_to_imperial">Metric → Imperial</button>
+                        </div>
+                        <input type="hidden" id="direction" name="direction">
+                    </fieldset>
+
+                    <div class="input-group">
+                        <label for="value">Value
+                            <span class="tooltip-trigger" id="tooltip-value" data-tooltip="Loading…">?</span>
+                        </label>
+                        <input type="number" step="any" id="value" name="value" placeholder="Enter the measurement">
+                    </div>
+
+                    <div style="display:flex; gap:12px;">
+                        <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                    </div>
+                </form>
+
+                <div id="scenario-description" style="margin-top:1rem; font-size:0.95rem; color:var(--secondary-color);"></div>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tab-strip">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="background">Background</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display:block;">
+                    <h3>System Comparison</h3>
+                    <div class="results-stage" id="results-stage">
+                        <p id="results-placeholder">Select a scenario, set the direction, then provide a value to see both unit systems side by side.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content" style="display:none;">
+                    <h3>Underlying Principles</h3>
+                    <div id="background-description">
+                        <p>Documentation and equations will appear after the tool loads.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>&copy; 2025 Engineering Tools. All tools are for educational purposes.</footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'unit_prototypes';
+        const TOOL_FUNCTION_NAME = 'convert_between_primary_systems';
+        const PARAM_IDS = ['scenario', 'direction', 'value'];
+
+        let pyodideInstance;
+        let pyUtils;
+        let pyToolModule;
+        let scenarioMetadata = {};
+        let toolDocumentation = {};
+
+        function mapToObject(maybeMap) {
+            if (maybeMap instanceof Map) {
+                return Object.fromEntries(
+                    Array.from(maybeMap, ([key, value]) => [key, mapToObject(value)])
+                );
+            }
+            return maybeMap;
+        }
+
+        function openTab(targetId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = tab.id === targetId ? 'block' : 'none';
+            });
+            document.querySelectorAll('.tab-link').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.target === targetId);
+            });
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        document.querySelectorAll('.tab-link').forEach(btn => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                openTab(btn.dataset.target);
+            });
+        });
+
+        async function loadReadme() {
+            try {
+                const response = await fetch('./README.md');
+                const text = await response.text();
+                const formatted = text
+                    .replace(/^# (.*$)/gim, '<h3>$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h4>$1</h4>')
+                    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+                    .replace(/^- (.*$)/gim, '<li>$1</li>')
+                    .replace(/\n{2,}/g, '</p><p>')
+                    .replace(/<li>(.*?)<\/li>/gim, '<ul><li>$1</li></ul>');
+                document.getElementById('readme-content').innerHTML = `<p>${formatted}</p>`;
+            } catch (error) {
+                document.getElementById('readme-content').innerHTML = '<p>Unable to load README.</p>';
+            }
+        }
+
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) { return; }
+            Object.entries(toolDocumentation.parameters).forEach(([key, description]) => {
+                const tooltip = document.getElementById(`tooltip-${key}`);
+                if (tooltip) {
+                    tooltip.setAttribute('data-tooltip', description);
+                }
+            });
+        }
+
+        function populateBackground() {
+            const container = document.getElementById('background-description');
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\\n').filter(line => line.trim())
+                : [];
+            const descriptionHtml = toolDocumentation.description
+                ? toolDocumentation.description.replace(/\\n/g, '<br>')
+                : 'No description provided.';
+            const equationCards = latexLines.map((expr, idx) => `
+                <div class="equation-card">
+                    <strong>Equation (${idx + 1})</strong>
+                    <div class="equation-expression">\\[ ${expr} \\]</div>
+                </div>
+            `).join('');
+            container.innerHTML = `
+                <p>${descriptionHtml}</p>
+                <h4 style="margin-top:1rem;">Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations provided.</p>'}
+                </div>
+            `;
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function setScenarioDescription(key) {
+            const meta = scenarioMetadata[key];
+            if (!meta) return;
+            document.getElementById('scenario-description').textContent = meta.description;
+        }
+
+        function populateScenarios(metadata) {
+            const container = document.getElementById('scenario-options');
+            container.innerHTML = '';
+            const keys = Object.keys(metadata);
+            keys.forEach((key, index) => {
+                const meta = metadata[key];
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'scenario-card';
+                card.dataset.key = key;
+                card.innerHTML = `
+                    <h4>${meta.label}</h4>
+                    <p>${meta.quantity.charAt(0).toUpperCase() + meta.quantity.slice(1)}</p>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:0.35rem;">
+                        <span class="chip">${meta.imperial_unit}</span>
+                        <span class="chip">${meta.metric_unit}</span>
+                    </div>
+                `;
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.scenario-card').forEach(el => el.classList.remove('selected'));
+                    card.classList.add('selected');
+                    document.getElementById('scenario').value = key;
+                    setScenarioDescription(key);
+                });
+                if (index === 0) {
+                    card.classList.add('selected');
+                    document.getElementById('scenario').value = key;
+                    setScenarioDescription(key);
+                }
+                container.appendChild(card);
+            });
+        }
+
+        function setupDirectionToggle() {
+            const buttons = document.querySelectorAll('.direction-button');
+            const hidden = document.getElementById('direction');
+            buttons.forEach((btn, index) => {
+                btn.addEventListener('click', () => {
+                    buttons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    hidden.value = btn.dataset.value;
+                });
+                if (index === 0) {
+                    btn.classList.add('active');
+                    hidden.value = btn.dataset.value;
+                }
+            });
+        }
+
+        function formatNumber(value) {
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return value;
+            }
+            if (Math.abs(value) >= 1e4 || Math.abs(value) <= 1e-3) {
+                return value.toExponential(4);
+            }
+            return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+        }
+
+        function renderResults(results) {
+            const stage = document.getElementById('results-stage');
+            stage.innerHTML = '';
+
+            const returns = toolDocumentation.returns || {};
+            const direction = document.getElementById('direction').value;
+            const scenarioKey = document.getElementById('scenario').value;
+            const meta = scenarioMetadata[scenarioKey] || {};
+
+            const imperialBadge = direction === 'imperial_to_metric' ? 'Input' : 'Converted';
+            const metricBadge = direction === 'metric_to_imperial' ? 'Input' : 'Converted';
+
+            const cardGroup = document.createElement('div');
+            cardGroup.className = 'system-row';
+            cardGroup.innerHTML = `
+                <div class="system-card">
+                    <h4>Imperial <span class="badge">${imperialBadge}</span></h4>
+                    <div class="value">${formatNumber(results.imperial_value)}</div>
+                    <div class="unit">${results.imperial_unit || meta.imperial_unit || ''}</div>
+                    <details class="context">
+                        <summary>Definition & derivation</summary>
+                        <p>${returns.imperial_value || ''}</p>
+                        ${results.subst_imperial_value ? `<p><strong>Substitution:</strong> $$${results.subst_imperial_value}$$</p>` : ''}
+                    </details>
+                </div>
+                <div class="system-card">
+                    <h4>Metric <span class="badge">${metricBadge}</span></h4>
+                    <div class="value">${formatNumber(results.metric_value)}</div>
+                    <div class="unit">${results.metric_unit || meta.metric_unit || ''}</div>
+                    <details class="context">
+                        <summary>Definition & derivation</summary>
+                        <p>${returns.metric_value || ''}</p>
+                        ${results.subst_metric_value ? `<p><strong>Substitution:</strong> $$${results.subst_metric_value}$$</p>` : ''}
+                    </details>
+                </div>
+            `;
+            stage.appendChild(cardGroup);
+
+            const unitNotes = document.createElement('div');
+            unitNotes.innerHTML = `
+                <details class="context" open>
+                    <summary>Unit identifiers</summary>
+                    <p><strong>${results.imperial_unit}</strong>: ${returns.imperial_unit || 'Imperial unit symbol.'}</p>
+                    <p><strong>${results.metric_unit}</strong>: ${returns.metric_unit || 'Metric unit symbol.'}</p>
+                </details>
+            `;
+            stage.appendChild(unitNotes);
+
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        async function initializePyodide() {
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide…';
+            pyodideInstance = await loadPyodide();
+            await pyodideInstance.loadPackage('micropip');
+
+            document.getElementById('calculate-btn').textContent = 'Loading Python…';
+            const bootstrapScript = `
+import micropip
+from pyodide.http import pyfetch
+
+response_utils = await pyfetch('../../pycalcs/utils.py')
+with open('utils.py', 'w') as f:
+    f.write(await response_utils.string())
+
+response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+    f.write(await response_tool.string())
+
+import utils
+import ${TOOL_MODULE_NAME}
+`;
+            await pyodideInstance.runPythonAsync(bootstrapScript);
+
+            pyUtils = pyodideInstance.globals.get('utils');
+            pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                throw new Error(docMap.get('error'));
+            }
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+            document.getElementById('tool-description').textContent = toolDocumentation.description || '';
+            populateTooltips();
+            populateBackground();
+
+            scenarioMetadata = mapToObject(pyToolModule.list_system_scenarios().toJs());
+            populateScenarios(scenarioMetadata);
+            setupDirectionToggle();
+
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        document.getElementById('calc-form').addEventListener('submit', (event) => {
+            event.preventDefault();
+            try {
+                const args = PARAM_IDS.map(id => document.getElementById(id).value || '');
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+                renderResults(results);
+            } catch (error) {
+                document.getElementById('results-stage').innerHTML = `
+                    <div class="system-card" style="border-color:#ef4444;background:rgba(239, 68, 68, 0.08);">
+                        <strong style="color:#b91c1c;">Calculation Error</strong>
+                        <p style="margin-top:0.5rem;color:#b91c1c;">${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+
+        loadReadme();
+        initializePyodide().catch((error) => {
+            document.getElementById('results-stage').innerHTML = `
+                <div class="system-card" style="border-color:#ef4444;background:rgba(239, 68, 68, 0.08);">
+                    <strong style="color:#b91c1c;">Initialization Error</strong>
+                    <p style="margin-top:0.5rem;color:#b91c1c;">${error.message}</p>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

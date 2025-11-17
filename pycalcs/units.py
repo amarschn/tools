@@ -239,6 +239,13 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "wk": _linear_unit("wk", "week", 604800.0),
         "yr": _linear_unit("yr", "year", 31_557_600.0),
     },
+    "velocity": {
+        "m/s": _linear_unit("m/s", "metre per second", 1.0),
+        "km/h": _linear_unit("km/h", "kilometre per hour", 1000.0 / 3600.0),
+        "ft/s": _linear_unit("ft/s", "foot per second", 0.3048),
+        "mph": _linear_unit("mph", "mile per hour", 1609.344 / 3600.0),
+        "knot": _linear_unit("knot", "knot", 1852.0 / 3600.0),
+    },
     "linear_stiffness": {
         "N/m": _linear_unit("N/m", "newton per metre", 1.0),
         "kN/m": _linear_unit("kN/m", "kilonewton per metre", 1e3),

@@ -109,6 +109,7 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
     * **`description`**: A brief summary that will appear on the tool card.
     * **`category`**: The primary engineering discipline(s). Try to use existing categories if they fit.
     * **`tags`**: A list of relevant, lowercase keywords that users might search for.
+    * Add the reserved tag `"human-verified"` once a maintainer has personally tested the tool end-to-end; the catalog will surface it with a dedicated badge so users can identify human-reviewed calculators.
 
     ***This step is critical.*** Without it, your tool will exist in the repository but will not appear on the main tools hub.
 
@@ -217,9 +218,18 @@ def calculate_tool(input_a: float, input_b: float) -> dict[str, float]:
     * Ensuring all functionality is usable with a keyboard.
 * **CSS:** The example template currently ships with an inline `<style>` block; start from it, keep component-specific tweaks inside that block, and only introduce shared rules in the forthcoming global stylesheet (see Roadmap). Use descriptive class names and avoid one-off inline `style=""` attributes so future extraction stays easy.
 
+### Local Environment Setup
+
+To keep WSL and macOS machines aligned without heavy tooling, install the few development dependencies directly:
+
+1. (Optional) create a project virtual environment: `python3 -m venv .venv && source .venv/bin/activate`
+2. Install the dev requirements: `python3 -m pip install -r requirements-dev.txt`
+
+This provides `pytest` (and any future lint/test utilities) while leaving the Pyodide-facing code dependency-free.
+
 ### Testing & Verification
 
-* **Numerical checks:** Add or update `tests/` cases (use `pytest`) that exercise new `pycalcs` functions across nominal, edge, and failure inputs. If you introduce a regression-safe fixture (e.g., compare against a known textbook example), document the reference in the test docstring.
+* **Numerical checks:** Add or update `tests/` cases (use `pytest`, run via `python3 -m pytest`) that exercise new `pycalcs` functions across nominal, edge, and failure inputs. If you introduce a regression-safe fixture (e.g., compare against a known textbook example), document the reference in the test docstring.
 * **Docstring parser smoke test:** Run `python -c "from pycalcs import utils, <module>; print(utils.get_documentation('<module>', '<function>'))"` to confirm the docstring splits cleanly before committing.
 * **Frontend sanity:** Open the tool in a local static server (e.g., `python -m http.server`) and verify tooltips, tab switching, and error handling. Capture at least one screenshot or screen recording when submitting a PR if the UI meaningfully changes.
 * **Export/visual checks:** When the tool supports exports or plots, download the artifact and ensure units, labels, and legends align with the on-screen values.
