@@ -1,251 +1,592 @@
-<!doctype html>
-<html lang="en" class="bg-slate-100 dark:bg-slate-900">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Whistle Acoustics Explorer</title>
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-  
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    .form-label { @apply block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1; }
-    /* --- THIS IS THE KEY FIX --- */
-    .form-input { @apply w-full p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition **text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500**; }
-    .card { @apply bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700; }
-    .btn { @apply px-4 py-2 text-white font-semibold rounded-md shadow-sm transition-colors duration-200 flex items-center justify-center; }
-    .btn-primary { @apply bg-sky-600 hover:bg-sky-700; }
-    .btn-secondary { @apply bg-slate-500 hover:bg-slate-600; }
-  </style>
-</head>
-<body class="text-slate-800 dark:text-slate-200">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whistle Acoustics Explorer - Engineering Tools</title>
 
-<div id="loading-indicator" class="text-center p-8">
-  <h1 class="text-2xl font-bold">⏳ Initializing Python Runtime...</h1>
-  <p>This may take a moment on the first visit.</p>
-</div>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
 
-<div id="app-content" class="container mx-auto p-4 md:p-8 max-w-7xl" style="display: none;">
-  
-  <header class="text-center mb-10">
-    <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">Whistle Acoustics Explorer</h1>
-    <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">An interactive tool for analyzing whistle resonance and edge-tone locking.</p>
-  </header>
-
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    
-    <div class="lg:col-span-1 space-y-6">
-      <form method="post" id="params-form">
-        
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Configuration</h2>
-          <div>
-            <label for="preset-selector" class="form-label">Load a Preset</label>
-            <select id="preset-selector" class="form-input">
-              <option value="custom">-- Custom --</option>
-              <option value="tin_whistle">Tin Whistle</option>
-              <option value="bottle_blow">Bottle Blow</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">General Parameters</h2>
-          <div class="space-y-4">
-            <div>
-              <label for="model" class="form-label">Resonator Model</label>
-              <select name="model" id="model" class="form-input">
-                <option value="pipe">Pipe (Open–Closed)</option>
-                <option value="helmholtz">Helmholtz</option>
-              </select>
-            </div>
-            <div>
-              <label for="T" class="form-label">Air Temperature T (K)</label>
-              <input type="number" step="0.1" name="T" id="T" value="293.15" class="form-input">
-            </div>
-            <div>
-              <label for="d" class="form-label">Jet Thickness d (m)</label>
-              <input type="number" step="0.0001" name="d" id="d" value="0.001" class="form-input">
-            </div>
-            <div>
-              <label for="stages" class="form-label">Edge-Tone Stages (St values)</label>
-              <input type="text" name="stages" id="stages" value="0.2,0.4,0.7,1.0,1.3" class="form-input">
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-            <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Resonator Geometry</h2>
-            <div id="pipe_fields" class="space-y-4">
-              <div>
-                <label for="L" class="form-label">Tube Length L (m)</label>
-                <input type="number" step="0.001" name="L" id="L" value="0.3" class="form-input">
-              </div>
-              <div>
-                <label for="end_corr" class="form-label">End Correction (m)</label>
-                <input type="number" step="0.0001" name="end_corr" id="end_corr" value="0.005" class="form-input">
-              </div>
-              <div>
-                <label for="n_max" class="form-label">Number of Modes (n)</label>
-                <input type="number" step="1" name="n_max" id="n_max" value="6" class="form-input">
-              </div>
-            </div>
-            <div id="helm_fields" class="space-y-4">
-              <div>
-                <label for="A" class="form-label">Neck Area A (m²)</label>
-                <input type="number" step="0.000001" name="A" id="A" value="0.00005" class="form-input">
-              </div>
-              <div>
-                <label for="V" class="form-label">Cavity Volume V (m³)</label>
-                <input type="number" step="0.000001" name="V" id="V" value="0.00003" class="form-input">
-              </div>
-              <div>
-                <label for="L_eff" class="form-label">Effective Neck Length L_eff (m)</label>
-                <input type="number" step="0.0001" name="L_eff" id="L_eff" value="0.01" class="form-input">
-              </div>
-            </div>
-        </div>
-        
-        <button type="submit" class="w-full btn btn-primary">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-2">
-            <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-          </svg>
-          Analyze
-        </button>
-
-      </form>
-    </div>
-
-    <div class="lg:col-span-2 space-y-8">
-      
-      <div class="card">
-         <h2 class="text-lg font-semibold mb-1">Visualization</h2>
-         <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Locking occurs where edge-tone lines (dotted) intersect resonator modes (dashed).</p>
-        <div id="plot" style="width:100%; min-height:450px;"></div>
-      </div>
-
-      <div class="card">
-        <h2 class="text-lg font-semibold mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Analysis Results</h2>
-        <div id="results-summary" class="mb-4 space-y-1">
-            <p>Speed of Sound c = <strong class="text-sky-500 dark:text-sky-400">...</strong> m/s</p>
-            <p>Resonator Frequencies (Hz): <span class="font-mono text-sky-500 dark:text-sky-400 text-sm">...</span></p>
-        </div>
-        
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="bg-slate-100 dark:bg-slate-700/50 text-xs uppercase">
-              <tr>
-                <th class="px-4 py-2">Mode</th>
-                <th class="px-4 py-2">Mode Freq (Hz)</th>
-                <th class="px-4 py-2">Stage</th>
-                <th class="px-4 py-2">St</th>
-                <th class="px-4 py-2">Locking Speed (m/s)</th>
-              </tr>
-            </thead>
-            <tbody id="results-table-body" class="divide-y divide-slate-200 dark:divide-slate-700">
-              </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script type="text/javascript">
-  async function main() {
-    const pyodide = await loadPyodide();
-    const [whistleCode, appCode] = await Promise.all([
-        fetch("./whistle_acoustics.py").then(res => res.text()),
-        fetch("./app.py").then(res => res.text())
-    ]);
-
-    pyodide.FS.writeFile("whistle_acoustics.py", whistleCode, { encoding: "utf8" });
-    pyodide.FS.writeFile("app.py", appCode, { encoding: "utf8" });
-
-    const app = pyodide.pyimport("app");
-    const presets = app.get_presets().toJs(); 
-    const calculateAcoustics = app.calculate_acoustics;
-
-    document.getElementById("loading-indicator").style.display = 'none';
-    document.getElementById("app-content").style.display = 'block';
-
-    const form = document.getElementById('params-form');
-    const modelSel = document.getElementById('model');
-    const pipeFields = document.getElementById('pipe_fields');
-    const helmFields = document.getElementById('helm_fields');
-    const presetSelector = document.getElementById('preset-selector');
-
-    function syncModelFields() {
-      const isPipe = modelSel.value === 'pipe';
-      pipeFields.style.display = isPipe ? 'block' : 'none';
-      helmFields.style.display = !isPipe ? 'block' : 'none';
-    }
-
-    function applyPreset(name) {
-      if (!name || name === 'custom') return;
-      const data = presets.get(name); 
-      Object.keys(data).forEach(key => {
-        const el = document.getElementById(key);
-        if (el) el.value = data[key];
-      });
-      syncModelFields();
-    }
-
-    function updateUI(results) {
-        document.querySelector("#results-summary strong").textContent = results.get('c').toFixed(2);
-        const modes = results.get('resonator_modes').toJs();
-        document.querySelector("#results-summary span").textContent = modes.map(f => Math.round(f)).join(', ');
-
-        const tableBody = document.getElementById("results-table-body");
-        tableBody.innerHTML = ''; 
-        const tableData = results.get('table').toJs();
-        for (const row of tableData) {
-            tableBody.innerHTML += `
-              <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                <td class="px-4 py-2 font-mono">${row.get('mode_n')}</td>
-                <td class="px-4 py-2 font-mono">${row.get('mode_freq_Hz').toFixed(1)}</td>
-                <td class="px-4 py-2 font-mono">${row.get('stage')}</td>
-                <td class="px-4 py-2 font-mono">${row.get('St').toFixed(3)}</td>
-                <td class="px-4 py-2 font-mono font-bold text-orange-500">${row.get('U_lock_m_per_s').toFixed(2)}</td>
-              </tr>
-            `;
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #212529;
+            --primary-light: #f8f9fa;
+            --secondary-color: #495057;
+            --text-color: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --border-radius: 8px;
         }
-        
-        const payload = JSON.parse(results.get('plot_payload'));
-        const plotConfig = { responsive: true, displaylogo: false };
-        Plotly.newPlot('plot', payload.data, payload.layout, plotConfig);
-    }
-    
-    async function analyze(event) {
-        if (event) event.preventDefault();
-        
-        const formData = new FormData(form);
-        const params = Object.fromEntries(formData.entries());
-        
-        const resultsProxy = calculateAcoustics(params);
-        updateUI(resultsProxy);
-        resultsProxy.destroy();
-    }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; }
+        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.25rem; color: var(--secondary-color); }
+        h4 { font-size: 1rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
 
-    form.addEventListener('submit', analyze);
-    modelSel.addEventListener('change', syncModelFields);
-    presetSelector.addEventListener('change', () => applyPreset(presetSelector.value));
+        /* --- 2. Navigation --- */
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+        .nav-brand:hover { text-decoration: none; }
 
-    syncModelFields();
-    analyze(); 
-  }
+        /* --- 3. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.1rem; max-width: 80ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
 
-  main().catch(err => {
-      console.error("Failed to initialize the application:", err);
-      document.getElementById("loading-indicator").innerHTML = `<div class="text-center p-8"><h1 class="text-2xl font-bold text-red-500">❌ Application Error</h1><p>Could not load the Python environment. Check the browser console (F12) for details.</p></div>`;
-  });
-</script>
+        /* --- 3b. Purpose/README Section --- */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
 
+        /* --- 4. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.25rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-group input:focus, .input-group select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light); }
+        .input-section { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+        .input-section:last-child { border-bottom: none; }
+        .input-section h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+        .conditional-inputs { display: none; }
+        .conditional-inputs.active { display: block; }
+
+        /* --- 5. Input Tooltip --- */
+        .tooltip-trigger { display: inline-block; width: 18px; height: 18px; background-color: var(--border-color); color: var(--text-light); border-radius: 50%; text-align: center; font-size: 12px; font-weight: bold; line-height: 18px; cursor: help; position: absolute; right: -24px; top: 38px; }
+        .tooltip-trigger::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: var(--text-color); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 400; line-height: 1.4; width: max-content; max-width: 300px; white-space: normal; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 10; }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 6. Button Styles --- */
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--primary-color); color: white; width: 100%; font-size: 1.1rem; padding: 12px; }
+        .btn-primary:hover { background-color: #000000; }
+        .btn-secondary { background-color: var(--bg-card); color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+        .btn-preset { margin-bottom: 0.5rem; }
+
+        /* --- 7. Output Section --- */
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 24px; }
+        .tab-link { padding: 10px 16px; cursor: pointer; background-color: transparent; border: none; font-size: 1rem; font-weight: 500; color: var(--text-light); border-bottom: 3px solid transparent; margin-bottom: -2px; }
+        .tab-link:hover { background-color: var(--primary-light); }
+        .tab-link.active { color: var(--primary-color); font-weight: 600; border-bottom-color: var(--primary-color); }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #results-display { background-color: var(--bg-color); border-radius: 6px; padding: 16px; margin-bottom: 1.5rem; }
+
+        /* --- 7b. Locking Table Styles --- */
+        .locking-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .locking-table th { background-color: var(--primary-color); color: white; padding: 12px 8px; text-align: left; font-weight: 600; font-size: 0.9rem; }
+        .locking-table td { padding: 10px 8px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
+        .locking-table tbody tr:hover { background-color: var(--primary-light); }
+        .locking-table tbody tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+
+        /* --- 7c. Result Summary --- */
+        .result-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 1.5rem; }
+        .summary-item { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; }
+        .summary-item strong { display: block; color: var(--secondary-color); font-size: 0.85rem; margin-bottom: 4px; }
+        .summary-item span { font-size: 1.4rem; font-weight: 600; color: var(--primary-color); }
+
+        /* --- 8. Footer --- */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* --- 9. Responsive Layout --- */
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0px; }
+            .input-group { padding-right: 24px; }
+        }
+
+        /* --- 10. Equation Display --- */
+        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
+        .equation-card { background: rgba(248, 250, 252, 0.75); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
+    </style>
+</head>
+
+<body>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+
+        <h1>Whistle Acoustics Explorer</h1>
+        <p class="tool-description" id="tool-description">
+            Analyze the physics of whistles, flutes, and resonant instruments by finding "locking"
+            conditions where edge-tone frequencies match resonator modes to produce stable musical notes.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>Purpose of This Tool</h3>
+                <p>This tool models the interaction between a resonator's natural frequencies and the edge-tones
+                produced by a jet of air striking a sharp edge (the labium). A stable musical note occurs only when
+                the edge-tone frequency matches one of the resonator's natural modes, creating "acoustic locking."</p>
+
+                <h4>Two Resonator Models</h4>
+
+                <p><strong>1. Pipe (Open-Closed Tube):</strong></p>
+                <p>An open-closed tube has one end open to the atmosphere and one end closed (or effectively closed).
+                Examples include flutes (embouchure end is effectively closed by the air column), tin whistles, clarinets,
+                and some organ pipes.</p>
+                <p><strong>Key characteristic:</strong> Open-closed tubes produce only <em>odd harmonics</em> (1st, 3rd, 5th, 7th...).
+                This is why the frequency formula contains (2n-1), which generates odd numbers. The fundamental is at frequency
+                f₁ = c/(4L), and subsequent modes are at 3f₁, 5f₁, 7f₁, etc. This odd-harmonic series gives instruments
+                like the clarinet their distinctive sound, different from open-open tubes like pan pipes.</p>
+
+                <p><strong>2. Helmholtz Resonator:</strong></p>
+                <p>A Helmholtz resonator is a cavity with a narrow neck opening—like blowing across a bottle. The air in
+                the cavity acts as a spring, and the air in the neck acts as a mass, creating a single dominant resonance
+                frequency. Unlike pipes, Helmholtz resonators typically have just one strong mode.</p>
+
+                <h4>End Correction (Pipes)</h4>
+                <p><strong>Why is end correction needed?</strong> The effective acoustic length of a pipe is slightly longer
+                than its physical length. At the open end, sound waves don't stop abruptly—they extend slightly beyond the
+                pipe opening due to acoustic radiation and diffraction.</p>
+                <p>Without end correction, calculated resonant frequencies would be <em>too high</em> (the pipe would seem
+                shorter than it acoustically behaves). The correction accounts for the pressure antinode occurring outside
+                the physical boundary.</p>
+                <p><strong>Typical values:</strong></p>
+                <ul>
+                    <li>Unflanged pipe (most instruments): δ ≈ 0.6 × radius ≈ 0.3–0.4 × diameter</li>
+                    <li>Flanged pipe: δ ≈ 0.8 × radius</li>
+                    <li>For a 15mm bore instrument: δ ≈ 4–6 mm (use 0.005 m)</li>
+                    <li>For a 10mm bore: δ ≈ 3–4 mm (use 0.003–0.004 m)</li>
+                </ul>
+                <p>The effective length becomes L_eff = L_physical + δ, lowering all resonant frequencies proportionally.</p>
+
+                <h4>Edge-Tone Physics</h4>
+                <p>When a thin jet of air strikes a sharp edge, it creates oscillating vortices at specific frequencies
+                called edge-tones. The frequency is given by: <strong>f = St × U / d</strong>, where U is jet velocity,
+                d is jet thickness, and St is the Strouhal number.</p>
+
+                <p><strong>Strouhal Numbers (Edge-Tone Stages):</strong> The Strouhal number characterizes different
+                oscillation modes of the jet. Edge-tones don't occur at all frequencies—only at discrete "stages"
+                with specific Strouhal numbers:</p>
+                <ul>
+                    <li><strong>Stage 1 (St ≈ 0.2):</strong> Fundamental mode, lowest frequency, most stable</li>
+                    <li><strong>Stage 2 (St ≈ 0.4):</strong> First overtone</li>
+                    <li><strong>Stage 3 (St ≈ 0.7):</strong> Second overtone</li>
+                    <li><strong>Stage 4 (St ≈ 1.0):</strong> Third overtone</li>
+                    <li><strong>Stage 5 (St ≈ 1.3):</strong> Fourth overtone</li>
+                </ul>
+                <p>These empirically-determined values (from Powell, 1961) represent the natural vortex shedding
+                patterns. Higher stages require higher jet velocities but are less stable in practice.</p>
+
+                <h4>Acoustic Locking</h4>
+                <p>Locking occurs when the edge-tone frequency exactly matches a resonator mode frequency. The tool
+                calculates the required jet velocities for each combination of resonator mode and edge-tone stage,
+                showing you which velocities will produce stable tones.</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+
+                    <div class="input-section">
+                        <h3>Preset Configurations</h3>
+                        <button type="button" class="btn btn-secondary btn-preset" onclick="loadPreset('tin_whistle')">🎵 Load Tin Whistle</button>
+                        <button type="button" class="btn btn-secondary btn-preset" onclick="loadPreset('bottle')">🍾 Load Bottle Blow</button>
+                    </div>
+
+                    <div class="input-section">
+                        <h3>General Parameters</h3>
+                        <div class="input-group">
+                            <label for="resonator_type">Resonator Type</label>
+                            <select id="resonator_type" name="resonator_type" onchange="toggleResonatorInputs()">
+                                <option value="pipe">Pipe (Open-Closed)</option>
+                                <option value="helmholtz">Helmholtz Resonator</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Select the type of resonator to model">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="temperature">Temperature (K)</label>
+                            <input type="number" step="0.1" id="temperature" name="temperature" value="293.15" placeholder="e.g., 293.15">
+                            <span class="tooltip-trigger" data-tooltip="Air temperature in Kelvin">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="jet_thickness">Jet Thickness (m)</label>
+                            <input type="number" step="0.0001" id="jet_thickness" name="jet_thickness" value="0.001" placeholder="e.g., 0.001">
+                            <span class="tooltip-trigger" data-tooltip="Thickness of the air jet at the labium">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="stages">Edge-Tone Stages</label>
+                            <input type="text" id="stages" name="stages" value="0.2,0.4,0.7,1.0,1.3" placeholder="e.g., 0.2,0.4,0.7">
+                            <span class="tooltip-trigger" data-tooltip="Comma-separated Strouhal numbers">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-section conditional-inputs active" id="pipe-inputs">
+                        <h3>Pipe Parameters</h3>
+                        <div class="input-group">
+                            <label for="pipe_length">Pipe Length (m)</label>
+                            <input type="number" step="0.001" id="pipe_length" name="pipe_length" value="0.3" placeholder="e.g., 0.3">
+                            <span class="tooltip-trigger" data-tooltip="Physical length of the tube">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="pipe_end_correction">End Correction (m)</label>
+                            <input type="number" step="0.0001" id="pipe_end_correction" name="pipe_end_correction" value="0.005" placeholder="e.g., 0.005">
+                            <span class="tooltip-trigger" data-tooltip="Correction for acoustic radiation at the open end">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="pipe_n_modes">Number of Modes</label>
+                            <input type="number" step="1" id="pipe_n_modes" name="pipe_n_modes" value="6" placeholder="e.g., 6">
+                            <span class="tooltip-trigger" data-tooltip="How many resonant modes to calculate">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-section conditional-inputs" id="helmholtz-inputs">
+                        <h3>Helmholtz Parameters</h3>
+                        <div class="input-group">
+                            <label for="helm_neck_area">Neck Area (m²)</label>
+                            <input type="number" step="0.00001" id="helm_neck_area" name="helm_neck_area" value="0.0001" placeholder="e.g., 0.0001">
+                            <span class="tooltip-trigger" data-tooltip="Cross-sectional area of the resonator neck">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="helm_cavity_volume">Cavity Volume (m³)</label>
+                            <input type="number" step="0.00001" id="helm_cavity_volume" name="helm_cavity_volume" value="0.0005" placeholder="e.g., 0.0005">
+                            <span class="tooltip-trigger" data-tooltip="Volume of the resonator cavity">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="helm_neck_length">Neck Length (m)</label>
+                            <input type="number" step="0.001" id="helm_neck_length" name="helm_neck_length" value="0.02" placeholder="e.g., 0.02">
+                            <span class="tooltip-trigger" data-tooltip="Effective length of the resonator neck">?</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Equations</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Acoustic Analysis</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Please enter inputs and press Calculate to analyze the acoustic locking conditions.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">Principles and equations will be loaded here.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        // --- 0. Global Store & Config ---
+        let toolDocumentation = {};
+        let pyUtils, pyAcoustics;
+
+        const TOOL_MODULE_NAME = 'acoustics';
+        const TOOL_FUNCTION_NAME = 'calculate_whistle_acoustics';
+
+        // --- 1. Tabbed Interface Logic ---
+        function openTab(event, tabName) {
+            document.querySelectorAll(".tab-content").forEach(tab => tab.style.display = "none");
+            document.querySelectorAll(".tab-link").forEach(link => link.classList.remove("active"));
+            document.getElementById(tabName).style.display = "block";
+            event.currentTarget.classList.add("active");
+        }
+        function typesetMath() {
+            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        }
+
+        // --- 2. Conditional Input Display ---
+        function toggleResonatorInputs() {
+            const resonatorType = document.getElementById('resonator_type').value;
+            const pipeInputs = document.getElementById('pipe-inputs');
+            const helmInputs = document.getElementById('helmholtz-inputs');
+
+            if (resonatorType === 'pipe') {
+                pipeInputs.classList.add('active');
+                helmInputs.classList.remove('active');
+            } else {
+                pipeInputs.classList.remove('active');
+                helmInputs.classList.add('active');
+            }
+        }
+
+        // --- 3. Preset Loader ---
+        function loadPreset(presetName) {
+            if (presetName === 'tin_whistle') {
+                document.getElementById('resonator_type').value = 'pipe';
+                document.getElementById('temperature').value = 293.15;
+                document.getElementById('jet_thickness').value = 0.001;
+                document.getElementById('stages').value = '0.2,0.4,0.7,1.0,1.3';
+                document.getElementById('pipe_length').value = 0.3;
+                document.getElementById('pipe_end_correction').value = 0.005;
+                document.getElementById('pipe_n_modes').value = 6;
+            } else if (presetName === 'bottle') {
+                document.getElementById('resonator_type').value = 'helmholtz';
+                document.getElementById('temperature').value = 293.15;
+                document.getElementById('jet_thickness').value = 0.002;
+                document.getElementById('stages').value = '0.2,0.4,0.7,1.0';
+                document.getElementById('helm_neck_area').value = 0.0003;
+                document.getElementById('helm_cavity_volume').value = 0.0005;
+                document.getElementById('helm_neck_length').value = 0.025;
+            }
+            toggleResonatorInputs();
+        }
+
+        // --- 4. Pyodide Initialization ---
+        async function main() {
+            document.getElementById("calculate-btn").textContent = "Loading Pyodide...";
+            let pyodide = await loadPyodide();
+            await pyodide.loadPackage("micropip");
+
+            document.getElementById("calculate-btn").textContent = "Loading Python...";
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_acoustics = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_acoustics.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            pyUtils = pyodide.globals.get('utils');
+            pyAcoustics = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                console.error("Docstring Error:", docMap.get('error'));
+                document.getElementById("results-placeholder").innerHTML = `
+                    <p style="color: red; font-weight: bold;">Initialization Error:</p>
+                    <p style="color: red;">Could not parse docstring from ${TOOL_MODULE_NAME}.py</p>
+                    <p style="color: red; font-size: 0.9em;">${docMap.get('error')}</p>
+                `;
+                return;
+            }
+
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+
+            populateUiFromDocs();
+            document.getElementById("calculate-btn").textContent = "Calculate";
+        }
+        main();
+
+        // --- 5. Populate UI from Docstring ---
+        function populateUiFromDocs() {
+            if (!toolDocumentation.parameters) return;
+
+            document.getElementById("tool-description").textContent = toolDocumentation.description || document.getElementById("tool-description").textContent;
+
+            // Update tooltips
+            const params = toolDocumentation.parameters;
+            document.querySelector('#resonator_type + .tooltip-trigger')?.setAttribute('data-tooltip', params.resonator_type || 'N/A');
+            document.querySelector('#temperature + .tooltip-trigger')?.setAttribute('data-tooltip', params.temperature || 'N/A');
+            document.querySelector('#jet_thickness + .tooltip-trigger')?.setAttribute('data-tooltip', params.jet_thickness || 'N/A');
+            document.querySelector('#stages + .tooltip-trigger')?.setAttribute('data-tooltip', params.stages || 'N/A');
+            document.querySelector('#pipe_length + .tooltip-trigger')?.setAttribute('data-tooltip', params.pipe_length || 'N/A');
+            document.querySelector('#pipe_end_correction + .tooltip-trigger')?.setAttribute('data-tooltip', params.pipe_end_correction || 'N/A');
+            document.querySelector('#pipe_n_modes + .tooltip-trigger')?.setAttribute('data-tooltip', params.pipe_n_modes || 'N/A');
+            document.querySelector('#helm_neck_area + .tooltip-trigger')?.setAttribute('data-tooltip', params.helm_neck_area || 'N/A');
+            document.querySelector('#helm_cavity_volume + .tooltip-trigger')?.setAttribute('data-tooltip', params.helm_cavity_volume || 'N/A');
+            document.querySelector('#helm_neck_length + .tooltip-trigger')?.setAttribute('data-tooltip', params.helm_neck_length || 'N/A');
+
+            // Build equations display
+            const latexLines = toolDocumentation.latex ? toolDocumentation.latex.split('\n').filter(line => line.trim().length > 0) : [];
+            const equationCards = latexLines.map((expression, index) => `
+                <div class="equation-card">
+                    <strong>Equation (${index + 1})</strong>
+                    <span class="equation-expression">\\[ ${expression} \\]</span>
+                </div>
+            `).join('');
+
+            document.getElementById('background').innerHTML = `
+                <h3>Underlying Principles</h3>
+                <p>${(toolDocumentation.description || '').replace(/\n/g, '<br>')}</p>
+                <h4>Governing Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations provided.</p>'}
+                </div>
+            `;
+            typesetMath();
+        }
+
+        // --- 6. Handle Calculation ---
+        const form = document.getElementById("calc-form");
+        form.addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            const resonatorType = document.getElementById("resonator_type").value;
+            const temperature = parseFloat(document.getElementById("temperature").value) || 293.15;
+            const jetThickness = parseFloat(document.getElementById("jet_thickness").value) || 0.001;
+            const stages = document.getElementById("stages").value || "0.2,0.4,0.7,1.0,1.3";
+            const pipeLength = parseFloat(document.getElementById("pipe_length").value) || 0.3;
+            const pipeEndCorr = parseFloat(document.getElementById("pipe_end_correction").value) || 0.005;
+            const pipeNModes = parseInt(document.getElementById("pipe_n_modes").value) || 6;
+            const helmNeckArea = parseFloat(document.getElementById("helm_neck_area").value) || 0.0001;
+            const helmCavityVol = parseFloat(document.getElementById("helm_cavity_volume").value) || 0.0005;
+            const helmNeckLen = parseFloat(document.getElementById("helm_neck_length").value) || 0.02;
+
+            try {
+                const resultMap = pyAcoustics[TOOL_FUNCTION_NAME](
+                    resonatorType, temperature, jetThickness, stages,
+                    pipeLength, pipeEndCorr, pipeNModes,
+                    helmNeckArea, helmCavityVol, helmNeckLen
+                ).toJs({dict_converter: Object.fromEntries});
+
+                // Deep convert the results to plain JavaScript
+                const results = {};
+                for (let [key, value] of Object.entries(resultMap)) {
+                    if (Array.isArray(value)) {
+                        // Convert arrays of dicts
+                        results[key] = value.map(item =>
+                            typeof item === 'object' ? Object.fromEntries(Object.entries(item)) : item
+                        );
+                    } else {
+                        results[key] = value;
+                    }
+                }
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                displayResults(results);
+
+            } catch (error) {
+                console.error("Python calculation error:", error);
+                document.getElementById("results-display").innerHTML = `
+                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+            }
+        });
+
+        // --- 7. Display Results ---
+        function displayResults(results) {
+            const resultsDiv = document.getElementById("results-display");
+            resultsDiv.innerHTML = '';
+            document.getElementById("results-placeholder")?.remove();
+
+            // Summary section
+            const summaryHtml = `
+                <div class="result-summary">
+                    <div class="summary-item">
+                        <strong>Speed of Sound</strong>
+                        <span>${results.speed_of_sound} m/s</span>
+                    </div>
+                    <div class="summary-item">
+                        <strong>Resonator Type</strong>
+                        <span style="font-size: 1.1rem;">${results.resonator_type_display}</span>
+                    </div>
+                    <div class="summary-item">
+                        <strong>Jet Thickness</strong>
+                        <span>${results.jet_thickness_mm} mm</span>
+                    </div>
+                </div>
+            `;
+            resultsDiv.innerHTML += summaryHtml;
+
+            // Resonator frequencies
+            const freqsHtml = `
+                <h4>Resonator Mode Frequencies</h4>
+                <p style="color: var(--text-light); margin-bottom: 1rem;">
+                    ${results.resonator_frequencies.map((f, i) => `Mode ${i+1}: <strong>${f} Hz</strong>`).join(' &nbsp;|&nbsp; ')}
+                </p>
+            `;
+            resultsDiv.innerHTML += freqsHtml;
+
+            // Locking table
+            const lockingTable = results.locking_table;
+            if (lockingTable && lockingTable.length > 0) {
+                let tableHtml = `
+                    <h4>Acoustic Locking Conditions</h4>
+                    <p style="color: var(--text-light); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                        These are the jet velocities required for edge-tone frequencies to match (lock with) resonator modes, sorted by velocity.
+                    </p>
+                    <table class="locking-table">
+                        <thead>
+                            <tr>
+                                <th>Mode #</th>
+                                <th>Mode Freq (Hz)</th>
+                                <th>Stage #</th>
+                                <th>Strouhal (St)</th>
+                                <th>Required Velocity (m/s)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                lockingTable.forEach(row => {
+                    tableHtml += `
+                        <tr>
+                            <td>${row.mode_index}</td>
+                            <td>${row.mode_frequency_hz}</td>
+                            <td>${row.stage_index}</td>
+                            <td>${row.strouhal_number}</td>
+                            <td><strong>${row.required_velocity_m_s}</strong></td>
+                        </tr>
+                    `;
+                });
+
+                tableHtml += `
+                        </tbody>
+                    </table>
+                `;
+                resultsDiv.innerHTML += tableHtml;
+            }
+        }
+    </script>
 </body>
 </html>
