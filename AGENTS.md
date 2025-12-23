@@ -30,6 +30,7 @@ All tools (our "agents") in this repository should adhere to the following princ
 * **Transparency:** Every calculation should be traceable. The exact equations, including references where applicable, must be accessible to the user. This builds trust and enhances the educational value.
 * **Modularity and Reusability:** Each tool is a standalone web page. However, the core calculation logic should be written as generic, well-documented Python functions in a shared library - `/pycalcs`. This promotes code reuse and simplifies maintenance. There should be multiple python files within `/pycalcs`, each containing relevant code for a given field or discipline.
 * **Single Source of Truth:** This is related to modularity and reusability, but bears explicit explanation - there should be no duplication of equations or explanations, this will result in errors. For any given variable, equation, or explanation for a phenomena, there should be only ONE place where that is documented.
+* **Tool-Local References by Default:** Reference data (datasheets, curves, images, PDFs) should live with the tool that uses them unless multiple tools depend on the same asset. This keeps context tight while still allowing shared promotion when reuse is real.
 * **Consistency:** All tools should share a similar, clean, and simple user interface. This creates a cohesive experience as users navigate between different calculators.
 * **Dependency-Free Core:** The core Python library functions should have minimal to no external dependencies to ensure they run smoothly with Pyodide and to avoid versioning conflicts.
 * **Visualizations:** Where appropriate, tools should include visualizations (plots, diagrams, etc.) to help users better understand the results and the underlying concepts.
@@ -49,6 +50,17 @@ The project is a static web app hosted on GitHub Pages, with calculations perfor
         * The mathematical equations used, written in LaTeX format.
         * Any references to textbooks, papers, or standards.
 * **Tools (`/tools/`):** Each tool lives in its own directory (e.g., `/tools/beam_deflection/`) and consists of at least an `index.html` file. Many of these tools directories will have their own `AGENTS.md` file that further refines what is needed for that tool.
+* **Reference Assets:** Default to tool-local storage under `/tools/<tool>/references/` (or within the tool README). If a tool-local reference becomes useful to more than one tool, promote it to a shared root folder such as `/references/<domain>/`, update all tools to link to the shared asset, and delete the duplicated copies. Document the promotion (why it is shared and which tools depend on it) in each tool README to keep the single source of truth clear.
+
+### Reference Promotion Checklist
+
+Use this when a tool-local reference becomes relevant to multiple tools:
+
+1. Move the reference into `/references/<domain>/` with clear naming and minimal duplication.
+2. Update every tool that used the local copy to point to the shared asset.
+3. Remove the old tool-local copies to keep a single source of truth.
+4. Add a short note in each affected tool README stating the shared reference location and dependent tools.
+5. Verify links/load paths still work in the browser (relative paths, fetch, etc.).
 
 ## Contribution Guidelines
 

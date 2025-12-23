@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battery Runtime Estimator - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #1e3a5f;
+            --primary-light: #f0f4f8;
+            --secondary-color: #495057;
+            --accent-color: #2563eb;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --text-color: #1f2937;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8fafc;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+            --border-radius: 10px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 700; }
+        h1 { font-size: 2.5rem; letter-spacing: -0.02em; }
+        h2 { font-size: 1.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; }
+        h3 { font-size: 1.15rem; color: var(--secondary-color); font-weight: 600; }
+        h4 { font-size: 1rem; color: var(--secondary-color); font-weight: 600; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        /* --- 2. Navigation --- */
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #0f172a 100%);
+            border-bottom: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+            padding: 0 5%;
+        }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.4rem; font-weight: 700; color: #fff; letter-spacing: -0.01em; }
+        .nav-brand:hover { text-decoration: none; opacity: 0.9; }
+
+        /* --- 3. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-header h1 { margin-bottom: 0.5rem; }
+        .tool-description { font-size: 1.15rem; max-width: 70ch; margin: 0 auto 1.5rem; color: var(--text-light); }
+        .tool-layout { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr); gap: 28px; align-items: start; }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 28px;
+        }
+
+        /* --- 3b. Purpose/README Section --- */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.05rem; font-weight: 600; color: var(--secondary-color); display: flex; justify-content: space-between; align-items: center; }
+        .purpose-section summary::after { content: 'Expand'; font-size: 0.85rem; font-weight: 500; color: var(--accent-color); background: var(--primary-light); padding: 4px 12px; border-radius: 20px; }
+        .purpose-section[open] > summary::after { content: 'Collapse'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+
+        /* --- 4. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+        .tool-inputs h2::before { content: ''; width: 4px; height: 24px; background: var(--accent-color); border-radius: 2px; }
+        .inputs-intro { font-size: 0.95rem; color: var(--text-light); margin-bottom: 1rem; }
+
+        .input-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .input-tab {
+            flex: 1 1 auto;
+            padding: 10px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-color);
+            color: var(--secondary-color);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .input-tab:hover { border-color: var(--accent-color); color: var(--accent-color); }
+        .input-tab.active {
+            background: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+        }
+        .input-section { display: none; animation: fadeIn 0.3s ease; }
+        .input-section.active { display: block; }
+
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            color: var(--text-color);
+        }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 12px 14px;
+            padding-right: 38px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+        .input-group select {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: none;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+        .input-hint { font-size: 0.85rem; color: var(--text-light); margin-top: 6px; }
+
+        /* --- 5. Input Tooltip --- */
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 42px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 220px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 100;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 6. Button Styles --- */
+        .btn {
+            display: inline-block;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-color) 0%, #1d4ed8 100%);
+            color: white;
+            width: 100%;
+            font-size: 1.1rem;
+            padding: 14px;
+            margin-top: 8px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+        }
+        .btn-secondary {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+        }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* --- 7. Output Section --- */
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 20px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-light);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s ease;
+        }
+        .tab-link:hover { background-color: var(--primary-light); color: var(--accent-color); }
+        .tab-link.active {
+            color: var(--accent-color);
+            font-weight: 600;
+            border-bottom-color: var(--accent-color);
+        }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- 7a. Results Display --- */
+        #results-display { min-height: 200px; }
+        .results-section { margin-bottom: 24px; }
+        .results-section h4 { margin-bottom: 12px; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .result-card {
+            background: linear-gradient(135deg, var(--primary-light) 0%, #fff 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .result-card.highlight {
+            background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+            border-color: var(--accent-color);
+        }
+        .result-card .label { font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px; font-weight: 500; }
+        .result-card .value { font-size: 1.6rem; font-weight: 700; color: var(--primary-color); font-family: 'JetBrains Mono', monospace; }
+        .result-card .unit { font-size: 0.9rem; color: var(--text-light); margin-left: 4px; }
+        .result-card .range { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; }
+
+        /* --- 7b. Inline Equation Details --- */
+        .result-card details.inline-details { margin-top: 10px; }
+        .result-card details.inline-details summary {
+            list-style: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+        .result-card details.inline-details summary::-webkit-details-marker { display: none; }
+        .result-card .equation-details {
+            margin-top: 10px;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            color: var(--secondary-color);
+            text-align: left;
+        }
+        .result-card .equation-details p { margin-bottom: 6px; }
+
+        /* --- 7c. Performance Gauges --- */
+        .safety-section { margin-top: 24px; }
+        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
+        .safety-gauge {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 14px;
+            padding: 12px 16px;
+            background: var(--bg-color);
+            border-radius: 8px;
+        }
+        .gauge-label { min-width: 160px; font-weight: 600; font-size: 0.9rem; }
+        .gauge-bar-container { flex: 1; height: 10px; background: #e5e7eb; border-radius: 5px; position: relative; overflow: visible; }
+        .gauge-bar { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+        .gauge-bar.success { background: linear-gradient(90deg, var(--success-color), #10b981); }
+        .gauge-bar.warning { background: linear-gradient(90deg, var(--warning-color), #fbbf24); }
+        .gauge-bar.danger { background: linear-gradient(90deg, var(--danger-color), #f87171); }
+        .gauge-value {
+            min-width: 80px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .gauge-value.success { color: var(--success-color); }
+        .gauge-value.warning { color: var(--warning-color); }
+        .gauge-value.danger { color: var(--danger-color); }
+        .gauge-threshold {
+            position: absolute;
+            width: 2px;
+            height: 18px;
+            background: var(--text-color);
+            top: -4px;
+        }
+
+        /* --- 7d. Status Banner --- */
+        .status-banner {
+            padding: 18px 24px;
+            border-radius: 10px;
+            margin-top: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+        .status-banner .icon { font-size: 1.5rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
+        .status-banner.acceptable {
+            background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+            border: 1px solid var(--success-color);
+        }
+        .status-banner.acceptable h4 { color: var(--success-color); }
+        .status-banner.marginal {
+            background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+            border: 1px solid var(--warning-color);
+        }
+        .status-banner.marginal h4 { color: var(--warning-color); }
+        .status-banner.unacceptable {
+            background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
+            border: 1px solid var(--danger-color);
+        }
+        .status-banner.unacceptable h4 { color: var(--danger-color); }
+        .recommendations { margin-top: 8px; padding-left: 20px; }
+        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; }
+
+        /* --- 7e. Chart Containers --- */
+        .chart-container {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .chart-container h4 { margin-bottom: 12px; font-size: 1rem; }
+        .chart-plot { width: 100%; min-height: 280px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-light); padding: 16px; background: #fafafa; border-radius: 8px; }
+
+        /* --- 7f. Interactive Definitions (Tooltips) --- */
+        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
+        .def::after {
+            content: attr(data-def);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+        }
+        .def:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 7g. Equation Cards --- */
+        .equation-container { display: flex; flex-direction: column; gap: 16px; margin-top: 1rem; }
+        .equation-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #fff 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.95rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.1rem; }
+        .equation-card .equation-summary { font-size: 0.9rem; color: var(--text-light); margin-bottom: 8px; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
+
+        /* --- 8. Footer --- */
+        .footer {
+            text-align: center;
+            padding: 24px 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: auto;
+        }
+
+        /* --- 9. Responsive Layout --- */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .input-row { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 600px) {
+            .input-tabs { flex-direction: column; }
+            .results-grid { grid-template-columns: 1fr; }
+        }
+
+        /* --- 10. Loading State --- */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; color: var(--text-color); }
+    </style>
+</head>
+
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div class="tool-header">
+            <h1>Battery Runtime Estimator</h1>
+            <p class="tool-description" id="tool-description">
+                Estimate runtime based on load type, internal resistance, temperature, and capacity adjustments.
+            </p>
+        </div>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <p class="inputs-intro">
+                    Choose a chemistry preset, then set pack or cell specs. Use the load tab to define current,
+                    power, or resistance, and refine runtime with environment and degradation factors.
+                </p>
+                <div class="input-tabs">
+                    <button type="button" class="input-tab active" data-target="section-pack">Pack</button>
+                    <button type="button" class="input-tab" data-target="section-cells">Cells</button>
+                    <button type="button" class="input-tab" data-target="section-load">Load</button>
+                    <button type="button" class="input-tab" data-target="section-environment">Environment</button>
+                </div>
+                <form id="calc-form">
+                    <div id="section-pack" class="input-section active">
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="chemistry">Chemistry Preset</label>
+                                <select id="chemistry" name="chemistry">
+                                    <option value="li_ion_nmc" selected>Li-ion (NMC/NCA)</option>
+                                    <option value="lipo">LiPo (high-rate)</option>
+                                    <option value="lifepo4">LiFePO4</option>
+                                    <option value="nimh">NiMH</option>
+                                    <option value="lead_acid">Lead-acid</option>
+                                </select>
+                                <span class="tooltip-trigger" id="tooltip-chemistry" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="use_cell_specs">Use Cell Specs?</label>
+                                <select id="use_cell_specs" name="use_cell_specs">
+                                    <option value="1">Yes (derive pack)</option>
+                                    <option value="0" selected>No (use pack inputs)</option>
+                                </select>
+                                <span class="tooltip-trigger" id="tooltip-use_cell_specs" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="pack_nominal_voltage_v">Pack Nominal Voltage (V)</label>
+                                <input type="number" id="pack_nominal_voltage_v" name="pack_nominal_voltage_v" value="14.4" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-pack_nominal_voltage_v" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="pack_capacity_ah">Pack Capacity (Ah)</label>
+                                <input type="number" id="pack_capacity_ah" name="pack_capacity_ah" value="5.2" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-pack_capacity_ah" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="pack_internal_resistance_ohm">Pack Internal Resistance (Ohm)</label>
+                                <input type="number" id="pack_internal_resistance_ohm" name="pack_internal_resistance_ohm" value="0.06" step="0.001">
+                                <span class="tooltip-trigger" id="tooltip-pack_internal_resistance_ohm" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="pack_cutoff_voltage_v">Pack Cutoff Voltage (V)</label>
+                                <input type="number" id="pack_cutoff_voltage_v" name="pack_cutoff_voltage_v" value="12.0" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-pack_cutoff_voltage_v" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <p class="input-hint">When cell specs are enabled, pack-level values update automatically.</p>
+                    </div>
+
+                    <div id="section-cells" class="input-section">
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="series_cells">Cells in Series (Ns)</label>
+                                <input type="number" id="series_cells" name="series_cells" value="4" step="1">
+                                <span class="tooltip-trigger" id="tooltip-series_cells" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="parallel_cells">Cells in Parallel (Np)</label>
+                                <input type="number" id="parallel_cells" name="parallel_cells" value="2" step="1">
+                                <span class="tooltip-trigger" id="tooltip-parallel_cells" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="cell_nominal_voltage_v">Cell Nominal Voltage (V)</label>
+                                <input type="number" id="cell_nominal_voltage_v" name="cell_nominal_voltage_v" value="3.6" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-cell_nominal_voltage_v" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="cell_capacity_ah">Cell Capacity (Ah)</label>
+                                <input type="number" id="cell_capacity_ah" name="cell_capacity_ah" value="2.6" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-cell_capacity_ah" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="cell_internal_resistance_ohm">Cell Internal Resistance (Ohm)</label>
+                                <input type="number" id="cell_internal_resistance_ohm" name="cell_internal_resistance_ohm" value="0.03" step="0.001">
+                                <span class="tooltip-trigger" id="tooltip-cell_internal_resistance_ohm" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="cell_cutoff_voltage_v">Cell Cutoff Voltage (V)</label>
+                                <input type="number" id="cell_cutoff_voltage_v" name="cell_cutoff_voltage_v" value="3.0" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-cell_cutoff_voltage_v" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="section-load" class="input-section">
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="load_type">Load Type</label>
+                                <select id="load_type" name="load_type">
+                                    <option value="constant_power" selected>Constant power</option>
+                                    <option value="constant_current">Constant current</option>
+                                    <option value="constant_resistance">Constant resistance</option>
+                                </select>
+                                <span class="tooltip-trigger" id="tooltip-load_type" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="duty_cycle">Duty Cycle (0-1)</label>
+                                <input type="number" id="duty_cycle" name="duty_cycle" value="1.0" step="0.01" min="0" max="1">
+                                <span class="tooltip-trigger" id="tooltip-duty_cycle" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="load_current_a">Load Current (A)</label>
+                                <input type="number" id="load_current_a" name="load_current_a" value="1.5" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-load_current_a" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="load_power_w">Load Power (W)</label>
+                                <input type="number" id="load_power_w" name="load_power_w" value="20" step="0.1">
+                                <span class="tooltip-trigger" id="tooltip-load_power_w" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="load_resistance_ohm">Load Resistance (Ohm)</label>
+                                <input type="number" id="load_resistance_ohm" name="load_resistance_ohm" value="10" step="0.1">
+                                <span class="tooltip-trigger" id="tooltip-load_resistance_ohm" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="converter_efficiency">Converter Efficiency (0-1)</label>
+                                <input type="number" id="converter_efficiency" name="converter_efficiency" value="0.9" step="0.01" min="0" max="1">
+                                <span class="tooltip-trigger" id="tooltip-converter_efficiency" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="section-environment" class="input-section">
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="ambient_temperature_c">Ambient Temperature (deg C)</label>
+                                <input type="number" id="ambient_temperature_c" name="ambient_temperature_c" value="25" step="0.1">
+                                <span class="tooltip-trigger" id="tooltip-ambient_temperature_c" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="reference_temperature_c">Reference Temperature (deg C)</label>
+                                <input type="number" id="reference_temperature_c" name="reference_temperature_c" value="25" step="0.1">
+                                <span class="tooltip-trigger" id="tooltip-reference_temperature_c" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="capacity_temp_coeff_per_c">Capacity Temp Coeff (1/deg C)</label>
+                                <input type="number" id="capacity_temp_coeff_per_c" name="capacity_temp_coeff_per_c" value="0.004" step="0.0001">
+                                <span class="tooltip-trigger" id="tooltip-capacity_temp_coeff_per_c" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="peukert_exponent">Peukert Exponent (k)</label>
+                                <input type="number" id="peukert_exponent" name="peukert_exponent" value="1.05" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-peukert_exponent" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="reference_current_a">Reference Current (A)</label>
+                                <input type="number" id="reference_current_a" name="reference_current_a" value="1.0" step="0.01">
+                                <span class="tooltip-trigger" id="tooltip-reference_current_a" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="depth_of_discharge">Depth of Discharge (0-1)</label>
+                                <input type="number" id="depth_of_discharge" name="depth_of_discharge" value="0.8" step="0.01" min="0" max="1">
+                                <span class="tooltip-trigger" id="tooltip-depth_of_discharge" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="state_of_health">State of Health (0-1)</label>
+                                <input type="number" id="state_of_health" name="state_of_health" value="1.0" step="0.01" min="0" max="1">
+                                <span class="tooltip-trigger" id="tooltip-state_of_health" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="plot">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <div id="results-display">
+                        <p style="text-align: center; color: var(--text-light); padding: 40px;">
+                            Enter parameters and click <strong>Calculate</strong> to estimate runtime.
+                        </p>
+                    </div>
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Discharge Curve (Placeholder)</h4>
+                        <div id="plot-container" class="chart-plot">
+                            Provide a reference discharge profile to visualize voltage vs capacity.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">General principles and theory will be loaded here from the docstring.</p>
+                    <h4>Equations</h4>
+                    <div class="equation-container" id="equation-container"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        // --- 0. Global Store & Config ---
+        let toolDocumentation = {};
+        let latexExpressions = [];
+        let pyUtils, pyToolModule;
+
+        // --- CONFIG: Set these for each tool ---
+        const TOOL_MODULE_NAME = 'batteries';
+        const TOOL_FUNCTION_NAME = 'estimate_battery_runtime';
+        const PARAM_ORDER = [
+            'chemistry',
+            'use_cell_specs',
+            'series_cells',
+            'parallel_cells',
+            'cell_nominal_voltage_v',
+            'cell_capacity_ah',
+            'cell_internal_resistance_ohm',
+            'cell_cutoff_voltage_v',
+            'pack_nominal_voltage_v',
+            'pack_capacity_ah',
+            'pack_internal_resistance_ohm',
+            'pack_cutoff_voltage_v',
+            'load_type',
+            'load_current_a',
+            'load_power_w',
+            'load_resistance_ohm',
+            'converter_efficiency',
+            'duty_cycle',
+            'peukert_exponent',
+            'reference_current_a',
+            'ambient_temperature_c',
+            'reference_temperature_c',
+            'capacity_temp_coeff_per_c',
+            'depth_of_discharge',
+            'state_of_health'
+        ];
+        const STRING_PARAMS = new Set(['chemistry', 'load_type']);
+        const RESULT_EQUATION_INDEX = {
+            runtime_hours: 11,
+            runtime_minutes: 11,
+            effective_capacity_ah: 10,
+            average_current_a: null,
+            average_power_w: 13,
+            energy_delivered_wh: 12,
+            loaded_voltage_v: 6,
+            voltage_sag_v: 7,
+            c_rate: 14,
+            pack_nominal_voltage_v: 0,
+            pack_capacity_ah: 1,
+            pack_internal_resistance_ohm: 2,
+            pack_cutoff_voltage_v: null
+        };
+        const EQUATION_DESCRIPTIONS = [
+            'Series cells scale nominal voltage.',
+            'Parallel cells scale capacity.',
+            'Series and parallel combine internal resistance.',
+            'Constant-current load adjusted by efficiency.',
+            'Constant-resistance load current with internal resistance.',
+            'Constant-power load current with internal resistance.',
+            'Loaded voltage under current draw.',
+            'Voltage sag across internal resistance.',
+            'Temperature-adjusted capacity.',
+            'Capacity limited by SOH and depth-of-discharge.',
+            'Peukert-adjusted effective capacity.',
+            'Runtime based on effective capacity and average current.',
+            'Delivered energy estimate.',
+            'Average power at loaded voltage.',
+            'C-rate based on average current.'
+        ];
+        const EQUATION_LEGENDS = [
+            [
+                { symbol: 'V_{pack}', text: 'Pack nominal voltage (V)' },
+                { symbol: 'N_s', text: 'Cells in series (count)' },
+                { symbol: 'V_{cell}', text: 'Cell nominal voltage (V)' }
+            ],
+            [
+                { symbol: 'C_{pack}', text: 'Pack capacity (Ah)' },
+                { symbol: 'N_p', text: 'Cells in parallel (count)' },
+                { symbol: 'C_{cell}', text: 'Cell capacity (Ah)' }
+            ],
+            [
+                { symbol: 'R_{pack}', text: 'Pack internal resistance (Ohm)' },
+                { symbol: 'N_s', text: 'Cells in series (count)' },
+                { symbol: 'N_p', text: 'Cells in parallel (count)' },
+                { symbol: 'R_{cell}', text: 'Cell internal resistance (Ohm)' }
+            ],
+            [
+                { symbol: 'I_{load}', text: 'Battery current (A)' },
+                { symbol: 'I_{set}', text: 'Requested constant current (A)' },
+                { symbol: '\\eta', text: 'Converter efficiency (0-1)' }
+            ],
+            [
+                { symbol: 'I_{load}', text: 'Battery current (A)' },
+                { symbol: 'V_{pack}', text: 'Pack nominal voltage (V)' },
+                { symbol: 'R_{load}', text: 'Load resistance (Ohm)' },
+                { symbol: 'R_{pack}', text: 'Pack internal resistance (Ohm)' }
+            ],
+            [
+                { symbol: 'I_{load}', text: 'Battery current (A)' },
+                { symbol: 'V_{pack}', text: 'Pack nominal voltage (V)' },
+                { symbol: 'R_{pack}', text: 'Pack internal resistance (Ohm)' },
+                { symbol: 'P_{batt}', text: 'Battery-side power demand (W)' }
+            ],
+            [
+                { symbol: 'V_{load}', text: 'Loaded voltage (V)' },
+                { symbol: 'V_{pack}', text: 'Pack nominal voltage (V)' },
+                { symbol: 'I_{load}', text: 'Battery current (A)' },
+                { symbol: 'R_{pack}', text: 'Pack internal resistance (Ohm)' }
+            ],
+            [
+                { symbol: 'V_{sag}', text: 'Voltage sag (V)' },
+                { symbol: 'I_{load}', text: 'Battery current (A)' },
+                { symbol: 'R_{pack}', text: 'Pack internal resistance (Ohm)' }
+            ],
+            [
+                { symbol: 'C_{temp}', text: 'Temperature-adjusted capacity (Ah)' },
+                { symbol: 'C_{pack}', text: 'Pack rated capacity (Ah)' },
+                { symbol: '\\alpha', text: 'Capacity temp coefficient (1/deg C)' },
+                { symbol: 'T', text: 'Ambient temperature (deg C)' },
+                { symbol: 'T_{ref}', text: 'Reference temperature (deg C)' }
+            ],
+            [
+                { symbol: 'C_{usable}', text: 'Usable capacity (Ah)' },
+                { symbol: 'C_{temp}', text: 'Temperature-adjusted capacity (Ah)' },
+                { symbol: 'SOH', text: 'State of health (fraction)' },
+                { symbol: 'DoD', text: 'Depth of discharge (fraction)' }
+            ],
+            [
+                { symbol: 'C_{eff}', text: 'Effective capacity (Ah)' },
+                { symbol: 'C_{usable}', text: 'Usable capacity (Ah)' },
+                { symbol: 'I_{ref}', text: 'Reference current (A)' },
+                { symbol: 'I_{avg}', text: 'Average current (A)' },
+                { symbol: 'k', text: 'Peukert exponent' }
+            ],
+            [
+                { symbol: 't', text: 'Runtime (h)' },
+                { symbol: 'C_{eff}', text: 'Effective capacity (Ah)' },
+                { symbol: 'I_{avg}', text: 'Average current (A)' }
+            ],
+            [
+                { symbol: 'E', text: 'Delivered energy (Wh)' },
+                { symbol: 'V_{load}', text: 'Loaded voltage (V)' },
+                { symbol: 'C_{eff}', text: 'Effective capacity (Ah)' }
+            ],
+            [
+                { symbol: 'P_{avg}', text: 'Average power (W)' },
+                { symbol: 'V_{load}', text: 'Loaded voltage (V)' },
+                { symbol: 'I_{avg}', text: 'Average current (A)' }
+            ],
+            [
+                { symbol: 'C_{rate}', text: 'C-rate (1/h)' },
+                { symbol: 'I_{avg}', text: 'Average current (A)' },
+                { symbol: 'C_{pack}', text: 'Pack rated capacity (Ah)' }
+            ]
+        ];
+        const CHEMISTRY_DEFAULTS = {
+            li_ion_nmc: {
+                cell_nominal_voltage_v: 3.6,
+                cell_capacity_ah: 2.6,
+                cell_internal_resistance_ohm: 0.03,
+                cell_cutoff_voltage_v: 3.0,
+                peukert_exponent: 1.05,
+                capacity_temp_coeff_per_c: 0.004,
+                reference_c_rate: 0.2
+            },
+            lipo: {
+                cell_nominal_voltage_v: 3.7,
+                cell_capacity_ah: 2.2,
+                cell_internal_resistance_ohm: 0.02,
+                cell_cutoff_voltage_v: 3.2,
+                peukert_exponent: 1.03,
+                capacity_temp_coeff_per_c: 0.003,
+                reference_c_rate: 0.5
+            },
+            lifepo4: {
+                cell_nominal_voltage_v: 3.2,
+                cell_capacity_ah: 3.0,
+                cell_internal_resistance_ohm: 0.015,
+                cell_cutoff_voltage_v: 2.5,
+                peukert_exponent: 1.05,
+                capacity_temp_coeff_per_c: 0.003,
+                reference_c_rate: 0.3
+            },
+            nimh: {
+                cell_nominal_voltage_v: 1.2,
+                cell_capacity_ah: 2.0,
+                cell_internal_resistance_ohm: 0.02,
+                cell_cutoff_voltage_v: 1.0,
+                peukert_exponent: 1.1,
+                capacity_temp_coeff_per_c: 0.004,
+                reference_c_rate: 0.2
+            },
+            lead_acid: {
+                cell_nominal_voltage_v: 2.0,
+                cell_capacity_ah: 7.0,
+                cell_internal_resistance_ohm: 0.015,
+                cell_cutoff_voltage_v: 1.75,
+                peukert_exponent: 1.2,
+                capacity_temp_coeff_per_c: 0.006,
+                reference_c_rate: 0.05
+            }
+        };
+
+        const inputTabs = document.querySelectorAll('.input-tab');
+        const inputSections = document.querySelectorAll('.input-section');
+        const outputTabs = document.querySelectorAll('.tab-link');
+        const outputSections = document.querySelectorAll('.tab-content');
+
+        function setInputTab(targetId) {
+            inputTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.target === targetId));
+            inputSections.forEach(section => section.classList.toggle('active', section.id === targetId));
+        }
+
+        function setOutputTab(targetId) {
+            outputTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.target === targetId));
+            outputSections.forEach(section => {
+                section.style.display = section.id === targetId ? 'block' : 'none';
+            });
+        }
+
+        inputTabs.forEach(tab => {
+            tab.addEventListener('click', () => setInputTab(tab.dataset.target));
+        });
+        outputTabs.forEach(tab => {
+            tab.addEventListener('click', () => setOutputTab(tab.dataset.target));
+        });
+
+        function typesetMath() {
+            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        }
+
+        function formatNumber(value, decimals = 2) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return 'N/A';
+            }
+            if (!Number.isFinite(value)) {
+                return value > 0 ? '&infin;' : value < 0 ? '-&infin;' : 'N/A';
+            }
+            const absVal = Math.abs(value);
+            if (absVal >= 1e6) return (value / 1e6).toFixed(decimals) + ' M';
+            if (absVal >= 1e3) return (value / 1e3).toFixed(decimals) + ' k';
+            return value.toFixed(decimals);
+        }
+
+        function setNumberValue(id, value) {
+            const input = document.getElementById(id);
+            const numeric = Number(value);
+            if (input && Number.isFinite(numeric)) {
+                input.value = numeric;
+            }
+        }
+
+        function updatePackFromCells() {
+            const useCells = Number(document.getElementById('use_cell_specs').value) === 1;
+            if (!useCells) {
+                return;
+            }
+            const seriesCells = Number(document.getElementById('series_cells').value);
+            const parallelCells = Number(document.getElementById('parallel_cells').value);
+            const cellVoltage = Number(document.getElementById('cell_nominal_voltage_v').value);
+            const cellCapacity = Number(document.getElementById('cell_capacity_ah').value);
+            const cellResistance = Number(document.getElementById('cell_internal_resistance_ohm').value);
+            const cellCutoff = Number(document.getElementById('cell_cutoff_voltage_v').value);
+            if (![seriesCells, parallelCells, cellVoltage, cellCapacity, cellResistance, cellCutoff].every(Number.isFinite)) {
+                return;
+            }
+            if (seriesCells <= 0 || parallelCells <= 0) {
+                return;
+            }
+            setNumberValue('pack_nominal_voltage_v', seriesCells * cellVoltage);
+            setNumberValue('pack_capacity_ah', parallelCells * cellCapacity);
+            setNumberValue('pack_internal_resistance_ohm', (seriesCells * cellResistance) / parallelCells);
+            setNumberValue('pack_cutoff_voltage_v', seriesCells * cellCutoff);
+        }
+
+        function updateReferenceCurrent(defaults) {
+            const useCells = Number(document.getElementById('use_cell_specs').value) === 1;
+            const capacity = useCells
+                ? Number(document.getElementById('parallel_cells').value) * Number(document.getElementById('cell_capacity_ah').value)
+                : Number(document.getElementById('pack_capacity_ah').value);
+            if (!Number.isFinite(capacity) || capacity <= 0) {
+                return;
+            }
+            const cRate = defaults?.reference_c_rate ?? 0.2;
+            setNumberValue('reference_current_a', capacity * cRate);
+        }
+
+        function applyChemistryDefaults() {
+            const chemistry = document.getElementById('chemistry').value;
+            const defaults = CHEMISTRY_DEFAULTS[chemistry];
+            if (!defaults) {
+                return;
+            }
+            setNumberValue('cell_nominal_voltage_v', defaults.cell_nominal_voltage_v);
+            setNumberValue('cell_capacity_ah', defaults.cell_capacity_ah);
+            setNumberValue('cell_internal_resistance_ohm', defaults.cell_internal_resistance_ohm);
+            setNumberValue('cell_cutoff_voltage_v', defaults.cell_cutoff_voltage_v);
+            setNumberValue('peukert_exponent', defaults.peukert_exponent);
+            setNumberValue('capacity_temp_coeff_per_c', defaults.capacity_temp_coeff_per_c);
+            updatePackFromCells();
+            updateReferenceCurrent(defaults);
+        }
+
+        async function loadReadme() {
+            const container = document.getElementById('readme-content');
+            try {
+                const response = await fetch('./README.md');
+                if (!response.ok) throw new Error('README not found');
+                const markdown = await response.text();
+                container.innerHTML = renderMarkdown(markdown);
+            } catch (error) {
+                container.innerHTML = `<p style="color:#c92a2a;">Unable to load README: ${error.message}</p>`;
+            }
+        }
+
+        function renderMarkdown(markdown) {
+            const lines = markdown.split('\n');
+            let html = '';
+            let inList = false;
+            let paragraphLines = [];
+
+            const flushParagraph = () => {
+                if (paragraphLines.length) {
+                    html += `<p>${paragraphLines.join(' ').trim()}</p>`;
+                    paragraphLines = [];
+                }
+            };
+            const closeList = () => {
+                if (inList) {
+                    html += '</ul>';
+                    inList = false;
+                }
+            };
+
+            lines.forEach((line) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    flushParagraph();
+                    closeList();
+                    return;
+                }
+
+                if (trimmed.startsWith('#')) {
+                    flushParagraph();
+                    closeList();
+                    const match = trimmed.match(/^(#+)\\s*(.*)$/);
+                    const level = match ? match[1].length : 1;
+                    const text = match ? match[2] : trimmed.replace(/^#+\\s*/, '');
+                    const tag = level === 1 ? 'h3' : 'h4';
+                    html += `<${tag}>${text}</${tag}>`;
+                    return;
+                }
+
+                if (/^[-*+]\\s+/.test(trimmed)) {
+                    flushParagraph();
+                    if (!inList) {
+                        html += '<ul>';
+                        inList = true;
+                    }
+                    html += `<li>${trimmed.replace(/^[-*+]\\s+/, '')}</li>`;
+                    return;
+                }
+
+                if (inList) {
+                    closeList();
+                }
+                paragraphLines.push(trimmed);
+            });
+
+            flushParagraph();
+            closeList();
+            return html;
+        }
+
+        // --- 2. Pyodide Initialization ---
+        async function main() {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingText = document.getElementById('loading-text');
+            const button = document.getElementById('calculate-btn');
+
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                let pyodide = await loadPyodide();
+                await pyodide.loadPackage('micropip');
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+                if (docMap.has('error')) {
+                    document.getElementById('results-display').innerHTML = `
+                        <p style="color: red; font-weight: bold;">Initialization Error:</p>
+                        <p style="color: red;">${docMap.get('error')}</p>
+                    `;
+                    loadingText.textContent = 'Error loading documentation.';
+                    return;
+                }
+
+                toolDocumentation = Object.fromEntries(docMap);
+                if (toolDocumentation.parameters) {
+                    toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+                }
+                if (toolDocumentation.returns) {
+                    toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+                }
+                latexExpressions = toolDocumentation.latex
+                    ? toolDocumentation.latex.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+                    : [];
+
+                populateUiFromDocs();
+                button.textContent = 'Calculate';
+                loadingOverlay.classList.add('hidden');
+                loadReadme();
+            } catch (error) {
+                loadingText.textContent = 'Error loading: ' + error.message;
+                console.error('Initialization error:', error);
+            }
+        }
+        main();
+
+        // --- 3. Populate UI from Docstring ---
+        function populateUiFromDocs() {
+            if (!toolDocumentation.parameters) return;
+
+            document.getElementById('tool-description').textContent = toolDocumentation.description;
+
+            PARAM_ORDER.forEach((param) => {
+                const tooltip = document.getElementById(`tooltip-${param}`);
+                if (tooltip && toolDocumentation.parameters[param]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[param]);
+                }
+            });
+
+            const background = document.getElementById('background-description');
+            background.innerHTML = `
+                ${toolDocumentation.description.replace(/\n/g, '<br>')}
+                <br><br>
+                The model uses a nominal open-circuit voltage with a lumped internal resistance, plus
+                Peukert and temperature corrections for effective capacity. For more precise results,
+                validate against manufacturer discharge curves or field data.
+            `;
+
+            const equationContainer = document.getElementById('equation-container');
+            equationContainer.innerHTML = '';
+            latexExpressions.forEach((expression, index) => {
+                const legendItems = (EQUATION_LEGENDS[index] || [])
+                    .map((item) => `<li><span class="math-inline">\\(${item.symbol}\\)</span>: ${item.text}</li>`)
+                    .join('');
+                const legendHtml = legendItems || '<li>Variable definitions to be provided.</li>';
+                const summaryText = EQUATION_DESCRIPTIONS[index] || '';
+
+                const card = document.createElement('div');
+                card.className = 'equation-card';
+                card.innerHTML = `
+                    <strong>Equation (${index + 1})</strong>
+                    <span class="equation-expression">\\[ ${expression} \\]</span>
+                    ${summaryText ? `<p class="equation-summary">${summaryText}</p>` : ''}
+                    <ul>${legendHtml}</ul>
+                `;
+                equationContainer.appendChild(card);
+            });
+            typesetMath();
+        }
+
+        function buildEquationBlock(key, results) {
+            const eqIndex = RESULT_EQUATION_INDEX[key];
+            const equation = typeof eqIndex === 'number' ? latexExpressions[eqIndex] : '';
+            const substString = results[`subst_${key}`];
+            if (!equation && !substString) {
+                return '';
+            }
+            const equationHtml = equation ? `<p><strong>Equation:</strong> $$${equation}$$</p>` : '';
+            const substHtml = substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : '';
+            return `
+                <details class="inline-details">
+                    <summary>Equation</summary>
+                    <div class="equation-details">${equationHtml}${substHtml}</div>
+                </details>
+            `;
+        }
+
+        function buildResultCard(key, label, unit, options, results, returnDefs) {
+            const value = results[key];
+            const decimals = options?.decimals ?? 2;
+            const formatted = formatNumber(value, decimals);
+            const definition = returnDefs[key];
+            const labelHtml = definition ? `<span class="def" data-def="${definition}">${label}</span>` : label;
+            const highlight = options?.highlight ? 'highlight' : '';
+            const metaText = typeof options?.meta === 'function' ? options.meta(results) : '';
+            const equationBlock = buildEquationBlock(key, results);
+
+            return `
+                <div class="result-card ${highlight}">
+                    <div class="label">${labelHtml}</div>
+                    <div class="value">${formatted}${unit ? `<span class="unit">${unit}</span>` : ''}</div>
+                    ${metaText ? `<div class="range">${metaText}</div>` : ''}
+                    ${equationBlock}
+                </div>
+            `;
+        }
+
+        function classifyHigh(value, warn, danger) {
+            if (!Number.isFinite(value)) return 'danger';
+            if (value >= danger) return 'danger';
+            if (value >= warn) return 'warning';
+            return 'success';
+        }
+
+        function classifyLow(value, warn, danger) {
+            if (!Number.isFinite(value)) return 'danger';
+            if (value <= danger) return 'danger';
+            if (value <= warn) return 'warning';
+            return 'success';
+        }
+
+        function buildGauge(label, valueText, value, maxValue, thresholds, statusClass) {
+            const width = Math.min(100, Math.max(0, (value / maxValue) * 100));
+            const threshold1 = Math.min(100, Math.max(0, (thresholds[0] / maxValue) * 100));
+            const threshold2 = Math.min(100, Math.max(0, (thresholds[1] / maxValue) * 100));
+            return `
+                <div class="safety-gauge">
+                    <span class="gauge-label">${label}</span>
+                    <div class="gauge-bar-container">
+                        <div class="gauge-bar ${statusClass}" style="width: ${width}%"></div>
+                        <div class="gauge-threshold" style="left: ${threshold1}%"></div>
+                        <div class="gauge-threshold" style="left: ${threshold2}%"></div>
+                    </div>
+                    <span class="gauge-value ${statusClass}">${valueText}</span>
+                </div>
+            `;
+        }
+
+        function renderResults(results) {
+            const resultsDiv = document.getElementById('results-display');
+            const returnDefs = toolDocumentation.returns || {};
+
+            const primaryCards = [
+                buildResultCard('runtime_hours', 'Runtime', 'h', { highlight: true, decimals: 2, meta: (res) => `Avg current: ${formatNumber(res.average_current_a, 2)} A` }, results, returnDefs),
+                buildResultCard('runtime_minutes', 'Runtime', 'min', { highlight: true, decimals: 1 }, results, returnDefs),
+                buildResultCard('energy_delivered_wh', 'Energy Delivered', 'Wh', { decimals: 1, meta: (res) => `Eff capacity: ${formatNumber(res.effective_capacity_ah, 2)} Ah` }, results, returnDefs),
+                buildResultCard('loaded_voltage_v', 'Loaded Voltage', 'V', { decimals: 2, meta: (res) => `Sag: ${formatNumber(res.voltage_sag_v, 2)} V` }, results, returnDefs)
+            ];
+
+            const secondaryCards = [
+                buildResultCard('effective_capacity_ah', 'Effective Capacity', 'Ah', { decimals: 2 }, results, returnDefs),
+                buildResultCard('average_current_a', 'Average Current', 'A', { decimals: 2 }, results, returnDefs),
+                buildResultCard('average_power_w', 'Average Power', 'W', { decimals: 1 }, results, returnDefs),
+                buildResultCard('c_rate', 'C-rate', '1/h', { decimals: 2 }, results, returnDefs),
+                buildResultCard('voltage_sag_v', 'Voltage Sag', 'V', { decimals: 2 }, results, returnDefs)
+            ];
+
+            const packCards = [
+                buildResultCard('pack_nominal_voltage_v', 'Pack Nominal', 'V', { decimals: 2 }, results, returnDefs),
+                buildResultCard('pack_capacity_ah', 'Pack Capacity', 'Ah', { decimals: 2 }, results, returnDefs),
+                buildResultCard('pack_internal_resistance_ohm', 'Pack Resistance', 'Ohm', { decimals: 4 }, results, returnDefs),
+                buildResultCard('pack_cutoff_voltage_v', 'Pack Cutoff', 'V', { decimals: 2 }, results, returnDefs)
+            ];
+
+            const cRate = results.c_rate;
+            const sagRatio = results.voltage_sag_v / results.pack_nominal_voltage_v;
+            const marginRatioRaw = (results.loaded_voltage_v - results.pack_cutoff_voltage_v) / results.pack_nominal_voltage_v;
+            const marginRatio = Math.max(0, marginRatioRaw);
+
+            const cRateStatus = classifyHigh(cRate, 0.5, 1.5);
+            const sagStatus = classifyHigh(sagRatio, 0.05, 0.1);
+            const marginStatus = classifyLow(marginRatio, 0.1, 0.05);
+
+            const statusOrder = { success: 0, warning: 1, danger: 2 };
+            const worst = Math.max(statusOrder[cRateStatus], statusOrder[sagStatus], statusOrder[marginStatus]);
+            const status = worst === 2 ? 'unacceptable' : worst === 1 ? 'marginal' : 'acceptable';
+
+            const recommendations = [];
+            if (cRateStatus !== 'success') {
+                recommendations.push('Reduce load current or add parallel cells to lower C-rate.');
+            }
+            if (sagStatus !== 'success') {
+                recommendations.push('Lower internal resistance or reduce load to limit voltage sag.');
+            }
+            if (marginStatus !== 'success') {
+                recommendations.push('Increase pack voltage or reduce load to stay above cutoff voltage.');
+            }
+
+            const statusIcons = { acceptable: '&#10004;', marginal: '&#9888;', unacceptable: '&#10006;' };
+            const statusTitles = {
+                acceptable: 'Discharge Severity Acceptable',
+                marginal: 'Moderate Discharge - Review Needed',
+                unacceptable: 'High Discharge - Mitigation Recommended'
+            };
+
+            const gaugesHtml = `
+                <div class="safety-section">
+                    <h4>Performance Indicators</h4>
+                    ${buildGauge('C-rate severity', `${formatNumber(cRate, 2)} 1/h`, cRate, 3.0, [0.5, 1.5], cRateStatus)}
+                    ${buildGauge('Voltage sag ratio', `${(sagRatio * 100).toFixed(1)}%`, sagRatio, 0.2, [0.05, 0.1], sagStatus)}
+                    ${buildGauge('Cutoff margin', `${(marginRatio * 100).toFixed(1)}%`, marginRatio, 0.2, [0.05, 0.1], marginStatus)}
+                </div>
+            `;
+
+            const statusHtml = `
+                <div class="status-banner ${status}">
+                    <span class="icon">${statusIcons[status]}</span>
+                    <div class="content">
+                        <h4>${statusTitles[status]}</h4>
+                        <p>Indicators are heuristic; validate against the manufacturer discharge curve.</p>
+                        ${recommendations.length > 0 ? `
+                            <ul class="recommendations">
+                                ${recommendations.map(item => `<li>${item}</li>`).join('')}
+                            </ul>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = `
+                <div class="results-section">
+                    <h4>Runtime Summary</h4>
+                    <div class="results-grid">
+                        ${primaryCards.join('')}
+                    </div>
+                </div>
+                <div class="results-section">
+                    <h4>Load + Capacity</h4>
+                    <div class="results-grid">
+                        ${secondaryCards.join('')}
+                    </div>
+                </div>
+                <div class="results-section">
+                    <h4>Pack Summary</h4>
+                    <div class="results-grid">
+                        ${packCards.join('')}
+                    </div>
+                </div>
+                ${gaugesHtml}
+                ${statusHtml}
+            `;
+            typesetMath();
+        }
+
+        // --- 4. Handle Calculation ---
+        const form = document.getElementById('calc-form');
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+            const args = PARAM_ORDER.map((param) => {
+                const rawValue = formData.get(param);
+                if (STRING_PARAMS.has(param)) {
+                    return rawValue ? String(rawValue) : '';
+                }
+                const value = Number(rawValue);
+                return Number.isFinite(value) ? value : 0;
+            });
+
+            try {
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                renderResults(results);
+            } catch (error) {
+                console.error('Python calculation error:', error);
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+            }
+        });
+
+        document.getElementById('chemistry').addEventListener('change', applyChemistryDefaults);
+        ['series_cells', 'parallel_cells', 'cell_nominal_voltage_v', 'cell_capacity_ah', 'cell_internal_resistance_ohm', 'cell_cutoff_voltage_v']
+            .forEach((id) => document.getElementById(id).addEventListener('input', updatePackFromCells));
+        document.getElementById('use_cell_specs').addEventListener('change', () => {
+            updatePackFromCells();
+            applyChemistryDefaults();
+            if (Number(document.getElementById('use_cell_specs').value) === 1) {
+                setInputTab('section-cells');
+            }
+        });
+        applyChemistryDefaults();
+    </script>
+</body>
+</html>
