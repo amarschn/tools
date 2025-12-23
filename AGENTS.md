@@ -166,6 +166,18 @@ All new tools **must** be built using one of the example tools templates unless 
 
 This mandate enforces our core principles of consistency, usability, and progressive disclosure.
 
+### AI Tool Creation Checklist
+
+When creating a new tool, generate these files:
+
+1. **`/pycalcs/<module>.py`** - Calculation function with docstring containing `---Parameters---`, `---Returns---`, and `---LaTeX---` sections. Return a dict with results plus `subst_<key>` strings for showing substituted equations.
+
+2. **`/tools/<tool-slug>/index.html`** - Copy from `/tools/example_tool/index.html`. Update `TOOL_MODULE_NAME`, `TOOL_FUNCTION_NAME`, and `PARAM_ORDER` in the script config. Match input field IDs to parameter names.
+
+3. **`/tests/test_<module>.py`** - At least one nominal test and one with a known/textbook value.
+
+**Reference examples:** `/pycalcs/snapfits.py` and `/tools/snap-fit-cantilever/` show the full pattern.
+
 ### Python
 
 * **Style:** All Python code must follow the [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/).
@@ -218,6 +230,14 @@ def calculate_tool(input_a: float, input_b: float) -> dict[str, float]:
     * Ensuring all functionality is usable with a keyboard.
 * **CSS:** The example template currently ships with an inline `<style>` block; start from it, keep component-specific tweaks inside that block, and only introduce shared rules in the forthcoming global stylesheet (see Roadmap). Use descriptive class names and avoid one-off inline `style=""` attributes so future extraction stays easy.
 
+### Visualization Standards
+
+* **Axes + units:** Every plotted axis must be labeled and include units (e.g., `Pressure (kPa)`). Diagrams without axes must label any numeric callouts with units.
+* **Legend required:** Always include a legend, even for single-series plots, so the dataset is unambiguous.
+* **Scale clarity:** Declare linear vs. log axes explicitly. For log scales, enforce positive-only data and explain any filtered points.
+* **Data hygiene:** Never plot NaN/inf values; guard against empty datasets and surface a user-facing warning instead.
+* **Annotations:** Any markers, thresholds, or highlights must state their numeric value and match the underlying data.
+
 ### Local Environment Setup
 
 To keep WSL and macOS machines aligned without heavy tooling, install the few development dependencies directly:
@@ -232,6 +252,7 @@ This provides `pytest` (and any future lint/test utilities) while leaving the Py
 * **Numerical checks:** Add or update `tests/` cases (use `pytest`, run via `python3 -m pytest`) that exercise new `pycalcs` functions across nominal, edge, and failure inputs. If you introduce a regression-safe fixture (e.g., compare against a known textbook example), document the reference in the test docstring.
 * **Docstring parser smoke test:** Run `python -c "from pycalcs import utils, <module>; print(utils.get_documentation('<module>', '<function>'))"` to confirm the docstring splits cleanly before committing.
 * **Frontend sanity:** Open the tool in a local static server (e.g., `python -m http.server`) and verify tooltips, tab switching, and error handling. Capture at least one screenshot or screen recording when submitting a PR if the UI meaningfully changes.
+* **Graph verification (required):** Any tool that renders a graph, plot, or diagram must include a quick visual check. Capture at least one screenshot after running nominal inputs and review it against this checklist: axis labels and units present, scale type correct (linear/log), legend matches series, data values are finite (no NaN/inf gaps), ranges look physically plausible, and any annotations or highlights map to the right values.
 * **Export/visual checks:** When the tool supports exports or plots, download the artifact and ensure units, labels, and legends align with the on-screen values.
 
 ## Roadmap
