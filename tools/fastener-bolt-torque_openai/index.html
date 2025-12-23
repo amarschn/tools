@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fastener and Bolt Torque Calculator_openai - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #1f2937;
+            --primary-light: #f4f6f8;
+            --secondary-color: #0f766e;
+            --accent-color: #d97706;
+            --text-color: #1f2937;
+            --text-light: #6b7280;
+            --border-color: #d1d5db;
+            --bg-color: #f8fafc;
+            --bg-card: #ffffff;
+            --shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+            --border-radius: 12px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 92%; max-width: 1200px; margin: 0 auto; padding: 20px 0 30px; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.1rem; }
+        h2 { font-size: 1.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; }
+        h3 { font-size: 1.15rem; color: var(--secondary-color); }
+        h4 { font-size: 1rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 600; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
+        .nav-brand { font-size: 1.4rem; font-weight: 700; color: var(--primary-color); letter-spacing: 0.2px; }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.05rem; max-width: 86ch; margin-bottom: 1.25rem; }
+        .tool-layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.1fr); gap: 24px; align-items: start; }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.05rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+
+        .tool-inputs h2 { margin-top: 0; }
+        form { display: flex; flex-direction: column; gap: 18px; }
+        fieldset { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; }
+        legend { padding: 0 8px; font-weight: 600; color: var(--secondary-color); }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+        .input-group { position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: #fbfbfd;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+        }
+        .input-help { font-size: 0.8rem; color: var(--text-light); margin-top: 6px; }
+        .inline-note { font-size: 0.82rem; color: var(--text-light); margin-top: 10px; }
+        .hidden { display: none; }
+
+        .tooltip-trigger {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            background-color: var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: -24px;
+            top: 34px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            max-width: 240px;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary { background-color: var(--secondary-color); color: white; font-size: 1.05rem; padding: 12px; }
+        .btn-primary:hover { background-color: #0b6058; }
+        .btn-secondary { background-color: var(--bg-card); color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        .output-column { display: flex; flex-direction: column; gap: 18px; }
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 24px; flex-wrap: wrap; gap: 6px; }
+        .tab-link {
+            padding: 10px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-light);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab-link:hover { background-color: var(--primary-light); }
+        .tab-link.active { color: var(--primary-color); font-weight: 600; border-bottom-color: var(--secondary-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #results-key {
+            background-color: var(--bg-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .result-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-item:first-child { padding-top: 0; }
+        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .result-header p { margin: 0; font-size: 1rem; }
+        .result-header p strong { color: var(--text-color); }
+        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.85rem; }
+        details.inline-details > summary::after { content: '[Show equation]'; }
+        details.inline-details[open] > summary::after { content: '[Hide equation]'; }
+        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
+        .equation-details p { margin-bottom: 0.5rem; }
+
+        .result-highlight {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .highlight-card {
+            background: linear-gradient(145deg, #ffffff 0%, #f2f7f6 100%);
+            border: 1px solid rgba(15, 118, 110, 0.18);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .highlight-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); margin-bottom: 6px; }
+        .highlight-value { font-size: 1.35rem; font-weight: 700; color: var(--primary-color); }
+        .highlight-sub { font-size: 0.85rem; color: var(--text-light); margin-top: 2px; }
+
+        .warning-banner {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background-color: rgba(217, 119, 6, 0.12);
+            border: 1px solid rgba(217, 119, 6, 0.4);
+            color: #92400e;
+            font-size: 0.9rem;
+        }
+        .warning-banner.hidden { display: none; }
+
+        .plot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .plot-card { background: var(--bg-color); border-radius: 10px; border: 1px dashed var(--border-color); padding: 12px; min-height: 260px; }
+        .plot-wrapper { overflow-x: auto; }
+        .plot-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85rem; margin-bottom: 8px; }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-light); }
+        .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+        .plot-caption { margin-top: 10px; font-size: 0.85rem; color: var(--text-light); }
+
+        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
+        .equation-card {
+            background: rgba(248, 250, 252, 0.85);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
+        .equation-card ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            display: grid;
+            gap: 6px 18px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
+
+        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
+        .def::after {
+            content: attr(data-def);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+        }
+        .def:hover::after { opacity: 1; visibility: visible; }
+
+        .summary-card { position: sticky; top: 90px; }
+        .summary-card h3 { margin-bottom: 0.5rem; }
+        .summary-metric { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+        .summary-metric span { font-size: 0.85rem; color: var(--text-light); }
+        .summary-metric strong { font-size: 1.2rem; color: var(--primary-color); }
+        .summary-divider { height: 1px; background-color: var(--border-color); margin: 12px 0; }
+
+        .chart-checklist { margin-top: 16px; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); padding: 12px 16px; }
+        .chart-checklist summary { font-weight: 600; color: var(--secondary-color); }
+        .chart-checklist ul { padding-left: 20px; margin-top: 8px; }
+        .chart-checklist li { margin-bottom: 6px; color: var(--text-light); }
+
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        @media (max-width: 980px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 0; }
+            .input-group { padding-right: 24px; }
+            .summary-card { position: static; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Fastener and Bolt Torque Calculator_openai</h1>
+        <p class="tool-description" id="tool-description">
+            Estimate tightening torque, clamp load, and proof utilization using friction or nut-factor models.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose and README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <fieldset>
+                        <legend>Thread geometry</legend>
+                        <div class="input-grid">
+                            <div class="input-group" data-param="thread_standard">
+                                <label for="thread_standard">Thread standard</label>
+                                <select id="thread_standard" name="thread_standard">
+                                    <option value="metric">ISO metric (mm, MPa)</option>
+                                    <option value="unified">Unified (in, ksi)</option>
+                                </select>
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="nominal_diameter">
+                                <label for="nominal_diameter" data-label="nominal_diameter">Nominal diameter d (mm)</label>
+                                <input type="number" id="nominal_diameter" name="nominal_diameter" value="10" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" id="metric-pitch-group" data-param="thread_pitch">
+                                <label for="thread_pitch" data-label="thread_pitch">Thread pitch p (mm)</label>
+                                <input type="number" id="thread_pitch" name="thread_pitch" value="1.5" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group hidden" id="unified-tpi-group" data-param="threads_per_inch">
+                                <label for="threads_per_inch" data-label="threads_per_inch">Threads per inch n (TPI)</label>
+                                <input type="number" id="threads_per_inch" name="threads_per_inch" value="16" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="thread_angle_deg">
+                                <label for="thread_angle_deg">Thread angle (deg)</label>
+                                <input type="number" id="thread_angle_deg" name="thread_angle_deg" value="60" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="bearing_diameter">
+                                <label for="bearing_diameter" data-label="bearing_diameter">Bearing diameter D_b (mm)</label>
+                                <input type="number" id="bearing_diameter" name="bearing_diameter" value="18" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <p class="inline-note">Bearing diameter should represent the mean friction diameter under the nut or washer. Enter 0 to use 1.5 x d.</p>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Strength and preload targets</legend>
+                        <div class="input-grid">
+                            <div class="input-group" data-param="preload_method">
+                                <label for="preload_method">Preload target method</label>
+                                <select id="preload_method" name="preload_method">
+                                    <option value="percent_proof">Percent of proof load</option>
+                                    <option value="direct">Direct clamp load</option>
+                                </select>
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" id="percent-proof-group" data-param="percent_proof">
+                                <label for="percent_proof">Percent of proof load (%)</label>
+                                <input type="number" id="percent_proof" name="percent_proof" value="75" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group hidden" id="direct-preload-group" data-param="target_preload">
+                                <label for="target_preload" data-label="target_preload">Target preload (kN)</label>
+                                <input type="number" id="target_preload" name="target_preload" value="20" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="proof_strength">
+                                <label for="proof_strength" data-label="proof_strength">Proof strength S_p (MPa)</label>
+                                <input type="number" id="proof_strength" name="proof_strength" value="830" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="tensile_stress_area">
+                                <label for="tensile_stress_area" data-label="tensile_stress_area">Tensile stress area override A_t (mm^2)</label>
+                                <input type="number" id="tensile_stress_area" name="tensile_stress_area" value="0" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <p class="inline-note">Proof strength is required for proof utilization checks even when using a direct preload. Default 830 MPa aligns with ISO 898-1 property class 10.9.</p>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Torque model and friction</legend>
+                        <div class="input-grid">
+                            <div class="input-group" data-param="torque_model">
+                                <label for="torque_model">Primary torque model</label>
+                                <select id="torque_model" name="torque_model">
+                                    <option value="friction">Thread + bearing friction</option>
+                                    <option value="nut_factor">Nut factor (K)</option>
+                                </select>
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="nut_factor">
+                                <label for="nut_factor">Nut factor K (-)</label>
+                                <input type="number" id="nut_factor" name="nut_factor" value="0.2" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="mu_thread">
+                                <label for="mu_thread">Thread friction mu_t (-)</label>
+                                <input type="number" id="mu_thread" name="mu_thread" value="0.15" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group" data-param="mu_bearing">
+                                <label for="mu_bearing">Bearing friction mu_b (-)</label>
+                                <input type="number" id="mu_bearing" name="mu_bearing" value="0.15" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <p class="inline-note">The friction model is still computed for comparison, even if the nut-factor model is selected. Typical mu_t=0.15, mu_b=0.15, and K=0.2 are cited in NASA SP-8007 and Shigley.</p>
+                    </fieldset>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <div class="output-column">
+                <section class="tool-outputs card">
+                    <div class="tabs">
+                        <button class="tab-link active" data-target="results">Results</button>
+                        <button class="tab-link" data-target="plot">Visualization</button>
+                        <button class="tab-link" data-target="background">Background and equations</button>
+                    </div>
+
+                    <div id="results" class="tab-content" style="display: block;">
+                        <div class="result-highlight" id="highlight-strip">
+                            <div class="highlight-card">
+                                <div class="highlight-label">Selected torque</div>
+                                <div class="highlight-value" id="highlight-torque">--</div>
+                                <div class="highlight-sub" id="highlight-torque-sub">--</div>
+                            </div>
+                            <div class="highlight-card">
+                                <div class="highlight-label">Clamp load</div>
+                                <div class="highlight-value" id="highlight-clamp">--</div>
+                                <div class="highlight-sub" id="highlight-clamp-sub">--</div>
+                            </div>
+                            <div class="highlight-card">
+                                <div class="highlight-label">Proof utilization</div>
+                                <div class="highlight-value" id="highlight-proof">--</div>
+                                <div class="highlight-sub" id="highlight-proof-sub">--</div>
+                            </div>
+                        </div>
+
+                        <h3>Key results</h3>
+                        <div id="results-key">
+                            <p id="results-placeholder">Enter inputs and press Calculate.</p>
+                        </div>
+
+                        <details style="margin-top: 16px;">
+                            <summary style="font-weight: 600; color: var(--secondary-color);">Detailed results</summary>
+                            <div id="results-detail" style="margin-top: 12px;"></div>
+                        </details>
+
+                        <div class="warning-banner hidden" id="warning-banner"></div>
+                        <button class="btn btn-secondary" id="export-btn" style="margin-top: 18px;">Export results</button>
+                    </div>
+
+                    <div id="plot" class="tab-content">
+                        <h3>Torque insight</h3>
+                        <div class="plot-grid">
+                            <div class="plot-card" id="plot-torque-curve">
+                                <p>Run a calculation to plot torque vs clamp load.</p>
+                            </div>
+                            <div class="plot-card" id="plot-torque-split">
+                                <p>Run a calculation to see the friction torque split.</p>
+                            </div>
+                        </div>
+                        <p class="plot-caption">Scale: linear. Axes are labeled with units and each series includes a legend.</p>
+                        <details class="chart-checklist">
+                            <summary>Chart checklist</summary>
+                            <ul>
+                                <li>Axes are labeled and include units.</li>
+                                <li>Legend is present and matches the plotted series.</li>
+                                <li>Scale type is linear and stated.</li>
+                                <li>Plotted values are finite (no NaN or infinity).</li>
+                                <li>Ranges look physically plausible for the inputs.</li>
+                                <li>Annotations reflect the correct numeric values.</li>
+                            </ul>
+                        </details>
+                    </div>
+
+                    <div id="background" class="tab-content">
+                        <h3>Underlying principles</h3>
+                        <div id="background-content">
+                            <p>Equations and references will appear here after the docstring loads.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <aside class="card summary-card" id="summary-card">
+                    <h3>Summary</h3>
+                    <div class="summary-metric">
+                        <span>Torque model</span>
+                        <strong id="summary-model">--</strong>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-metric">
+                        <span>Equivalent nut factor</span>
+                        <strong id="summary-k">--</strong>
+                    </div>
+                    <div class="summary-metric">
+                        <span>Bolt stress</span>
+                        <strong id="summary-stress">--</strong>
+                    </div>
+                    <div class="summary-metric">
+                        <span>Lead angle</span>
+                        <strong id="summary-lead">--</strong>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-metric">
+                        <span>Notes</span>
+                        <strong id="summary-notes">Run a calculation to populate this panel.</strong>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. Calculations provided for educational use.</p>
+    </footer>
+
+    <script>
+        let toolDocumentation = { parameters: {}, returns: {}, latex: '', variables: '', references: '' };
+        let pyToolModule;
+        let latestResults = null;
+        let latestInputs = null;
+
+        const TOOL_MODULE_NAME = 'fastener_bolt_torque_openai';
+        const TOOL_FUNCTION_NAME = 'calculate_bolt_torque_openai';
+
+        const PARAM_ORDER = [
+            'thread_standard',
+            'nominal_diameter',
+            'thread_pitch',
+            'threads_per_inch',
+            'thread_angle_deg',
+            'bearing_diameter',
+            'mu_thread',
+            'mu_bearing',
+            'torque_model',
+            'nut_factor',
+            'preload_method',
+            'target_preload',
+            'percent_proof',
+            'proof_strength',
+            'tensile_stress_area'
+        ];
+
+        const RESULT_ORDER = [
+            'torque_total_nm',
+            'torque_total_lbf_ft',
+            'clamp_load_n',
+            'clamp_load_lbf',
+            'proof_load_n',
+            'proof_load_lbf',
+            'proof_utilization_percent',
+            'bolt_stress_mpa',
+            'bolt_stress_ksi',
+            'tensile_stress_area_mm2',
+            'tensile_stress_area_in2',
+            'torque_thread_nm',
+            'torque_bearing_nm',
+            'torque_total_friction_nm',
+            'torque_total_nut_factor_nm',
+            'nut_factor_equiv',
+            'lead_angle_deg'
+        ];
+
+        const KEY_RESULTS = new Set([
+            'torque_total_nm',
+            'torque_total_lbf_ft',
+            'clamp_load_n',
+            'clamp_load_lbf',
+            'proof_utilization_percent',
+            'bolt_stress_mpa',
+            'bolt_stress_ksi'
+        ]);
+
+        const RESULT_LABELS = {
+            torque_total_nm: 'Total torque (N*m)',
+            torque_total_lbf_ft: 'Total torque (lbf*ft)',
+            clamp_load_n: 'Clamp load (N)',
+            clamp_load_lbf: 'Clamp load (lbf)',
+            proof_load_n: 'Proof load (N)',
+            proof_load_lbf: 'Proof load (lbf)',
+            proof_utilization_percent: 'Proof utilization (%)',
+            bolt_stress_mpa: 'Bolt stress (MPa)',
+            bolt_stress_ksi: 'Bolt stress (ksi)',
+            tensile_stress_area_mm2: 'Tensile stress area (mm^2)',
+            tensile_stress_area_in2: 'Tensile stress area (in^2)',
+            torque_thread_nm: 'Thread torque (N*m)',
+            torque_bearing_nm: 'Bearing torque (N*m)',
+            torque_total_friction_nm: 'Total torque, friction model (N*m)',
+            torque_total_nut_factor_nm: 'Total torque, nut factor (N*m)',
+            nut_factor_equiv: 'Equivalent nut factor (-)',
+            lead_angle_deg: 'Lead angle (deg)'
+        };
+
+        const RESULT_EQUATION_MAP = {
+            clamp_load_n: 3,
+            proof_load_n: 2,
+            bolt_stress_mpa: 10,
+            torque_thread_nm: 5,
+            torque_bearing_nm: 6,
+            torque_total_nut_factor_nm: 8,
+            nut_factor_equiv: 9
+        };
+
+        const LABELS_BY_STANDARD = {
+            metric: {
+                nominal_diameter: 'Nominal diameter d (mm)',
+                thread_pitch: 'Thread pitch p (mm)',
+                threads_per_inch: 'Threads per inch n (TPI)',
+                bearing_diameter: 'Bearing diameter D_b (mm)',
+                target_preload: 'Target preload (kN)',
+                proof_strength: 'Proof strength S_p (MPa)',
+                tensile_stress_area: 'Tensile stress area override A_t (mm^2)'
+            },
+            unified: {
+                nominal_diameter: 'Nominal diameter d (in)',
+                thread_pitch: 'Thread pitch p (mm)',
+                threads_per_inch: 'Threads per inch n (TPI)',
+                bearing_diameter: 'Bearing diameter D_b (in)',
+                target_preload: 'Target preload (lbf)',
+                proof_strength: 'Proof strength S_p (ksi)',
+                tensile_stress_area: 'Tensile stress area override A_t (in^2)'
+            }
+        };
+
+        const DEFAULTS_BY_STANDARD = {
+            metric: {
+                nominal_diameter: 10,
+                thread_pitch: 1.5,
+                threads_per_inch: 16,
+                bearing_diameter: 18,
+                target_preload: 20,
+                proof_strength: 830,
+                tensile_stress_area: 0
+            },
+            unified: {
+                nominal_diameter: 0.375,
+                thread_pitch: 1.5,
+                threads_per_inch: 16,
+                bearing_diameter: 0.56,
+                target_preload: 7000,
+                proof_strength: 120,
+                tensile_stress_area: 0
+            }
+        };
+
+        function openTab(event) {
+            const target = event.currentTarget.dataset.target;
+            document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(section => section.style.display = 'none');
+            document.getElementById(target).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            if (target === 'background') {
+                typesetMath();
+            }
+        }
+
+        document.querySelectorAll('.tab-link').forEach(btn => btn.addEventListener('click', openTab));
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function normaliseMap(value) {
+            if (value instanceof Map) {
+                const obj = {};
+                for (const [key, entry] of value.entries()) {
+                    obj[key] = normaliseMap(entry);
+                }
+                return obj;
+            }
+            if (value && typeof value === 'object' && typeof value.toJs === 'function') {
+                return normaliseMap(value.toJs());
+            }
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                const obj = {};
+                for (const [key, entry] of Object.entries(value)) {
+                    obj[key] = normaliseMap(entry);
+                }
+                return obj;
+            }
+            return value;
+        }
+
+        async function loadReadme() {
+            try {
+                const response = await fetch('README.md');
+                const text = await response.text();
+                const container = document.getElementById('readme-content');
+                const paragraphs = text.trim().split(/\n{2,}/).map(block => {
+                    const normalised = block.replace(/\r/g, '');
+                    if (normalised.startsWith('# ')) {
+                        return `<h3>${normalised.substring(2).trim()}</h3>`;
+                    }
+                    if (normalised.startsWith('## ')) {
+                        return `<h4>${normalised.substring(3).trim()}</h4>`;
+                    }
+                    if (normalised.startsWith('- ')) {
+                        const items = normalised.split('\n').map(item => `<li>${item.replace(/^-\s*/, '')}</li>`).join('');
+                        return `<ul>${items}</ul>`;
+                    }
+                    return `<p>${normalised.replace(/\n/g, '<br>')}</p>`;
+                }).join('');
+                container.innerHTML = paragraphs || '<p>README.md is empty.</p>';
+            } catch (error) {
+                document.getElementById('readme-content').innerHTML = `<p style="color:#c92a2a;">Failed to load README: ${error.message}</p>`;
+            }
+        }
+
+        let lastStandard = document.getElementById('thread_standard').value;
+
+        function applyDefaults(nextStandard) {
+            const previousDefaults = DEFAULTS_BY_STANDARD[lastStandard] || DEFAULTS_BY_STANDARD.metric;
+            const nextDefaults = DEFAULTS_BY_STANDARD[nextStandard] || DEFAULTS_BY_STANDARD.metric;
+            Object.entries(nextDefaults).forEach(([key, value]) => {
+                const input = document.getElementById(key);
+                if (!input) return;
+                const current = Number(input.value);
+                if (!Number.isFinite(current) || current === 0 || Math.abs(current - previousDefaults[key]) < 1e-9) {
+                    input.value = value;
+                }
+            });
+            lastStandard = nextStandard;
+        }
+
+        function updateVisibility() {
+            const standard = document.getElementById('thread_standard').value;
+            const isMetric = standard === 'metric';
+            if (standard !== lastStandard) {
+                applyDefaults(standard);
+            }
+            document.getElementById('metric-pitch-group').classList.toggle('hidden', !isMetric);
+            document.getElementById('unified-tpi-group').classList.toggle('hidden', isMetric);
+
+            const preloadMethod = document.getElementById('preload_method').value;
+            document.getElementById('percent-proof-group').classList.toggle('hidden', preloadMethod !== 'percent_proof');
+            document.getElementById('direct-preload-group').classList.toggle('hidden', preloadMethod !== 'direct');
+
+            const labels = LABELS_BY_STANDARD[standard] || LABELS_BY_STANDARD.metric;
+            document.querySelectorAll('[data-label]').forEach(label => {
+                const key = label.dataset.label;
+                if (labels[key]) {
+                    label.textContent = labels[key];
+                }
+            });
+        }
+
+        document.getElementById('thread_standard').addEventListener('change', updateVisibility);
+        document.getElementById('preload_method').addEventListener('change', updateVisibility);
+        updateVisibility();
+
+        async function initialisePyodide() {
+            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage('micropip');
+
+            document.getElementById('calculate-btn').textContent = 'Loading Python...';
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            const pyUtils = pyodide.globals.get('utils');
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has && docMap.has('error')) {
+                throw new Error(docMap.get('error'));
+            }
+            toolDocumentation = normaliseMap(docMap);
+            toolDocumentation.parameters = toolDocumentation.parameters || {};
+            toolDocumentation.returns = toolDocumentation.returns || {};
+
+            populateUiFromDocstring();
+            document.getElementById('calculate-btn').textContent = 'Calculate';
+        }
+
+        function populateUiFromDocstring() {
+            if (toolDocumentation.description) {
+                document.getElementById('tool-description').textContent = toolDocumentation.description;
+            }
+
+            document.querySelectorAll('.input-group[data-param]').forEach(group => {
+                const param = group.dataset.param;
+                const tooltip = group.querySelector('.tooltip-trigger');
+                const definition = toolDocumentation.parameters?.[param];
+                if (tooltip) {
+                    tooltip.setAttribute('data-tooltip', definition || 'Parameter description unavailable.');
+                }
+            });
+
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').filter(line => line.trim().length > 0)
+                : [];
+
+            const variableLines = (toolDocumentation.variables || '')
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.includes(':'));
+            const variableListHtml = variableLines.length
+                ? `<ul>${variableLines.map(line => {
+                    const [symbolRaw, detailRaw] = line.split(':', 2);
+                    const symbol = symbolRaw.trim();
+                    const detail = (detailRaw || '').trim();
+                    return `<li><span class="math-inline">\\(${symbol}\\)</span>: ${detail}</li>`;
+                }).join('')}</ul>`
+                : '<p>No variable definitions supplied.</p>';
+
+            const equationCards = latexLines.map((expr, index) => `
+                <div class="equation-card">
+                    <strong>Equation (${index + 1})</strong>
+                    <span class="equation-expression">\\[ ${expr} \\]</span>
+                    ${variableListHtml}
+                </div>
+            `).join('');
+
+            const referencesLines = (toolDocumentation.references || '')
+                .split('\n')
+                .map(line => line.trim())
+                .filter(Boolean);
+
+            const background = document.getElementById('background-content');
+            background.innerHTML = `
+                <p>${(toolDocumentation.description || '').replace(/\n/g, '<br>')}</p>
+                <h4>Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations supplied.</p>'}
+                </div>
+                <h4>References</h4>
+                ${referencesLines.length ? `<ul>${referencesLines.map(item => `<li>${item}</li>`).join('')}</ul>` : '<p>No references supplied.</p>'}
+            `;
+            typesetMath();
+        }
+
+        function getNumericValue(id) {
+            const value = document.getElementById(id).value;
+            if (value === '' || value === null || value === undefined) {
+                return 0;
+            }
+            return Number(value);
+        }
+
+        function formatNumber(value, decimals = 2) {
+            if (!Number.isFinite(value)) {
+                return 'N/A';
+            }
+            return value.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        function formatResultValue(key, value) {
+            if (!Number.isFinite(value)) {
+                return 'N/A';
+            }
+            const decimalsByKey = {
+                torque_total_nm: 2,
+                torque_total_lbf_ft: 2,
+                torque_thread_nm: 2,
+                torque_bearing_nm: 2,
+                torque_total_friction_nm: 2,
+                torque_total_nut_factor_nm: 2,
+                clamp_load_n: 0,
+                clamp_load_lbf: 0,
+                proof_load_n: 0,
+                proof_load_lbf: 0,
+                proof_utilization_percent: 1,
+                bolt_stress_mpa: 1,
+                bolt_stress_ksi: 1,
+                tensile_stress_area_mm2: 2,
+                tensile_stress_area_in2: 4,
+                nut_factor_equiv: 3,
+                lead_angle_deg: 2
+            };
+            const decimals = decimalsByKey[key] ?? 2;
+            return value.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        function buildResultRow(key, label, definition, valueText, equation, substitution) {
+            const detailsHtml = substitution
+                ? `<details class="inline-details">
+                        <summary title="Show equation"></summary>
+                        <div class="equation-details">
+                            ${equation ? `<p><strong>Equation:</strong> $$${equation}$$</p>` : ''}
+                            <p><strong>Substituted:</strong> $$${substitution}$$</p>
+                        </div>
+                   </details>`
+                : '';
+            return `
+                <div class="result-item">
+                    <div class="result-header">
+                        <p><strong><span class="def" data-def="${definition || 'Definition unavailable.'}">${label}</span>:</strong> ${valueText}</p>
+                        ${detailsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResults(results, inputs) {
+            const resultsKey = document.getElementById('results-key');
+            const resultsDetail = document.getElementById('results-detail');
+            resultsKey.innerHTML = '';
+            resultsDetail.innerHTML = '';
+
+            const equations = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').filter(line => line.trim().length > 0)
+                : [];
+            const returnDefs = toolDocumentation.returns || {};
+
+            RESULT_ORDER.forEach(key => {
+                if (!(key in results)) {
+                    return;
+                }
+                const label = RESULT_LABELS[key] || key.replace(/_/g, ' ');
+                const definition = returnDefs[key];
+                const valueText = formatResultValue(key, results[key]);
+                let equationIndex = RESULT_EQUATION_MAP[key];
+                if (key === 'torque_total_nm') {
+                    equationIndex = inputs?.torque_model === 'nut_factor' ? 8 : 7;
+                }
+                if (key === 'clamp_load_n' && inputs?.preload_method === 'direct') {
+                    equationIndex = null;
+                }
+                const equation = Number.isInteger(equationIndex) ? equations[equationIndex] : '';
+                const substitution = results[`subst_${key}`];
+                const rowHtml = buildResultRow(key, label, definition, valueText, equation, substitution);
+                if (KEY_RESULTS.has(key)) {
+                    resultsKey.innerHTML += rowHtml;
+                } else {
+                    resultsDetail.innerHTML += rowHtml;
+                }
+            });
+
+            typesetMath();
+        }
+
+        function updateHighlights(results, inputs) {
+            const torqueNm = results.torque_total_nm;
+            const torqueLbfFt = results.torque_total_lbf_ft;
+            const clampN = results.clamp_load_n;
+            const clampLbf = results.clamp_load_lbf;
+            const proofUtil = results.proof_utilization_percent;
+
+            const isMetric = inputs.thread_standard === 'metric';
+            if (isMetric) {
+                document.getElementById('highlight-torque').textContent = `${formatNumber(torqueNm, 2)} N*m`;
+                document.getElementById('highlight-torque-sub').textContent = `${formatNumber(torqueLbfFt, 2)} lbf*ft`;
+                document.getElementById('highlight-clamp').textContent = `${formatNumber(clampN / 1000, 2)} kN`;
+                document.getElementById('highlight-clamp-sub').textContent = `${formatNumber(clampLbf, 0)} lbf`;
+            } else {
+                document.getElementById('highlight-torque').textContent = `${formatNumber(torqueLbfFt, 2)} lbf*ft`;
+                document.getElementById('highlight-torque-sub').textContent = `${formatNumber(torqueNm, 2)} N*m`;
+                document.getElementById('highlight-clamp').textContent = `${formatNumber(clampLbf, 0)} lbf`;
+                document.getElementById('highlight-clamp-sub').textContent = `${formatNumber(clampN / 1000, 2)} kN`;
+            }
+
+            document.getElementById('highlight-proof').textContent = `${formatNumber(proofUtil, 1)} %`;
+            document.getElementById('highlight-proof-sub').textContent = proofUtil > 100 ? 'Exceeds proof' : 'Within proof';
+
+            const modelLabel = inputs.torque_model === 'nut_factor' ? 'Nut factor (K)' : 'Thread + bearing friction';
+            document.getElementById('summary-model').textContent = modelLabel;
+            document.getElementById('summary-k').textContent = formatNumber(results.nut_factor_equiv, 3);
+            document.getElementById('summary-stress').textContent = isMetric
+                ? `${formatNumber(results.bolt_stress_mpa, 1)} MPa`
+                : `${formatNumber(results.bolt_stress_ksi, 1)} ksi`;
+            document.getElementById('summary-lead').textContent = `${formatNumber(results.lead_angle_deg, 2)} deg`;
+
+            const delta = results.torque_total_friction_nm && results.torque_total_nut_factor_nm
+                ? ((results.torque_total_nut_factor_nm - results.torque_total_friction_nm) / results.torque_total_friction_nm) * 100
+                : 0;
+            document.getElementById('summary-notes').textContent = `Nut factor vs friction delta: ${formatNumber(delta, 1)} %`;
+
+            const warningBanner = document.getElementById('warning-banner');
+            if (proofUtil > 100) {
+                warningBanner.textContent = 'Warning: Selected preload exceeds proof load. Reduce preload or verify fastener capacity.';
+                warningBanner.classList.remove('hidden');
+            } else if (proofUtil > 90) {
+                warningBanner.textContent = 'Caution: Preload is above 90% of proof load. Tight control of torque and lubrication is recommended.';
+                warningBanner.classList.remove('hidden');
+            } else {
+                warningBanner.classList.add('hidden');
+            }
+        }
+
+        function renderTorqueCurve(results, inputs) {
+            const container = document.getElementById('plot-torque-curve');
+            if (!results) {
+                container.innerHTML = '<p>No data available.</p>';
+                return;
+            }
+            const clampLoad = results.clamp_load_n;
+            if (!Number.isFinite(clampLoad) || clampLoad <= 0) {
+                container.innerHTML = '<p>Clamp load is invalid, unable to plot.</p>';
+                return;
+            }
+
+            const frictionTorque = results.torque_total_friction_nm;
+            const nutTorque = results.torque_total_nut_factor_nm;
+            if (!Number.isFinite(frictionTorque) || !Number.isFinite(nutTorque)) {
+                container.innerHTML = '<p>Torque results are invalid, unable to plot.</p>';
+                return;
+            }
+
+            const proofLoad = results.proof_load_n || clampLoad * 1.1;
+            const maxLoad = Math.max(clampLoad * 1.35, proofLoad * 1.05);
+
+            const loads = Array.from({ length: 6 }, (_, i) => (i / 5) * maxLoad);
+            const slopeFriction = frictionTorque / clampLoad;
+            const slopeNut = nutTorque / clampLoad;
+
+            const isMetric = inputs.thread_standard === 'metric';
+            const loadScale = isMetric ? 1 / 1000 : 1 / 4.4482216152605;
+            const torqueScale = isMetric ? 1 : 0.7375621492772654;
+            const loadUnit = isMetric ? 'kN' : 'lbf';
+            const torqueUnit = isMetric ? 'N*m' : 'lbf*ft';
+
+            const xValues = loads.map(load => load * loadScale);
+            const yFriction = loads.map(load => slopeFriction * load * torqueScale);
+            const yNut = loads.map(load => slopeNut * load * torqueScale);
+
+            const allY = [...yFriction, ...yNut];
+            const xMin = 0;
+            const xMax = Math.max(...xValues);
+            const yMin = 0;
+            const yMax = Math.max(...allY) * 1.1 || 1;
+
+            const width = 640;
+            const height = 320;
+            const margin = { top: 24, right: 24, bottom: 44, left: 60 };
+
+            const xScale = value => margin.left + ((value - xMin) / (xMax - xMin || 1)) * (width - margin.left - margin.right);
+            const yScale = value => margin.top + (yMax - value) / (yMax - yMin || 1) * (height - margin.top - margin.bottom);
+
+            const buildPath = series => series.map((value, index) => {
+                const x = xScale(xValues[index]);
+                const y = yScale(value);
+                return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+            }).join(' ');
+
+            const ticks = 6;
+            const xTicks = Array.from({ length: ticks }, (_, idx) => xMin + (idx / (ticks - 1)) * (xMax - xMin));
+            const yTicks = Array.from({ length: ticks }, (_, idx) => yMin + (idx / (ticks - 1)) * (yMax - yMin));
+
+            const targetTorque = (inputs.torque_model === 'nut_factor' ? nutTorque : frictionTorque) * torqueScale;
+            const targetLoad = clampLoad * loadScale;
+
+            const legend = `
+                <div class="plot-legend">
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#0f766e;"></span>Friction model</span>
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#d97706;"></span>Nut factor model</span>
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#111827;"></span>Target point</span>
+                </div>
+            `;
+
+            const svg = `
+                ${legend}
+                <div class="plot-wrapper">
+                    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Torque versus clamp load">
+                        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="${'var(--border-color)'}" stroke-width="1"/>
+                        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="${'var(--border-color)'}" stroke-width="1"/>
+                        ${xTicks.map(t => `
+                            <line x1="${xScale(t)}" y1="${height - margin.bottom}" x2="${xScale(t)}" y2="${height - margin.bottom + 6}" stroke="${'var(--border-color)'}"/>
+                            <text x="${xScale(t)}" y="${height - margin.bottom + 22}" text-anchor="middle" font-size="12">${formatNumber(t, 1)}</text>
+                        `).join('')}
+                        ${yTicks.map(t => `
+                            <line x1="${margin.left - 6}" y1="${yScale(t)}" x2="${margin.left}" y2="${yScale(t)}" stroke="${'var(--border-color)'}"/>
+                            <text x="${margin.left - 10}" y="${yScale(t) + 4}" text-anchor="end" font-size="12">${formatNumber(t, 1)}</text>
+                        `).join('')}
+                        <path d="${buildPath(yFriction)}" fill="none" stroke="#0f766e" stroke-width="2.4" stroke-linecap="round"/>
+                        <path d="${buildPath(yNut)}" fill="none" stroke="#d97706" stroke-width="2" stroke-dasharray="5 4"/>
+                        <circle cx="${xScale(targetLoad)}" cy="${yScale(targetTorque)}" r="4.5" fill="#111827"/>
+                        <text x="${xScale(targetLoad) + 6}" y="${yScale(targetTorque) - 6}" font-size="12" fill="#111827">${formatNumber(targetTorque, 1)} ${torqueUnit}</text>
+                        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-size="12">Clamp load (${loadUnit})</text>
+                        <text x="${margin.left - 48}" y="${margin.top - 6}" text-anchor="start" font-size="12" transform="rotate(-90 ${margin.left - 48} ${margin.top - 6})">Torque (${torqueUnit})</text>
+                    </svg>
+                </div>
+            `;
+
+            container.innerHTML = svg;
+        }
+
+        function renderTorqueSplit(results, inputs) {
+            const container = document.getElementById('plot-torque-split');
+            if (!results) {
+                container.innerHTML = '<p>No data available.</p>';
+                return;
+            }
+            const threadTorque = results.torque_thread_nm;
+            const bearingTorque = results.torque_bearing_nm;
+            if (!Number.isFinite(threadTorque) || !Number.isFinite(bearingTorque)) {
+                container.innerHTML = '<p>Torque split is invalid.</p>';
+                return;
+            }
+
+            const isMetric = inputs.thread_standard === 'metric';
+            const torqueScale = isMetric ? 1 : 0.7375621492772654;
+            const torqueUnit = isMetric ? 'N*m' : 'lbf*ft';
+
+            const threadValue = threadTorque * torqueScale;
+            const bearingValue = bearingTorque * torqueScale;
+            const total = threadValue + bearingValue;
+
+            if (total <= 0) {
+                container.innerHTML = '<p>Torque split is not available for the current inputs.</p>';
+                return;
+            }
+
+            const width = 520;
+            const height = 160;
+            const margin = { left: 60, right: 30, top: 24, bottom: 40 };
+
+            const barWidth = width - margin.left - margin.right;
+            const threadWidth = (threadValue / total) * barWidth;
+            const bearingWidth = (bearingValue / total) * barWidth;
+
+            const legend = `
+                <div class="plot-legend">
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#0f766e;"></span>Thread torque</span>
+                    <span class="legend-item"><span class="legend-swatch" style="background-color:#d97706;"></span>Bearing torque</span>
+                </div>
+            `;
+
+            const svg = `
+                ${legend}
+                <div class="plot-wrapper">
+                    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Torque split between thread and bearing friction">
+                        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="${'var(--border-color)'}" stroke-width="1"/>
+                        <rect x="${margin.left}" y="${height / 2 - 16}" width="${threadWidth}" height="32" fill="#0f766e" rx="4"/>
+                        <rect x="${margin.left + threadWidth}" y="${height / 2 - 16}" width="${bearingWidth}" height="32" fill="#d97706" rx="4"/>
+                        <text x="${margin.left}" y="${height - margin.bottom + 20}" font-size="12">0</text>
+                        <text x="${width - margin.right}" y="${height - margin.bottom + 20}" text-anchor="end" font-size="12">${formatNumber(total, 1)} ${torqueUnit}</text>
+                        <text x="${margin.left + threadWidth / 2}" y="${height / 2 + 4}" text-anchor="middle" font-size="12" fill="white">${formatNumber(threadValue, 1)}</text>
+                        <text x="${margin.left + threadWidth + bearingWidth / 2}" y="${height / 2 + 4}" text-anchor="middle" font-size="12" fill="white">${formatNumber(bearingValue, 1)}</text>
+                        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-size="12">Torque split (${torqueUnit})</text>
+                    </svg>
+                </div>
+            `;
+
+            container.innerHTML = svg;
+        }
+
+        function exportResults() {
+            if (!latestResults || !latestInputs) {
+                alert('Run a calculation before exporting.');
+                return;
+            }
+            const rows = [];
+            rows.push('section,key,value');
+            Object.entries(latestInputs).forEach(([key, value]) => {
+                rows.push(`input,${key},${value}`);
+            });
+            RESULT_ORDER.forEach(key => {
+                if (key in latestResults) {
+                    rows.push(`result,${key},${latestResults[key]}`);
+                }
+            });
+            const csvContent = rows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'fastener_bolt_torque_openai_results.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('export-btn').addEventListener('click', exportResults);
+
+        document.getElementById('calc-form').addEventListener('submit', event => {
+            event.preventDefault();
+            if (!pyToolModule) {
+                return;
+            }
+
+            const inputs = {
+                thread_standard: document.getElementById('thread_standard').value,
+                nominal_diameter: getNumericValue('nominal_diameter'),
+                thread_pitch: getNumericValue('thread_pitch'),
+                threads_per_inch: getNumericValue('threads_per_inch'),
+                thread_angle_deg: getNumericValue('thread_angle_deg'),
+                bearing_diameter: getNumericValue('bearing_diameter'),
+                mu_thread: getNumericValue('mu_thread'),
+                mu_bearing: getNumericValue('mu_bearing'),
+                torque_model: document.getElementById('torque_model').value,
+                nut_factor: getNumericValue('nut_factor'),
+                preload_method: document.getElementById('preload_method').value,
+                target_preload: getNumericValue('target_preload'),
+                percent_proof: getNumericValue('percent_proof'),
+                proof_strength: getNumericValue('proof_strength'),
+                tensile_stress_area: getNumericValue('tensile_stress_area')
+            };
+
+            try {
+                const args = PARAM_ORDER.map(key => inputs[key]);
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args);
+                const resultObj = normaliseMap(resultMap.toJs());
+
+                latestResults = resultObj;
+                latestInputs = inputs;
+
+                renderResults(resultObj, inputs);
+                updateHighlights(resultObj, inputs);
+                renderTorqueCurve(resultObj, inputs);
+                renderTorqueSplit(resultObj, inputs);
+            } catch (error) {
+                console.error('Python calculation error:', error);
+                document.getElementById('results-key').innerHTML = `<p style="color: red; font-weight:bold;">Calculation Error:</p><p style="color: red;">${error.message}</p>`;
+                document.getElementById('results-detail').innerHTML = '';
+                document.getElementById('plot-torque-curve').innerHTML = '<p>Unable to render chart due to calculation error.</p>';
+                document.getElementById('plot-torque-split').innerHTML = '<p>Unable to render chart due to calculation error.</p>';
+            }
+        });
+
+        loadReadme();
+        initialisePyodide().catch(error => {
+            document.getElementById('results-key').innerHTML = `<p style="color: red; font-weight:bold;">Initialization Error:</p><p style="color: red;">${error.message}</p>`;
+            document.getElementById('summary-notes').textContent = 'Initialization error.';
+        });
+    </script>
+</body>
+</html>
