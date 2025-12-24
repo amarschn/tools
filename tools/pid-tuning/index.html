@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PID Tuning (Ultimate Gain) - Engineering Tools</title>
-    
+
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
 
     <style>
@@ -35,53 +34,85 @@
         body {
             font-family: var(--font-sans);
             line-height: 1.6;
-            background-color: var(--bg-color);
+            background: var(--bg-color);
             color: var(--text-color);
             display: flex;
             flex-direction: column;
+            min-height: 100vh;
         }
         .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
-        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 700; }
         h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
         h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        h3 { font-size: 1.05rem; color: var(--secondary-color); }
-        h4 { font-size: 0.95rem; color: var(--text-color); }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); font-weight: 600; }
+        h4 { font-size: 1rem; color: var(--secondary-color); font-weight: 600; }
         p { margin-bottom: 1em; color: var(--text-light); }
         a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
         a:hover { text-decoration: underline; }
 
         /* --- 2. Navigation --- */
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: none;
+            padding: 0 5%;
+        }
         .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
-        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
-        .nav-brand:hover { text-decoration: none; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); letter-spacing: -0.01em; }
+        .nav-brand:hover { text-decoration: none; color: var(--text-color); }
 
         /* --- 3. Main Tool Layout --- */
         main.container { flex-grow: 1; }
-        .tool-description { font-size: 1.1rem; max-width: 80ch; margin-bottom: 1rem; }
-        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
-        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-header h1 { margin-bottom: 0.5rem; }
+        .tool-description { font-size: 1.15rem; max-width: 70ch; margin: 0 auto 1.5rem; color: var(--text-light); }
+        .tool-layout { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr); gap: 28px; align-items: start; }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 28px;
+        }
 
         /* --- 3b. Purpose/README Section --- */
         details > summary { list-style: none; cursor: pointer; }
         details > summary::-webkit-details-marker { display: none; }
         .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
-        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
-        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
-        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-section summary { padding: 16px 24px; font-size: 1rem; font-weight: 600; color: var(--text-color); display: flex; justify-content: space-between; align-items: center; }
+        .purpose-section summary::after {
+            content: 'Expand';
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border: 1px solid var(--border-color);
+            padding: 2px 8px;
+            border-radius: 999px;
+        }
+        .purpose-section[open] > summary::after { content: 'Collapse'; }
         .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
         .purpose-content h3 { margin-top: 1rem; }
-        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
-        .purpose-content ul { padding-left: 20px; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
 
         /* --- 4. Input Section --- */
-        .tool-inputs h2 { margin-top: 0; }
-        .input-group { margin-bottom: 1.25rem; position: relative; }
-        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
-        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; }
+        .inputs-intro { font-size: 0.95rem; color: var(--text-light); margin-bottom: 1rem; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            color: var(--text-color);
+        }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
             width: 100%;
             padding: 12px 14px;
-            padding-right: 38px;
             border: 1px solid var(--border-color);
             border-radius: 6px;
             font-size: 1rem;
@@ -93,39 +124,25 @@
             border-color: var(--text-color);
             box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
         }
-        .input-group select {
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            background-image: none;
-        }
-        .input-group input[type="number"]::-webkit-inner-spin-button,
-        .input-group input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        .input-group input[type="number"] { -moz-appearance: textfield; }
-        
+        .input-group select { cursor: pointer; appearance: none; }
+
         /* --- 5. Input Tooltip --- */
         .tooltip-trigger {
             display: inline-flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             width: 18px;
             height: 18px;
             background-color: #f1f5f9;
             border: 1px solid var(--border-color);
             color: var(--text-light);
             border-radius: 50%;
-            text-align: center;
             font-size: 11px;
             font-weight: bold;
-            line-height: 18px;
             cursor: help;
             position: absolute;
-            right: 8px;
-            top: 38px;
+            right: 10px;
+            top: 40px;
         }
         .tooltip-trigger::after {
             content: attr(data-tooltip);
@@ -141,7 +158,7 @@
             font-weight: 400;
             line-height: 1.5;
             white-space: normal;
-            width: 220px;
+            width: 240px;
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.2s, visibility 0.2s;
@@ -150,9 +167,9 @@
         }
         .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
 
-        /* --- 6. Button Styles --- */
+        /* --- 6. Buttons --- */
         .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
-        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.1rem; padding: 12px; }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.05rem; padding: 12px; }
         .btn-primary:hover { background-color: #050608; }
         .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
         .btn-secondary:hover { background-color: var(--primary-light); }
@@ -175,42 +192,162 @@
         }
         .tab-link:hover { color: var(--text-color); }
         .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
-        .tab-content { display: none; animation: fadeIn 0.5s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        #results-display { background-color: var(--primary-light); border-radius: 6px; padding: 16px; margin-bottom: 1.5rem; }
-        #plot-container { width: 100%; min-height: 350px; background-color: var(--primary-light); border: 1px dashed var(--border-color); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-light); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- 7a. Results --- */
+        #results-display { min-height: 160px; }
+        .results-placeholder { text-align: center; color: var(--text-light); padding: 40px 0; }
+        .result-summary {
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--primary-light);
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+            margin-bottom: 18px;
+        }
+        .results-section { margin-bottom: 22px; }
+        .results-section h4 { margin-bottom: 12px; }
+        .results-grid { display: flex; flex-direction: column; gap: 12px; }
+        .result-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            gap: 4px 16px;
+            align-items: center;
+        }
+        .result-card .label { font-size: 0.9rem; color: var(--text-light); font-weight: 600; grid-column: 1; grid-row: 1; }
+        .result-card .value { font-size: 1.35rem; font-weight: 700; color: var(--text-color); font-family: var(--font-mono); grid-column: 2; grid-row: 1; text-align: right; }
+        .result-card .unit { font-size: 0.85rem; color: var(--text-light); margin-left: 6px; font-weight: 500; }
+        .result-card details.inline-details { grid-column: 1 / -1; grid-row: 2; margin-top: 8px; }
+        .result-card details.inline-details summary { list-style: none; cursor: pointer; font-size: 0.8rem; color: var(--accent-color); font-weight: 600; }
+        .result-card details.inline-details summary::-webkit-details-marker { display: none; }
+        .result-card .equation-details {
+            margin-top: 10px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+        .result-card .equation-details p { margin-bottom: 8px; }
+        .result-card .equation-details p:last-child { margin-bottom: 0; }
+        .result-card .equation-details .MathJax { font-size: 0.95em !important; }
+        .result-card .equation-details mjx-container { display: block !important; margin: 4px 0; }
+
+        /* --- 7b. Interactive Definitions --- */
+        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
+        .def::after {
+            content: attr(data-def);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: normal;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            max-width: 280px;
+        }
+        .def:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 7c. Charts --- */
+        .chart-container {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+        .chart-container h4 { margin-bottom: 12px; font-size: 1rem; }
+        .chart-plot {
+            width: 100%;
+            min-height: 280px;
+            display: block;
+            color: var(--text-light);
+            padding: 12px;
+            background: var(--primary-light);
+            border-radius: 8px;
+        }
+        .chart-message {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 240px;
+            text-align: center;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        .chart-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .chart-note { margin-top: 8px; font-size: 0.85rem; color: var(--text-light); }
+        .chart-legend { display: flex; align-items: center; gap: 8px; }
+        .legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
+
         .chart-checklist { margin-top: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); padding: 12px 16px; }
         .chart-checklist summary { font-weight: 600; color: var(--secondary-color); }
         .chart-checklist ul { padding-left: 20px; margin-top: 8px; }
         .chart-checklist li { margin-bottom: 6px; color: var(--text-light); }
 
-        /* --- 7b. Inline Result Details --- */
-        .result-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
-        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
-        .result-item:first-child { padding-top: 0; }
-        .result-header { display: flex; justify-content: space-between; align-items: center; }
-        .result-header p { margin: 0; font-size: 1.1rem; }
-        .result-header p strong { color: var(--text-color); }
-        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.9rem; }
-        details.inline-details > summary::after { content: '[Show Equation]'; }
-        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
-        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
-        .equation-details p { margin-bottom: 0.5rem; }
+        /* --- 7d. Background Content --- */
+        .background-section { margin-bottom: 2rem; }
+        .background-section h3 { margin-top: 0; margin-bottom: 1rem; font-size: 1.15rem; color: var(--text-color); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .background-section h4 { margin-top: 1.25rem; margin-bottom: 0.75rem; font-size: 1rem; color: var(--secondary-color); }
+        .background-section p { font-size: 0.95rem; line-height: 1.7; margin-bottom: 1rem; }
+        .background-section ul, .background-section ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+        .background-section li { font-size: 0.95rem; line-height: 1.6; margin-bottom: 0.5rem; }
+        .background-tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+        .background-tab {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-light);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+        .background-tab:hover { border-color: var(--text-color); color: var(--text-color); }
+        .background-tab.active { background: var(--text-color); color: #fff; border-color: var(--text-color); }
+        .background-panel { display: none; animation: fadeIn 0.3s ease; }
+        .background-panel.active { display: block; }
 
-        /* --- 7c. Nested Intermediate Steps --- */
-        details.intermediate-steps { margin-top: 10px; background-color: var(--primary-light); border-radius: 6px; }
-        details.intermediate-steps > summary { padding: 8px 12px; font-weight: 500; font-size: 0.9rem; color: var(--secondary-color); }
-        details.intermediate-steps > summary::after { content: '[Show Steps]'; }
-        details.intermediate-steps[open] > summary::after { content: '[Hide Steps]'; }
-        .steps-content { padding: 0 12px 12px 12px; border-top: 1px solid var(--border-color); }
-        .steps-content p { margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--text-color); }
+        /* --- 7e. Glossary --- */
+        .glossary-grid { display: grid; gap: 12px; }
+        .glossary-item {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 14px 18px;
+        }
+        .glossary-item .term { font-weight: 600; font-size: 0.95rem; color: var(--text-color); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .glossary-item .term code { font-family: var(--font-mono); font-size: 0.85rem; background: var(--bg-color); padding: 2px 6px; border-radius: 4px; }
+        .glossary-item .definition { font-size: 0.9rem; color: var(--text-light); line-height: 1.6; }
+        .glossary-item .units { font-size: 0.8rem; color: var(--secondary-color); margin-top: 4px; font-family: var(--font-mono); }
+        .glossary-item .notes { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; font-style: italic; }
 
-        /* --- 7d. Interactive Definitions (Tooltips) --- */
-        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
-        .def::after { content: attr(data-def); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: var(--text-color); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 400; line-height: 1.4; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 10; }
-        .def:hover::after { opacity: 1; visibility: visible; }
-
-        /* --- 7e. Equation Cards --- */
+        /* --- 7f. Equations --- */
         .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
         .equation-card {
             background: rgba(248, 250, 252, 0.75);
@@ -234,21 +371,27 @@
         }
         .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
 
-        /* --- 7f. Units --- */
-        .unit { color: var(--text-light); font-size: 0.9rem; }
-
         /* --- 8. Footer --- */
-        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+        .footer {
+            text-align: center;
+            padding: 24px 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: auto;
+        }
 
         /* --- 9. Responsive Layout --- */
-        @media (max-width: 900px) {
+        @media (max-width: 1000px) {
             .tool-layout { grid-template-columns: 1fr; }
+            .tooltip-trigger { right: 8px; top: 38px; }
+            .background-tabs { flex-direction: column; }
         }
     </style>
 </head>
 
 <body>
-    
     <header class="navbar">
         <nav class="nav-container">
             <a href="../../index.html" class="nav-brand">Engineering Tools</a>
@@ -256,11 +399,12 @@
     </header>
 
     <main class="container">
-
-        <h1>PID Tuning (Ultimate Gain)</h1>
-        <p class="tool-description" id="tool-description">
-            Tune PI or PID controllers from ultimate gain and oscillation period using classic rules.
-        </p>
+        <div class="tool-header">
+            <h1>PID Tuning (Ultimate Gain)</h1>
+            <p class="tool-description" id="tool-description">
+                Tune PI or PID controllers from ultimate gain and oscillation period using classic rules.
+            </p>
+        </div>
 
         <details class="purpose-section">
             <summary>Tool Purpose & README</summary>
@@ -272,32 +416,38 @@
         <div class="tool-layout">
             <section class="tool-inputs card">
                 <h2>Inputs</h2>
+                <p class="inputs-intro">
+                    Measure the ultimate gain and period by increasing proportional gain until the loop oscillates
+                    with a steady amplitude, then select a tuning rule and controller type.
+                </p>
                 <form id="calc-form">
-                    <div class="input-group">
-                        <label for="ultimate_gain">Ultimate Gain, Ku</label>
-                        <input type="number" id="ultimate_gain" name="ultimate_gain" placeholder="e.g., 4.5" step="any">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <div class="input-group">
-                        <label for="ultimate_period">Ultimate Period, Pu (s)</label>
-                        <input type="number" id="ultimate_period" name="ultimate_period" placeholder="e.g., 8.0" step="any">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <div class="input-group">
-                        <label for="tuning_rule">Tuning Rule</label>
-                        <select id="tuning_rule" name="tuning_rule">
-                            <option value="ziegler-nichols">Ziegler-Nichols (Ultimate Gain)</option>
-                            <option value="tyreus-luyben">Tyreus-Luyben (Ultimate Gain)</option>
-                        </select>
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <div class="input-group">
-                        <label for="controller_type">Controller Type</label>
-                        <select id="controller_type" name="controller_type">
-                            <option value="PI">PI</option>
-                            <option value="PID">PID</option>
-                        </select>
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="ultimate_gain">Ultimate Gain, Ku</label>
+                            <input type="number" id="ultimate_gain" name="ultimate_gain" value="5" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="ultimate_period">Ultimate Period, Pu (s)</label>
+                            <input type="number" id="ultimate_period" name="ultimate_period" value="8" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="tuning_rule">Tuning Rule</label>
+                            <select id="tuning_rule" name="tuning_rule">
+                                <option value="ziegler-nichols">Ziegler-Nichols (Ultimate Gain)</option>
+                                <option value="tyreus-luyben">Tyreus-Luyben (Ultimate Gain)</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="controller_type">Controller Type</label>
+                            <select id="controller_type" name="controller_type">
+                                <option value="PI">PI</option>
+                                <option value="PID">PID</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
                 </form>
@@ -305,23 +455,33 @@
 
             <section class="tool-outputs card">
                 <div class="tabs">
-                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
-                    <button class="tab-link" onclick="openTab(event, 'plot')">Visualization</button>
-                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="plot">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
                 </div>
 
                 <div id="results" class="tab-content" style="display: block;">
-                    <h3>Key Results</h3>
                     <div id="results-display">
-                        <p id="results-placeholder">Please enter inputs and press Calculate.</p>
+                        <p class="results-placeholder">
+                            Enter parameters and click <strong>Calculate</strong> to generate tuning gains.
+                        </p>
                     </div>
                     <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
                 </div>
 
                 <div id="plot" class="tab-content">
-                    <h3>Visualization</h3>
-                    <div id="plot-container">
-                        <p>Plot will appear here after calculation.</p>
+                    <div class="chart-container">
+                        <h4>Time Constants</h4>
+                        <div id="time-chart" class="chart-plot">
+                            <div class="chart-message">Run a calculation to plot Ti and Td.</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Tuning Coefficients</h4>
+                        <div id="gain-chart" class="chart-plot">
+                            <div class="chart-message">Run a calculation to plot dimensionless tuning coefficients.</div>
+                        </div>
+                        <p class="chart-note">Coefficients are computed from Kp/Ku, Ti/Pu, and Td/Pu.</p>
                     </div>
                     <details class="chart-checklist">
                         <summary>Chart checklist</summary>
@@ -337,8 +497,114 @@
                 </div>
 
                 <div id="background" class="tab-content">
-                    <h3>Underlying Principles</h3>
-                    <p id="background-description">General principles and theory will be loaded here from the docstring.</p>
+                    <div class="background-tabs">
+                        <button class="background-tab active" data-bg-target="bg-overview">Overview</button>
+                        <button class="background-tab" data-bg-target="bg-glossary">Inputs & Outputs</button>
+                        <button class="background-tab" data-bg-target="bg-rules">Tuning Rules</button>
+                        <button class="background-tab" data-bg-target="bg-practice">Implementation Notes</button>
+                        <button class="background-tab" data-bg-target="bg-equations">Equations</button>
+                        <button class="background-tab" data-bg-target="bg-references">References</button>
+                    </div>
+
+                    <div id="bg-overview" class="background-panel active">
+                        <div class="background-section">
+                            <h3>Ultimate Gain PID Tuning</h3>
+                            <p id="docstring-summary">Loading summary...</p>
+                            <p>
+                                The ultimate gain method identifies the proportional gain that drives a closed loop
+                                into sustained oscillation. Once you capture the oscillation period, classic tuning
+                                rules convert those two measurements into PI or PID settings that are easy to
+                                implement and validate.
+                            </p>
+                            <h4>Workflow</h4>
+                            <ol>
+                                <li>Close the loop with proportional-only control.</li>
+                                <li>Increase proportional gain until the output oscillates with constant amplitude.</li>
+                                <li>Record the ultimate gain (Ku) and oscillation period (Pu).</li>
+                                <li>Select the tuning rule and controller type, then review the recommended gains.</li>
+                            </ol>
+                            <h4>When to Use This Tool</h4>
+                            <p>
+                                Use these settings for initial commissioning or for legacy loops with unknown models.
+                                They provide a consistent baseline for more detailed tuning, simulation, or auto-tune
+                                procedures.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="bg-glossary" class="background-panel">
+                        <div class="background-section">
+                            <h3>Input Parameters</h3>
+                            <p>Detailed definitions for every input shown in the calculator.</p>
+                            <div id="input-glossary" class="glossary-grid"></div>
+                        </div>
+                        <div class="background-section">
+                            <h3>Output Parameters</h3>
+                            <p>Descriptions of every tuned gain and time constant.</p>
+                            <div id="output-glossary" class="glossary-grid"></div>
+                        </div>
+                    </div>
+
+                    <div id="bg-rules" class="background-panel">
+                        <div class="background-section">
+                            <h3>Tuning Rule Selection</h3>
+                            <p>
+                                The Ziegler-Nichols rule targets faster response and quarter-amplitude decay, which can
+                                introduce overshoot or oscillatory behavior on sensitive processes. The Tyreus-Luyben
+                                rule is more conservative, often delivering smoother control with improved stability
+                                margins.
+                            </p>
+                            <h4>Ziegler-Nichols (Ultimate Gain)</h4>
+                            <ul>
+                                <li>Faster rise time with higher proportional gain.</li>
+                                <li>Best for systems that can tolerate overshoot.</li>
+                                <li>Common starting point for further manual tuning.</li>
+                            </ul>
+                            <h4>Tyreus-Luyben (Ultimate Gain)</h4>
+                            <ul>
+                                <li>Lower proportional gain and longer integral time.</li>
+                                <li>More robust when actuator limits or dead time dominate.</li>
+                                <li>Preferred for integrating or noisy processes.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-practice" class="background-panel">
+                        <div class="background-section">
+                            <h3>Implementation Notes</h3>
+                            <p>
+                                The gains provided are in parallel form: u = Kp * e + Ki * integral(e dt) + Kd * de/dt. Ensure your
+                                controller uses the same form, or convert as needed. Many industrial controllers use
+                                series or ISA form, which require different parameter mapping.
+                            </p>
+                            <h4>Practical Considerations</h4>
+                            <ul>
+                                <li><strong>Derivative filtering:</strong> Apply a filter to reduce noise amplification.</li>
+                                <li><strong>Integral windup:</strong> Use anti-windup to avoid slow recovery after saturation.</li>
+                                <li><strong>Sampling time:</strong> Use a sample rate at least 10x faster than the dominant loop dynamics.</li>
+                                <li><strong>Actuator limits:</strong> Re-test Ku and Pu if saturation occurs during the ultimate gain test.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-equations" class="background-panel">
+                        <div class="background-section">
+                            <h3>Equations</h3>
+                            <p>The tool applies the selected tuning coefficients to Ku and Pu, then converts to parallel-form gains.</p>
+                            <p>Visualization uses the dimensionless ratios C_Kp = Kp/Ku, C_Ti = Ti/Pu, and C_Td = Td/Pu.</p>
+                            <div id="equations-container" class="equation-container"></div>
+                        </div>
+                    </div>
+
+                    <div id="bg-references" class="background-panel">
+                        <div class="background-section">
+                            <h3>References</h3>
+                            <ul>
+                                <li>J. G. Ziegler and N. B. Nichols, "Optimum Settings for Automatic Controllers," Trans. ASME, 1942.</li>
+                                <li>B. D. Tyreus and W. L. Luyben, "Tuning PI Controllers for Integrator/Dead Time Processes," Ind. Eng. Chem. Res., 1992.</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
@@ -352,11 +618,29 @@
         // --- 0. Global Store & Config ---
         let toolDocumentation = {};
         let pyUtils, pyToolModule;
-        
-        // --- CONFIG: Set these for each tool ---
+
         const TOOL_MODULE_NAME = 'controls';
         const TOOL_FUNCTION_NAME = 'tune_pid_ultimate_gain';
         const PARAM_ORDER = ['ultimate_gain', 'ultimate_period', 'tuning_rule', 'controller_type'];
+        const PARAM_LABELS = {
+            ultimate_gain: 'Ultimate gain Ku',
+            ultimate_period: 'Ultimate period Pu',
+            tuning_rule: 'Tuning rule',
+            controller_type: 'Controller type'
+        };
+        const PARAM_UNITS = {
+            ultimate_gain: 'unitless',
+            ultimate_period: 's',
+            tuning_rule: 'categorical',
+            controller_type: 'categorical'
+        };
+        const PARAM_NOTES = {
+            ultimate_gain: 'Measured at sustained oscillation in closed loop.',
+            ultimate_period: 'Measure at Ku with the same operating point.',
+            tuning_rule: 'Ziegler-Nichols is aggressive; Tyreus-Luyben is conservative.',
+            controller_type: 'PI for noisy systems, PID when derivative action is acceptable.'
+        };
+
         const RESULT_LABELS = {
             kp: 'Kp',
             ti: 'Ti',
@@ -371,6 +655,26 @@
             ki: '1/s',
             kd: 's'
         };
+        const RESULT_NOTES = {
+            kp: 'Parallel-form proportional gain.',
+            ti: 'Integral time constant used in Ki = Kp / Ti.',
+            td: 'Derivative time constant, zero for PI.',
+            ki: 'Parallel-form integral gain.',
+            kd: 'Parallel-form derivative gain.'
+        };
+        const RESULT_GROUPS = [
+            { title: 'Controller Gains', keys: ['kp', 'ki', 'kd'] },
+            { title: 'Time Constants', keys: ['ti', 'td'] }
+        ];
+        const RULE_LABELS = {
+            'ziegler-nichols': 'Ziegler-Nichols',
+            'tyreus-luyben': 'Tyreus-Luyben'
+        };
+        const CONTROLLER_LABELS = {
+            PI: 'PI',
+            PID: 'PID'
+        };
+
         const EQUATION_LEGENDS = [
             {
                 summary: 'Proportional gain from ultimate gain.',
@@ -413,18 +717,37 @@
                 ]
             }
         ];
-        // ---
 
-        // --- 1. Tabbed Interface Logic ---
-        function openTab(event, tabName) {
-            document.querySelectorAll(".tab-content").forEach(tab => tab.style.display = "none");
-            document.querySelectorAll(".tab-link").forEach(link => link.classList.remove("active"));
-            document.getElementById(tabName).style.display = "block";
-            event.currentTarget.classList.add("active");
+        const outputTabs = document.querySelectorAll('.tab-link');
+        const outputSections = document.querySelectorAll('.tab-content');
+        const bgTabs = document.querySelectorAll('.background-tab');
+        const bgPanels = document.querySelectorAll('.background-panel');
+
+        function setOutputTab(targetId) {
+            outputTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.target === targetId));
+            outputSections.forEach(section => {
+                section.style.display = section.id === targetId ? 'block' : 'none';
+            });
         }
+
+        outputTabs.forEach(tab => {
+            tab.addEventListener('click', () => setOutputTab(tab.dataset.target));
+        });
+
+        function setBackgroundTab(targetId) {
+            bgTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.bgTarget === targetId));
+            bgPanels.forEach(panel => panel.classList.toggle('active', panel.id === targetId));
+            typesetMath();
+        }
+
+        bgTabs.forEach(tab => {
+            tab.addEventListener('click', () => setBackgroundTab(tab.dataset.bgTarget));
+        });
+
         function typesetMath() {
             if (window.MathJax) { window.MathJax.typesetPromise(); }
         }
+
         function formatValue(value) {
             if (typeof value !== 'number' || Number.isNaN(value)) {
                 return '--';
@@ -438,6 +761,23 @@
             }
             return value.toFixed(4);
         }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function toTitleCase(key) {
+            return key
+                .split('_')
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        }
+
         async function loadReadme() {
             const container = document.getElementById('readme-content');
             try {
@@ -455,53 +795,185 @@
             }
         }
 
-        // --- 2. Pyodide Initialization ---
+        function buildGlossary(containerId, keys, definitions, labelMap, unitMap, notesMap) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const items = keys.map((key) => {
+                const label = escapeHtml(labelMap[key] || toTitleCase(key));
+                const description = escapeHtml(definitions[key] || '');
+                const units = unitMap[key] ? `<div class="units">Unit: ${escapeHtml(unitMap[key])}</div>` : '';
+                const notes = notesMap[key] ? `<div class="notes">${escapeHtml(notesMap[key])}</div>` : '';
+                return `
+                    <div class="glossary-item">
+                        <div class="term">${label} <code>${key}</code></div>
+                        <div class="definition">${description}</div>
+                        ${units}
+                        ${notes}
+                    </div>
+                `;
+            }).join('');
+            container.innerHTML = items || '<p>No glossary data available.</p>';
+        }
+
+        function renderBarChart(containerId, items, options) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            if (!items.length) {
+                container.innerHTML = '<div class="chart-message">No data available.</div>';
+                return;
+            }
+
+            if (items.some(item => !Number.isFinite(item.value))) {
+                container.innerHTML = '<div class="chart-message">Chart unavailable due to non-finite values.</div>';
+                return;
+            }
+
+            if (items.some(item => item.value < 0)) {
+                container.innerHTML = '<div class="chart-message">Chart unavailable for negative values.</div>';
+                return;
+            }
+
+            const width = 640;
+            const height = 300;
+            const margin = { top: 20, right: 20, bottom: 60, left: 70 };
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+
+            const maxValue = Math.max(...items.map(item => item.value), 0);
+            const safeMax = maxValue > 0 ? maxValue : 1;
+
+            const barGap = plotWidth / items.length;
+            const barWidth = Math.min(60, barGap * 0.6);
+
+            const ticks = 4;
+            const tickValues = Array.from({ length: ticks + 1 }, (_, i) => safeMax * i / ticks);
+
+            const bars = items.map((item, index) => {
+                const barHeight = (item.value / safeMax) * plotHeight;
+                const x = margin.left + barGap * index + (barGap - barWidth) / 2;
+                const y = margin.top + plotHeight - barHeight;
+                const valueLabel = formatValue(item.value);
+                return `
+                    <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="#2563eb"></rect>
+                    <text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" font-size="12" fill="#1f2937">${valueLabel}</text>
+                `;
+            }).join('');
+
+            const xLabels = items.map((item, index) => {
+                const x = margin.left + barGap * index + barGap / 2;
+                return `<text x="${x}" y="${height - margin.bottom + 20}" text-anchor="middle" font-size="12" fill="#374151">${item.label}</text>`;
+            }).join('');
+
+            const yTicks = tickValues.map((tickValue) => {
+                const y = margin.top + plotHeight - (tickValue / safeMax) * plotHeight;
+                return `
+                    <line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" stroke="#e5e7eb" stroke-width="1" />
+                    <text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="#6b7280">${formatValue(tickValue)}</text>
+                `;
+            }).join('');
+
+            const yAxisLabel = `${options.yLabel} (${options.unit})`;
+            const xAxisLabel = options.xLabel || 'Parameter';
+
+            const svg = `
+                <svg viewBox="0 0 ${width} ${height}" width="100%" height="280" role="img" aria-label="${options.title}">
+                    <title>${options.title}</title>
+                    <desc>${options.description}</desc>
+                    <rect x="0" y="0" width="${width}" height="${height}" fill="#f9fafb"></rect>
+                    ${yTicks}
+                    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="#111827" stroke-width="1" />
+                    <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="#111827" stroke-width="1" />
+                    ${bars}
+                    ${xLabels}
+                    <text x="${margin.left + plotWidth / 2}" y="${height - 10}" text-anchor="middle" font-size="12" fill="#374151">${xAxisLabel}</text>
+                    <text x="${-height / 2}" y="16" transform="rotate(-90)" text-anchor="middle" font-size="12" fill="#374151">${yAxisLabel}</text>
+                </svg>
+            `;
+
+            const legend = `
+                <div class="chart-meta">
+                    <div class="chart-legend">
+                        <span class="legend-swatch" style="background:#2563eb"></span>
+                        <span>${options.seriesLabel}</span>
+                    </div>
+                    <div class="chart-scale">Scale: Linear</div>
+                </div>
+            `;
+
+            container.innerHTML = svg + legend;
+        }
+
+        function renderCharts(results, inputs) {
+            const timeItems = [
+                { label: 'Ti', value: results.ti },
+                { label: 'Td', value: results.td }
+            ];
+            renderBarChart('time-chart', timeItems, {
+                title: 'Time Constants',
+                description: 'Bar chart of integral and derivative time constants.',
+                yLabel: 'Time constant',
+                unit: 's',
+                seriesLabel: 'Time constants'
+            });
+
+            const ku = inputs.ultimateGain;
+            const pu = inputs.ultimatePeriod;
+            const coeffItems = [
+                { label: 'C_Kp', value: ku > 0 ? results.kp / ku : NaN },
+                { label: 'C_Ti', value: pu > 0 ? results.ti / pu : NaN },
+                { label: 'C_Td', value: pu > 0 ? results.td / pu : NaN }
+            ];
+            renderBarChart('gain-chart', coeffItems, {
+                title: 'Tuning Coefficients',
+                description: 'Dimensionless coefficients based on Kp/Ku, Ti/Pu, and Td/Pu.',
+                yLabel: 'Coefficient',
+                unit: 'unitless',
+                seriesLabel: 'Tuning coefficients'
+            });
+        }
+
         async function main() {
-            document.getElementById("calculate-btn").textContent = "Loading Pyodide...";
-            let pyodide = await loadPyodide();
-            await pyodide.loadPackage("micropip");
-            
-            document.getElementById("calculate-btn").textContent = "Loading Python...";
+            const button = document.getElementById('calculate-btn');
+            button.textContent = 'Loading Pyodide...';
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage('micropip');
+
+            button.textContent = 'Loading Python...';
             await pyodide.runPythonAsync(`
                 import micropip
                 from pyodide.http import pyfetch
-                
-                # Fetch and write the reusable utils.py
+
                 response_utils = await pyfetch('../../pycalcs/utils.py')
                 with open('utils.py', 'w') as f:
                     f.write(await response_utils.string())
-                
-                # Fetch and write the tool-specific module
+
                 response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
                 with open('${TOOL_MODULE_NAME}.py', 'w') as f:
                     f.write(await response_tool.string())
-                
+
                 import utils
                 import ${TOOL_MODULE_NAME}
             `);
-            
+
             pyUtils = pyodide.globals.get('utils');
             pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
-            
+
             const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
             const jsDoc = docMap.toJs();
             const hasError = jsDoc instanceof Map
                 ? jsDoc.has('error')
                 : Object.prototype.hasOwnProperty.call(jsDoc, 'error');
+
             if (hasError) {
                 const errorMessage = jsDoc instanceof Map ? jsDoc.get('error') : jsDoc.error;
-                console.error("Docstring Error:", errorMessage);
-                
-                // **** ERROR FIX IS HERE ****
-                // Removed the backslash (\) before the backtick (`)
-                document.getElementById("results-placeholder").innerHTML = `
+                document.getElementById('results-display').innerHTML = `
                     <p style="color: red; font-weight: bold;">Initialization Error:</p>
-                    <p style="color: red;">Could not parse docstring from ${TOOL_MODULE_NAME}.py</p>
-                    <p style="color: red; font-size: 0.9em;">${errorMessage}</p>
+                    <p style="color: red;">${errorMessage}</p>
                 `;
                 return;
             }
-            
+
             const docEntries = jsDoc instanceof Map ? jsDoc : Object.entries(jsDoc);
             toolDocumentation = Object.fromEntries(docEntries);
             if (toolDocumentation.parameters) {
@@ -516,34 +988,38 @@
                     : Object.entries(toolDocumentation.returns);
                 toolDocumentation.returns = Object.fromEntries(returnEntries);
             }
-            
+
             populateUiFromDocs();
             loadReadme();
-            document.getElementById("calculate-btn").textContent = "Calculate";
+            button.textContent = 'Calculate';
         }
         main();
-        
-        // --- 3. Populate UI from Docstring ---
+
         function populateUiFromDocs() {
-            if (!toolDocumentation.parameters) return;
-            
+            if (!toolDocumentation || !toolDocumentation.parameters) return;
+
             const description = toolDocumentation.description || '';
             const summary = description.split('\n\n')[0];
-            document.getElementById("tool-description").textContent = summary;
-            
+            document.getElementById('tool-description').textContent = summary || 'Tune PI or PID controllers from ultimate gain tests.';
+            const summaryElement = document.getElementById('docstring-summary');
+            if (summaryElement) {
+                summaryElement.textContent = summary || description;
+            }
+
             PARAM_ORDER.forEach((param) => {
                 const tooltip = toolDocumentation.parameters[param] || 'N/A';
                 document.querySelector(`#${param} + .tooltip-trigger`)
                     ?.setAttribute('data-tooltip', tooltip);
             });
-            
+
             const latexLines = toolDocumentation.latex
                 ? toolDocumentation.latex.split('\n').map(line => line.trim()).filter(line => line.length > 0)
                 : [];
+
             const equationCards = latexLines.map((expression, index) => {
                 const meta = EQUATION_LEGENDS[index] || { summary: '', variables: [] };
-                const legendItems = (meta.variables || []).map(([symbol, description]) => (
-                    `<li><span class="math-inline">\\(${symbol}\\)</span>: ${description}</li>`
+                const legendItems = (meta.variables || []).map(([symbol, note]) => (
+                    `<li><span class="math-inline">\\(${symbol}\\)</span>: ${note}</li>`
                 )).join('');
                 const summaryLine = meta.summary
                     ? `<p class="equation-summary">${meta.summary}</p>`
@@ -562,28 +1038,27 @@
                     </div>
                 `;
             }).join('');
-            document.getElementById('background').innerHTML = `
-                <h3>Underlying Principles</h3>
-                <p>${description.replace(/\n/g, '<br>')}</p>
-                <h4>Equations</h4>
-                <div class="equation-container">
-                    ${equationCards || '<p>No equations provided.</p>'}
-                </div>
-            `;
+
+            const equationsContainer = document.getElementById('equations-container');
+            if (equationsContainer) {
+                equationsContainer.innerHTML = equationCards || '<p>No equations provided.</p>';
+            }
+
+            buildGlossary('input-glossary', PARAM_ORDER, toolDocumentation.parameters, PARAM_LABELS, PARAM_UNITS, PARAM_NOTES);
+            buildGlossary('output-glossary', Object.keys(toolDocumentation.returns || {}), toolDocumentation.returns, RESULT_LABELS, RESULT_UNITS, RESULT_NOTES);
             typesetMath();
         }
 
-        // --- 4. Handle Calculation ---
-        const form = document.getElementById("calc-form");
-        form.addEventListener("submit", function(event) {
-            event.preventDefault(); 
-            
-            const ultimateGainInput = Number.parseFloat(document.getElementById("ultimate_gain").value);
-            const ultimatePeriodInput = Number.parseFloat(document.getElementById("ultimate_period").value);
+        const form = document.getElementById('calc-form');
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const ultimateGainInput = Number.parseFloat(document.getElementById('ultimate_gain').value);
+            const ultimatePeriodInput = Number.parseFloat(document.getElementById('ultimate_period').value);
             const ultimateGain = Number.isFinite(ultimateGainInput) ? ultimateGainInput : 0;
             const ultimatePeriod = Number.isFinite(ultimatePeriodInput) ? ultimatePeriodInput : 0;
-            const tuningRule = document.getElementById("tuning_rule").value;
-            const controllerType = document.getElementById("controller_type").value;
+            const tuningRule = document.getElementById('tuning_rule').value;
+            const controllerType = document.getElementById('controller_type').value;
 
             try {
                 const resultMap = pyToolModule[TOOL_FUNCTION_NAME](
@@ -598,49 +1073,66 @@
                     throw new Error(results.error);
                 }
 
-                const resultsDiv = document.getElementById("results-display");
-                resultsDiv.innerHTML = ''; // Clear old results
-                document.getElementById("results-placeholder")?.remove();
+                renderResults(results, { tuningRule, controllerType });
+                renderCharts(results, { ultimateGain, ultimatePeriod });
+                typesetMath();
 
-                const returnDefs = toolDocumentation.returns;
-                const equations = toolDocumentation.latex.split('\n');
-                let eq_index = 0;
+            } catch (error) {
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+            }
+        });
 
-                for (const key in returnDefs) {
-                    const definition = returnDefs[key];
+        function renderResults(results, meta) {
+            const resultsDiv = document.getElementById('results-display');
+            const returnDefs = toolDocumentation.returns || {};
+            const equations = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+                : [];
+            const returnKeys = Object.keys(returnDefs);
+            const equationMap = {};
+            returnKeys.forEach((key, index) => {
+                equationMap[key] = equations[index] || '';
+            });
+
+            const ruleLabel = RULE_LABELS[meta.tuningRule] || meta.tuningRule;
+            const controllerLabel = CONTROLLER_LABELS[meta.controllerType] || meta.controllerType;
+            let html = `
+                <div class="result-summary">
+                    Rule: <strong>${ruleLabel}</strong> | Controller: <strong>${controllerLabel}</strong>
+                </div>
+            `;
+
+            RESULT_GROUPS.forEach((group) => {
+                html += `<div class="results-section"><h4>${group.title}</h4><div class="results-grid">`;
+                group.keys.forEach((key) => {
+                    const definition = escapeHtml(returnDefs[key] || '');
                     const value = results[key];
                     const substString = results[`subst_${key}`];
-                    const equation = equations[eq_index] || '';
-                    
-                    const displayName = RESULT_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ');
-                    const unitLabel = RESULT_UNITS[key] ? ` <span class="unit">(${RESULT_UNITS[key]})</span>` : '';
-
-                    // **** ERROR FIX IS HERE ****
-                    // Removed the backslash (\) before the backtick (`)
-                    const html = `
-                    <div class="result-item">
-                        <div class="result-header">
-                            <p><strong><span class="def" data-def="${definition}">${displayName}</span>:</strong> ${formatValue(value)}${unitLabel}</p>
+                    const equation = equationMap[key] || '';
+                    const displayName = RESULT_LABELS[key] || toTitleCase(key);
+                    const unitLabel = RESULT_UNITS[key] ? `<span class="unit">${RESULT_UNITS[key]}</span>` : '';
+                    html += `
+                        <div class="result-card">
+                            <div class="label"><span class="def" data-def="${definition}">${displayName}</span></div>
+                            <div class="value">${formatValue(value)} ${unitLabel}</div>
                             <details class="inline-details">
-                                <summary></summary>
+                                <summary>Show equation</summary>
                                 <div class="equation-details">
                                     <p><strong>Equation:</strong> $$${equation}$$</p>
                                     ${substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : ''}
                                 </div>
                             </details>
                         </div>
-                    </div>`;
-                    
-                    resultsDiv.innerHTML += html;
-                    eq_index++;
-                }
-                typesetMath();
+                    `;
+                });
+                html += '</div></div>';
+            });
 
-            } catch (error) {
-                console.error("Python calculation error:", error);
-                document.getElementById("results-display").innerHTML = `<p style="color: red; font-weight:bold;">Calculation Error:</p><p style="color: red;">${error.message}</p>`;
-            }
-        });
+            resultsDiv.innerHTML = html;
+        }
     </script>
 </body>
 </html>

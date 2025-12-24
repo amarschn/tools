@@ -21,6 +21,8 @@ The primary goal of this project is to create a GitHub Pages-hosted web applicat
 
 We aim for a user experience where the initial tool is simple and straightforward, but curiosity is rewarded with detailed, step-by-step explanations available on demand.
 
+Design philosophy and UI direction live in `DESIGN.md` and should be treated as required context for any new tool or visual refresh.
+
 ## Core Principles
 
 All tools (our "agents") in this repository should adhere to the following principles:
@@ -32,6 +34,7 @@ All tools (our "agents") in this repository should adhere to the following princ
 * **Single Source of Truth:** This is related to modularity and reusability, but bears explicit explanation - there should be no duplication of equations or explanations, this will result in errors. For any given variable, equation, or explanation for a phenomena, there should be only ONE place where that is documented.
 * **Tool-Local References by Default:** Reference data (datasheets, curves, images, PDFs) should live with the tool that uses them unless multiple tools depend on the same asset. This keeps context tight while still allowing shared promotion when reuse is real.
 * **Consistency:** All tools should share a similar, clean, and simple user interface. This creates a cohesive experience as users navigate between different calculators.
+* **Design Alignment:** Follow the system-wide visual language and layout guidance in `DESIGN.md` for typography, spacing, and interaction patterns.
 * **Dependency-Free Core:** The core Python library functions should have minimal to no external dependencies to ensure they run smoothly with Pyodide and to avoid versioning conflicts.
 * **Visualizations:** Where appropriate, tools should include visualizations (plots, diagrams, etc.) to help users better understand the results and the underlying concepts.
 * **Exporting:** Engineering work is still done in Excel and other tools, and that is unlikely to change. Many of the tools in this repo will need some form of export function that can output an Excel document or similar with all calculations in that document to be used locally by a user for verification, modification, and private use.

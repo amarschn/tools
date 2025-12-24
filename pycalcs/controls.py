@@ -12,13 +12,15 @@ def tune_pid_ultimate_gain(
     controller_type: str,
 ) -> dict[str, float]:
     """
-    Tunes PI/PID gains from ultimate gain and period using classic closed-loop rules.
+    Tunes PI/PID gains from ultimate gain tests using classic closed-loop rules.
 
     This function applies Ziegler-Nichols or Tyreus-Luyben ultimate gain tuning to
     compute parallel-form gains (Kp, Ki, Kd) along with their equivalent time
-    constants (Ti, Td). Ultimate gain Ku and ultimate period Pu are typically
-    measured by increasing proportional gain until sustained oscillations appear
-    in a closed loop.
+    constants (Ti, Td). Ultimate gain Ku and ultimate period Pu are measured by
+    increasing proportional gain until sustained oscillations appear in a closed
+    loop, then timing the oscillation period at that gain. Results are intended
+    as starting points and should be validated and refined for noise, actuator
+    limits, and robustness.
 
     References:
     - J. G. Ziegler and N. B. Nichols, "Optimum Settings for Automatic Controllers," Trans. ASME, 1942.
@@ -27,18 +29,25 @@ def tune_pid_ultimate_gain(
     ---Parameters---
     ultimate_gain : float
         Ultimate gain Ku at the onset of sustained oscillations (dimensionless).
+        Increase proportional gain until the loop output oscillates with constant
+        amplitude, then record that gain as Ku.
     ultimate_period : float
-        Ultimate period Pu of the sustained oscillation (s).
+        Ultimate period Pu of the sustained oscillation (s). Measure the time
+        between successive peaks at Ku using the same operating point and
+        sampling conditions.
     tuning_rule : str
-        Rule selection: "ziegler-nichols" or "tyreus-luyben".
+        Rule selection: "ziegler-nichols" for aggressive tuning or "tyreus-luyben"
+        for a more conservative, robust starting point.
     controller_type : str
-        Controller mode: "PI" or "PID".
+        Controller mode: "PI" or "PID". PI is often preferred when derivative
+        action amplifies noise or is unavailable, while PID can improve
+        transient response when derivative action is acceptable.
 
     ---Returns---
     kp : float
-        Proportional gain Kp (dimensionless).
+        Proportional gain Kp in parallel form (dimensionless).
     ti : float
-        Integral time constant Ti (s).
+        Integral time constant Ti (s) used in Ki = Kp / Ti.
     td : float
         Derivative time constant Td (s). PI tuning returns 0.
     ki : float
