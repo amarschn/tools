@@ -114,6 +114,8 @@ def estimate_battery_runtime(
         Voltage drop across internal resistance at load current (V).
     c_rate : float
         Discharge C-rate based on nominal capacity (1/h).
+    power_loss_w : float
+        Power dissipated as heat in internal resistance (W). Equals I_load^2 * R_pack.
     pack_nominal_voltage_v : float
         Pack nominal voltage after cell aggregation (V).
     pack_capacity_ah : float
@@ -139,6 +141,7 @@ def estimate_battery_runtime(
     E = V_{load} C_{eff}
     P_{avg} = V_{load} I_{avg}
     C_{rate} = \\frac{I_{avg}}{C_{pack}}
+    P_{loss} = I_{load}^{2} R_{pack}
     """
 
     use_cell_specs_bool = bool(round(use_cell_specs))
@@ -241,6 +244,7 @@ def estimate_battery_runtime(
     energy_delivered_wh = v_load * capacity_effective_ah
     voltage_sag_v = i_load * r_int
     c_rate = i_avg / pack_capacity_ah
+    power_loss_w = i_load * i_load * r_int
 
     def _fmt(value: float) -> str:
         if value == 0:
@@ -350,6 +354,10 @@ def estimate_battery_runtime(
         f"C_{{rate}} = I_{{avg}} / C_{{pack}} = {_fmt(i_avg)} / {_fmt(pack_capacity_ah)}"
         f" = {_fmt(c_rate)} \\, \\text{{1/h}}"
     )
+    subst_power_loss = (
+        f"P_{{loss}} = I_{{load}}^2 R_{{pack}} = {_fmt(i_load)}^2 \\times {_fmt(r_int)}"
+        f" = {_fmt(power_loss_w)} \\, \\text{{W}}"
+    )
 
     return {
         "runtime_hours": runtime_hours,
@@ -361,6 +369,7 @@ def estimate_battery_runtime(
         "loaded_voltage_v": v_load,
         "voltage_sag_v": voltage_sag_v,
         "c_rate": c_rate,
+        "power_loss_w": power_loss_w,
         "pack_nominal_voltage_v": pack_nominal_voltage_v,
         "pack_capacity_ah": pack_capacity_ah,
         "pack_internal_resistance_ohm": pack_internal_resistance_ohm,
@@ -374,6 +383,7 @@ def estimate_battery_runtime(
         "subst_loaded_voltage_v": subst_voltage_loaded,
         "subst_voltage_sag_v": subst_voltage_sag,
         "subst_c_rate": subst_c_rate,
+        "subst_power_loss_w": subst_power_loss,
         "subst_pack_nominal_voltage_v": subst_pack_voltage,
         "subst_pack_capacity_ah": subst_pack_capacity,
         "subst_pack_internal_resistance_ohm": subst_pack_resistance,

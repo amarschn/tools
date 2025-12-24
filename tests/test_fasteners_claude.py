@@ -344,17 +344,38 @@ class TestGraphDataGeneration:
     """Test graph data generation functions."""
 
     def test_joint_diagram_data(self):
-        """Joint diagram data should have correct structure."""
+        """Joint diagram data should have correct structure for triangular diagram."""
         data = generate_joint_diagram_data_claude(
             preload=30000,
             bolt_stiffness=500e6,
             joint_stiffness=1500e6,
             external_load=5000,
         )
+        # Core stiffness lines
         assert "bolt_extension" in data
         assert "bolt_force" in data
+        assert "joint_x" in data
+        assert "joint_force" in data
+
+        # Key points
+        assert "preload_extension" in data
         assert "preload_force" in data
+        assert "work_bolt_extension" in data
+        assert "work_bolt_force" in data
+        assert "work_joint_force" in data
+
+        # Triangular features
+        assert "triangle_x" in data
+        assert "triangle_f" in data
+        assert "separation_extension" in data
+
+        # Verify data arrays have reasonable length
         assert len(data["bolt_extension"]) > 10
+        assert len(data["joint_x"]) > 10
+
+        # Verify working triangle is closed (returns to start)
+        assert data["triangle_x"][0] == data["triangle_x"][-1]
+        assert data["triangle_f"][0] == data["triangle_f"][-1]
 
     def test_torque_tension_data(self):
         """Torque-tension data should have K-factor variants."""

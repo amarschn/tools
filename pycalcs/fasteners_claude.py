@@ -781,51 +781,106 @@ def generate_joint_diagram_data_claude(
     n_points: int = 50,
 ) -> Dict[str, List[float]]:
     """
-    Generate data for classic bolt/joint force-extension diagram.
+    Generate data for classic triangular bolt/joint force-extension diagram.
 
-    Returns arrays for plotting the bolt and joint stiffness lines,
-    preload point, and working load range.
+    The classic joint diagram (per VDI 2230 and Bickford) shows:
+    - Bolt stiffness line from origin through preload point (slope = Kb)
+    - Joint stiffness line from preload point back toward baseline (slope = -Kj)
+    - The triangular region bounded by these lines and the x-axis
+    - Working load shifts showing delta_Fb and delta_Fj under external load
+
+    Returns arrays for plotting the classic triangular diagram with
+    bolt line, joint line, working triangle, and key annotation points.
     """
-    # Preload creates initial state
-    delta_b_preload = preload / bolt_stiffness
-    delta_j_preload = preload / joint_stiffness
+    # Preload creates initial deformations
+    delta_b_preload = preload / bolt_stiffness  # Bolt stretch at preload
+    delta_j_preload = preload / joint_stiffness  # Joint compression at preload
 
-    # Load factor
+    # Load factor (portion of external load carried by bolt)
     phi = bolt_stiffness / (bolt_stiffness + joint_stiffness)
 
-    # Additional bolt stretch under external load
-    delta_ext_bolt = phi * external_load / bolt_stiffness
-    delta_ext_joint = (1 - phi) * external_load / joint_stiffness
+    # Working state under external axial load
+    work_bolt_force = preload + phi * external_load
+    work_joint_force = max(0, preload - (1 - phi) * external_load)
+    work_bolt_extension = work_bolt_force / bolt_stiffness
+    work_joint_compression = work_joint_force / joint_stiffness
 
-    # Generate bolt line (from origin through preload point and beyond)
-    max_extension = delta_b_preload * 1.5
-    bolt_extension = [i * max_extension / (n_points - 1) for i in range(n_points)]
+    # Separation load (external load at which joint separates)
+    separation_load = preload / (1 - phi) if phi < 1 else float('inf')
+
+    # ===== BOLT LINE (from origin through preload, extended to max working) =====
+    # Extends from (0,0) through preload point and beyond to show working range
+    max_bolt_ext = max(delta_b_preload * 1.3, work_bolt_extension * 1.1)
+    bolt_extension = [i * max_bolt_ext / (n_points - 1) for i in range(n_points)]
     bolt_force = [ext * bolt_stiffness for ext in bolt_extension]
 
-    # Generate joint line (from origin, but plotted as compression)
-    max_compression = delta_j_preload * 1.5
-    joint_compression = [i * max_compression / (n_points - 1) for i in range(n_points)]
-    joint_force = [comp * joint_stiffness for comp in joint_compression]
+    # ===== JOINT LINE (from preload point back to x-axis) =====
+    # This creates the classic triangular shape
+    # Joint line has slope Kj but plotted from preload point toward origin
+    # X positions from preload extension back to where joint force = 0
+    # At preload: x = delta_b_preload, F = preload
+    # At zero force: x = delta_b_preload + delta_j_preload (joint fully released)
+    joint_start_x = delta_b_preload  # Preload point
+    joint_end_x = delta_b_preload + delta_j_preload  # Full decompression point
 
-    # Key points
-    preload_point = {"extension": delta_b_preload, "force": preload}
+    joint_x = [joint_start_x + i * (joint_end_x - joint_start_x) / (n_points - 1)
+               for i in range(n_points)]
+    # Force decreases from preload to zero as we move right (joint decompresses)
+    joint_force_line = [preload - (x - delta_b_preload) * joint_stiffness
+                        for x in joint_x]
 
-    # Working point under load
-    work_bolt_force = preload + phi * external_load
-    work_joint_force = preload - (1 - phi) * external_load
-    work_extension = work_bolt_force / bolt_stiffness
+    # ===== WORKING TRIANGLE VERTICES =====
+    # Under external load, operating point moves from preload along both stiffness lines
+    # Bolt force increases (moves up bolt line)
+    # Joint force decreases (moves along joint line toward separation)
+
+    # Calculate working point on joint line
+    work_x = delta_b_preload + (preload - work_joint_force) / joint_stiffness
+
+    # Triangle showing load distribution
+    triangle_x = [delta_b_preload, work_bolt_extension, work_x, delta_b_preload]
+    triangle_f = [preload, work_bolt_force, work_joint_force, preload]
+
+    # ===== DELTA LINES (showing load pickup) =====
+    # Vertical delta Fb (additional bolt force)
+    delta_fb_x = [work_bolt_extension, work_bolt_extension]
+    delta_fb_y = [preload, work_bolt_force]
+
+    # Horizontal working line at external load application
+    working_line_x = [work_bolt_extension, work_x]
+    working_line_y = [work_bolt_force, work_joint_force]
 
     return {
+        # Main stiffness lines
         "bolt_extension": bolt_extension,
         "bolt_force": bolt_force,
-        "joint_compression": joint_compression,
-        "joint_force": joint_force,
+        "joint_x": joint_x,
+        "joint_force": joint_force_line,
+
+        # Key points
         "preload_extension": delta_b_preload,
         "preload_force": preload,
-        "work_extension": work_extension,
+        "work_bolt_extension": work_bolt_extension,
         "work_bolt_force": work_bolt_force,
+        "work_x": work_x,
         "work_joint_force": work_joint_force,
+
+        # Working triangle
+        "triangle_x": triangle_x,
+        "triangle_f": triangle_f,
+
+        # Delta lines for annotation
+        "delta_fb_x": delta_fb_x,
+        "delta_fb_y": delta_fb_y,
+        "working_line_x": working_line_x,
+        "working_line_y": working_line_y,
+
+        # Reference values
+        "separation_extension": joint_end_x,
+        "separation_load": separation_load,
         "phi": phi,
+        "delta_b_preload": delta_b_preload,
+        "delta_j_preload": delta_j_preload,
     }
 
 

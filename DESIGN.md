@@ -1,42 +1,42 @@
 # UI Design Guidance
 
-This document captures the preferred UI direction for Engineering Tools calculators. It codifies the
-visual language established by the Claude-based fastener torque calculator so new tools share the same
-polished, information-dense feel.
+This document captures the preferred UI direction for Engineering Tools calculators. The current
+target is a Polestar-inspired minimal UI: clean geometry, restrained color, and high legibility.
 
 ## Visual Language
 
-- Use a deep primary hue with a saturated accent for call-to-action emphasis.
-- Apply a subtle background gradient to the page; keep cards on clean white surfaces.
-- Reserve semantic colors for status (success/warning/danger) and use them consistently across badges,
-  gauges, and banners.
-- Favor soft drop shadows and a slightly larger corner radius (8-10px) for a modern, confident look.
+- Prioritize clean, monochrome surfaces with a single dark accent for CTAs.
+- Keep backgrounds solid (no gradients) and use whitespace for separation.
+- Reserve semantic colors for status indicators only (success/warning/danger).
+- Use hairline borders and subtle shadows; avoid heavy depth effects.
 
 Suggested CSS variables (tool-local):
 
 ```
---primary-color: #1e3a5f;
---primary-light: #f0f4f8;
---secondary-color: #495057;
---accent-color: #2563eb;
---success-color: #059669;
---warning-color: #d97706;
---danger-color: #dc2626;
---text-color: #1f2937;
+--primary-color: #0b0d12;
+--primary-light: #f4f5f7;
+--secondary-color: #4b5563;
+--accent-color: #111827;
+--success-color: #0f766e;
+--warning-color: #b45309;
+--danger-color: #b91c1c;
+--text-color: #111827;
 --text-light: #6b7280;
 --border-color: #e5e7eb;
---bg-color: #f8fafc;
+--bg-color: #f8f9fb;
 --bg-card: #ffffff;
---shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
---shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
---border-radius: 10px;
+--shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+--shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+--border-radius: 8px;
+--font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+--font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
 ```
 
 ## Typography
 
-- Use a modern sans serif (Inter preferred) for body and headings.
-- Use a monospace font (JetBrains Mono preferred) for numeric readouts.
-- Increase heading weight (600-700) and tighten letter spacing slightly for h1.
+- Use a Swiss-style sans serif for body and headings (Helvetica Neue / Avenir Next / Univers).
+- Use a clean monospace for numeric readouts (SF Mono / Menlo / Monaco).
+- Keep headings crisp with moderate weight and minimal letter spacing.
 
 ## Layout & Structure
 
@@ -49,7 +49,8 @@ Suggested CSS variables (tool-local):
 
 - Organize large input sets into tabbed sections (Fastener / Joint / Loading style).
 - Pair related inputs in a two-column row (`.input-row`) when it reduces scan time.
-- Use 2px input borders with a soft focus ring (4px glow) to signal interactivity.
+- Use 1px input borders with a subtle focus ring to keep the UI clean.
+- Remove native select arrows/number spinners if they collide with tooltip icons; pad inputs accordingly.
 - Tooltips should be larger, wrapped, and shadowed for readability.
 
 ## Outputs
@@ -68,7 +69,7 @@ Suggested CSS variables (tool-local):
 
 ## Motion & Feedback
 
-- Apply light fade/slide transitions on tab content and hover lift on primary buttons.
+- Apply light fade transitions on tab content; keep hover effects restrained.
 - Show a full-screen loading overlay while Pyodide initializes to avoid blank states.
 
 ## Implementation Notes
