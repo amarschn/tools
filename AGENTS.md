@@ -10,7 +10,9 @@ This document outlines the vision, architecture, and contribution guidelines for
 4. [Contribution Guidelines](#contribution-guidelines)
 5. [Git Workflow](#git-workflow)
 6. [Coding Practices and Standards](#coding-practices-and-standards)
-7. [Roadmap](#roadmap)
+7. [Advanced Tool UI & Visualization Requirements](#advanced-tool-ui--visualization-requirements)
+8. [Tool Roadmaps](#tool-roadmaps)
+9. [Roadmap](#roadmap)
 
 ## Project Vision & Philosophy
 
@@ -82,6 +84,7 @@ We welcome contributions! To ensure a smooth process, please follow these guidel
 2.  **Define Requirements in a README.md file:** There must be a README.md file in each tool subdirectory in `/tools/` that contains:
     * The purpose of the tool.
     * The requirements of the tool.
+    * If a tool-local `ROADMAP.md` exists, review it before starting work and keep it updated as tasks are completed.
 3.  **Add Python Logic:**
     * Identify the core calculations for your tool.
     * Write one or more Python functions to perform these calculations.
@@ -244,6 +247,25 @@ def calculate_tool(input_a: float, input_b: float) -> dict[str, float]:
     * Providing sufficient color contrast.
     * Ensuring all functionality is usable with a keyboard.
 * **CSS:** The example template currently ships with an inline `<style>` block; start from it, keep component-specific tweaks inside that block, and only introduce shared rules in the forthcoming global stylesheet (see Roadmap). Use descriptive class names and avoid one-off inline `style=""` attributes so future extraction stays easy.
+
+## Advanced Tool UI & Visualization Requirements
+
+Use these guidelines for parameter-heavy tools or any tool that benefits from plots, glossaries, or multi-panel explanation (e.g., the layout patterns demonstrated in `tools/battery-runtime-estimator/index.html`).
+
+* **Template baseline:** Start from `tools/example_tool/index.html` as required. For complex tools, extend it by borrowing patterns from `tools/battery-runtime-estimator/index.html` (input grouping, background tabs, glossary cards, chart containers) rather than copying that file wholesale.
+* **Background structure:** Provide multi-tab background content with at least Overview, Inputs & Outputs Glossary, Theory/Principles, Equations, Implementation Notes, and References. Keep it aligned with the tool README.
+* **Glossary wiring:** Populate glossary entries directly from the docstring `---Parameters---` and `---Returns---` blocks. Ensure input IDs match parameter names, and escape docstring/README text before inserting into HTML.
+* **Results presentation:** Group outputs into labeled sections, show units, include equation + substituted equation, and add a summary banner that captures key configuration (e.g., rule selection, controller type, model choice).
+* **Visualization:** Provide at least one chart when it adds clarity. Every plot must include labeled axes with units, a legend, declared scale (linear/log), and a user-friendly message when data are invalid or empty (no NaN/inf on plots).
+* **Mixed-unit plotting:** Do not plot mixed-unit values on the same axis. Use dimensionless ratios or separate charts.
+
+## Tool Roadmaps
+
+Some tools include a tool-local `ROADMAP.md` under `tools/<tool>/`. Treat this file as a focused TODO list for future agentic or human work on that tool.
+
+* Keep entries concise and actionable.
+* Update the roadmap when completing significant items or when new gaps are discovered.
+* Review the roadmap before large changes to ensure alignment with outstanding work.
 
 ### Visualization Standards
 

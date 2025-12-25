@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bolt Torque Calculator (Experimental) - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* Polestar-Inspired Minimal UI - White/Black/Gray */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; }
+        h2 { font-size: 1.375rem; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+        h3 { font-size: 1.1rem; color: var(--secondary-color); font-weight: 600; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--text-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        /* Navigation */
+        .navbar {
+            background: var(--primary-color);
+            border-bottom: none;
+            box-shadow: var(--shadow);
+            padding: 0 5%;
+        }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 56px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.25rem; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+        .nav-brand:hover { text-decoration: none; opacity: 0.85; }
+        .exp-badge {
+            background: var(--warning-color);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: 12px;
+            font-weight: 600;
+        }
+
+        /* Main Layout */
+        main.container { flex-grow: 1; }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-header h1 { margin-bottom: 0.5rem; }
+        .tool-description { font-size: 1.15rem; max-width: 70ch; margin: 0 auto 1.5rem; color: var(--text-light); }
+
+        /* Mode Toggle */
+        .mode-toggle-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .mode-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-card);
+            padding: 4px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+        }
+        .mode-btn {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background: var(--accent-color);
+            color: white;
+        }
+        .mode-btn:hover:not(.active) {
+            background: var(--primary-light);
+            color: var(--text-color);
+        }
+        .mode-desc {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .tool-layout { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr); gap: 28px; align-items: start; }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 28px;
+        }
+
+        /* Input Section */
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+        .tool-inputs h2::before { content: ''; width: 4px; height: 24px; background: var(--accent-color); border-radius: 2px; }
+
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            font-size: 0.875rem;
+            color: var(--text-color);
+        }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            transition: border-color 0.15s ease;
+            background: var(--bg-card);
+        }
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-hint {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* Advanced Section */
+        .advanced-section {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border-color);
+        }
+        .advanced-section.visible { display: block; }
+        .advanced-toggle {
+            background: none;
+            border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 12px;
+            padding: 8px 0;
+        }
+        .advanced-toggle:hover { text-decoration: underline; }
+
+        /* Preload Slider */
+        .preload-slider-group {
+            margin: 16px 0;
+            padding: 16px;
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+        }
+        .preload-slider-group .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .preload-slider-group .slider-value {
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+        .preload-slider-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: var(--border-color);
+            border-radius: 3px;
+            outline: none;
+        }
+        .preload-slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+
+        /* Button */
+        .btn-primary {
+            display: inline-block;
+            padding: 14px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            background: var(--accent-color);
+            color: white;
+            width: 100%;
+            margin-top: 8px;
+            box-shadow: var(--shadow);
+            transition: opacity 0.15s ease;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Output Tabs */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 18px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active {
+            color: var(--text-color);
+            font-weight: 600;
+            border-bottom-color: var(--text-color);
+        }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Results Display */
+        #results-display { min-height: 200px; }
+        .results-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-light);
+        }
+
+        /* Primary Result */
+        .primary-result {
+            background: var(--primary-color);
+            color: white;
+            padding: 24px;
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .primary-result .label { font-size: 0.9rem; opacity: 0.8; margin-bottom: 4px; }
+        .primary-result .value { font-size: 2.5rem; font-weight: 700; font-family: var(--font-mono); }
+        .primary-result .unit { font-size: 1rem; opacity: 0.7; }
+        .primary-result .range { font-size: 0.85rem; opacity: 0.7; margin-top: 8px; }
+
+        /* Results Grid */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .result-item {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .result-item:hover { border-color: var(--border-color); }
+        .result-item.expanded { border-color: var(--accent-color); background: var(--primary-light); }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .icon { font-size: 0.7rem; margin-left: 4px; opacity: 0.5; }
+
+        /* Derivation Panels */
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); }
+        .derivation-step .equation { background: white; padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+        .derivation-step .inputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .derivation-step .input-tag { background: white; border: 1px solid var(--border-color); color: var(--text-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); }
+        .derivation-step .result-box { background: var(--primary-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
+        .derivation-step .explanation { font-size: 0.9rem; color: var(--text-light); line-height: 1.5; }
+
+        /* Safety Gauges */
+        .safety-section { margin-top: 24px; }
+        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
+        .safety-gauge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            padding: 12px 16px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .safety-gauge:hover { border-color: var(--text-light); }
+        .safety-gauge.expanded { border-color: var(--accent-color); }
+        .gauge-label { min-width: 90px; font-weight: 600; font-size: 0.9rem; }
+        .gauge-bar-container { flex: 1; height: 8px; background: var(--border-color); border-radius: 4px; position: relative; overflow: visible; }
+        .gauge-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .gauge-bar.success { background: var(--success-color); }
+        .gauge-bar.warning { background: var(--warning-color); }
+        .gauge-bar.danger { background: var(--danger-color); }
+        .gauge-threshold { position: absolute; width: 2px; height: 14px; background: var(--text-color); top: -3px; }
+        .gauge-value { min-width: 50px; text-align: right; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
+        .gauge-value.success { color: var(--success-color); }
+        .gauge-value.warning { color: var(--warning-color); }
+        .gauge-value.danger { color: var(--danger-color); }
+        .gauge-info { font-size: 0.7rem; color: var(--text-light); }
+
+        /* Safety Derivation */
+        .safety-derivation {
+            display: none;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin: -4px 0 12px 0;
+        }
+        .safety-derivation.visible { display: block; animation: fadeIn 0.2s ease; }
+        .safety-derivation h4 { font-size: 0.9rem; margin-bottom: 12px; }
+        .safety-derivation .explanation { font-size: 0.85rem; color: var(--text-light); margin-bottom: 12px; line-height: 1.5; }
+        .safety-derivation .formula { background: var(--primary-light); padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+        .safety-derivation .tip { background: #fef3c7; border-left: 3px solid var(--warning-color); padding: 10px 12px; font-size: 0.85rem; border-radius: 0 6px 6px 0; }
+
+        /* Status Banner */
+        .status-banner { padding: 18px 24px; border-radius: var(--border-radius); margin-top: 20px; display: flex; align-items: flex-start; gap: 14px; }
+        .status-banner .icon { font-size: 1.25rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
+        .status-banner.acceptable { background: #ecfdf5; border: 1px solid var(--success-color); }
+        .status-banner.acceptable h4 { color: var(--success-color); }
+        .status-banner.marginal { background: #fffbeb; border: 1px solid var(--warning-color); }
+        .status-banner.marginal h4 { color: var(--warning-color); }
+        .status-banner.unacceptable { background: #fef2f2; border: 1px solid var(--danger-color); }
+        .status-banner.unacceptable h4 { color: var(--danger-color); }
+        .recommendations { margin-top: 8px; padding-left: 20px; }
+        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; }
+
+        /* Chart Containers */
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 18px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .chart-container h4 { margin-bottom: 8px; font-size: 0.95rem; font-weight: 600; }
+        .chart-explanation {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .chart-explanation strong { color: var(--text-color); }
+        .chart-plot { width: 100%; min-height: 320px; max-width: 100%; overflow: hidden; }
+
+        /* Equation Cards (for background section) */
+        .equation-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin: 16px 0;
+        }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+
+        /* Background Section */
+        .background-content { max-height: 70vh; overflow-y: auto; padding-right: 8px; }
+        .background-content h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-top: 24px; }
+        .background-content h3:first-child { margin-top: 0; }
+        .background-content table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+        .background-content th, .background-content td { padding: 10px; border: 1px solid var(--border-color); text-align: left; }
+        .background-content th { background: var(--primary-light); }
+        .background-content .callout { padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+        .background-content .callout-warning { background: #fef3c7; border-left: 4px solid var(--warning-color); }
+        .background-content .callout-success { background: #d1fae5; border-left: 4px solid var(--success-color); }
+        .background-content .callout-info { background: #dbeafe; border-left: 4px solid var(--accent-color); }
+        .background-content .callout-danger { background: #fef2f2; border-left: 4px solid var(--danger-color); }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 24px 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .input-row { grid-template-columns: 1fr; }
+        }
+
+        /* Loading */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; color: var(--text-color); }
+    </style>
+</head>
+
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <div style="display: flex; align-items: center;">
+                <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+                <span class="exp-badge">EXPERIMENTAL</span>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div class="tool-header">
+            <h1>Bolt Torque Calculator</h1>
+            <p class="tool-description">
+                VDI 2230-style bolted joint analysis with progressive disclosure.
+                Click any result to see its derivation.
+            </p>
+        </div>
+
+        <!-- Mode Toggle -->
+        <div class="mode-toggle-wrap">
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="mode-simple" onclick="setMode('simple')">Simple</button>
+                <button class="mode-btn" id="mode-advanced" onclick="setMode('advanced')">Advanced</button>
+            </div>
+            <div class="mode-desc" id="mode-description">
+                <strong>Simple Mode:</strong> Quick calculation with defaults for grip length, lubrication, and assembly method.
+            </div>
+        </div>
+
+        <div class="tool-layout">
+            <!-- Input Panel -->
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <!-- Core inputs -->
+                    <div class="input-group">
+                        <label for="fastener_standard">Fastener Standard</label>
+                        <select id="fastener_standard">
+                            <option value="ISO">ISO Metric (M6, M8, M10...)</option>
+                            <option value="UTS">SAE Imperial (1/4", 3/8", 1/2"...)</option>
+                        </select>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="fastener_size">Thread Size</label>
+                            <select id="fastener_size"></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="bolt_grade">Grade</label>
+                            <select id="bolt_grade"></select>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="external_axial_load">Working Load per Bolt (N)</label>
+                        <input type="number" id="external_axial_load" value="5000" min="0" step="100">
+                        <div class="input-hint">Tensile load the bolt must resist during operation</div>
+                    </div>
+
+                    <!-- Preload slider - now 10% to 100% -->
+                    <div class="preload-slider-group">
+                        <div class="slider-header">
+                            <span>Target Preload</span>
+                            <span class="slider-value"><span id="preload-pct-display">75</span>% of proof load</span>
+                        </div>
+                        <input type="range" id="preload_percentage" min="10" max="100" value="75" oninput="updatePreloadDisplay()">
+                        <div class="slider-labels">
+                            <span>10% (very low)</span>
+                            <span>50%</span>
+                            <span>100% (proof)</span>
+                        </div>
+                    </div>
+
+                    <!-- Advanced inputs -->
+                    <div class="advanced-section" id="advanced-inputs">
+                        <div class="input-group">
+                            <label for="grip_length">Grip Length (mm)</label>
+                            <input type="number" id="grip_length" value="25" min="1" step="0.5">
+                            <div class="input-hint">Distance from bolt head to nut bearing surface</div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="clamped_material">Clamped Material</label>
+                            <select id="clamped_material">
+                                <option value="210e9">Steel (E = 210 GPa)</option>
+                                <option value="70e9">Aluminum (E = 70 GPa)</option>
+                                <option value="110e9">Cast Iron (E = 110 GPa)</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="surface_condition">Thread/Bearing Condition</label>
+                            <select id="surface_condition">
+                                <option value="oiled">Oiled (K ~ 0.15)</option>
+                                <option value="dry_steel">Dry Steel (K ~ 0.20)</option>
+                                <option value="moly_lube">Moly Lubricant (K ~ 0.11)</option>
+                                <option value="zinc_plated_dry">Zinc Plated Dry (K ~ 0.20)</option>
+                                <option value="ptfe_coated">PTFE Coated (K ~ 0.09)</option>
+                                <option value="stainless_dry">Stainless Dry (K ~ 0.30)</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="tightening_method">Tightening Method</label>
+                            <select id="tightening_method">
+                                <option value="torque_wrench">Torque Wrench (±25% scatter)</option>
+                                <option value="torque_wrench_precision">Calibrated Click (±20%)</option>
+                                <option value="angle_control">Torque + Angle (±12%)</option>
+                                <option value="yield_control">Yield Point (±5%)</option>
+                            </select>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="external_shear_load">Shear Load (N)</label>
+                                <input type="number" id="external_shear_load" value="0" min="0" step="100">
+                            </div>
+                            <div class="input-group">
+                                <label for="joint_type">Joint Type</label>
+                                <select id="joint_type">
+                                    <option value="through_bolt">Through-Bolt</option>
+                                    <option value="tap_bolt">Tap Bolt</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="advanced-toggle" id="toggle-advanced" onclick="toggleAdvanced()">
+                        <span id="toggle-icon">+</span> Show advanced options
+                    </button>
+
+                    <button type="submit" class="btn-primary" id="calculate-btn">Calculate Torque</button>
+                </form>
+            </section>
+
+            <!-- Results Panel -->
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'diagrams')">Joint Diagram</button>
+                    <button class="tab-link" onclick="openTab(event, 'sensitivity')">Sensitivity</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background</button>
+                </div>
+
+                <div id="results" class="tab-content active">
+                    <div id="results-display">
+                        <div class="results-empty">
+                            <p>Enter parameters and click <strong>Calculate</strong></p>
+                            <p style="font-size: 0.85rem; margin-top: 8px; color: var(--text-light);">Click on any result to see its derivation</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="diagrams" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Joint Force-Extension Diagram</h4>
+                        <p class="chart-explanation">
+                            This classic "joint diagram" shows how forces are distributed between bolt and joint.
+                            The <strong style="color:#2563eb;">blue line</strong> is bolt stiffness (steeper = stiffer bolt).
+                            The <strong style="color:#dc2626;">red line</strong> is joint stiffness starting from preload.
+                            The <strong style="color:#f59e0b;">amber triangle</strong> shows the working range under external load.
+                            When external load is applied, bolt force increases slightly (moves up the blue line) while
+                            joint clamping decreases (moves down the red line). A good design keeps the working triangle small.
+                        </p>
+                        <div id="joint-diagram-plot" class="chart-plot"></div>
+                    </div>
+                </div>
+
+                <div id="sensitivity" class="tab-content">
+                    <div class="chart-container">
+                        <h4>K-Factor Sensitivity</h4>
+                        <p class="chart-explanation">
+                            <strong>Purpose:</strong> Shows how much your achieved preload varies due to K-factor uncertainty.
+                            For a fixed torque, lower K-factor = higher preload (risk of yield), higher K-factor = lower preload (risk of insufficient clamp).
+                            The <strong style="color:#16a34a;">green star</strong> marks your target operating point.
+                            The curve shows: if friction is lower than expected (K drops), you'll over-tighten; if friction is higher (K rises), you'll under-tighten.
+                            <strong>Key insight:</strong> The steepness of this curve shows why torque control alone has ±25% preload uncertainty.
+                        </p>
+                        <div id="k-sensitivity-plot" class="chart-plot"></div>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <div class="background-content">
+                        <!-- Table of Contents -->
+                        <div style="background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px;">
+                            <strong>Contents</strong>
+                            <ol style="margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem;">
+                                <li><a href="#bg-overview">Overview: Why Preload Matters</a></li>
+                                <li><a href="#bg-torque-tension">Torque-Tension Relationship</a></li>
+                                <li><a href="#bg-kfactor">The K-Factor (Nut Factor)</a></li>
+                                <li><a href="#bg-stiffness">Bolt and Joint Stiffness</a></li>
+                                <li><a href="#bg-loadfactor">Load Factor and Force Distribution</a></li>
+                                <li><a href="#bg-safety">Safety Factors Explained</a></li>
+                                <li><a href="#bg-references">References</a></li>
+                            </ol>
+                        </div>
+
+                        <!-- Section 1: Overview -->
+                        <div id="bg-overview">
+                            <h3>1. Overview: Why Preload Matters</h3>
+                            <p style="margin-top: 12px; color: var(--text-color);">
+                                A bolted joint is not merely a mechanical connection&mdash;it is a <strong>clamping system</strong>.
+                                The bolt acts as a very stiff spring that clamps the joint members together. The tension in the bolt
+                                after tightening is called the <strong>preload</strong> (F<sub>i</sub>), and it is the single most
+                                important factor determining joint reliability.
+                            </p>
+                            <div class="callout callout-warning">
+                                <strong style="color: var(--warning-color);">Key Insight:</strong>
+                                Approximately 90% of bolted joint failures are due to inadequate preload, not bolt breakage.
+                            </div>
+                            <p style="color: var(--text-color);"><strong>What preload does:</strong></p>
+                            <ul style="margin-left: 20px; color: var(--text-color);">
+                                <li><strong>Prevents joint separation:</strong> Keeps members in contact under tensile loads</li>
+                                <li><strong>Reduces fatigue:</strong> Bolt sees only a fraction of external load variation</li>
+                                <li><strong>Resists loosening:</strong> Friction from clamping prevents nut rotation</li>
+                                <li><strong>Transfers shear loads:</strong> Friction grip carries shear without bolt shear stress</li>
+                            </ul>
+                        </div>
+
+                        <!-- Section 2: Torque-Tension -->
+                        <div id="bg-torque-tension">
+                            <h3>2. Torque-Tension Relationship</h3>
+                            <p style="margin-top: 12px; color: var(--text-color);">
+                                When you apply torque to a bolt, only a small fraction actually stretches the bolt.
+                                The majority is lost to friction.
+                            </p>
+                            <div class="equation-card">
+                                <strong>The "Short Form" Torque Equation</strong>
+                                <span class="equation-expression">$$ T = K \cdot d \cdot F_i $$</span>
+                                <ul>
+                                    <li><strong>T</strong> = Applied torque (N-m)</li>
+                                    <li><strong>K</strong> = Nut factor (typically 0.10&ndash;0.25)</li>
+                                    <li><strong>d</strong> = Nominal bolt diameter (m)</li>
+                                    <li><strong>F<sub>i</sub></strong> = Resulting preload (N)</li>
+                                </ul>
+                            </div>
+                            <p style="color: var(--text-color);"><strong>Where does the torque go?</strong></p>
+                            <ul style="margin-left: 20px; color: var(--text-color);">
+                                <li><strong>~50%</strong> &rarr; Friction under the nut/bolt head</li>
+                                <li><strong>~40%</strong> &rarr; Friction in the threads</li>
+                                <li><strong>~10%</strong> &rarr; Useful work stretching the bolt</li>
+                            </ul>
+                        </div>
+
+                        <!-- Section 3: K-Factor -->
+                        <div id="bg-kfactor">
+                            <h3>3. The K-Factor (Nut Factor)</h3>
+                            <p style="margin-top: 12px; color: var(--text-color);">
+                                The K-factor captures all friction and geometry effects in a single empirical constant.
+                            </p>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Surface Condition</th>
+                                        <th style="text-align: center;">K (min)</th>
+                                        <th style="text-align: center;">K (typ)</th>
+                                        <th style="text-align: center;">K (max)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>Dry steel</td><td style="text-align: center;">0.16</td><td style="text-align: center;"><strong>0.20</strong></td><td style="text-align: center;">0.25</td></tr>
+                                    <tr><td>Machine oil</td><td style="text-align: center;">0.12</td><td style="text-align: center;"><strong>0.15</strong></td><td style="text-align: center;">0.18</td></tr>
+                                    <tr><td>Moly paste</td><td style="text-align: center;">0.08</td><td style="text-align: center;"><strong>0.11</strong></td><td style="text-align: center;">0.14</td></tr>
+                                    <tr><td>PTFE coating</td><td style="text-align: center;">0.06</td><td style="text-align: center;"><strong>0.09</strong></td><td style="text-align: center;">0.12</td></tr>
+                                    <tr><td>Stainless dry</td><td style="text-align: center;">0.25</td><td style="text-align: center;"><strong>0.30</strong></td><td style="text-align: center;">0.35</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Section 4: Stiffness -->
+                        <div id="bg-stiffness">
+                            <h3>4. Bolt and Joint Stiffness</h3>
+                            <p style="margin-top: 12px; color: var(--text-color);">
+                                Both the bolt and clamped members act as springs. Their relative stiffness determines how external loads are shared.
+                            </p>
+                            <div class="equation-card">
+                                <strong>Bolt Stiffness</strong>
+                                <span class="equation-expression">$$ K_b = \frac{A_s \cdot E}{L_{eff}} $$</span>
+                            </div>
+                            <div class="equation-card">
+                                <strong>Joint Stiffness (Frustum Model)</strong>
+                                <span class="equation-expression">$$ K_j = \frac{\pi \cdot E_j \cdot d \cdot \tan\alpha}{\ln\left[\frac{(D_w + d)(D_w - d + L\tan\alpha)}{(D_w - d)(D_w + d + L\tan\alpha)}\right]} $$</span>
+                            </div>
+                            <p style="color: var(--text-color);">
+                                <strong>Key:</strong> Joint stiffness is typically 3&ndash;10&times; higher than bolt stiffness.
+                            </p>
+                        </div>
+
+                        <!-- Section 5: Load Factor -->
+                        <div id="bg-loadfactor">
+                            <h3>5. Load Factor and Force Distribution</h3>
+                            <p style="margin-top: 12px; color: var(--text-color);">
+                                The <strong>load factor</strong> (&phi;) answers: "How much of the external load goes into the bolt?"
+                            </p>
+                            <div class="equation-card">
+                                <strong>Load Factor</strong>
+                                <span class="equation-expression">$$ \phi = \frac{K_b}{K_b + K_j} $$</span>
+                            </div>
+                            <p style="color: var(--text-color);">
+                                Since K<sub>j</sub> >> K<sub>b</sub>, typically &phi; = 0.05 to 0.20.
+                                This means <strong>only 5&ndash;20% of external load adds to bolt tension</strong>.
+                            </p>
+                            <div class="callout callout-success">
+                                <strong style="color: var(--success-color);">Why This Matters:</strong>
+                                If &phi; = 0.10 and cyclic load is &plusmn;10 kN, the bolt only sees &plusmn;1 kN variation.
+                                This dramatically improves fatigue life.
+                            </div>
+                        </div>
+
+                        <!-- Section 6: Safety Factors -->
+                        <div id="bg-safety">
+                            <h3>6. Safety Factors Explained</h3>
+                            <p style="margin-top: 12px; color: var(--text-color);">
+                                This calculator evaluates four distinct failure modes:
+                            </p>
+                            <div style="background: var(--bg-color); padding: 16px; border-radius: 8px; margin: 16px 0;">
+                                <h4 style="margin-bottom: 8px;">SF<sub>y</sub> &mdash; Yield Safety Factor</h4>
+                                <span class="equation-expression">$$ SF_y = \frac{R_{p0.2} \cdot A_s}{F_{b,max}} $$</span>
+                                <p style="margin-top: 8px; color: var(--text-color);">Target: SF<sub>y</sub> &ge; 1.2 static, &ge; 1.5 dynamic</p>
+                            </div>
+                            <div style="background: var(--bg-color); padding: 16px; border-radius: 8px; margin: 16px 0;">
+                                <h4 style="margin-bottom: 8px;">SF<sub>k</sub> &mdash; Clamping Safety Factor</h4>
+                                <span class="equation-expression">$$ SF_k = \frac{F_{j,min}}{F_{req}} $$</span>
+                                <p style="margin-top: 8px; color: var(--text-color);">Ensures adequate clamping under max load. Target: &ge; 1.2</p>
+                            </div>
+                            <div style="background: var(--bg-color); padding: 16px; border-radius: 8px; margin: 16px 0;">
+                                <h4 style="margin-bottom: 8px;">SF<sub>D</sub> &mdash; Fatigue Safety Factor</h4>
+                                <span class="equation-expression">$$ SF_D = \frac{\sigma_{endurance}}{\sigma_a} $$</span>
+                                <p style="margin-top: 8px; color: var(--text-color);">For infinite life, target SF<sub>D</sub> &ge; 2.0</p>
+                            </div>
+                            <div class="callout callout-info">
+                                <strong>Why SF<sub>y</sub> doesn't change much with bolt size:</strong>
+                                Both yield capacity and preload scale with stress area. At a given preload percentage,
+                                the ratio stays roughly constant regardless of bolt diameter.
+                            </div>
+                        </div>
+
+                        <!-- Section 7: References -->
+                        <div id="bg-references">
+                            <h3>7. References</h3>
+                            <table>
+                                <tbody>
+                                    <tr><td style="font-weight: 600; width: 30%;">VDI 2230:2015</td><td>Systematic calculation of highly stressed bolted joints</td></tr>
+                                    <tr><td style="font-weight: 600;">ISO 898-1:2013</td><td>Mechanical properties of fasteners (metric)</td></tr>
+                                    <tr><td style="font-weight: 600;">SAE J429</td><td>SAE bolt grade specifications</td></tr>
+                                    <tr><td style="font-weight: 600;">Bickford (2007)</td><td>Introduction to the Design and Behavior of Bolted Joints</td></tr>
+                                    <tr><td style="font-weight: 600;">Shigley's MED</td><td>Chapter 8: Screws, Fasteners, and Nonpermanent Joints</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="callout callout-info" style="margin-top: 20px;">
+                                <strong>Disclaimer:</strong>
+                                This calculator is for educational and preliminary design purposes.
+                                Critical applications should be verified by qualified engineers.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All calculations are for reference only.</p>
+    </footer>
+
+    <script>
+        // === CONFIGURATION ===
+        const TOOL_MODULE_NAME = 'fasteners_claude';
+        const ISO_SIZES = [
+            "M2x0.4", "M2.5x0.45", "M3x0.5", "M4x0.7", "M5x0.8",
+            "M6x1.0", "M8x1.25", "M8x1.0", "M10x1.5", "M10x1.25",
+            "M12x1.75", "M12x1.5", "M14x2.0", "M16x2.0", "M20x2.5", "M24x3.0"
+        ];
+        const UTS_SIZES = [
+            "#2-56 UNC", "#4-40 UNC", "#6-32 UNC", "#8-32 UNC", "#10-24 UNC", "#10-32 UNF",
+            "1/4-20 UNC", "1/4-28 UNF", "5/16-18 UNC", "3/8-16 UNC", "3/8-24 UNF",
+            "7/16-14 UNC", "1/2-13 UNC", "1/2-20 UNF", "5/8-11 UNC", "3/4-10 UNC", "7/8-9 UNC", "1-8 UNC"
+        ];
+        const ISO_GRADES = ["4.6", "5.6", "8.8", "10.9", "12.9"];
+        const SAE_GRADES = ["SAE Grade 2", "SAE Grade 5", "SAE Grade 8"];
+
+        let pyToolModule = null;
+        let currentResults = null;
+
+        // === MODE HANDLING ===
+        function setMode(mode) {
+            document.getElementById('mode-simple').classList.toggle('active', mode === 'simple');
+            document.getElementById('mode-advanced').classList.toggle('active', mode === 'advanced');
+            const advInputs = document.getElementById('advanced-inputs');
+            const toggle = document.getElementById('toggle-advanced');
+
+            if (mode === 'advanced') {
+                advInputs.classList.add('visible');
+                toggle.style.display = 'none';
+                document.getElementById('mode-description').innerHTML = '<strong>Advanced Mode:</strong> Full control over all joint parameters.';
+            } else {
+                advInputs.classList.remove('visible');
+                toggle.style.display = 'flex';
+                document.getElementById('mode-description').innerHTML = '<strong>Simple Mode:</strong> Quick calculation with defaults for grip length, lubrication, and assembly method.';
+            }
+        }
+
+        function toggleAdvanced() {
+            const advInputs = document.getElementById('advanced-inputs');
+            const toggle = document.getElementById('toggle-advanced');
+            if (advInputs.classList.contains('visible')) {
+                advInputs.classList.remove('visible');
+                toggle.innerHTML = '<span id="toggle-icon">+</span> Show advanced options';
+            } else {
+                advInputs.classList.add('visible');
+                toggle.innerHTML = '<span id="toggle-icon">−</span> Hide advanced options';
+            }
+        }
+
+        function updatePreloadDisplay() {
+            document.getElementById('preload-pct-display').textContent = document.getElementById('preload_percentage').value;
+        }
+
+        // === TAB HANDLING ===
+        function openTab(event, tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            if (tabId === 'background' && window.MathJax) MathJax.typesetPromise();
+        }
+
+        // === DROPDOWN UPDATES ===
+        function updateFastenerOptions() {
+            const standard = document.getElementById('fastener_standard').value;
+            const sizeSelect = document.getElementById('fastener_size');
+            const gradeSelect = document.getElementById('bolt_grade');
+            sizeSelect.innerHTML = '';
+            gradeSelect.innerHTML = '';
+            const sizes = standard === 'ISO' ? ISO_SIZES : UTS_SIZES;
+            const grades = standard === 'ISO' ? ISO_GRADES : SAE_GRADES;
+            sizes.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sizeSelect.appendChild(o); });
+            grades.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; gradeSelect.appendChild(o); });
+            sizeSelect.value = standard === 'ISO' ? 'M10x1.5' : '1/2-13 UNC';
+            gradeSelect.value = standard === 'ISO' ? '8.8' : 'SAE Grade 5';
+        }
+
+        // === PYODIDE INIT ===
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                let pyodide = await loadPyodide();
+                await pyodide.loadPackage("micropip");
+                loadingText.textContent = 'Loading calculation module...';
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+                    import time
+                    cache_bust = int(time.time())
+                    response = await pyfetch(f'../../pycalcs/${TOOL_MODULE_NAME}.py?v={cache_bust}')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response.string())
+                    import ${TOOL_MODULE_NAME}
+                `);
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+                updateFastenerOptions();
+                document.getElementById('fastener_standard').addEventListener('change', updateFastenerOptions);
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('calc-form').addEventListener('submit', async (e) => { e.preventDefault(); await runCalculation(); });
+            } catch (error) {
+                loadingText.textContent = 'Error: ' + error.message;
+            }
+        }
+        main();
+
+        // === CALCULATION ===
+        async function runCalculation() {
+            const btn = document.getElementById('calculate-btn');
+            btn.disabled = true;
+            btn.textContent = 'Calculating...';
+
+            try {
+                const axialLoad = parseFloat(document.getElementById('external_axial_load').value) || 0;
+                const preloadPct = parseFloat(document.getElementById('preload_percentage').value) / 100;
+
+                // Defaults or advanced values
+                let gripLength = 25e-3, clampedModulus = 210e9, surfaceCondition = 'oiled', tighteningMethod = 'torque_wrench', shearLoad = 0, jointType = 'through_bolt';
+                if (document.getElementById('advanced-inputs').classList.contains('visible')) {
+                    gripLength = parseFloat(document.getElementById('grip_length').value) * 1e-3;
+                    clampedModulus = parseFloat(document.getElementById('clamped_material').value);
+                    surfaceCondition = document.getElementById('surface_condition').value;
+                    tighteningMethod = document.getElementById('tightening_method').value;
+                    shearLoad = parseFloat(document.getElementById('external_shear_load').value) || 0;
+                    jointType = document.getElementById('joint_type').value;
+                }
+
+                const result = pyToolModule.analyze_bolted_joint_claude(
+                    document.getElementById('fastener_size').value,
+                    document.getElementById('bolt_grade').value,
+                    gripLength, clampedModulus, axialLoad, shearLoad, tighteningMethod, surfaceCondition, 20, 1, jointType, 'machined'
+                );
+                currentResults = result.toJs({ dict_converter: Object.fromEntries });
+                adjustResultsForPreloadPct(preloadPct, axialLoad);
+                renderResults(currentResults);
+                renderCharts(currentResults);
+            } catch (error) {
+                document.getElementById('results-display').innerHTML = `<div style="color: var(--danger-color); padding: 20px;">Error: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Calculate Torque';
+            }
+        }
+
+        function adjustResultsForPreloadPct(pct, axialLoad) {
+            const scale = pct / 0.90;
+            currentResults.target_preload *= scale;
+            currentResults.minimum_preload *= scale;
+            currentResults.assembly_torque *= scale;
+            currentResults.torque_range_low *= scale;
+            currentResults.torque_range_high *= scale;
+            currentResults.preload_percentage = pct;
+
+            const phi = currentResults.load_factor;
+            currentResults.bolt_load_max = currentResults.target_preload + phi * axialLoad;
+            currentResults.clamp_load_min = currentResults.minimum_preload - (1 - phi) * axialLoad;
+
+            // Recalculate safety factors
+            const originalYieldCapacity = currentResults.safety_factor_yield * (currentResults.target_preload / scale + phi * axialLoad);
+            currentResults.safety_factor_yield = originalYieldCapacity / currentResults.bolt_load_max;
+            const requiredClamp = 0.1 * currentResults.target_preload;
+            currentResults.safety_factor_clamp = currentResults.clamp_load_min > 0 ? currentResults.clamp_load_min / requiredClamp : 0;
+        }
+
+        // === RESULTS RENDERING ===
+        function renderResults(r) {
+            const fmt = (v, d=1) => !isFinite(v) ? 'N/A' : Math.abs(v) >= 1e3 ? (v/1e3).toFixed(d) + 'k' : v.toFixed(d);
+            const fmtk = (v) => (v/1000).toFixed(1);
+            const fmtM = (v) => (v/1e6).toFixed(0);
+            const derivations = buildDerivations(r);
+
+            let html = `
+                <div class="primary-result">
+                    <div class="label">Assembly Torque</div>
+                    <div class="value">${r.assembly_torque.toFixed(1)}<span class="unit"> N·m</span></div>
+                    <div class="range">Range: ${r.torque_range_low.toFixed(1)} – ${r.torque_range_high.toFixed(1)} N·m</div>
+                </div>
+                <div class="derivation-panel" id="deriv-torque">${derivations.torque}</div>
+                <div class="results-grid">
+                    <div class="result-item" onclick="toggleDerivation('preload')">
+                        <div class="label">Target Preload</div>
+                        <div class="value">${fmtk(r.target_preload)} kN<span class="icon">ⓘ</span></div>
+                    </div>
+                    <div class="result-item" onclick="toggleDerivation('kfactor')">
+                        <div class="label">K-Factor</div>
+                        <div class="value">${r.k_factor.toFixed(3)}<span class="icon">ⓘ</span></div>
+                    </div>
+                    <div class="result-item" onclick="toggleDerivation('loadfactor')">
+                        <div class="label">Load Factor (φ)</div>
+                        <div class="value">${r.load_factor.toFixed(3)}<span class="icon">ⓘ</span></div>
+                    </div>
+                    <div class="result-item" onclick="toggleDerivation('stiffness')">
+                        <div class="label">Stiffness Ratio</div>
+                        <div class="value">${(r.joint_stiffness/r.bolt_stiffness).toFixed(1)}:1<span class="icon">ⓘ</span></div>
+                    </div>
+                </div>
+                <div class="derivation-panel" id="deriv-preload">${derivations.preload}</div>
+                <div class="derivation-panel" id="deriv-kfactor">${derivations.kfactor}</div>
+                <div class="derivation-panel" id="deriv-loadfactor">${derivations.loadfactor}</div>
+                <div class="derivation-panel" id="deriv-stiffness">${derivations.stiffness}</div>
+                <div class="safety-section">
+                    <h4>Safety Factors</h4>
+                    ${renderSafetyGauge('Yield', r.safety_factor_yield, 'yield')}
+                    <div class="safety-derivation" id="safety-deriv-yield">${derivations.sf_yield}</div>
+                    ${renderSafetyGauge('Clamp', r.safety_factor_clamp, 'clamp')}
+                    <div class="safety-derivation" id="safety-deriv-clamp">${derivations.sf_clamp}</div>
+                    ${renderSafetyGauge('Fatigue', r.safety_factor_fatigue, 'fatigue')}
+                    <div class="safety-derivation" id="safety-deriv-fatigue">${derivations.sf_fatigue}</div>
+                </div>
+                ${renderStatusBanner(r)}
+            `;
+            document.getElementById('results-display').innerHTML = html;
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        function renderSafetyGauge(label, value, id) {
+            const cls = value >= 1.5 ? 'success' : value >= 1.0 ? 'warning' : 'danger';
+            const w = Math.min(100, Math.max(0, value / 3 * 100));
+            return `<div class="safety-gauge" onclick="toggleSafetyDerivation('${id}')">
+                <span class="gauge-label">${label}</span>
+                <div class="gauge-bar-container"><div class="gauge-bar ${cls}" style="width:${w}%"></div><div class="gauge-threshold" style="left:33.3%"></div><div class="gauge-threshold" style="left:50%"></div></div>
+                <span class="gauge-value ${cls}">${isFinite(value)?value.toFixed(2):'>10'}</span>
+                <span class="gauge-info">ⓘ</span>
+            </div>`;
+        }
+
+        function renderStatusBanner(r) {
+            const icons = { acceptable: '✓', marginal: '⚠', unacceptable: '✗' };
+            const titles = { acceptable: 'Design Acceptable', marginal: 'Marginal - Review Required', unacceptable: 'Unacceptable' };
+            return `<div class="status-banner ${r.status}"><span class="icon">${icons[r.status]}</span><div class="content"><h4>${titles[r.status]}</h4><p>Min SF: ${Math.min(r.safety_factor_yield, r.safety_factor_clamp, r.safety_factor_fatigue).toFixed(2)}</p>${r.recommendations.length ? `<ul class="recommendations">${r.recommendations.map(x=>`<li>${x}</li>`).join('')}</ul>` : ''}</div></div>`;
+        }
+
+        function buildDerivations(r) {
+            const fmtk = v => (v/1000).toFixed(1);
+            const fmtM = v => (v/1e6).toFixed(0);
+            const fmtMPa = v => isFinite(v) ? (v/1e6).toFixed(0) : '—';
+            const pct = r.preload_percentage ? (r.preload_percentage * 100).toFixed(0) : '75';
+
+            // Get actual values from results (with fallbacks for missing data)
+            const d_mm = r.nominal_diameter ? (r.nominal_diameter * 1000).toFixed(1) : '10.0';
+            const As_mm2 = r.stress_area ? (r.stress_area * 1e6).toFixed(1) : '58.0';
+            const Rp = r.proof_strength ? fmtMPa(r.proof_strength) : '640';
+            const Sy = r.yield_strength ? fmtMPa(r.yield_strength) : '640';
+            const Su = r.tensile_strength ? fmtMPa(r.tensile_strength) : '800';
+            const sigma_a = r.alternating_stress ? fmtMPa(r.alternating_stress) : '—';
+            const sigma_m = r.mean_stress ? fmtMPa(r.mean_stress) : '—';
+
+            // Fatigue calculation values
+            const tensile = r.tensile_strength || 800e6;
+            const Se_prime = (0.45 * tensile / 1e6).toFixed(0);
+            const Kf = 2.2;
+            const Se = (0.45 * tensile / 2.2 / 1e6).toFixed(0);
+            const extLoad = parseFloat(document.getElementById('external_axial_load').value) || 0;
+
+            return {
+                torque: `<div class="derivation-header"><span class="derivation-title">Assembly Torque Derivation</span><button class="derivation-close" onclick="toggleDerivation('torque')">×</button></div>
+                    <div class="derivation-step"><div class="step-title">1. Short-form torque equation</div><div class="equation">\\( T = K \\cdot d \\cdot F_i \\)</div></div>
+                    <div class="derivation-step"><div class="step-title">2. Input values</div><div class="inputs"><span class="input-tag">K = ${r.k_factor.toFixed(3)}</span><span class="input-tag">d = ${d_mm} mm</span><span class="input-tag">Fᵢ = ${fmtk(r.target_preload)} kN</span></div></div>
+                    <div class="derivation-step"><div class="step-title">3. Substitution</div><div class="equation">\\( T = ${r.k_factor.toFixed(3)} \\times ${d_mm}\\text{ mm} \\times ${fmtk(r.target_preload)}\\text{ kN} \\)</div><div class="result-box">T = ${r.assembly_torque.toFixed(1)} N·m</div></div>
+                    <div class="derivation-step"><div class="step-title">4. K-factor uncertainty</div><div class="explanation">Due to friction scatter (K ranges ${r.k_factor_min.toFixed(2)}–${r.k_factor_max.toFixed(2)}), actual preload may vary:</div><div class="inputs"><span class="input-tag">T<sub>min</sub> = ${r.torque_range_low.toFixed(1)} N·m</span><span class="input-tag">T<sub>max</sub> = ${r.torque_range_high.toFixed(1)} N·m</span></div></div>`,
+
+                preload: `<div class="derivation-header"><span class="derivation-title">Preload Derivation</span><button class="derivation-close" onclick="toggleDerivation('preload')">×</button></div>
+                    <div class="derivation-step"><div class="step-title">1. Target preload formula</div><div class="equation">\\( F_i = \\text{(preload %)} \\times R_{p0.2} \\times A_s \\)</div></div>
+                    <div class="derivation-step"><div class="step-title">2. Input values</div><div class="inputs"><span class="input-tag">Preload % = ${pct}%</span><span class="input-tag">R<sub>p0.2</sub> = ${Rp} MPa</span><span class="input-tag">A<sub>s</sub> = ${As_mm2} mm²</span></div></div>
+                    <div class="derivation-step"><div class="step-title">3. Substitution</div><div class="equation">\\( F_i = ${pct}\\% \\times ${Rp}\\text{ MPa} \\times ${As_mm2}\\text{ mm}^2 \\)</div><div class="result-box">Fᵢ = ${fmtk(r.target_preload)} kN</div></div>
+                    <div class="derivation-step"><div class="explanation"><strong>Lower % (50-70%):</strong> More margin against yield, safer for uncertain loads<br><strong>Higher % (75-90%):</strong> Better fatigue resistance, tighter clamp, but less overload margin</div></div>`,
+
+                kfactor: `<div class="derivation-header"><span class="derivation-title">K-Factor (Nut Factor)</span><button class="derivation-close" onclick="toggleDerivation('kfactor')">×</button></div>
+                    <div class="derivation-step"><div class="step-title">What is K?</div><div class="explanation">K is an empirical constant that captures thread geometry and friction. Only ~10% of applied torque actually stretches the bolt; the rest is lost to friction.</div></div>
+                    <div class="derivation-step"><div class="step-title">Long-form equation</div><div class="equation">\\( K = \\frac{d_2}{2d}\\left(\\frac{P}{\\pi d_2} + \\frac{\\mu_t}{\\cos\\alpha}\\right) + \\frac{\\mu_b D_m}{2d} \\)</div></div>
+                    <div class="derivation-step"><div class="step-title">Your values</div><div class="inputs"><span class="input-tag">K<sub>typ</sub> = ${r.k_factor.toFixed(3)}</span><span class="input-tag">K<sub>min</sub> = ${r.k_factor_min.toFixed(3)}</span><span class="input-tag">K<sub>max</sub> = ${r.k_factor_max.toFixed(3)}</span></div><div class="explanation">Variation of ±${((r.k_factor_max - r.k_factor_min) / r.k_factor / 2 * 100).toFixed(0)}% causes significant preload uncertainty</div></div>`,
+
+                loadfactor: `<div class="derivation-header"><span class="derivation-title">Load Factor (φ)</span><button class="derivation-close" onclick="toggleDerivation('loadfactor')">×</button></div>
+                    <div class="derivation-step"><div class="step-title">1. Definition</div><div class="equation">\\( \\phi = \\frac{K_b}{K_b + K_j} \\)</div><div class="explanation">φ is the fraction of external load that adds to bolt tension. Lower is better.</div></div>
+                    <div class="derivation-step"><div class="step-title">2. Input values</div><div class="inputs"><span class="input-tag">K<sub>b</sub> = ${fmtM(r.bolt_stiffness)} MN/m</span><span class="input-tag">K<sub>j</sub> = ${fmtM(r.joint_stiffness)} MN/m</span></div></div>
+                    <div class="derivation-step"><div class="step-title">3. Substitution</div><div class="equation">\\( \\phi = \\frac{${fmtM(r.bolt_stiffness)}}{${fmtM(r.bolt_stiffness)} + ${fmtM(r.joint_stiffness)}} = ${r.load_factor.toFixed(3)} \\)</div><div class="result-box">Bolt sees only ${(r.load_factor*100).toFixed(0)}% of external load</div></div>
+                    <div class="derivation-step"><div class="explanation"><strong>Example:</strong> With ${extLoad} N external load, only ${(r.load_factor * extLoad).toFixed(0)} N adds to bolt tension. The stiff joint "absorbs" ${((1-r.load_factor) * extLoad).toFixed(0)} N.</div></div>`,
+
+                stiffness: `<div class="derivation-header"><span class="derivation-title">Stiffness Analysis</span><button class="derivation-close" onclick="toggleDerivation('stiffness')">×</button></div>
+                    <div class="derivation-step"><div class="step-title">Bolt stiffness (K<sub>b</sub>)</div><div class="equation">\\( K_b = \\frac{A_s \\cdot E}{L_{eff}} \\)</div><div class="inputs"><span class="input-tag">A<sub>s</sub> = ${As_mm2} mm²</span><span class="input-tag">E = 205 GPa</span></div><div class="result-box">K<sub>b</sub> = ${fmtM(r.bolt_stiffness)} MN/m</div></div>
+                    <div class="derivation-step"><div class="step-title">Joint stiffness (K<sub>j</sub>)</div><div class="explanation">Calculated using VDI 2230 frustum cone model</div><div class="result-box">K<sub>j</sub> = ${fmtM(r.joint_stiffness)} MN/m</div></div>
+                    <div class="derivation-step"><div class="step-title">Stiffness ratio</div><div class="explanation">K<sub>j</sub>/K<sub>b</sub> = ${(r.joint_stiffness/r.bolt_stiffness).toFixed(1)} (typical range: 3–10 for steel joints)</div></div>`,
+
+                sf_yield: `<h4>Yield Safety Factor</h4>
+                    <div class="formula">\\( SF_y = \\frac{R_{p0.2} \\cdot A_s}{F_{b,max}} \\)</div>
+                    <div class="explanation" style="margin: 12px 0;"><strong>Input values:</strong></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"><span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">R<sub>p0.2</sub> = ${Sy} MPa</span><span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">A<sub>s</sub> = ${As_mm2} mm²</span><span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">F<sub>b,max</sub> = ${fmtk(r.bolt_load_max)} kN</span></div>
+                    <div class="formula">\\( SF_y = \\frac{${Sy} \\times ${As_mm2}}{${fmtk(r.bolt_load_max)} \\times 1000} = ${r.safety_factor_yield.toFixed(2)} \\)</div>
+                    <div class="explanation" style="margin-top:12px;">At ${pct}% preload, SF<sub>y</sub> is inherently limited because you're already using most of the bolt's capacity. <strong>To increase:</strong> lower preload %, use higher grade, or reduce external load.</div>`,
+
+                sf_clamp: `<h4>Clamp Safety Factor</h4>
+                    <div class="formula">\\( SF_k = \\frac{F_{j,min}}{F_{required}} \\)</div>
+                    <div class="explanation" style="margin: 12px 0;"><strong>Input values:</strong></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"><span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">F<sub>j,min</sub> = ${fmtk(r.clamp_load_min)} kN</span><span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">F<sub>req</sub> = ${fmtk(0.1 * r.target_preload)} kN (10% of preload)</span></div>
+                    <div class="formula">\\( SF_k = \\frac{${fmtk(r.clamp_load_min)}}{${fmtk(0.1 * r.target_preload)}} = ${r.safety_factor_clamp.toFixed(2)} \\)</div>
+                    <div class="explanation" style="margin-top:12px;">Ensures adequate clamping force remains under maximum external load to prevent joint separation or slippage.</div>`,
+
+                sf_fatigue: `<h4>Fatigue Safety Factor</h4>
+                    <div class="explanation" style="margin-bottom:12px; padding:10px; background:#fef3c7; border-left:3px solid var(--warning-color); border-radius:0 6px 6px 0;">
+                        <strong>Assumption:</strong> Load cycles from 0 to max (pulsating). If your load is fully reversed or has different R-ratio, this estimate will differ.
+                    </div>
+                    <div class="formula">\\( SF_D = \\frac{S_e}{\\sigma_a} \\)</div>
+                    <div class="explanation" style="margin: 12px 0;"><strong>Step 1: Calculate alternating stress</strong></div>
+                    <div class="formula">\\( \\sigma_a = \\frac{\\phi \\cdot F_a}{2 \\cdot A_s} = \\frac{${r.load_factor.toFixed(3)} \\times ${extLoad}}{2 \\times ${As_mm2}} = ${sigma_a}\\text{ MPa} \\)</div>
+                    <div class="explanation" style="margin: 12px 0;"><strong>Step 2: Estimate endurance limit (Shigley's method)</strong></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                        <span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">S<sub>u</sub> = ${Su} MPa</span>
+                        <span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">S'<sub>e</sub> ≈ 0.45×S<sub>u</sub> = ${Se_prime} MPa</span>
+                        <span class="input-tag" style="background:var(--primary-light);border:1px solid var(--border-color);padding:4px 10px;border-radius:20px;font-size:0.8rem;">K<sub>f</sub> ≈ ${Kf} (rolled threads)</span>
+                    </div>
+                    <div class="formula">\\( S_e = \\frac{S'_e}{K_f} = \\frac{${Se_prime}}{${Kf}} = ${Se}\\text{ MPa} \\)</div>
+                    <div class="explanation" style="margin: 12px 0;"><strong>Step 3: Safety factor</strong></div>
+                    <div class="formula">\\( SF_D = \\frac{${Se}}{${sigma_a}} = ${r.safety_factor_fatigue.toFixed(2)} \\)</div>
+                    <div class="explanation" style="margin-top:12px;"><strong>Note:</strong> Higher preload → lower φ → lower σ<sub>a</sub> → better fatigue life. Target SF<sub>D</sub> ≥ 2.0 for infinite life.</div>`
+            };
+        }
+
+        function toggleDerivation(id) {
+            const panel = document.getElementById('deriv-' + id);
+            document.querySelectorAll('.derivation-panel').forEach(p => p !== panel && p.classList.remove('visible'));
+            document.querySelectorAll('.result-item').forEach(i => i.classList.remove('expanded'));
+            panel.classList.toggle('visible');
+            if (panel.classList.contains('visible') && window.MathJax) MathJax.typesetPromise();
+        }
+
+        function toggleSafetyDerivation(id) {
+            const panel = document.getElementById('safety-deriv-' + id);
+            document.querySelectorAll('.safety-derivation').forEach(p => p !== panel && p.classList.remove('visible'));
+            document.querySelectorAll('.safety-gauge').forEach(g => g.classList.remove('expanded'));
+            panel.classList.toggle('visible');
+            if (panel.classList.contains('visible') && window.MathJax) MathJax.typesetPromise();
+        }
+
+        // === CHART RENDERING ===
+        function renderCharts(r) {
+            const jd = r.joint_diagram_data.get ? Object.fromEntries(r.joint_diagram_data) : r.joint_diagram_data;
+            const toArr = d => Array.isArray(d) ? d : Array.from(d);
+
+            // Colors for charts (distinct from grayscale UI)
+            const BLUE = '#2563eb';      // Bolt stiffness
+            const RED = '#dc2626';       // Joint stiffness
+            const AMBER = '#f59e0b';     // Working triangle
+            const GREEN = '#16a34a';     // Preload point
+
+            const plotConfig = { responsive: true, displayModeBar: false };
+
+            Plotly.newPlot('joint-diagram-plot', [
+                { x: toArr(jd.bolt_extension).map(x=>x*1000), y: toArr(jd.bolt_force).map(f=>f/1000), mode: 'lines', name: 'Bolt (Kb)', line: { color: BLUE, width: 3 } },
+                { x: toArr(jd.joint_x).map(x=>x*1000), y: toArr(jd.joint_force).map(f=>f/1000), mode: 'lines', name: 'Joint (Kj)', line: { color: RED, width: 3 } },
+                { x: toArr(jd.triangle_x).map(x=>x*1000), y: toArr(jd.triangle_f).map(f=>f/1000), mode: 'lines', fill: 'toself', fillcolor: 'rgba(245,158,11,0.15)', line: { color: AMBER, width: 2, dash: 'dot' }, name: 'Working range' },
+                { x: [jd.preload_extension*1000], y: [jd.preload_force/1000], mode: 'markers+text', marker: { size: 14, color: GREEN, symbol: 'circle' }, text: [`Fi = ${(jd.preload_force/1000).toFixed(1)} kN`], textposition: 'top left', textfont: { color: GREEN, size: 12 }, name: 'Preload', showlegend: true }
+            ], {
+                xaxis: { title: 'Deformation δ (mm)', zeroline: true, zerolinecolor: '#ccc', gridcolor: '#f0f0f0', automargin: true },
+                yaxis: { title: 'Force F (kN)', zeroline: true, zerolinecolor: '#ccc', gridcolor: '#f0f0f0', automargin: true },
+                legend: { orientation: 'h', y: -0.22, x: 0.5, xanchor: 'center', font: { size: 11 } },
+                margin: { t: 10, r: 10, b: 60, l: 50 },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                autosize: true
+            }, plotConfig);
+
+            const kData = r.k_sensitivity_data.get ? Object.fromEntries(r.k_sensitivity_data) : r.k_sensitivity_data;
+            Plotly.newPlot('k-sensitivity-plot', [{
+                x: toArr(kData.k_values),
+                y: toArr(kData.preload_achieved).map(p=>p/1000),
+                mode: 'lines', fill: 'tozeroy', fillcolor: 'rgba(37,99,235,0.1)',
+                line: { color: BLUE, width: 3 }, name: 'Achieved Preload'
+            }, {
+                x: [r.k_factor],
+                y: [r.target_preload / 1000],
+                mode: 'markers',
+                marker: { size: 12, color: GREEN, symbol: 'star' },
+                name: 'Target (K=' + r.k_factor.toFixed(2) + ')'
+            }], {
+                xaxis: { title: 'K-Factor', gridcolor: '#f0f0f0', automargin: true },
+                yaxis: { title: 'Achieved Preload (kN)', gridcolor: '#f0f0f0', automargin: true },
+                legend: { orientation: 'h', y: -0.22, x: 0.5, xanchor: 'center', font: { size: 11 } },
+                margin: { t: 10, r: 10, b: 60, l: 50 },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                autosize: true
+            }, plotConfig);
+        }
+    </script>
+</body>
+</html>

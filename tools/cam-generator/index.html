@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cam Profile Generator (Experimental) - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
+        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        /* --- 2. Navigation --- */
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        /* --- 3. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-header h1 { margin-bottom: 0.5rem; }
+        .tool-description { font-size: 1.1rem; max-width: 80ch; margin: 0 auto 1.5rem; color: var(--text-light); }
+        .tool-layout { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(520px, 1.3fr); gap: 24px; align-items: start; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        /* --- 3b. Purpose/README Section --- */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.85rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; }
+
+        /* --- 4. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; }
+        .inputs-intro { font-size: 0.95rem; color: var(--text-light); margin-bottom: 1rem; }
+        .input-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .input-tab {
+            flex: 1 1 auto;
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-light);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .input-tab:hover { border-color: var(--text-color); color: var(--text-color); }
+        .input-tab.active { background: #fff; color: var(--text-color); border-color: var(--text-color); }
+        .input-section { display: none; animation: fadeIn 0.3s ease; }
+        .input-section.active { display: block; }
+
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; color: var(--text-color); }
+        .input-group input[type="number"], .input-group select {
+            width: 100%;
+            padding: 12px 14px;
+            padding-right: 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
+        .input-group select {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: none;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+        .input-hint { font-size: 0.85rem; color: var(--text-light); margin-top: 6px; }
+
+        /* --- 5. Input Tooltip --- */
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: #f1f5f9;
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 42px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 240px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+        .tooltip-trigger.inline { position: relative; right: auto; top: auto; margin-left: 6px; }
+
+        /* --- 6. Segment Builder --- */
+        .segment-header {
+            display: grid;
+            grid-template-columns: 1.1fr 1.6fr 1fr 1fr auto;
+            gap: 10px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+        .segment-row {
+            display: grid;
+            grid-template-columns: 1.1fr 1.6fr 1fr 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #fff;
+        }
+        .segment-row select, .segment-row input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        .segment-row select:disabled, .segment-row input:disabled {
+            background: var(--primary-light);
+            color: var(--text-light);
+        }
+        .segment-actions { display: flex; gap: 10px; margin-top: 1rem; }
+        .segment-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 1rem;
+        }
+        .summary-card {
+            background: var(--primary-light);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+        }
+        .summary-card p { margin: 0; font-size: 0.85rem; color: var(--text-light); }
+        .summary-card .value { font-family: var(--font-mono); font-weight: 600; font-size: 1.1rem; color: var(--text-color); }
+        .status-good { color: var(--success-color); }
+        .status-bad { color: var(--danger-color); }
+
+        .motion-law-list { margin-top: 1rem; border: 1px solid var(--border-color); border-radius: 8px; }
+        .motion-law-list summary { padding: 10px 14px; font-weight: 600; color: var(--secondary-color); }
+        .motion-law-list .motion-law-item { padding: 10px 14px; border-top: 1px solid var(--border-color); }
+        .motion-law-list .motion-law-item p { margin: 0.35rem 0 0; font-size: 0.9rem; }
+
+        /* --- 7. Buttons --- */
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.05rem; padding: 12px; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+        .btn-icon { background: transparent; border: 1px solid var(--border-color); color: var(--danger-color); padding: 6px 10px; border-radius: 6px; }
+        .btn-icon:hover { background: var(--primary-light); }
+
+        /* --- 8. Output Section --- */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .status-banner {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 1rem;
+            display: grid;
+            gap: 8px;
+        }
+        .status-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: var(--text-color); }
+        .status-row span { font-family: var(--font-mono); }
+
+        .result-section { margin-top: 1.5rem; }
+        .result-section h3 { margin-bottom: 0.75rem; }
+        .result-item { padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-item:first-child { padding-top: 0; }
+        .result-item.highlight { background: rgba(17, 24, 39, 0.03); border-radius: 6px; padding: 12px; }
+        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .result-header p { margin: 0; font-size: 1rem; }
+        .result-header p strong { color: var(--text-color); }
+        .unit { font-size: 0.85rem; color: var(--text-light); margin-left: 4px; }
+        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.85rem; cursor: pointer; }
+        details.inline-details > summary::after { content: '[Show Equation]'; }
+        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
+        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
+        .equation-details p { margin-bottom: 0.5rem; }
+        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
+        .def::after {
+            content: attr(data-def);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: normal;
+            width: 220px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+        .def:hover::after { opacity: 1; visibility: visible; }
+        .error-title { color: #c92a2a; font-weight: 700; }
+        .error-text { color: #c92a2a; }
+
+        /* --- 9. Charts --- */
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+        .chart-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background: #fff; }
+        .plot-container {
+            width: 100%;
+            min-height: 260px;
+            background-color: var(--primary-light);
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+        }
+        .chart-caption { font-size: 0.85rem; color: var(--text-light); margin-top: 8px; }
+        .chart-checklist { margin-top: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); padding: 12px 16px; }
+        .chart-checklist summary { font-weight: 600; color: var(--secondary-color); }
+        .chart-checklist ul { padding-left: 20px; margin-top: 8px; }
+        .chart-checklist li { margin-bottom: 6px; color: var(--text-light); }
+
+        /* --- 10. Background Content --- */
+        .background-section { margin-bottom: 1.5rem; }
+        .glossary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .glossary-card { background: var(--primary-light); border-radius: 8px; padding: 10px 12px; border: 1px solid var(--border-color); }
+        .glossary-card strong { display: block; margin-bottom: 6px; color: var(--text-color); }
+        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
+        .equation-card { background: rgba(248, 250, 252, 0.75); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-legend-title { font-size: 0.85rem; color: var(--text-light); margin-bottom: 0.35rem; }
+        .equation-card ul { padding-left: 18px; margin-top: 6px; }
+        .equation-card li { font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px; }
+        .math-inline { font-family: var(--font-mono); }
+
+        /* --- 11. Loading Overlay --- */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(248, 249, 251, 0.96);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 999;
+        }
+        .loading-overlay.hidden { display: none; }
+        .loading-text { font-weight: 600; color: var(--text-color); }
+
+        /* --- 12. Footer --- */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* --- 13. Responsive Layout --- */
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .segment-header { display: none; }
+            .segment-row { grid-template-columns: 1fr; }
+            .segment-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div class="tool-header">
+            <h1>Cam Profile Generator (Experimental)</h1>
+            <p class="tool-description" id="tool-description">
+                Build translating roller cam profiles from motion segments and visualize the
+                follower kinematics and cam geometry.
+            </p>
+        </div>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <p class="inputs-intro">
+                    Start with geometry and speed, then refine the motion sequence. Advanced settings
+                    control calculation resolution.
+                </p>
+                <div class="input-tabs">
+                    <button type="button" class="input-tab active" data-target="section-basics">Basics</button>
+                    <button type="button" class="input-tab" data-target="section-segments">Segments</button>
+                    <button type="button" class="input-tab" data-target="section-advanced">Advanced</button>
+                </div>
+
+                <form id="calc-form">
+                    <div id="section-basics" class="input-section active">
+                        <div class="input-grid">
+                            <div class="input-group">
+                                <label for="base_circle_radius">Base Circle Radius (mm)</label>
+                                <input type="number" id="base_circle_radius" name="base_circle_radius" value="50">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="roller_radius">Roller Radius (mm)</label>
+                                <input type="number" id="roller_radius" name="roller_radius" value="8">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="angular_velocity_rpm">Angular Velocity (RPM)</label>
+                                <input type="number" id="angular_velocity_rpm" name="angular_velocity_rpm" value="120">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="preset-select">Profile Preset</label>
+                                <select id="preset-select">
+                                    <option value="four_segment">Rise/Dwell/Fall/Dwell</option>
+                                    <option value="symmetric">Symmetric Rise/Fall</option>
+                                    <option value="dwell_heavy">Short Rise, Long Dwell</option>
+                                </select>
+                                <span class="tooltip-trigger" data-tooltip="Load a starting motion sequence before fine tuning.">?</span>
+                            </div>
+                        </div>
+                        <div class="segment-actions">
+                            <button type="button" class="btn btn-secondary" id="apply-preset-btn">Load Preset</button>
+                        </div>
+                    </div>
+
+                    <div id="section-segments" class="input-section">
+                        <div class="segment-header">
+                            <span>Type</span>
+                            <span>Motion Law <span class="tooltip-trigger inline" id="segments-tooltip" data-tooltip="Loading...">?</span></span>
+                            <span>Duration (&deg;)</span>
+                            <span>Lift (mm)</span>
+                            <span>Remove</span>
+                        </div>
+                        <div id="segment-container"></div>
+                        <div class="segment-actions">
+                            <button type="button" class="btn btn-secondary" id="add-segment-btn">Add Segment</button>
+                            <button type="button" class="btn btn-secondary" id="load-example-btn">Load Example</button>
+                        </div>
+                        <div class="segment-summary">
+                            <div class="summary-card">
+                                <p>Total Duration</p>
+                                <span class="value" id="total-duration-value">0</span>
+                                <span class="unit">&deg;</span>
+                                <span id="total-duration-status"></span>
+                            </div>
+                            <div class="summary-card">
+                                <p>Net Lift</p>
+                                <span class="value" id="net-lift-value">0</span>
+                                <span class="unit">mm</span>
+                                <span id="net-lift-status"></span>
+                            </div>
+                            <div class="summary-card">
+                                <p>Segments</p>
+                                <span class="value" id="segment-count-value">0</span>
+                            </div>
+                        </div>
+
+                        <details class="motion-law-list">
+                            <summary>Motion law reference</summary>
+                            <div id="motion-law-reference"></div>
+                        </details>
+                    </div>
+
+                    <div id="section-advanced" class="input-section">
+                        <div class="input-group">
+                            <label for="points_per_degree">Points per Degree</label>
+                            <input type="number" id="points_per_degree" name="points_per_degree" value="1" min="1" step="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            <p class="input-hint">Higher values increase smoothness but require more compute time.</p>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="kinematics">Kinematics</button>
+                    <button class="tab-link" data-target="geometry">Cam Geometry</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content active">
+                    <div class="status-banner" id="status-banner">
+                        <div class="status-row"><strong>Profile Summary</strong></div>
+                        <div class="status-row"><span id="summary-geometry">Base circle: -- mm, Roller: -- mm</span></div>
+                        <div class="status-row"><span id="summary-motion">Segments: --, Total: -- &deg;</span></div>
+                        <div class="status-row"><span id="summary-speed">Speed: -- RPM</span></div>
+                    </div>
+
+                    <div id="results-display">
+                        <p id="results-placeholder">Enter inputs and press Calculate.</p>
+                    </div>
+                </div>
+
+                <div id="kinematics" class="tab-content">
+                    <div class="chart-grid">
+                        <div class="chart-card">
+                            <h4>Displacement</h4>
+                            <div id="plot-displacement" class="plot-container"><p>Displacement plot will appear here.</p></div>
+                            <p class="chart-caption">Linear scale, units in mm.</p>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Velocity</h4>
+                            <div id="plot-velocity" class="plot-container"><p>Velocity plot will appear here.</p></div>
+                            <p class="chart-caption">Linear scale, units in mm/s.</p>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Acceleration</h4>
+                            <div id="plot-acceleration" class="plot-container"><p>Acceleration plot will appear here.</p></div>
+                            <p class="chart-caption">Linear scale, units in mm/s^2.</p>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Jerk</h4>
+                            <div id="plot-jerk" class="plot-container"><p>Jerk plot will appear here.</p></div>
+                            <p class="chart-caption">Linear scale, units in mm/s^3.</p>
+                        </div>
+                    </div>
+                    <details class="chart-checklist">
+                        <summary>Chart checklist</summary>
+                        <ul>
+                            <li>Axes are labeled and include units.</li>
+                            <li>Legend is present and matches the plotted series.</li>
+                            <li>Scale type is correct and stated (linear or log).</li>
+                            <li>Plotted values are finite (no NaN or infinity gaps).</li>
+                            <li>Ranges look physically plausible for the inputs.</li>
+                            <li>Annotations reflect the correct numeric values.</li>
+                        </ul>
+                    </details>
+                </div>
+
+                <div id="geometry" class="tab-content">
+                    <div class="chart-card">
+                        <h3>Cam Surface vs. Pitch Curve</h3>
+                        <div id="plot-profile" class="plot-container"><p>Cam profile plot will appear here.</p></div>
+                        <p class="chart-caption">Linear scale with equal aspect ratio. Base circle shown as dashed line.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <div class="background-section">
+                        <h3>Overview</h3>
+                        <p id="background-overview">Overview will load from the docstring.</p>
+                    </div>
+                    <div class="background-section">
+                        <h3>Inputs Glossary</h3>
+                        <div class="glossary-grid" id="inputs-glossary"></div>
+                    </div>
+                    <div class="background-section">
+                        <h3>Outputs Glossary</h3>
+                        <div class="glossary-grid" id="outputs-glossary"></div>
+                    </div>
+                    <div class="background-section">
+                        <h3>Theory & Principles</h3>
+                        <div id="theory-content">
+                            <p>Translating roller followers use the pitch curve as the roller center path. The cam surface is an inward normal offset by the roller radius.</p>
+                        </div>
+                    </div>
+                    <div class="background-section">
+                        <h3>Equations</h3>
+                        <div class="equation-container" id="equation-container"></div>
+                    </div>
+                    <div class="background-section">
+                        <h3>Implementation Notes</h3>
+                        <ul id="implementation-notes">
+                            <li>Segment durations must sum to 360 degrees.</li>
+                            <li>Net lift must return to zero for a closed cam profile.</li>
+                            <li>Pressure angle and undercut checks are not included in this prototype.</li>
+                        </ul>
+                    </div>
+                    <div class="background-section">
+                        <h3>References</h3>
+                        <ul id="references-list">
+                            <li>Placeholder: add a primary cam design reference when available.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        let pyodideInstance = null;
+        let pyUtils = null;
+        let pyToolModule = null;
+        let toolDocumentation = {};
+        let motionLawCatalog = {};
+        let equationBlocks = [];
+
+        const TOOL_MODULE_NAME = 'cams';
+        const TOOL_FUNCTION_NAME = 'analyze_cam_profile';
+        const PARAM_ORDER = [
+            'base_circle_radius',
+            'roller_radius',
+            'angular_velocity_rpm',
+            'points_per_degree',
+            'segments',
+        ];
+        const RESULT_GROUPS = [
+            { title: 'Key Metrics', keys: ['max_displacement', 'max_velocity', 'max_acceleration', 'max_jerk'] },
+            { title: 'Geometry Checks', keys: ['min_pitch_radius', 'max_pitch_radius', 'min_cam_radius', 'max_cam_radius'] },
+            { title: 'Timing', keys: ['omega_rad_s', 'cycle_time', 'total_duration_deg'] },
+        ];
+        const RESULT_EQUATION_MAP = {
+            omega_rad_s: 1,
+            max_velocity: 11,
+            max_acceleration: 12,
+            max_jerk: 13,
+            min_cam_radius: 14,
+            cycle_time: 15,
+        };
+
+        const PRESETS = {
+            four_segment: [
+                { type: 'rise', motion_law: 'poly_4_5_6_7', duration_deg: 90, lift_mm: 12 },
+                { type: 'dwell', duration_deg: 60 },
+                { type: 'fall', motion_law: 'poly_4_5_6_7', duration_deg: 120, lift_mm: 12 },
+                { type: 'dwell', duration_deg: 90 },
+            ],
+            symmetric: [
+                { type: 'rise', motion_law: 'cycloidal', duration_deg: 180, lift_mm: 15 },
+                { type: 'fall', motion_law: 'cycloidal', duration_deg: 180, lift_mm: 15 },
+            ],
+            dwell_heavy: [
+                { type: 'rise', motion_law: 'poly_3_4_5', duration_deg: 60, lift_mm: 10 },
+                { type: 'dwell', duration_deg: 180 },
+                { type: 'fall', motion_law: 'poly_3_4_5', duration_deg: 120, lift_mm: 10 },
+            ],
+        };
+
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach((tab) => {
+                tab.classList.toggle('active', tab.id === tabName);
+            });
+            document.querySelectorAll('.tab-link').forEach((link) => {
+                link.classList.toggle('active', link.dataset.target === tabName);
+            });
+            resizePlots();
+        }
+
+        function openInputTab(tabName) {
+            document.querySelectorAll('.input-section').forEach((tab) => {
+                tab.classList.toggle('active', tab.id === tabName);
+            });
+            document.querySelectorAll('.input-tab').forEach((link) => {
+                link.classList.toggle('active', link.dataset.target === tabName);
+            });
+        }
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatValue(value) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return '-';
+            }
+            if (!Number.isFinite(value)) {
+                return value > 0 ? '&infin;' : value < 0 ? '-&infin;' : '-';
+            }
+            const absVal = Math.abs(value);
+            if (absVal !== 0 && (absVal >= 1e4 || absVal < 1e-3)) {
+                return value.toExponential(4);
+            }
+            return value.toFixed(4);
+        }
+
+        function extractUnit(description) {
+            const match = description.match(/\(([^)]+)\)/);
+            return match ? match[1] : '';
+        }
+
+        function parseDocumentationMap(docMap) {
+            const entries = docMap instanceof Map ? docMap : Object.entries(docMap || {});
+            const doc = Object.fromEntries(entries);
+            if (doc.parameters) {
+                const paramEntries = doc.parameters instanceof Map ? doc.parameters : Object.entries(doc.parameters);
+                doc.parameters = Object.fromEntries(paramEntries);
+            }
+            if (doc.returns) {
+                const returnEntries = doc.returns instanceof Map ? doc.returns : Object.entries(doc.returns);
+                doc.returns = Object.fromEntries(returnEntries);
+            }
+            return doc;
+        }
+
+        function parseEquations(latexText) {
+            if (!latexText) return [];
+            const lines = latexText.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
+            const equationMap = new Map();
+            const legendMap = new Map();
+
+            lines.forEach((line) => {
+                if (line.startsWith('Equation_')) {
+                    const parts = line.split('=');
+                    const label = parts.shift();
+                    const expression = parts.join('=').trim();
+                    const index = parseInt(label.replace('Equation_', '').trim(), 10);
+                    if (!Number.isNaN(index)) {
+                        equationMap.set(index, expression);
+                    }
+                } else if (line.startsWith('Legend_')) {
+                    const parts = line.split('=');
+                    const label = parts.shift();
+                    const legendText = parts.join('=').trim();
+                    const index = parseInt(label.replace('Legend_', '').trim(), 10);
+                    if (!Number.isNaN(index)) {
+                        legendMap.set(index, legendText);
+                    }
+                }
+            });
+
+            const indices = Array.from(equationMap.keys()).sort((a, b) => a - b);
+            return indices.map((index) => {
+                const legendRaw = legendMap.get(index) || '';
+                const legendItems = legendRaw
+                    .split(';')
+                    .map((item) => item.trim())
+                    .filter((item) => item.length > 0);
+                return {
+                    index,
+                    expression: equationMap.get(index),
+                    legendItems,
+                };
+            });
+        }
+
+        async function loadReadme() {
+            const container = document.getElementById('readme-content');
+            try {
+                const response = await fetch('./README.md');
+                if (!response.ok) throw new Error('README not found');
+                const markdown = await response.text();
+                container.innerHTML = markdown
+                    .split('\n\n')
+                    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+                    .join('');
+            } catch (error) {
+                container.innerHTML = `<p class="error-text">Unable to load README: ${escapeHtml(error.message)}</p>`;
+            }
+        }
+
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+            PARAM_ORDER.forEach((param) => {
+                if (param === 'segments') {
+                    const segmentTooltip = document.getElementById('segments-tooltip');
+                    if (segmentTooltip) {
+                        segmentTooltip.setAttribute('data-tooltip', toolDocumentation.parameters.segments || 'Segment list.');
+                    }
+                    return;
+                }
+                const input = document.getElementById(param);
+                const tooltip = input ? input.parentElement.querySelector('.tooltip-trigger') : null;
+                if (tooltip) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[param] || '-');
+                }
+            });
+        }
+
+        function populateGlossary() {
+            const inputsGlossary = document.getElementById('inputs-glossary');
+            const outputsGlossary = document.getElementById('outputs-glossary');
+            if (!toolDocumentation.parameters || !toolDocumentation.returns) return;
+
+            inputsGlossary.innerHTML = Object.entries(toolDocumentation.parameters)
+                .map(([key, description]) => (
+                    `<div class="glossary-card"><strong>${escapeHtml(key)}</strong><p>${escapeHtml(description)}</p></div>`
+                ))
+                .join('');
+
+            outputsGlossary.innerHTML = Object.entries(toolDocumentation.returns)
+                .map(([key, description]) => (
+                    `<div class="glossary-card"><strong>${escapeHtml(key)}</strong><p>${escapeHtml(description)}</p></div>`
+                ))
+                .join('');
+        }
+
+        function populateEquations() {
+            const container = document.getElementById('equation-container');
+            if (!equationBlocks.length) {
+                container.innerHTML = '<p>No equations provided.</p>';
+                return;
+            }
+            container.innerHTML = equationBlocks.map((eq) => {
+                const legendHtml = eq.legendItems.length
+                    ? `<p class="equation-legend-title">Variables:</p>
+                       <ul>
+                           ${eq.legendItems.map((item) => {
+                               const parts = item.split(':');
+                               const symbol = parts.shift().trim();
+                               const description = parts.join(':').trim();
+                               return `<li><span class="math-inline">\\(${symbol}\\)</span>: ${escapeHtml(description)}</li>`;
+                           }).join('')}
+                       </ul>`
+                    : '';
+                return `
+                    <div class="equation-card">
+                        <strong>Equation (${eq.index})</strong>
+                        <div class="equation-expression">\\[ ${eq.expression} \\]</div>
+                        ${legendHtml}
+                    </div>
+                `;
+            }).join('');
+            typesetMath();
+        }
+
+        function populateMotionLawReference() {
+            const container = document.getElementById('motion-law-reference');
+            if (!motionLawCatalog.motion_laws) return;
+            const entries = Object.entries(motionLawCatalog.motion_laws);
+            container.innerHTML = entries.map(([key, value]) => `
+                <div class="motion-law-item">
+                    <strong>${escapeHtml(value.name)}</strong>
+                    <p>${escapeHtml(value.description)}</p>
+                    <p><em>Continuous jerk:</em> ${value.continuous_jerk ? 'Yes' : 'No'}</p>
+                </div>
+            `).join('');
+        }
+
+        function populateUiFromDocs() {
+            const description = toolDocumentation.description || '';
+            document.getElementById('tool-description').textContent = description;
+            document.getElementById('background-overview').innerHTML = escapeHtml(description).replace(/\n/g, '<br>');
+            populateTooltips();
+            populateGlossary();
+            populateEquations();
+        }
+
+        function updateSummaryBanner() {
+            const baseCircle = document.getElementById('base_circle_radius').value;
+            const roller = document.getElementById('roller_radius').value;
+            const rpm = document.getElementById('angular_velocity_rpm').value;
+            const segments = document.querySelectorAll('.segment-row').length;
+            const totalDuration = document.getElementById('total-duration-value').textContent;
+            document.getElementById('summary-geometry').textContent = `Base circle: ${baseCircle} mm, Roller: ${roller} mm`;
+            document.getElementById('summary-motion').textContent = `Segments: ${segments}, Total: ${totalDuration} deg`;
+            document.getElementById('summary-speed').textContent = `Speed: ${rpm} RPM`;
+        }
+
+        function updateSegmentSummary() {
+            const rows = Array.from(document.querySelectorAll('.segment-row'));
+            let totalDuration = 0;
+            let netLift = 0;
+
+            rows.forEach((row) => {
+                const type = row.querySelector('.segment-type').value;
+                const duration = parseFloat(row.querySelector('.segment-duration').value) || 0;
+                const lift = parseFloat(row.querySelector('.segment-lift').value) || 0;
+                totalDuration += duration;
+                if (type === 'rise') {
+                    netLift += lift;
+                } else if (type === 'fall') {
+                    netLift -= lift;
+                }
+            });
+
+            document.getElementById('total-duration-value').textContent = totalDuration.toFixed(1);
+            document.getElementById('net-lift-value').textContent = netLift.toFixed(2);
+            document.getElementById('segment-count-value').textContent = rows.length;
+
+            const totalStatus = document.getElementById('total-duration-status');
+            const netLiftStatus = document.getElementById('net-lift-status');
+
+            const durationOk = Math.abs(totalDuration - 360) < 1e-3;
+            totalStatus.textContent = durationOk ? 'OK' : 'Needs 360';
+            totalStatus.className = durationOk ? 'status-good' : 'status-bad';
+
+            const liftOk = Math.abs(netLift) < 1e-6;
+            netLiftStatus.textContent = liftOk ? 'OK' : 'Needs 0';
+            netLiftStatus.className = liftOk ? 'status-good' : 'status-bad';
+
+            updateSummaryBanner();
+        }
+
+        function buildMotionLawOptions(selectedLaw) {
+            if (!motionLawCatalog.motion_laws) return '';
+            return Object.entries(motionLawCatalog.motion_laws).map(([key, value]) => {
+                const selected = key === selectedLaw ? 'selected' : '';
+                return `<option value="${escapeHtml(key)}" ${selected}>${escapeHtml(value.name)}</option>`;
+            }).join('');
+        }
+
+        let segmentCounter = 0;
+
+        function addSegment(segmentData = {}) {
+            segmentCounter += 1;
+            const container = document.getElementById('segment-container');
+            const row = document.createElement('div');
+            row.className = 'segment-row';
+            row.dataset.segmentId = segmentCounter;
+
+            const typeId = `segment-${segmentCounter}-type`;
+            const lawId = `segment-${segmentCounter}-law`;
+            const durationId = `segment-${segmentCounter}-duration`;
+            const liftId = `segment-${segmentCounter}-lift`;
+
+            row.innerHTML = `
+                <div>
+                    <label for="${typeId}">Type</label>
+                    <select id="${typeId}" class="segment-type">
+                        <option value="rise">Rise</option>
+                        <option value="fall">Fall</option>
+                        <option value="dwell">Dwell</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="${lawId}">Motion Law</label>
+                    <select id="${lawId}" class="segment-motion-law">
+                        ${buildMotionLawOptions(segmentData.motion_law)}
+                    </select>
+                </div>
+                <div>
+                    <label for="${durationId}">Duration (&deg;)</label>
+                    <input id="${durationId}" class="segment-duration" type="number" value="${segmentData.duration_deg ?? 90}">
+                </div>
+                <div>
+                    <label for="${liftId}">Lift (mm)</label>
+                    <input id="${liftId}" class="segment-lift" type="number" value="${segmentData.lift_mm ?? 10}">
+                </div>
+                <button type="button" class="btn-icon remove-segment-btn" aria-label="Remove segment">X</button>
+            `;
+
+            container.appendChild(row);
+
+            const typeSelect = row.querySelector('.segment-type');
+            if (segmentData.type) {
+                typeSelect.value = segmentData.type;
+            }
+            updateSegmentRow(row);
+            updateSegmentSummary();
+        }
+
+        function updateSegmentRow(row) {
+            const type = row.querySelector('.segment-type').value;
+            const lawSelect = row.querySelector('.segment-motion-law');
+            const liftInput = row.querySelector('.segment-lift');
+            const isDwell = type === 'dwell';
+            lawSelect.disabled = isDwell;
+            liftInput.disabled = isDwell;
+            if (isDwell) {
+                liftInput.value = 0;
+            }
+        }
+
+        function clearSegments() {
+            document.getElementById('segment-container').innerHTML = '';
+            segmentCounter = 0;
+            updateSegmentSummary();
+        }
+
+        function loadPreset(presetKey) {
+            const preset = PRESETS[presetKey] || PRESETS.four_segment;
+            clearSegments();
+            preset.forEach((segment) => addSegment(segment));
+        }
+
+        function loadExample() {
+            loadPreset('four_segment');
+        }
+
+        function readSegments() {
+            const rows = Array.from(document.querySelectorAll('.segment-row'));
+            return rows.map((row) => {
+                const type = row.querySelector('.segment-type').value;
+                const duration = parseFloat(row.querySelector('.segment-duration').value);
+                const lift = parseFloat(row.querySelector('.segment-lift').value);
+                const motionLaw = row.querySelector('.segment-motion-law').value;
+                if (!Number.isFinite(duration)) {
+                    throw new Error('Each segment must have a valid duration.');
+                }
+                if (type !== 'dwell' && !Number.isFinite(lift)) {
+                    throw new Error('Each rise/fall segment must have a valid lift.');
+                }
+                const segment = { type, duration_deg: duration };
+                if (type !== 'dwell') {
+                    segment.lift_mm = lift;
+                    segment.motion_law = motionLaw;
+                }
+                return segment;
+            });
+        }
+
+        function buildResultItem(key, value, definition, equation) {
+            const displayName = key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+            const unit = extractUnit(definition);
+            const highlight = RESULT_GROUPS[0].keys.includes(key) ? 'highlight' : '';
+            const equationDetails = equation
+                ? `<details class="inline-details">
+                        <summary></summary>
+                        <div class="equation-details">
+                            <p><strong>Equation:</strong> $$${equation}$$</p>
+                            ${value.subst ? `<p><strong>Substituted:</strong> $$${value.subst}$$</p>` : ''}
+                        </div>
+                   </details>`
+                : '';
+            return `
+                <div class="result-item ${highlight}">
+                    <div class="result-header">
+                        <p><strong><span class="def" data-def="${escapeHtml(definition)}">${escapeHtml(displayName)}</span>:</strong>
+                            ${formatValue(value.raw)}${unit ? `<span class="unit">${escapeHtml(unit)}</span>` : ''}
+                        </p>
+                        ${equationDetails}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResults(results) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+
+            if (!toolDocumentation.returns) {
+                resultsDiv.innerHTML = '<p>No results documentation available.</p>';
+                return;
+            }
+
+            const latexMap = equationBlocks.reduce((map, eq) => {
+                map[eq.index] = eq.expression;
+                return map;
+            }, {});
+
+            RESULT_GROUPS.forEach((group) => {
+                const groupItems = group.keys.filter((key) => typeof results[key] === 'number');
+                if (!groupItems.length) return;
+                const groupHtml = groupItems.map((key) => {
+                    const definition = toolDocumentation.returns[key] || '';
+                    const equationIndex = RESULT_EQUATION_MAP[key];
+                    const equation = equationIndex ? latexMap[equationIndex] : null;
+                    const value = {
+                        raw: results[key],
+                        subst: results[`subst_${key}`],
+                    };
+                    return buildResultItem(key, value, definition, equation);
+                }).join('');
+                resultsDiv.innerHTML += `
+                    <div class="result-section">
+                        <h3>${escapeHtml(group.title)}</h3>
+                        ${groupHtml}
+                    </div>
+                `;
+            });
+
+            typesetMath();
+        }
+
+        function isFiniteSeries(series) {
+            return Array.isArray(series) && series.length > 0 && series.every((value) => Number.isFinite(value));
+        }
+
+        function plotSeries(containerId, x, y, name, yTitle) {
+            const container = document.getElementById(containerId);
+            if (!isFiniteSeries(x) || !isFiniteSeries(y)) {
+                container.innerHTML = '<p>Data invalid or empty.</p>';
+                return;
+            }
+            Plotly.newPlot(container, [{
+                x,
+                y,
+                name,
+                mode: 'lines',
+                line: { width: 2 },
+            }], {
+                margin: { l: 50, r: 20, t: 30, b: 40 },
+                xaxis: { title: 'Cam Angle (deg, linear)', type: 'linear' },
+                yaxis: { title: yTitle, type: 'linear' },
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.15 },
+            }, { responsive: true });
+        }
+
+        function plotCamProfile(results) {
+            const container = document.getElementById('plot-profile');
+            const xCam = results.cam_profile_x;
+            const yCam = results.cam_profile_y;
+            const xPitch = results.pitch_curve_x;
+            const yPitch = results.pitch_curve_y;
+
+            if (!isFiniteSeries(xCam) || !isFiniteSeries(yCam) || !isFiniteSeries(xPitch) || !isFiniteSeries(yPitch)) {
+                container.innerHTML = '<p>Profile data invalid or empty.</p>';
+                return;
+            }
+
+            const baseRadius = parseFloat(document.getElementById('base_circle_radius').value);
+            const angles = results.cam_angle_deg || [];
+            const baseCircleX = angles.map((angle) => baseRadius * Math.cos(angle * Math.PI / 180));
+            const baseCircleY = angles.map((angle) => baseRadius * Math.sin(angle * Math.PI / 180));
+
+            Plotly.newPlot(container, [
+                {
+                    x: xCam,
+                    y: yCam,
+                    mode: 'lines',
+                    name: 'Cam Surface',
+                    line: { width: 2, color: '#111827' },
+                },
+                {
+                    x: xPitch,
+                    y: yPitch,
+                    mode: 'lines',
+                    name: 'Pitch Curve',
+                    line: { width: 2, dash: 'dash', color: '#4b5563' },
+                },
+                {
+                    x: baseCircleX,
+                    y: baseCircleY,
+                    mode: 'lines',
+                    name: 'Base Circle',
+                    line: { width: 1.5, dash: 'dot', color: '#9ca3af' },
+                },
+            ], {
+                margin: { l: 50, r: 20, t: 30, b: 40 },
+                xaxis: { title: 'X (mm, linear)', scaleanchor: 'y', scaleratio: 1, type: 'linear' },
+                yaxis: { title: 'Y (mm, linear)', type: 'linear' },
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.15 },
+            }, { responsive: true });
+        }
+
+        function resizePlots() {
+            const plotIds = ['plot-displacement', 'plot-velocity', 'plot-acceleration', 'plot-jerk', 'plot-profile'];
+            plotIds.forEach((id) => {
+                const node = document.getElementById(id);
+                if (node && node.data) {
+                    Plotly.Plots.resize(node);
+                }
+            });
+        }
+
+        async function handleCalculation(event) {
+            event.preventDefault();
+            const button = document.getElementById('calculate-btn');
+            if (!pyodideInstance) {
+                alert('Python runtime still loading. Please wait a moment and try again.');
+                return;
+            }
+            button.textContent = 'Calculating...';
+            try {
+                const segments = readSegments();
+                const baseCircle = parseFloat(document.getElementById('base_circle_radius').value);
+                const rollerRadius = parseFloat(document.getElementById('roller_radius').value);
+                const rpm = parseFloat(document.getElementById('angular_velocity_rpm').value);
+                const pointsPerDegree = parseFloat(document.getElementById('points_per_degree').value);
+
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](
+                    pyodideInstance.toPy(segments),
+                    baseCircle,
+                    rollerRadius,
+                    rpm,
+                    pointsPerDegree,
+                ).toJs();
+
+                const results = resultMap instanceof Map ? Object.fromEntries(resultMap) : resultMap;
+                renderResults(results);
+                plotSeries('plot-displacement', results.cam_angle_deg, results.displacement, 'Displacement', 'Displacement (mm)');
+                plotSeries('plot-velocity', results.cam_angle_deg, results.velocity, 'Velocity', 'Velocity (mm/s)');
+                plotSeries('plot-acceleration', results.cam_angle_deg, results.acceleration, 'Acceleration', 'Acceleration (mm/s^2)');
+                plotSeries('plot-jerk', results.cam_angle_deg, results.jerk, 'Jerk', 'Jerk (mm/s^3)');
+                plotCamProfile(results);
+            } catch (error) {
+                console.error('Calculation Error:', error);
+                document.getElementById('results-display').innerHTML = `
+                    <p class="error-title">Calculation Error:</p>
+                    <p class="error-text">${escapeHtml(error.message)}</p>
+                `;
+            } finally {
+                button.textContent = 'Calculate';
+            }
+        }
+
+        async function main() {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                pyodideInstance = await loadPyodide();
+                await pyodideInstance.loadPackage('micropip');
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodideInstance.runPythonAsync(`
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodideInstance.globals.get('utils');
+                pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+                const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+                if (docMap.has && docMap.has('error')) {
+                    throw new Error(docMap.get('error'));
+                }
+                toolDocumentation = parseDocumentationMap(docMap);
+                equationBlocks = parseEquations(toolDocumentation.latex || '');
+
+                motionLawCatalog = parseDocumentationMap(pyToolModule.get_cam_catalog().toJs());
+                if (motionLawCatalog.motion_laws instanceof Map) {
+                    motionLawCatalog.motion_laws = Object.fromEntries(
+                        Array.from(motionLawCatalog.motion_laws.entries()).map(([key, value]) => [
+                            key,
+                            value instanceof Map ? Object.fromEntries(value) : value,
+                        ])
+                    );
+                }
+                populateMotionLawReference();
+                populateUiFromDocs();
+                loadReadme();
+                loadExample();
+            } catch (error) {
+                console.error('Initialization Error:', error);
+                document.getElementById('results-display').innerHTML = `
+                    <p class="error-title">Initialization Error:</p>
+                    <p class="error-text">${escapeHtml(error.message)}</p>
+                `;
+            } finally {
+                loadingOverlay.classList.add('hidden');
+                updateSummaryBanner();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            main();
+
+            document.querySelectorAll('.tab-link').forEach((button) => {
+                button.addEventListener('click', (event) => openTab(event, event.currentTarget.dataset.target));
+            });
+
+            document.querySelectorAll('.input-tab').forEach((button) => {
+                button.addEventListener('click', (event) => openInputTab(event.currentTarget.dataset.target));
+            });
+
+            document.getElementById('add-segment-btn').addEventListener('click', () => addSegment());
+            document.getElementById('load-example-btn').addEventListener('click', loadExample);
+            document.getElementById('apply-preset-btn').addEventListener('click', () => {
+                const presetKey = document.getElementById('preset-select').value;
+                loadPreset(presetKey);
+            });
+
+            document.getElementById('segment-container').addEventListener('change', (event) => {
+                if (event.target.classList.contains('segment-type')) {
+                    updateSegmentRow(event.target.closest('.segment-row'));
+                }
+                updateSegmentSummary();
+            });
+            document.getElementById('segment-container').addEventListener('input', updateSegmentSummary);
+            document.getElementById('segment-container').addEventListener('click', (event) => {
+                if (event.target.classList.contains('remove-segment-btn')) {
+                    event.target.closest('.segment-row').remove();
+                    updateSegmentSummary();
+                }
+            });
+
+            document.getElementById('calc-form').addEventListener('submit', handleCalculation);
+            ['base_circle_radius', 'roller_radius', 'angular_velocity_rpm'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('input', updateSummaryBanner);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

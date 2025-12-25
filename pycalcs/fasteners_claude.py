@@ -112,7 +112,53 @@ SAE_BOLT_GRADES: Dict[str, Dict[str, float]] = {
 # ISO Metric Thread Geometry per ISO 262 and ISO 724
 # Format: designation -> (nominal_d_mm, pitch_mm, stress_area_mm2, minor_d_mm, pitch_d_mm)
 ISO_FASTENER_GEOMETRY: Dict[str, Dict[str, float]] = {
-    # Coarse pitch series
+    # Small sizes (M2 - M5)
+    "M2x0.4": {
+        "nominal_diameter": 2.0e-3,
+        "pitch": 0.4e-3,
+        "stress_area": 2.07e-6,
+        "minor_diameter": 1.509e-3,
+        "pitch_diameter": 1.740e-3,
+        "head_diameter": 4.0e-3,
+        "head_height": 1.4e-3,
+    },
+    "M2.5x0.45": {
+        "nominal_diameter": 2.5e-3,
+        "pitch": 0.45e-3,
+        "stress_area": 3.39e-6,
+        "minor_diameter": 1.948e-3,
+        "pitch_diameter": 2.208e-3,
+        "head_diameter": 5.0e-3,
+        "head_height": 1.7e-3,
+    },
+    "M3x0.5": {
+        "nominal_diameter": 3.0e-3,
+        "pitch": 0.5e-3,
+        "stress_area": 5.03e-6,
+        "minor_diameter": 2.387e-3,
+        "pitch_diameter": 2.675e-3,
+        "head_diameter": 5.5e-3,
+        "head_height": 2.0e-3,
+    },
+    "M4x0.7": {
+        "nominal_diameter": 4.0e-3,
+        "pitch": 0.7e-3,
+        "stress_area": 8.78e-6,
+        "minor_diameter": 3.141e-3,
+        "pitch_diameter": 3.545e-3,
+        "head_diameter": 7.0e-3,
+        "head_height": 2.8e-3,
+    },
+    "M5x0.8": {
+        "nominal_diameter": 5.0e-3,
+        "pitch": 0.8e-3,
+        "stress_area": 14.2e-6,
+        "minor_diameter": 4.019e-3,
+        "pitch_diameter": 4.480e-3,
+        "head_diameter": 8.0e-3,
+        "head_height": 3.5e-3,
+    },
+    # Coarse pitch series (M6+)
     "M6x1.0": {
         "nominal_diameter": 6.0e-3,
         "pitch": 1.0e-3,
@@ -272,6 +318,25 @@ ISO_FASTENER_GEOMETRY: Dict[str, Dict[str, float]] = {
 # Unified Thread Standard (UTS) per ASME B1.1
 # Imperial thread geometry
 UTS_FASTENER_GEOMETRY: Dict[str, Dict[str, float]] = {
+    # Small machine screws
+    "#2-56 UNC": {
+        "nominal_diameter": 2.184e-3,    # 0.086 in
+        "pitch": 0.454e-3,               # 1/56 in
+        "stress_area": 1.89e-6,          # 0.00293 in^2
+        "minor_diameter": 1.628e-3,
+        "pitch_diameter": 1.905e-3,
+        "head_diameter": 4.37e-3,
+        "head_height": 1.52e-3,
+    },
+    "#4-40 UNC": {
+        "nominal_diameter": 2.845e-3,    # 0.112 in
+        "pitch": 0.635e-3,               # 1/40 in
+        "stress_area": 3.08e-6,          # 0.00477 in^2
+        "minor_diameter": 2.070e-3,
+        "pitch_diameter": 2.458e-3,
+        "head_diameter": 5.56e-3,
+        "head_height": 1.91e-3,
+    },
     "#6-32 UNC": {
         "nominal_diameter": 3.505e-3,    # 0.138 in
         "pitch": 0.794e-3,               # 1/32 in
@@ -1268,6 +1333,15 @@ def analyze_bolted_joint_claude(
         "k_factor": k_factor,
         "k_factor_min": k_min,
         "k_factor_max": k_max,
+
+        # Geometry and material properties (for progressive disclosure)
+        "nominal_diameter": nominal_d,
+        "stress_area": stress_area,
+        "proof_strength": proof_strength,
+        "yield_strength": yield_strength,
+        "tensile_strength": tensile_strength,
+        "external_axial_load": external_axial_load,
+        "external_shear_load": external_shear_load,
 
         # Stiffness
         "bolt_stiffness": bolt_stiffness,

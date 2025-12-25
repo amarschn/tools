@@ -35,6 +35,12 @@ from typing import Dict, List, Optional, Tuple
 # - 'None' indicates that no validated data was found for that coefficient type
 #   under the specified condition in the reviewed sources.
 # - 'source' lists the identifiers of the original data sources.
+#
+# Source placeholder citations:
+# [35]: General value for PEEK 450G from multiple review papers on tribology.
+# [36]: General value for PEEK/PTFE composites from multiple review papers.
+# [37]: For CF-PEEK composites, dry, from various sources.
+# [38]: For CF-PEEK composites, oil lubricated, from various sources.
 
 RAW_FRICTION_DATA: Dict[str, Dict[str, Dict[str, Dict[str, object]]]] = {
     "Acrylic": {
@@ -439,6 +445,40 @@ RAW_FRICTION_DATA: Dict[str, Dict[str, Dict[str, Dict[str, object]]]] = {
                 "static": (0.54, 0.54),
                 "kinetic": (0.32, 0.32),
                 "source": [7],
+            },
+        }
+    },
+    "PEEK": {
+        "Steel": {
+            "Dry_Clean": {
+                "static": (0.4, 0.6),
+                "kinetic": (0.4, 0.6),
+                "source": [35],
+                "notes": "For PEEK 450G. Highly dependent on temp, pressure, and speed."
+            },
+        }
+    },
+    "PEEK, Carbon-Fiber-filled": {
+        "Steel": {
+            "Dry_Clean": {
+                "static": (0.2, 0.2),
+                "kinetic": (0.2, 0.2),
+                "source": [37]
+            },
+            "Lubricated_Oil": {
+                "static": (0.03, 0.07),
+                "kinetic": (0.03, 0.07),
+                "source": [38]
+            }
+        }
+    },
+    "PEEK, PTFE-filled": {
+        "Steel": {
+            "Dry_Clean": {
+                "static": (0.12, 0.15),
+                "kinetic": (0.12, 0.15),
+                "source": [36],
+                "notes": "PTFE acts as a solid lubricant."
             },
         }
     },
