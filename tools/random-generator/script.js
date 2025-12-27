@@ -188,9 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearDisplays() {
         resultDisplay.innerHTML = '';
         textResultDisplay.textContent = '';
-        // Also clear any existing details
-        const placeholders = document.querySelectorAll('.details-placeholder');
-        placeholders.forEach(p => p.innerHTML = '');
     }
 
     function renderToolDetails(toolName) {
@@ -214,7 +211,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isAnimating) return;
         currentTool = toolName;
         lastDieSides = 0;
+        
+        // Clear displays and old details before setting up the new tool
         clearDisplays();
+        const placeholders = document.querySelectorAll('.details-placeholder');
+        placeholders.forEach(p => p.innerHTML = '');
         
         toolButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tool === toolName));
         controls.forEach(control => control.classList.toggle('active', control.id === `${toolName}-controls`));

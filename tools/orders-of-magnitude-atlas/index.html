@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders of Magnitude Atlas - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* =================================================================
+           2. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; color: var(--text-color); }
+
+        /* =================================================================
+           3. LAYOUT & CONTAINERS
+           ================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        /* =================================================================
+           4. PURPOSE/README SECTION
+           ================================================================= */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .purpose-content code { background-color: var(--primary-light); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
+
+        /* =================================================================
+           5. INPUT SECTION
+           ================================================================= */
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            transition: border-color 0.15s ease;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-bottom: 1.1rem; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-group label { margin-bottom: 0; cursor: pointer; }
+
+        .tooltip-trigger {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px; font-weight: bold;
+            cursor: help;
+            position: absolute; right: 10px; top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--text-color); color: white;
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5;
+            white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+        .tooltip-trigger.slider-tooltip { position: relative; top: auto; right: auto; margin-left: 6px; }
+
+        .slider-group {
+            margin: 0 0 1.5rem 0;
+            padding: 16px;
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+        }
+        .slider-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500; font-size: 0.875rem; }
+        .slider-value { font-family: var(--font-mono); font-weight: 600; color: var(--accent-color); }
+        .slider-group input[type="range"] {
+            width: 100%; height: 6px; -webkit-appearance: none;
+            background: var(--border-color); border-radius: 3px; outline: none;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            background: var(--accent-color); border-radius: 50%; cursor: pointer;
+        }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-light); margin-top: 4px; }
+
+        .advanced-section {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border-color);
+        }
+        .advanced-section.visible { display: block; }
+        .advanced-toggle {
+            background: none; border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 0.9rem; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 12px; padding: 8px 0;
+        }
+        .advanced-toggle:hover { text-decoration: underline; }
+        .toggle-icon { font-family: var(--font-mono); font-weight: 600; }
+
+        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s; }
+        .btn-primary { background-color: var(--accent-color); color: white; width: 100%; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* =================================================================
+           6. TABS
+           ================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px; cursor: pointer;
+            background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* =================================================================
+           7. RESULTS SECTION
+           ================================================================= */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .result-item {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .result-item:hover { border-color: var(--border-color); }
+        .result-item.expanded { border-color: var(--accent-color); background: var(--primary-light); }
+        .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
+        .result-item.static { cursor: default; }
+        .result-item.static:hover { border-color: transparent; }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
+        .result-item .icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.4; }
+
+        .result-note { font-size: 0.85rem; color: var(--text-light); margin-bottom: 14px; }
+
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-close:hover { color: var(--text-color); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); font-size: 0.9rem; }
+        .derivation-step .equation { background: white; padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+        .derivation-step .inputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .derivation-step .input-tag { background: white; border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); }
+        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
+
+        .anchor-section { margin-top: 20px; }
+        .anchor-list { display: grid; gap: 12px; }
+        .anchor-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+        .anchor-label { font-weight: 600; }
+        .anchor-meta { font-size: 0.85rem; color: var(--text-light); }
+        .anchor-ratio { font-family: var(--font-mono); font-size: 0.85rem; color: var(--secondary-color); }
+
+        .custom-summary { margin-top: 18px; padding: 16px; border-radius: var(--border-radius); background: var(--primary-light); border: 1px dashed var(--border-color); }
+
+        /* =================================================================
+           8. VISUALIZATION
+           ================================================================= */
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; }
+        .chart-explanation {
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+            line-height: 1.5;
+            padding: 10px;
+            background: var(--primary-light);
+            border-radius: 6px;
+        }
+        .chart-explanation strong { color: var(--text-color); }
+
+        .ladder-container { position: relative; margin-top: 12px; }
+        .ladder-scale {
+            position: relative;
+            height: 280px;
+            border-left: 2px solid var(--border-color);
+            margin-left: 16px;
+        }
+        .ladder-marker {
+            position: absolute;
+            left: -2px;
+            transform: translate(-8px, -50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ladder-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            border: 2px solid var(--bg-card);
+            box-shadow: var(--shadow);
+        }
+        .ladder-marker.selected .ladder-dot { background: var(--success-color); }
+        .ladder-label { font-size: 0.85rem; color: var(--text-color); }
+        .ladder-label small { color: var(--text-light); margin-left: 6px; font-size: 0.75rem; }
+        .ladder-labels { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-light); margin-top: 10px; }
+
+        /* =================================================================
+           9. BACKGROUND TAB
+           ================================================================= */
+        .toc-card {
+            background: var(--primary-light);
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        .toc-card strong { color: var(--primary-color); }
+        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
+        .toc-card a { color: var(--accent-color); }
+
+        .bg-section { margin-bottom: 32px; }
+        .bg-section h3 {
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+        .equation-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin: 16px 0;
+        }
+        .equation-card strong {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+        }
+        .equation-card .equation-expression {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.05rem;
+        }
+        .equation-card ul {
+            list-style: none;
+            padding-left: 0;
+            display: grid;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .math-inline { font-weight: 600; color: var(--secondary-color); }
+
+        /* =================================================================
+           10. FOOTER
+           ================================================================= */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* =================================================================
+           11. RESPONSIVE
+           ================================================================= */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .input-row { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 600px) {
+            .results-grid { grid-template-columns: 1fr; }
+            .anchor-item { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Orders of Magnitude Atlas</h1>
+        <p class="tool-description" id="tool-description">
+            Pick a domain to see a curated list of anchors and a log-scale ladder chart.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>Purpose</h3>
+                <p>This tool builds intuition for how big (or small) engineering quantities are by mapping orders of magnitude to everyday anchors.</p>
+                <ul>
+                    <li>Select a domain to load the full anchor list for that quantity.</li>
+                    <li>Review the summary span and ratio for the displayed anchors.</li>
+                    <li>Switch to the visualization tab for a log-scale ladder chart.</li>
+                </ul>
+                <p>See <code>README.md</code> in this folder for assumptions and sources.</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="input-group">
+                        <label for="domain">Domain</label>
+                        <select id="domain" name="domain">
+                            <option value="length">Length (m)</option>
+                            <option value="mass">Mass (kg)</option>
+                            <option value="time">Time (s)</option>
+                            <option value="energy">Energy (J)</option>
+                            <option value="power">Power (W)</option>
+                            <option value="pressure">Pressure (Pa)</option>
+                            <option value="data">Data size (B)</option>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Loading..." data-tooltip-for="domain">?</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Refresh List</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'visualization')">Visualization</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Domain Summary</h3>
+                    <p id="results-placeholder">Select a domain to load its anchors.</p>
+                    <div id="results-grid" class="results-grid" style="display: none;">
+                        <div class="result-item highlight" data-key="span_exponent" onclick="toggleDerivation('span_exponent')">
+                            <div class="label">Anchor Span</div>
+                            <div class="value" id="val-span_exponent">-</div>
+                            <span class="icon">v</span>
+                        </div>
+                        <div class="result-item" data-key="span_ratio" onclick="toggleDerivation('span_ratio')">
+                            <div class="label">Span Ratio</div>
+                            <div class="value" id="val-span_ratio">-</div>
+                            <span class="icon">v</span>
+                        </div>
+                        <div class="result-item static">
+                            <div class="label">Anchor Count</div>
+                            <div class="value" id="val-anchor_count">-</div>
+                        </div>
+                    </div>
+                    <p class="result-note" id="range-note" style="display: none;"></p>
+
+                    <div class="derivation-panel" id="deriv-span_exponent">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Anchor Span Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('span_exponent')">x</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">Equation (1)</div>
+                            <div class="equation">$$ \\Delta n = n_{\\text{max}} - n_{\\text{min}} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">Substituted Values</div>
+                            <div class="equation" id="subst-span_exponent"></div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-span_ratio">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Span Ratio Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('span_ratio')">x</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">Equation (2)</div>
+                            <div class="equation">$$ R = 10^{\\Delta n} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">Substituted Values</div>
+                            <div class="equation" id="subst-span_ratio"></div>
+                        </div>
+                    </div>
+
+                    <div class="anchor-section">
+                        <h4>Anchor List</h4>
+                        <div class="anchor-list" id="anchor-list"></div>
+                    </div>
+                </div>
+
+                <div id="visualization" class="tab-content">
+                    <h3>Magnitude Ladder</h3>
+                    <div class="chart-container">
+                        <h4>Log Scale Ladder</h4>
+                        <div class="ladder-container">
+                            <div class="ladder-scale" id="ladder-scale"></div>
+                            <div class="ladder-labels">
+                                <span id="ladder-max">10^?</span>
+                                <span id="ladder-min">10^?</span>
+                            </div>
+                        </div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> Anchor points positioned on the log10 scale for the selected domain.
+                            <strong>Key insight:</strong> Equal vertical spacing represents a tenfold change, making large ranges intuitive.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Background & Principles</h3>
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-overview">Orders of magnitude</a></li>
+                            <li><a href="#bg-equations">Equations and variables</a></li>
+                            <li><a href="#bg-prefixes">SI prefixes and scaling</a></li>
+                            <li><a href="#bg-anchors">Anchor selection</a></li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-section" id="bg-overview">
+                        <h3>1. Orders of Magnitude</h3>
+                        <p id="background-overview">
+                            Orders of magnitude measure scale using base-10 exponents. Each integer step in exponent represents a 10x change.
+                        </p>
+                    </div>
+
+                    <div class="bg-section" id="bg-equations">
+                        <h3>2. Equations and Variables</h3>
+                        <div class="equation-card">
+                            <strong>Equation (1)</strong>
+                            <span class="equation-expression">$$ V = 10^{n} \\times U $$</span>
+                            <ul>
+                                <li><span class="math-inline">V</span>: magnitude value in base units</li>
+                                <li><span class="math-inline">n</span>: order of magnitude exponent (log10)</li>
+                                <li><span class="math-inline">U</span>: base unit of the domain</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (2)</strong>
+                            <span class="equation-expression">$$ V_{\\text{scaled}} = \\frac{V}{10^{k}} $$</span>
+                            <ul>
+                                <li><span class="math-inline">V_{scaled}</span>: value expressed with SI prefix</li>
+                                <li><span class="math-inline">k</span>: prefix exponent (multiple of 3)</li>
+                                <li><span class="math-inline">V</span>: base value</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (3)</strong>
+                            <span class="equation-expression">$$ R = \\frac{V}{V_{\\text{ref}}} $$</span>
+                            <ul>
+                                <li><span class="math-inline">R</span>: ratio to the nearest anchor</li>
+                                <li><span class="math-inline">V</span>: selected magnitude</li>
+                                <li><span class="math-inline">V_{ref}</span>: anchor magnitude</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (4)</strong>
+                            <span class="equation-expression">$$ n = \\log_{10}(V) $$</span>
+                            <ul>
+                                <li><span class="math-inline">n</span>: order of magnitude exponent</li>
+                                <li><span class="math-inline">V</span>: value in base units</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="bg-section" id="bg-prefixes">
+                        <h3>3. SI Prefixes and Scaling</h3>
+                        <p>Scaled values are reported using SI prefixes in steps of 10^3 (k, M, G, etc.) for readability.</p>
+                        <p>Mass is formatted using grams for prefixes to avoid "millikilogram" style outputs.</p>
+                    </div>
+
+                    <div class="bg-section" id="bg-anchors">
+                        <h3>4. Anchor Selection</h3>
+                        <p>Anchors are curated reference values from everyday engineering intuition (objects, processes, and global-scale quantities). The list is ordered by log10 magnitude to show the full span of the domain.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        let toolDocumentation = {};
+        let pyUtils, pyToolModule;
+        let openDerivation = null;
+        let pyReady = false;
+
+        const TOOL_MODULE_NAME = 'orders_of_magnitude';
+        const TOOL_FUNCTION_NAME = 'catalog_orders_of_magnitude';
+        const PARAM_ORDER = ['domain'];
+
+        const domainInput = document.getElementById('domain');
+
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        }
+
+        function formatExponent(value) {
+            if (!isFinite(value)) return '0';
+            const rounded = Math.round(value);
+            if (Math.abs(value - rounded) < 0.01) {
+                return rounded.toString();
+            }
+            return value.toFixed(2);
+        }
+
+        function formatNumber(value, sig = 3) {
+            if (!isFinite(value)) return 'N/A';
+            const abs = Math.abs(value);
+            if (abs === 0) return '0';
+            if (abs >= 1e4 || abs < 1e-3) {
+                return value.toExponential(sig - 1);
+            }
+            return Number(value.toPrecision(sig)).toString();
+        }
+
+
+        function toggleDerivation(key) {
+            const panel = document.getElementById('deriv-' + key);
+            const item = document.querySelector(`.result-item[data-key="${key}"]`);
+            if (!panel || !item) return;
+
+            if (openDerivation && openDerivation !== key) {
+                document.getElementById('deriv-' + openDerivation).classList.remove('visible');
+                document.querySelector(`.result-item[data-key="${openDerivation}"]`)?.classList.remove('expanded');
+            }
+
+            if (panel.classList.contains('visible')) {
+                panel.classList.remove('visible');
+                item.classList.remove('expanded');
+                openDerivation = null;
+            } else {
+                panel.classList.add('visible');
+                item.classList.add('expanded');
+                openDerivation = key;
+                typesetMath();
+            }
+        }
+
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                const pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.loadPackage('micropip');
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                loadingText.textContent = 'Parsing documentation...';
+                const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+
+                if (docMap.has('error')) {
+                    const placeholder = document.getElementById('results-placeholder');
+                    placeholder.textContent = docMap.get('error');
+                    placeholder.style.color = 'var(--danger-color)';
+                    document.getElementById('loading-overlay').classList.add('hidden');
+                    return;
+                }
+
+                toolDocumentation = Object.fromEntries(docMap);
+                if (toolDocumentation.parameters) {
+                    toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+                }
+                if (toolDocumentation.returns) {
+                    toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+                }
+
+                populateTooltips();
+                if (toolDocumentation.description) {
+                    document.getElementById('tool-description').textContent = toolDocumentation.description.split('\n')[0];
+                    document.getElementById('background-overview').textContent = toolDocumentation.description;
+                }
+
+                document.getElementById('loading-overlay').classList.add('hidden');
+                pyReady = true;
+                calculate();
+                typesetMath();
+            } catch (error) {
+                loadingText.textContent = 'Error loading: ' + error.message;
+                console.error(error);
+            }
+        }
+
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+            PARAM_ORDER.forEach(paramId => {
+                const tooltip = document.querySelector(`[data-tooltip-for="${paramId}"]`);
+                if (tooltip && toolDocumentation.parameters[paramId]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramId]);
+                }
+            });
+        }
+
+        async function calculate() {
+            if (!pyReady) return;
+
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Refreshing...';
+            btn.disabled = true;
+
+            try {
+                const domain = domainInput.value;
+                const resultProxy = pyToolModule[TOOL_FUNCTION_NAME](domain);
+
+                const results = {};
+                for (const key of resultProxy.keys()) {
+                    const value = resultProxy.get(key);
+                    results[key] = value && typeof value.toJs === 'function' ? value.toJs() : value;
+                }
+                resultProxy.destroy();
+
+                displayResults(results);
+            } catch (error) {
+                console.error('Calculation error:', error);
+                const placeholder = document.getElementById('results-placeholder');
+                placeholder.textContent = 'Error: ' + error.message;
+                placeholder.style.color = 'var(--danger-color)';
+                placeholder.style.display = 'block';
+                document.getElementById('results-grid').style.display = 'none';
+                document.getElementById('range-note').style.display = 'none';
+                document.getElementById('anchor-list').innerHTML = '';
+                document.getElementById('ladder-scale').innerHTML = '';
+            }
+
+            btn.textContent = 'Refresh List';
+            btn.disabled = false;
+        }
+
+        function displayResults(results) {
+            const placeholder = document.getElementById('results-placeholder');
+            placeholder.style.display = 'none';
+            placeholder.style.color = 'var(--text-light)';
+            document.getElementById('results-grid').style.display = 'grid';
+
+            document.getElementById('val-span_exponent').innerHTML =
+                `${formatNumber(results.anchor_span_exponent, 4)} <span class="unit">decades</span>`;
+            document.getElementById('val-span_ratio').textContent =
+                formatNumber(results.anchor_span_ratio, 4) + 'x';
+            document.getElementById('val-anchor_count').textContent = Math.round(results.anchor_count);
+
+            const rangeNote = document.getElementById('range-note');
+            rangeNote.textContent =
+                `${results.domain_label} anchors span from ${results.min_anchor_label} to ${results.max_anchor_label}. Base unit: ${results.base_unit}.`;
+            rangeNote.style.display = 'block';
+
+            if (results.subst_anchor_span_exponent) {
+                document.getElementById('subst-span_exponent').innerHTML = '$$' + results.subst_anchor_span_exponent + '$$';
+            }
+            if (results.subst_anchor_span_ratio) {
+                document.getElementById('subst-span_ratio').innerHTML = '$$' + results.subst_anchor_span_ratio + '$$';
+            }
+
+            renderAnchorList(results);
+            renderLadder(results);
+
+            typesetMath();
+        }
+
+        function renderAnchorList(results) {
+            const list = document.getElementById('anchor-list');
+            list.innerHTML = '';
+
+            results.anchors.forEach(anchor => {
+                const item = document.createElement('div');
+                item.className = 'anchor-item';
+                item.innerHTML = `
+                    <div>
+                        <div class="anchor-label">${anchor.label}</div>
+                        <div class="anchor-meta">10^${formatExponent(anchor.exponent)} ${results.base_unit} | ${formatNumber(anchor.value)} ${results.base_unit}</div>
+                    </div>
+                    <div class="anchor-ratio">${formatNumber(anchor.scaled_value)} ${anchor.scaled_unit}</div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function renderLadder(results) {
+            const ladder = document.getElementById('ladder-scale');
+            ladder.innerHTML = '';
+            const minExp = results.domain_min_exponent;
+            const maxExp = results.domain_max_exponent;
+            const range = maxExp - minExp;
+
+            function position(exp) {
+                return ((maxExp - exp) / range) * 100;
+            }
+
+            results.anchors.forEach(anchor => {
+                const marker = document.createElement('div');
+                marker.className = 'ladder-marker';
+                marker.style.top = `${position(anchor.exponent)}%`;
+                marker.innerHTML = `
+                    <span class="ladder-dot"></span>
+                    <span class="ladder-label">${anchor.label}<small>10^${formatExponent(anchor.exponent)}</small></span>
+                `;
+                ladder.appendChild(marker);
+            });
+
+            document.getElementById('ladder-min').textContent = '10^' + formatExponent(minExp);
+            document.getElementById('ladder-max').textContent = '10^' + formatExponent(maxExp);
+        }
+
+        document.getElementById('calc-form').addEventListener('submit', event => {
+            event.preventDefault();
+            calculate();
+        });
+
+        domainInput.addEventListener('change', calculate);
+
+        main();
+    </script>
+</body>
+</html>
