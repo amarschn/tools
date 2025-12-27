@@ -558,6 +558,31 @@ Hide infrequently-used parameters behind a toggle to keep the default view simpl
 </button>
 ```
 
+### Auto-Calculate: When to Use (and When Not To)
+
+Auto-calculate updates results in real-time as inputs change. While convenient for simple tools, it adds complexity and can degrade the user experience for complex calculations.
+
+**Include auto-calculate ONLY when ALL of these are true:**
+
+| Criterion | Threshold |
+|-----------|-----------|
+| Total inputs | ≤ 5 inputs |
+| Calculation time | < 100ms |
+| Complexity | No database lookups, iterations, or chart rendering |
+| User expectation | Instant feedback expected (e.g., unit converter) |
+
+**Do NOT include auto-calculate when:**
+
+- The tool has safety factor analysis or complex validation
+- Calculations take noticeable time (> 200ms)
+- Charts need to re-render with each change
+- Users need to review inputs before seeing results
+- The tool uses the advanced template
+
+**When in doubt, omit auto-calculate.** Users expect a Calculate button. An explicit action also gives users a moment to review their inputs before computation.
+
+The `example_tool` (basic template) includes auto-calculate as an option. The `example_tool_advanced` template does not include it at all—if you're building something complex enough to need the advanced template, you shouldn't have auto-calculate.
+
 ### Dynamic Cascading Dropdowns
 
 When selections depend on each other (e.g., fastener standard → size → grade), update options dynamically.
