@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Example Tool - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        /* Dark theme */
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+        }
+        /* System theme - follows OS preference */
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* =================================================================
+           2. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            transition: background-color 0.2s ease;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* =================================================================
+           3. LAYOUT & CONTAINERS
+           ================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-brand:hover { text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        main.container { flex-grow: 1; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        /* =================================================================
+           4. PURPOSE/README SECTION
+           ================================================================= */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .purpose-content code { background-color: var(--primary-light); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
+
+        /* =================================================================
+           5. INPUT SECTION
+           ================================================================= */
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            transition: border-color 0.15s ease;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* Checkbox styling */
+        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-bottom: 1.1rem; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-group label { margin-bottom: 0; cursor: pointer; }
+
+        /* Tooltip */
+        .tooltip-trigger {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px; font-weight: bold;
+            cursor: help;
+            position: absolute; right: 10px; top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--text-color); color: white;
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5;
+            white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* Slider tooltip override - inline positioning */
+        .tooltip-trigger.slider-tooltip {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        /* Advanced Section Toggle */
+        .advanced-section {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border-color);
+        }
+        .advanced-section.visible { display: block; }
+        .advanced-section h4 { margin-bottom: 12px; color: var(--secondary-color); font-size: 0.9rem; }
+        .advanced-toggle {
+            background: none; border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 0.9rem; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 12px; padding: 8px 0;
+        }
+        .advanced-toggle:hover { text-decoration: underline; }
+        .toggle-icon { font-family: var(--font-mono); font-weight: 600; }
+
+        /* Slider */
+        .slider-group {
+            margin: 0 0 1.5rem 0;
+            padding: 16px;
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+        }
+        .slider-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500; font-size: 0.875rem; }
+        .slider-value { font-family: var(--font-mono); font-weight: 600; color: var(--accent-color); }
+        .slider-group input[type="range"] {
+            width: 100%; height: 6px; -webkit-appearance: none;
+            background: var(--border-color); border-radius: 3px; outline: none;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            background: var(--accent-color); border-radius: 50%; cursor: pointer;
+        }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-light); margin-top: 4px; }
+
+        /* Buttons */
+        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s; }
+        .btn-primary { background-color: var(--accent-color); color: white; width: 100%; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* =================================================================
+           6. TABS
+           ================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px; cursor: pointer;
+            background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* =================================================================
+           7. RESULTS SECTION
+           ================================================================= */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .result-item {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .result-item:hover { border-color: var(--border-color); }
+        .result-item.expanded { border-color: var(--accent-color); background: var(--primary-light); }
+        .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
+        .result-item .icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.4; }
+
+        /* Derivation Panel */
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-close:hover { color: var(--text-color); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); font-size: 0.9rem; }
+        .derivation-step .equation { background: white; padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+        .derivation-step .inputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .derivation-step .input-tag { background: white; border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); }
+        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
+        .derivation-step .result-box.good { background: var(--success-color); }
+        .derivation-step .result-box.warning { background: var(--warning-color); color: var(--text-color); }
+        .derivation-step .result-box.bad { background: var(--danger-color); }
+
+        /* =================================================================
+           8. SAFETY GAUGES
+           ================================================================= */
+        .safety-section { margin-top: 24px; }
+        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
+        .safety-gauge {
+            display: flex; align-items: center; gap: 14px;
+            margin-bottom: 12px; padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+        .gauge-label { min-width: 120px; font-weight: 600; font-size: 0.85rem; }
+        .gauge-bar-container { flex: 1; height: 8px; background: var(--border-color); border-radius: 4px; position: relative; overflow: visible; }
+        .gauge-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .gauge-bar.success { background: var(--success-color); }
+        .gauge-bar.warning { background: var(--warning-color); }
+        .gauge-bar.danger { background: var(--danger-color); }
+        .gauge-value { min-width: 70px; text-align: right; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
+        .gauge-value.success { color: var(--success-color); }
+        .gauge-value.warning { color: var(--warning-color); }
+        .gauge-value.danger { color: var(--danger-color); }
+        .gauge-threshold { position: absolute; width: 2px; height: 16px; background: var(--text-color); top: -4px; }
+
+        /* Gauge Explainer Panels */
+        .gauge-explainer {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        .gauge-explainer.visible { display: block; }
+        .gauge-explainer .explainer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .gauge-explainer p { font-size: 0.9rem; margin-bottom: 10px; }
+        .gauge-explainer .explainer-equation {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+        .gauge-explainer .explainer-values {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .gauge-explainer .value-tag {
+            background: white;
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+        }
+        .gauge-explainer .explainer-guidance {
+            font-size: 0.85rem;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 0;
+        }
+        .gauge-explainer .explainer-guidance.good {
+            background: #d1fae5;
+            color: var(--success-color);
+        }
+        .gauge-explainer .explainer-guidance.marginal {
+            background: #fef3c7;
+            color: var(--warning-color);
+        }
+        .gauge-explainer .explainer-guidance.bad {
+            background: #fef2f2;
+            color: var(--danger-color);
+        }
+
+        /* =================================================================
+           9. STATUS BANNER
+           ================================================================= */
+        .status-banner { padding: 18px 24px; border-radius: var(--border-radius); margin-top: 24px; display: flex; align-items: flex-start; gap: 14px; }
+        .status-banner .icon { font-size: 1.25rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
+        .status-banner.acceptable { background: #ecfdf5; border: 1px solid var(--success-color); }
+        .status-banner.acceptable h4 { color: var(--success-color); }
+        .status-banner.marginal { background: #fffbeb; border: 1px solid var(--warning-color); }
+        .status-banner.marginal h4 { color: var(--warning-color); }
+        .status-banner.unacceptable { background: #fef2f2; border: 1px solid var(--danger-color); }
+        .status-banner.unacceptable h4 { color: var(--danger-color); }
+        .recommendations { margin-top: 8px; padding-left: 20px; }
+        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; color: var(--text-color); }
+
+        /* =================================================================
+           10. CHARTS
+           ================================================================= */
+        .chart-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 18px; margin-bottom: 20px; }
+        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; }
+        .chart-plot { width: 100%; min-height: 320px; }
+        .chart-explanation { margin-top: 12px; font-size: 0.85rem; color: var(--text-light); line-height: 1.5; padding: 10px; background: var(--primary-light); border-radius: 6px; }
+        .chart-explanation strong { color: var(--text-color); }
+        .charts-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+
+        /* =================================================================
+           11. BACKGROUND TAB
+           ================================================================= */
+        .toc-card { background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px; }
+        .toc-card strong { color: var(--primary-color); }
+        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
+        .toc-card a { color: var(--accent-color); }
+
+        .bg-section { margin-bottom: 32px; }
+        .bg-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-bottom: 16px; }
+        .bg-section h4 { margin-top: 20px; color: var(--secondary-color); }
+
+        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin: 16px 0; }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+
+        /* Callout boxes */
+        .callout-info { background: #dbeafe; border-left: 4px solid var(--accent-color); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+        .callout-info strong { color: var(--accent-color); }
+        .callout-warning { background: #fef3c7; border-left: 4px solid var(--warning-color); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+        .callout-warning strong { color: var(--warning-color); }
+        .callout-danger { background: #fef2f2; border-left: 4px solid var(--danger-color); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+        .callout-danger strong { color: var(--danger-color); }
+        .callout-success { background: #d1fae5; border-left: 4px solid var(--success-color); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+        .callout-success strong { color: var(--success-color); }
+
+        /* =================================================================
+           12. SETTINGS PANEL
+           ================================================================= */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close {
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.2s;
+            border-radius: 999px;
+        }
+        .switch .slider-toggle::before {
+            position: absolute;
+            content: '';
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: var(--bg-card);
+            transition: 0.2s;
+            border-radius: 50%;
+            box-shadow: var(--shadow);
+        }
+        .switch input:checked + .slider-toggle { background-color: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(20px); }
+
+        /* Segmented Control */
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        /* =================================================================
+           13. COMPACT DENSITY MODE
+           ================================================================= */
+        body[data-density="compact"] .card { padding: 18px; }
+        body[data-density="compact"] .input-group label { font-size: 0.82rem; margin-bottom: 4px; }
+        body[data-density="compact"] .input-group input,
+        body[data-density="compact"] .input-group select { padding: 9px 12px; font-size: 0.9rem; }
+        body[data-density="compact"] .slider-group { padding: 12px; margin-bottom: 1rem; }
+        body[data-density="compact"] .tool-description { font-size: 0.95rem; }
+        body[data-density="compact"] .tabs { margin-bottom: 18px; }
+        body[data-density="compact"] .result-item { padding: 12px; }
+        body[data-density="compact"] .result-item .value { font-size: 1.1rem; }
+        body[data-density="compact"] .safety-gauge { padding: 10px 14px; margin-bottom: 10px; }
+        body[data-density="compact"] h1 { font-size: 1.9rem; }
+        body[data-density="compact"] h2 { font-size: 1.2rem; padding-bottom: 10px; }
+
+        /* =================================================================
+           14. FOOTER
+           ================================================================= */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* =================================================================
+           15. RESPONSIVE
+           ================================================================= */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .settings-panel { width: 100%; }
+            .settings-button { padding: 8px 12px; font-size: 0.8rem; }
+        }
+        @media (max-width: 600px) {
+            .input-row { grid-template-columns: 1fr; }
+            .results-grid { grid-template-columns: 1fr; }
+            .safety-gauge { flex-direction: column; align-items: flex-start; }
+            .gauge-bar-container { width: 100%; }
+            .tabs { flex-direction: column; }
+            .segmented { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+
+<body data-theme="system" data-density="comfortable">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Auto-calculate</div>
+                        <div class="setting-help">Update results as inputs change.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-auto-calc">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show derivations by default</div>
+                        <div class="setting-help">Auto-expand derivation panels.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-derivations">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show gauge explainers</div>
+                        <div class="setting-help">Auto-expand safety gauge details.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-gauges">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2 dp</button>
+                        <button type="button" data-precision="3">3 dp</button>
+                        <button type="button" data-precision="4">4 dp</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Charts</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Auto-update charts</div>
+                        <div class="setting-help">Refresh charts when inputs change.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-auto-charts" checked>
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Widget Analyzer (Advanced Template)</h1>
+        <p class="tool-description" id="tool-description">
+            Generic analysis tool demonstrating all advanced UI patterns.
+            Replace placeholder equations with your actual domain-specific calculations.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>About This Template</h3>
+                <p>This is the <strong>Advanced Example Tool</strong> template demonstrating all UI patterns for complex engineering tools:</p>
+                <ul>
+                    <li><strong>Loading overlay</strong> during Pyodide initialization</li>
+                    <li><strong>Database-driven dropdowns</strong> for material selection</li>
+                    <li><strong>Advanced inputs toggle</strong> for progressive simplicity</li>
+                    <li><strong>Slider with live value</strong> for intuitive parameter adjustment</li>
+                    <li><strong>Clickable result cards</strong> that expand to show derivations</li>
+                    <li><strong>Safety factor gauges</strong> with color-coded status</li>
+                    <li><strong>Status banner</strong> with recommendations</li>
+                    <li><strong>Interactive charts</strong> with explanations</li>
+                    <li><strong>Comprehensive Background tab</strong> with TOC</li>
+                </ul>
+                <p>Copy this template when building complex tools. See <code>AGENTS.md</code> and <code>DESIGN.md</code> for full documentation.</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <!-- ============== INPUTS ============== -->
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <!-- Core Inputs -->
+                    <div class="input-group">
+                        <label for="material">Material</label>
+                        <select id="material" name="material">
+                            <option value="Standard Alloy">Standard Alloy (S = 250 MPa)</option>
+                            <option value="High-Strength Alloy">High-Strength Alloy (S = 450 MPa)</option>
+                            <option value="Lightweight Alloy">Lightweight Alloy (S = 280 MPa)</option>
+                            <option value="Economy Grade">Economy Grade (S = 180 MPa)</option>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Select material from database. Properties are automatically loaded.">?</span>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="primary_dimension">Primary Dimension (mm)</label>
+                            <input type="number" id="primary_dimension" name="primary_dimension" value="100" step="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="secondary_dimension">Secondary Dimension (mm)</label>
+                            <input type="number" id="secondary_dimension" name="secondary_dimension" value="25" step="0.5">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="load_factor">Load Factor</label>
+                        <input type="number" id="load_factor" name="load_factor" value="1.0" step="0.1" min="0.1">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <!-- Slider for Design Factor -->
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Design Factor <span class="tooltip-trigger slider-tooltip" data-tooltip="Required safety margin for the design. 1.5 = aggressive (well-understood loads), 2.0 = standard (typical applications), 3.0+ = conservative (uncertain loads or critical applications).">?</span></span>
+                            <span class="slider-value" id="design_factor_display">2.0</span>
+                        </div>
+                        <input type="range" id="design_factor" name="design_factor" min="1.5" max="4" step="0.1" value="2.0" oninput="updateSliderDisplay()">
+                        <div class="slider-labels">
+                            <span>1.5 (Aggressive)</span>
+                            <span>4.0 (Conservative)</span>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Section with REAL INPUTS -->
+                    <div class="advanced-section" id="advanced-inputs">
+                        <h4>Environmental Factors</h4>
+
+                        <!-- Slider for Efficiency -->
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Efficiency Factor <span class="tooltip-trigger slider-tooltip" data-tooltip="System efficiency accounting for losses, friction, and non-ideal behavior. 1.0 = theoretical ideal, 0.85 = typical real-world, 0.5 = high-loss system.">?</span></span>
+                                <span class="slider-value" id="efficiency_display">0.85</span>
+                            </div>
+                            <input type="range" id="efficiency" name="efficiency" min="0.5" max="1.0" step="0.01" value="0.85" oninput="updateEfficiencyDisplay()">
+                            <div class="slider-labels">
+                                <span>0.50 (Lossy)</span>
+                                <span>1.00 (Ideal)</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="temperature_offset">Temperature Offset (°C)</label>
+                                <input type="number" id="temperature_offset" name="temperature_offset" value="0" step="5">
+                                <span class="tooltip-trigger" data-tooltip="Temperature deviation from 20°C reference. Positive = hotter, negative = colder. Affects material strength derating.">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="humidity_factor">Humidity Factor</label>
+                                <input type="number" id="humidity_factor" name="humidity_factor" value="1.0" step="0.05" min="0.8" max="1.0">
+                                <span class="tooltip-trigger" data-tooltip="Environmental humidity derating. 1.0 = dry/controlled, 0.9 = moderate humidity, 0.8 = high humidity or wet conditions.">?</span>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 16px;">Analysis Options</h4>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Confidence Level <span class="tooltip-trigger slider-tooltip" data-tooltip="Statistical confidence for uncertainty analysis. 90% = typical engineering, 95% = conservative, 99% = high-reliability applications.">?</span></span>
+                                <span class="slider-value" id="confidence_display">95%</span>
+                            </div>
+                            <input type="range" id="confidence_level" name="confidence_level" min="90" max="99" step="1" value="95" oninput="updateConfidenceDisplay()">
+                            <div class="slider-labels">
+                                <span>90% (Typical)</span>
+                                <span>99% (Conservative)</span>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="cycles">Expected Duty Cycles</label>
+                            <input type="number" id="cycles" name="cycles" value="10000" step="1000" min="1">
+                            <span class="tooltip-trigger" data-tooltip="Expected number of load cycles over service life. Affects fatigue considerations in safety assessment.">?</span>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="include_correction" name="include_correction" checked>
+                            <label for="include_correction">Include empirical correction factors</label>
+                            <span class="tooltip-trigger slider-tooltip" data-tooltip="Apply empirical corrections based on geometry and aspect ratio. Disable for pure theoretical analysis.">?</span>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="conservative_mode" name="conservative_mode">
+                            <label for="conservative_mode">Use conservative assumptions</label>
+                            <span class="tooltip-trigger slider-tooltip" data-tooltip="When enabled, uses lower-bound material properties and worst-case loading assumptions.">?</span>
+                        </div>
+                    </div>
+
+                    <button type="button" class="advanced-toggle" onclick="toggleAdvanced()">
+                        <span class="toggle-icon" id="toggle-icon">+</span> Show advanced options
+                    </button>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" style="margin-top: 16px;">Calculate</button>
+                </form>
+            </section>
+
+            <!-- ============== OUTPUTS ============== -->
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'visualization')">Response Curve</button>
+                    <button class="tab-link" onclick="openTab(event, 'sensitivity')">Sensitivity</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background</button>
+                </div>
+
+                <!-- Results Tab -->
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <p id="results-placeholder" style="color: var(--text-light);">Enter inputs and press Calculate to see results.</p>
+
+                    <div class="results-grid" id="results-grid" style="display: none;">
+                        <div class="result-item highlight" data-key="primary_result" onclick="toggleDerivation('primary_result')">
+                            <div class="label">Primary Result</div>
+                            <div class="value" id="val-primary_result">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="secondary_result" onclick="toggleDerivation('secondary_result')">
+                            <div class="label">Secondary Result</div>
+                            <div class="value" id="val-secondary_result">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="safety_factor_a" onclick="toggleDerivation('safety_factor_a')">
+                            <div class="label">Safety Factor A</div>
+                            <div class="value" id="val-safety_factor_a">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="mass_estimate">
+                            <div class="label">Mass Estimate</div>
+                            <div class="value" id="val-mass_estimate">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Derivation Panels -->
+                    <div class="derivation-panel" id="deriv-primary_result">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Primary Result Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('primary_result')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Primary Result Equation</div>
+                            <div class="equation">$$ R_{primary} = \frac{D_1 \cdot D_2 \cdot \eta}{L_f \times 100} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-primary_result">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-secondary_result">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Secondary Result Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('secondary_result')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Secondary Result Equation</div>
+                            <div class="equation">$$ R_{secondary} = \sqrt{D_1^2 + D_2^2} \cdot \frac{E}{200} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-secondary_result">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-safety_factor_a">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Safety Factor Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('safety_factor_a')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Safety Factor Definition</div>
+                            <div class="equation">$$ SF_A = \frac{S_{eff} \cdot \eta}{\sigma_{simulated}} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-safety_factor_a">Loading...</div>
+                        </div>
+                    </div>
+
+                    <!-- Safety Gauges -->
+                    <div class="safety-section" id="safety-section" style="display: none;">
+                        <h4>Safety Assessment <span style="font-weight: normal; font-size: 0.8rem; color: var(--text-light);">(click for details)</span></h4>
+                        <div class="safety-gauge" onclick="toggleGaugeExplainer('a')" style="cursor: pointer;">
+                            <div class="gauge-label">Mode A Safety</div>
+                            <div class="gauge-bar-container">
+                                <div class="gauge-bar" id="gauge-a-bar"></div>
+                                <div class="gauge-threshold" id="gauge-a-threshold"></div>
+                            </div>
+                            <div class="gauge-value" id="gauge-a-value">--</div>
+                            <span class="icon" style="font-size: 0.7rem; opacity: 0.5;">&#9660;</span>
+                        </div>
+                        <div class="gauge-explainer" id="explainer-a">
+                            <div class="explainer-header">
+                                <strong>Mode A: Primary Failure Check</strong>
+                                <button class="derivation-close" onclick="event.stopPropagation(); toggleGaugeExplainer('a')">&times;</button>
+                            </div>
+                            <p>This safety factor compares the effective material capacity against the simulated demand.</p>
+                            <div class="explainer-equation" id="explainer-a-equation">$$SF_A = \frac{S_{eff} \cdot \eta}{\sigma_{simulated}}$$</div>
+                            <div class="explainer-values">
+                                <span class="value-tag" id="explainer-a-capacity">Capacity: --</span>
+                                <span class="value-tag" id="explainer-a-demand">Demand: --</span>
+                                <span class="value-tag" id="explainer-a-result">SF: --</span>
+                            </div>
+                            <p class="explainer-guidance" id="explainer-a-guidance">Guidance will appear here based on your results.</p>
+                        </div>
+
+                        <div class="safety-gauge" onclick="toggleGaugeExplainer('b')" style="cursor: pointer;">
+                            <div class="gauge-label">Mode B Safety</div>
+                            <div class="gauge-bar-container">
+                                <div class="gauge-bar" id="gauge-b-bar"></div>
+                                <div class="gauge-threshold" id="gauge-b-threshold"></div>
+                            </div>
+                            <div class="gauge-value" id="gauge-b-value">--</div>
+                            <span class="icon" style="font-size: 0.7rem; opacity: 0.5;">&#9660;</span>
+                        </div>
+                        <div class="gauge-explainer" id="explainer-b">
+                            <div class="explainer-header">
+                                <strong>Mode B: Secondary Failure Check</strong>
+                                <button class="derivation-close" onclick="event.stopPropagation(); toggleGaugeExplainer('b')">&times;</button>
+                            </div>
+                            <p>This safety factor represents a secondary failure mode with typically 15% less margin than Mode A.</p>
+                            <div class="explainer-equation">$$SF_B = 0.85 \times SF_A$$</div>
+                            <div class="explainer-values">
+                                <span class="value-tag" id="explainer-b-sfa">SF_A: --</span>
+                                <span class="value-tag" id="explainer-b-result">SF_B: --</span>
+                            </div>
+                            <p class="explainer-guidance" id="explainer-b-guidance">Guidance will appear here based on your results.</p>
+                        </div>
+                    </div>
+
+                    <!-- Status Banner -->
+                    <div class="status-banner" id="status-banner" style="display: none;">
+                        <div class="icon" id="status-icon">&#10003;</div>
+                        <div class="content">
+                            <h4 id="status-title">Design Status</h4>
+                            <p id="status-message">Status message here.</p>
+                            <ul class="recommendations" id="recommendations-list"></ul>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px; display: none;">Export Results</button>
+                </div>
+
+                <!-- Visualization Tab -->
+                <div id="visualization" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Response Curve</h4>
+                        <div id="response-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> A placeholder damped response curve based on input parameters.
+                            <strong>Key insight:</strong> Replace this with your actual visualization (stress distribution, frequency response, etc.).
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sensitivity Tab -->
+                <div id="sensitivity" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Safety Factor vs Primary Dimension</h4>
+                        <div id="sensitivity-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> How safety factor changes with the primary dimension parameter.
+                            <strong>Key insight:</strong> The dashed line shows your required design factor.
+                            Intersection point indicates minimum dimension for that margin.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Background Tab -->
+                <div id="background" class="tab-content">
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-overview">Overview</a></li>
+                            <li><a href="#bg-equations">Key Equations</a></li>
+                            <li><a href="#bg-interpretation">Interpreting Results</a></li>
+                            <li><a href="#bg-limitations">Limitations</a></li>
+                            <li><a href="#bg-references">References</a></li>
+                        </ol>
+                    </div>
+
+                    <div id="bg-overview" class="bg-section">
+                        <h3>1. Overview</h3>
+                        <p>
+                            This tool demonstrates the <strong>advanced template pattern</strong> for complex engineering calculators.
+                            All equations shown are placeholders. Replace them with your actual domain-specific calculations.
+                        </p>
+                        <div class="callout-info">
+                            <strong>Template Purpose:</strong> This template shows how to structure tools with
+                            database lookups, safety factor analysis, derivation panels, and interactive visualizations.
+                        </div>
+                    </div>
+
+                    <div id="bg-equations" class="bg-section">
+                        <h3>2. Key Equations</h3>
+
+                        <div class="equation-card">
+                            <strong>Primary Result (Placeholder)</strong>
+                            <span class="equation-expression">$$ R_{primary} = \frac{D_1 \cdot D_2 \cdot \eta}{L_f \times 100} $$</span>
+                            <ul>
+                                <li>D1: Primary dimension (mm)</li>
+                                <li>D2: Secondary dimension (mm)</li>
+                                <li>eta: Efficiency factor (0-1)</li>
+                                <li>Lf: Load factor (dimensionless)</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Safety Factor (Placeholder)</strong>
+                            <span class="equation-expression">$$ SF_A = \frac{S_{eff} \cdot \eta}{\sigma_{simulated}} $$</span>
+                            <ul>
+                                <li>Used for capacity vs demand assessment</li>
+                                <li>Replace with actual failure mode analysis</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-interpretation" class="bg-section">
+                        <h3>3. Interpreting Results</h3>
+
+                        <h4>Safety Factor Guidelines</h4>
+                        <div class="callout-success">
+                            <strong>SF &ge; Design Factor:</strong> Design is acceptable with appropriate margin.
+                        </div>
+                        <div class="callout-warning">
+                            <strong>1.0 &le; SF &lt; Design Factor:</strong> Design may be marginal.
+                            Review assumptions and consider increasing capacity.
+                        </div>
+                        <div class="callout-danger">
+                            <strong>SF &lt; 1.0:</strong> Design is unacceptable. Failure is predicted.
+                        </div>
+                    </div>
+
+                    <div id="bg-limitations" class="bg-section">
+                        <h3>4. Limitations</h3>
+                        <ul>
+                            <li>All equations are placeholders for demonstration</li>
+                            <li>Replace with actual physics for your domain</li>
+                            <li>Material database is illustrative only</li>
+                            <li>Visualization data is synthetic</li>
+                        </ul>
+                    </div>
+
+                    <div id="bg-references" class="bg-section">
+                        <h3>5. References</h3>
+                        <ul>
+                            <li>AGENTS.md - Full documentation of patterns</li>
+                            <li>DESIGN.md - CSS specifications for components</li>
+                            <li>tools/bolt-torque_claude/ - Production example</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        // =================================================================
+        // 0. GLOBAL STORE & CONFIG
+        // =================================================================
+        let toolDocumentation = {};
+        let pyUtils, pyToolModule;
+        let lastResults = null;
+        let openDerivation = null;
+        let calcDebounce = null;
+
+        const TOOL_MODULE_NAME = 'example_advanced';
+        const TOOL_FUNCTION_NAME = 'analyze_widget';
+        const PARAM_ORDER = ['primary_dimension', 'secondary_dimension', 'load_factor', 'material', 'design_factor', 'efficiency', 'temperature_offset', 'include_correction'];
+        const STORAGE_KEY = 'example-tool-advanced-settings';
+
+        // Default settings
+        const defaultSettings = {
+            autoCalc: false,
+            showDerivations: false,
+            showGauges: false,
+            autoCharts: true,
+            theme: 'system',
+            density: 'comfortable',
+            precision: 3
+        };
+        let settings = { ...defaultSettings };
+
+        // =================================================================
+        // SETTINGS MANAGEMENT
+        // =================================================================
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                settings = { ...defaultSettings };
+                return;
+            }
+            try {
+                settings = { ...defaultSettings, ...JSON.parse(stored) };
+            } catch (e) {
+                settings = { ...defaultSettings };
+            }
+        }
+
+        function applySettings() {
+            // Apply theme and density to body
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+
+            // Update toggle switches
+            document.getElementById('setting-auto-calc').checked = settings.autoCalc;
+            document.getElementById('setting-show-derivations').checked = settings.showDerivations;
+            document.getElementById('setting-show-gauges').checked = settings.showGauges;
+            document.getElementById('setting-auto-charts').checked = settings.autoCharts;
+
+            // Update segmented controls
+            setSegmentedActive('[data-theme]', settings.theme, 'theme');
+            setSegmentedActive('[data-density]', settings.density, 'density');
+            setSegmentedActive('[data-precision]', String(settings.precision), 'precision');
+
+            // Update calc button hint
+            updateCalcHint();
+
+            // Re-render results if we have them (for precision changes)
+            if (lastResults) {
+                displayResults(lastResults, parseFloat(document.getElementById('design_factor').value));
+            }
+        }
+
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(`.settings-panel ${selector}`).forEach(btn => {
+                const isActive = btn.dataset[dataAttr] === value;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        function updateCalcHint() {
+            const btn = document.getElementById('calculate-btn');
+            if (settings.autoCalc && pyToolModule) {
+                btn.textContent = 'Auto-calculating...';
+            } else if (pyToolModule) {
+                btn.textContent = 'Calculate';
+            }
+        }
+
+        function handleSettingChange(key, value) {
+            settings[key] = value;
+            saveSettings();
+            applySettings();
+
+            if (key === 'autoCalc' && value && pyToolModule) {
+                scheduleCalculation();
+            }
+        }
+
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = open ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+            panel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        }
+
+        function bindSettingsControls() {
+            // Toggle switches
+            document.getElementById('setting-auto-calc').addEventListener('change', e => handleSettingChange('autoCalc', e.target.checked));
+            document.getElementById('setting-show-derivations').addEventListener('change', e => handleSettingChange('showDerivations', e.target.checked));
+            document.getElementById('setting-show-gauges').addEventListener('change', e => handleSettingChange('showGauges', e.target.checked));
+            document.getElementById('setting-auto-charts').addEventListener('change', e => handleSettingChange('autoCharts', e.target.checked));
+
+            // Segmented controls
+            document.querySelectorAll('.settings-panel [data-theme]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('theme', btn.dataset.theme));
+            });
+            document.querySelectorAll('.settings-panel [data-density]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('density', btn.dataset.density));
+            });
+            document.querySelectorAll('.settings-panel [data-precision]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('precision', Number(btn.dataset.precision)));
+            });
+
+            // Reset button
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+            });
+
+            // Panel open/close
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+
+            // Escape key to close
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') toggleSettingsPanel(false);
+            });
+        }
+
+        // =================================================================
+        // AUTO-CALCULATE WITH DEBOUNCING
+        // =================================================================
+        function scheduleCalculation() {
+            if (!settings.autoCalc || !pyToolModule) return;
+
+            if (calcDebounce) {
+                window.clearTimeout(calcDebounce);
+            }
+            calcDebounce = window.setTimeout(() => {
+                handleCalculate({ preventDefault: () => {} });
+            }, 350);
+        }
+
+        function bindAutoCalc() {
+            const form = document.getElementById('calc-form');
+            form.querySelectorAll('input, select').forEach(el => {
+                el.addEventListener('input', scheduleCalculation);
+                el.addEventListener('change', scheduleCalculation);
+            });
+        }
+
+        // =================================================================
+        // PRECISION FORMATTING
+        // =================================================================
+        function formatNumber(value, overridePrecision = null) {
+            if (!Number.isFinite(value)) return 'N/A';
+            const precision = overridePrecision ?? settings.precision;
+            return value.toFixed(precision);
+        }
+
+        // =================================================================
+        // 1. TAB INTERFACE
+        // =================================================================
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            typesetMath();
+        }
+
+        function typesetMath() {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        // =================================================================
+        // 2. UI HELPERS
+        // =================================================================
+        function updateSliderDisplay() {
+            const slider = document.getElementById('design_factor');
+            document.getElementById('design_factor_display').textContent = parseFloat(slider.value).toFixed(1);
+        }
+
+        function updateEfficiencyDisplay() {
+            const slider = document.getElementById('efficiency');
+            document.getElementById('efficiency_display').textContent = parseFloat(slider.value).toFixed(2);
+        }
+
+        function updateConfidenceDisplay() {
+            const slider = document.getElementById('confidence_level');
+            document.getElementById('confidence_display').textContent = slider.value + '%';
+        }
+
+        let openExplainer = null;
+
+        function toggleGaugeExplainer(mode) {
+            const explainer = document.getElementById('explainer-' + mode);
+
+            // Close currently open explainer if different
+            if (openExplainer && openExplainer !== mode) {
+                document.getElementById('explainer-' + openExplainer).classList.remove('visible');
+            }
+
+            if (explainer.classList.contains('visible')) {
+                explainer.classList.remove('visible');
+                openExplainer = null;
+            } else {
+                explainer.classList.add('visible');
+                openExplainer = mode;
+                typesetMath();
+            }
+        }
+
+        function toggleAdvanced() {
+            const section = document.getElementById('advanced-inputs');
+            const icon = document.getElementById('toggle-icon');
+            const btn = document.querySelector('.advanced-toggle');
+
+            if (section.classList.contains('visible')) {
+                section.classList.remove('visible');
+                icon.textContent = '+';
+                btn.innerHTML = '<span class="toggle-icon" id="toggle-icon">+</span> Show advanced options';
+            } else {
+                section.classList.add('visible');
+                icon.textContent = '-';
+                btn.innerHTML = '<span class="toggle-icon" id="toggle-icon">-</span> Hide advanced options';
+            }
+        }
+
+        function toggleDerivation(key) {
+            const panel = document.getElementById('deriv-' + key);
+            const item = document.querySelector(`.result-item[data-key="${key}"]`);
+
+            // Close currently open panel if different
+            if (openDerivation && openDerivation !== key) {
+                document.getElementById('deriv-' + openDerivation).classList.remove('visible');
+                document.querySelector(`.result-item[data-key="${openDerivation}"]`)?.classList.remove('expanded');
+            }
+
+            if (panel.classList.contains('visible')) {
+                panel.classList.remove('visible');
+                item?.classList.remove('expanded');
+                openDerivation = null;
+            } else {
+                panel.classList.add('visible');
+                item?.classList.add('expanded');
+                openDerivation = key;
+                typesetMath();
+            }
+        }
+
+        function getGaugeClass(sf, threshold = 1.5) {
+            if (sf >= threshold) return 'success';
+            if (sf >= 1.0) return 'warning';
+            return 'danger';
+        }
+
+        function getGaugeWidth(sf, maxSF = 4.0) {
+            return Math.min(100, (sf / maxSF) * 100);
+        }
+
+        // =================================================================
+        // 3. PYODIDE INITIALIZATION
+        // =================================================================
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+
+            // Load and apply settings immediately
+            loadSettings();
+            applySettings();
+            bindSettingsControls();
+
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                let pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.loadPackage('micropip');
+
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                // Parse documentation
+                loadingText.textContent = 'Parsing documentation...';
+                const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+
+                if (docMap.has('error')) {
+                    console.error('Docstring Error:', docMap.get('error'));
+                } else {
+                    toolDocumentation = Object.fromEntries(docMap);
+                    if (toolDocumentation.parameters) {
+                        toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+                    }
+                    if (toolDocumentation.returns) {
+                        toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+                    }
+                    populateTooltips();
+                }
+
+                // Setup form handler
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+
+                // Bind auto-calculate to inputs
+                bindAutoCalc();
+
+                // Update button state
+                updateCalcHint();
+
+                // Hide loading overlay
+                document.getElementById('loading-overlay').classList.add('hidden');
+
+                // If auto-calc is on, run initial calculation
+                if (settings.autoCalc) {
+                    scheduleCalculation();
+                }
+
+            } catch (error) {
+                loadingText.textContent = 'Error loading: ' + error.message;
+                console.error(error);
+            }
+        }
+        main();
+
+        // =================================================================
+        // 4. POPULATE TOOLTIPS FROM DOCSTRING
+        // =================================================================
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+
+            PARAM_ORDER.forEach(paramId => {
+                const tooltip = document.querySelector(`#${paramId} + .tooltip-trigger, .input-group:has(#${paramId}) .tooltip-trigger`);
+                if (tooltip && toolDocumentation.parameters[paramId]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramId]);
+                }
+            });
+        }
+
+        // =================================================================
+        // 5. CALCULATION HANDLER
+        // =================================================================
+        async function handleCalculate(event) {
+            event.preventDefault();
+
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Calculating...';
+            btn.disabled = true;
+
+            try {
+                // Gather inputs
+                const primary_dimension = parseFloat(document.getElementById('primary_dimension').value);
+                const secondary_dimension = parseFloat(document.getElementById('secondary_dimension').value);
+                const load_factor = parseFloat(document.getElementById('load_factor').value);
+                const material = document.getElementById('material').value;
+                const design_factor = parseFloat(document.getElementById('design_factor').value);
+                const efficiency = parseFloat(document.getElementById('efficiency').value);
+                const temperature_offset = parseFloat(document.getElementById('temperature_offset').value);
+                const include_correction = document.getElementById('include_correction').checked;
+
+                // Call Python function
+                const resultProxy = pyToolModule.analyze_widget(
+                    primary_dimension,
+                    secondary_dimension,
+                    load_factor,
+                    material,
+                    design_factor,
+                    efficiency,
+                    temperature_offset,
+                    include_correction
+                );
+
+                // Convert to JS object
+                lastResults = {};
+                for (let key of resultProxy.keys()) {
+                    let val = resultProxy.get(key);
+                    if (val && typeof val.toJs === 'function') {
+                        lastResults[key] = val.toJs();
+                    } else {
+                        lastResults[key] = val;
+                    }
+                }
+                resultProxy.destroy();
+
+                displayResults(lastResults, design_factor);
+
+            } catch (error) {
+                console.error('Calculation error:', error);
+                document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
+                document.getElementById('results-placeholder').style.color = 'var(--danger-color)';
+            }
+
+            btn.textContent = 'Calculate';
+            btn.disabled = false;
+        }
+
+        // =================================================================
+        // 6. DISPLAY RESULTS
+        // =================================================================
+        function displayResults(results, designFactor) {
+            // Hide placeholder, show results
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-grid').style.display = 'grid';
+            document.getElementById('safety-section').style.display = 'block';
+            document.getElementById('status-banner').style.display = 'flex';
+            document.getElementById('export-btn').style.display = 'inline-block';
+
+            // Update result values using precision setting
+            document.getElementById('val-primary_result').innerHTML = formatNumber(results.primary_result);
+            document.getElementById('val-secondary_result').innerHTML = formatNumber(results.secondary_result);
+            document.getElementById('val-safety_factor_a').innerHTML = formatNumber(results.safety_factor_a, 2);
+            document.getElementById('val-mass_estimate').innerHTML = formatNumber(results.mass_estimate) + '<span class="unit">kg</span>';
+
+            // Handle show derivations setting
+            if (settings.showDerivations && !openDerivation) {
+                toggleDerivation('primary_result');
+            }
+
+            // Handle show gauges setting
+            if (settings.showGauges && !openExplainer) {
+                toggleGaugeExplainer('a');
+            }
+
+            // Update substituted equations
+            if (results.subst_primary_result) {
+                document.getElementById('subst-primary_result').innerHTML = '$$' + results.subst_primary_result + '$$';
+            }
+            if (results.subst_secondary_result) {
+                document.getElementById('subst-secondary_result').innerHTML = '$$' + results.subst_secondary_result + '$$';
+            }
+            if (results.subst_safety_factor_a) {
+                document.getElementById('subst-safety_factor_a').innerHTML = '$$' + results.subst_safety_factor_a + '$$';
+            }
+
+            // Update safety gauges
+            const sfA = results.safety_factor_a;
+            const sfB = results.safety_factor_b;
+            const classA = getGaugeClass(sfA, designFactor);
+            const classB = getGaugeClass(sfB, designFactor);
+
+            document.getElementById('gauge-a-bar').className = 'gauge-bar ' + classA;
+            document.getElementById('gauge-a-bar').style.width = getGaugeWidth(sfA) + '%';
+            document.getElementById('gauge-a-value').className = 'gauge-value ' + classA;
+            document.getElementById('gauge-a-value').textContent = 'SF = ' + sfA.toFixed(2);
+            document.getElementById('gauge-a-threshold').style.left = getGaugeWidth(designFactor) + '%';
+
+            document.getElementById('gauge-b-bar').className = 'gauge-bar ' + classB;
+            document.getElementById('gauge-b-bar').style.width = getGaugeWidth(sfB) + '%';
+            document.getElementById('gauge-b-value').className = 'gauge-value ' + classB;
+            document.getElementById('gauge-b-value').textContent = 'SF = ' + sfB.toFixed(2);
+            document.getElementById('gauge-b-threshold').style.left = getGaugeWidth(designFactor) + '%';
+
+            // Update explainer panels
+            const capacity = results.effective_strength * results.correction_factor;
+            const demand = results.simulated_stress;
+
+            document.getElementById('explainer-a-capacity').textContent = 'Capacity: ' + capacity.toFixed(1) + ' MPa';
+            document.getElementById('explainer-a-demand').textContent = 'Demand: ' + demand.toFixed(1) + ' MPa';
+            document.getElementById('explainer-a-result').textContent = 'SF: ' + sfA.toFixed(2);
+
+            const guidanceA = document.getElementById('explainer-a-guidance');
+            if (sfA >= designFactor) {
+                guidanceA.className = 'explainer-guidance good';
+                guidanceA.textContent = 'Excellent. Safety factor exceeds the design requirement of ' + designFactor.toFixed(1) + '. Design has adequate margin for Mode A failure.';
+            } else if (sfA >= 1.0) {
+                guidanceA.className = 'explainer-guidance marginal';
+                guidanceA.textContent = 'Marginal. Safety factor is below the target of ' + designFactor.toFixed(1) + ' but above 1.0. Consider increasing dimensions or using stronger material.';
+            } else {
+                guidanceA.className = 'explainer-guidance bad';
+                guidanceA.textContent = 'Unacceptable. Safety factor is below 1.0, indicating predicted failure. Immediate design changes required.';
+            }
+
+            document.getElementById('explainer-b-sfa').textContent = 'SF_A: ' + sfA.toFixed(2);
+            document.getElementById('explainer-b-result').textContent = 'SF_B: ' + sfB.toFixed(2);
+
+            const guidanceB = document.getElementById('explainer-b-guidance');
+            if (sfB >= designFactor) {
+                guidanceB.className = 'explainer-guidance good';
+                guidanceB.textContent = 'Good. Secondary failure mode also meets design requirements.';
+            } else if (sfB >= 1.0) {
+                guidanceB.className = 'explainer-guidance marginal';
+                guidanceB.textContent = 'Marginal. Secondary mode has reduced margin. Review Mode B assumptions carefully.';
+            } else {
+                guidanceB.className = 'explainer-guidance bad';
+                guidanceB.textContent = 'Critical. Secondary failure mode is predicted. Address before proceeding.';
+            }
+
+            // Update status banner
+            const banner = document.getElementById('status-banner');
+            banner.className = 'status-banner ' + results.status;
+
+            const statusTitles = {
+                'acceptable': 'Design Acceptable',
+                'marginal': 'Marginal Design',
+                'unacceptable': 'Design Unacceptable'
+            };
+            const statusIcons = {
+                'acceptable': '&#10003;',
+                'marginal': '&#9888;',
+                'unacceptable': '&#10007;'
+            };
+            const statusMessages = {
+                'acceptable': 'All safety factors meet or exceed requirements.',
+                'marginal': 'One or more safety factors are below recommended values.',
+                'unacceptable': 'Design does not meet minimum safety requirements.'
+            };
+
+            document.getElementById('status-icon').innerHTML = statusIcons[results.status];
+            document.getElementById('status-title').textContent = statusTitles[results.status];
+            document.getElementById('status-message').textContent = statusMessages[results.status];
+
+            const recList = document.getElementById('recommendations-list');
+            recList.innerHTML = '';
+            if (results.recommendations && results.recommendations.length > 0) {
+                results.recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.textContent = rec;
+                    recList.appendChild(li);
+                });
+            }
+
+            // Plot response curve
+            plotResponseCurve(results.response_curve);
+
+            // Plot sensitivity
+            plotSensitivity(results.sensitivity_data, designFactor);
+
+            // Typeset math
+            typesetMath();
+        }
+
+        // =================================================================
+        // 7. PLOTTING (Theme-aware)
+        // =================================================================
+        function getChartTheme() {
+            // Check if dark mode is active
+            const computedStyle = getComputedStyle(document.body);
+            const bgColor = computedStyle.getPropertyValue('--bg-card').trim();
+            const textColor = computedStyle.getPropertyValue('--text-color').trim();
+            const gridColor = computedStyle.getPropertyValue('--border-color').trim();
+            const successColor = computedStyle.getPropertyValue('--success-color').trim();
+            const accentColor = computedStyle.getPropertyValue('--accent-color').trim();
+
+            return {
+                bgColor: bgColor || '#ffffff',
+                textColor: textColor || '#111827',
+                gridColor: gridColor || '#e5e7eb',
+                successColor: successColor || '#0f766e',
+                accentColor: accentColor || '#111827'
+            };
+        }
+
+        function plotResponseCurve(data) {
+            if (!data) return;
+
+            const theme = getChartTheme();
+
+            const traces = [
+                {
+                    x: data.x_values,
+                    y: data.y_values,
+                    name: 'Response',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.successColor, width: 2 }
+                }
+            ];
+
+            const layout = {
+                xaxis: { title: 'Time / Position (normalized)', gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Response Amplitude', gridcolor: theme.gridColor, color: theme.textColor },
+                legend: { x: 0.7, y: 0.95, font: { color: theme.textColor } },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('response-plot', traces, layout, { responsive: true });
+        }
+
+        function plotSensitivity(data, designFactor) {
+            if (!data) return;
+
+            const theme = getChartTheme();
+
+            const traces = [
+                {
+                    x: data.param_values,
+                    y: data.output_values,
+                    name: 'Safety Factor',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.accentColor, width: 2 }
+                },
+                {
+                    x: [data.param_values[0], data.param_values[data.param_values.length - 1]],
+                    y: [designFactor, designFactor],
+                    name: 'Design Factor = ' + designFactor,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.successColor, width: 2, dash: 'dash' }
+                }
+            ];
+
+            const layout = {
+                xaxis: { title: 'Primary Dimension (mm)', gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Safety Factor', gridcolor: theme.gridColor, color: theme.textColor },
+                legend: { x: 0.6, y: 0.95, font: { color: theme.textColor } },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('sensitivity-plot', traces, layout, { responsive: true });
+        }
+    </script>
+</body>
+</html>

@@ -1027,6 +1027,7 @@ def analyze_bolted_joint_claude(
     n_bolts: int,
     joint_type: str,
     embedding_surface_roughness: str,
+    preload_percentage: float = 75.0,
 ) -> Dict[str, Any]:
     """
     Perform VDI 2230-style bolted joint analysis for a preloaded connection.
@@ -1198,8 +1199,9 @@ def analyze_bolted_joint_claude(
     load_factor = bolt_stiffness / (bolt_stiffness + joint_stiffness)
 
     # === PRELOAD DETERMINATION ===
-    # Target: 90% of proof load (typical for static joints)
-    target_preload = 0.90 * proof_strength * stress_area
+    # Target: user-specified percentage of proof load (default 75%)
+    proof_load = proof_strength * stress_area
+    target_preload = (preload_percentage / 100.0) * proof_load
 
     # Scatter factor from tightening method
     if tightening_method not in SCATTER_FACTORS:
@@ -1329,6 +1331,7 @@ def analyze_bolted_joint_claude(
         "torque_range_low": torque_range_low,
         "torque_range_high": torque_range_high,
         "target_preload": target_preload,
+        "proof_load": proof_load,
         "minimum_preload": minimum_preload,
         "k_factor": k_factor,
         "k_factor_min": k_min,
@@ -1352,6 +1355,18 @@ def analyze_bolted_joint_claude(
         "bolt_load_max": bolt_load_max,
         "clamp_load_min": clamp_load_min,
         "embedding_loss": embedding_loss,
+
+        # Safety factor intermediate values
+        "yield_capacity": yield_strength * stress_area,
+        "required_clamp": required_clamp,
+        "fatigue_limit": fatigue_limit,
+        "friction_capacity": friction_capacity,
+        "friction_coeff": friction_coeff,
+
+        # Preload calculation intermediates (for F_i,min derivation)
+        "alpha_a": alpha_a,
+        "tightening_method": tightening_method,
+        "min_assembly_preload": min_assembly_preload,
 
         # Stresses
         "mean_stress": mean_stress,

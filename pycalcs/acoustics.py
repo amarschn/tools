@@ -5,12 +5,39 @@ This module contains functions for analyzing whistle acoustics, edge-tone phenom
 and resonator behavior for musical instruments and fluid-structure interactions.
 """
 
-from math import sqrt, pi
-from typing import List, Dict, Any, Union
+from math import log10, pi, sqrt
+from typing import Any, Dict, List, Union
 
 # Physical constants
 GAMMA = 1.4  # Ratio of specific heats for air
 R = 287.0    # Specific gas constant for dry air (J/kg·K)
+
+OCTAVE_BANDS_HZ = [63, 125, 250, 500, 1000, 2000, 4000, 8000]
+OCTAVE_WEIGHTING_A = {
+    63: -26.2,
+    125: -16.1,
+    250: -8.6,
+    500: -3.2,
+    1000: 0.0,
+    2000: 1.2,
+    4000: 1.0,
+    8000: -1.1,
+}
+OCTAVE_WEIGHTING_C = {
+    63: -0.8,
+    125: -0.2,
+    250: 0.0,
+    500: 0.0,
+    1000: 0.0,
+    2000: -0.2,
+    4000: -0.8,
+    8000: -3.0,
+}
+SPREADING_MODELS = {
+    "point": {"k": 20.0, "c": 11.0},
+    "line": {"k": 10.0, "c": 8.0},
+    "plane": {"k": 0.0, "c": 0.0},
+}
 
 
 def calculate_whistle_acoustics(
@@ -157,3 +184,286 @@ def calculate_whistle_acoustics(
         return {'error': f'Invalid input: {str(e)}'}
     except Exception as e:
         return {'error': str(e)}
+
+
+def _parse_level_list(levels: Union[str, List[float], None]) -> List[float]:
+    if levels is None:
+        return []
+    if isinstance(levels, list):
+        return [float(value) for value in levels if value is not None]
+
+    text = str(levels).strip()
+    if not text:
+        return []
+
+    normalized = text.replace(";", ",").replace("\n", ",")
+    values = []
+    for token in normalized.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        values.append(float(token))
+    return values
+
+
+def _logspace(start: float, stop: float, count: int) -> List[float]:
+    if count < 2:
+        raise ValueError("distance sweep requires at least 2 points")
+    ratio = (stop / start) ** (1.0 / (count - 1))
+    return [start * (ratio ** idx) for idx in range(count)]
+
+
+def _linspace(start: float, stop: float, count: int) -> List[float]:
+    if count < 2:
+        raise ValueError("distance sweep requires at least 2 points")
+    step = (stop - start) / (count - 1)
+    return [start + step * idx for idx in range(count)]
+
+
+def _combine_levels(levels_db: List[float]) -> float:
+    if not levels_db:
+        return float("nan")
+    linear_sum = sum(10 ** (level / 10.0) for level in levels_db)
+    return 10.0 * log10(linear_sum)
+
+
+def calculate_sound_levels(
+    conversion_mode: str,
+    source_type: str,
+    known_level_db: float,
+    distance_m: float,
+    directivity_q: float,
+    distance_min_m: float,
+    distance_max_m: float,
+    combine_levels_db: str,
+    band_weighting: str,
+    band_63_db: float,
+    band_125_db: float,
+    band_250_db: float,
+    band_500_db: float,
+    band_1000_db: float,
+    band_2000_db: float,
+    band_4000_db: float,
+    band_8000_db: float,
+) -> Dict[str, Any]:
+    """
+    Converts between sound power and pressure levels, combines sources, and summarizes octave-band spectra.
+
+    This tool applies simplified free-field spreading models for point, line, and plane sources
+    while also supporting logarithmic level addition for incoherent sources and octave-band
+    summaries with optional A/C weighting. Equations align with ISO 9613 for divergence
+    guidance and IEC 61672 weighting tables (octave-band approximations).
+
+    ---Parameters---
+    conversion_mode : str
+        Conversion direction: "swl_to_spl" for source sound power to receiver SPL or
+        "spl_to_swl" for inferring SWL from a measured SPL at distance_m.
+    source_type : str
+        Source geometry model: "point", "line", or "plane" for spherical, cylindrical,
+        or planar spreading assumptions.
+    known_level_db : float
+        The input level in dB. Interpreted as SWL when conversion_mode is "swl_to_spl"
+        and as SPL when conversion_mode is "spl_to_swl".
+    distance_m : float
+        Source-to-receiver distance in meters for the primary conversion.
+    directivity_q : float
+        Directivity factor Q (dimensionless). Use 1 for free field, 2 for hemisphere,
+        4 for wall-floor corner, and 8 for trihedral corner.
+    distance_min_m : float
+        Minimum distance for the SPL sweep chart (m). Must be positive.
+    distance_max_m : float
+        Maximum distance for the SPL sweep chart (m). Must exceed distance_min_m.
+    combine_levels_db : str
+        Comma-separated list of source levels in dB to combine (e.g., "72, 76, 80").
+        Leave blank to skip the combination result.
+    band_weighting : str
+        Octave-band weighting selection: "Z" (flat), "A", or "C".
+    band_63_db : float
+        Octave-band SPL at 63 Hz (dB).
+    band_125_db : float
+        Octave-band SPL at 125 Hz (dB).
+    band_250_db : float
+        Octave-band SPL at 250 Hz (dB).
+    band_500_db : float
+        Octave-band SPL at 500 Hz (dB).
+    band_1000_db : float
+        Octave-band SPL at 1000 Hz (dB).
+    band_2000_db : float
+        Octave-band SPL at 2000 Hz (dB).
+    band_4000_db : float
+        Octave-band SPL at 4000 Hz (dB).
+    band_8000_db : float
+        Octave-band SPL at 8000 Hz (dB).
+
+    ---Returns---
+    spl_db : float
+        Sound pressure level at distance_m in dB re 20 microPascal.
+    swl_db : float
+        Sound power level in dB re 1 picowatt.
+    divergence_loss_db : float
+        Geometric spreading loss A_div based on source_type and distance_m (dB).
+    directivity_gain_db : float
+        Directivity gain G_dir applied from Q (dB).
+    combined_level_db : float
+        Logarithmically combined level from combine_levels_db (dB). NaN if no inputs.
+    combine_count : int
+        Count of valid source levels used in the combination.
+    octave_overall_db : float
+        Overall (Z-weighted) level from the octave-band inputs (dB).
+    octave_weighted_db : float
+        Overall level after applying the selected octave-band weighting (dB).
+    octave_weighting_label : str
+        Weighting label applied to octave_weighted_db ("Z", "A", or "C").
+    distance_sweep_m : list
+        Distances used for the SPL sweep chart (m).
+    spl_sweep_db : list
+        SPL values corresponding to distance_sweep_m (dB).
+    octave_bands_hz : list
+        Center frequencies for the octave-band data (Hz).
+    octave_levels_db : list
+        Octave-band levels for the Z-weighted spectrum (dB).
+    octave_weighted_levels_db : list
+        Octave-band levels after applying the selected weighting (dB).
+    subst_spl_db : str
+        Substituted SPL equation for display.
+    subst_swl_db : str
+        Substituted SWL equation for display.
+    subst_divergence_loss_db : str
+        Substituted divergence loss equation for display.
+    subst_directivity_gain_db : str
+        Substituted directivity gain equation for display.
+    subst_combined_level_db : str
+        Substituted level-combination equation for display.
+    subst_octave_overall_db : str
+        Substituted octave-band overall equation for display.
+    subst_octave_weighted_db : str
+        Substituted weighted octave-band equation for display.
+
+    ---LaTeX---
+    L_{p} = L_{w} - A_{div} + G_{dir}
+    A_{div} = k \\log_{10}(r) + C
+    G_{dir} = 10 \\log_{10}(Q)
+    L_{tot} = 10 \\log_{10}(\\sum_{i=1}^{N} 10^{L_{i}/10})
+    L_{i,w} = L_{i} + W_{i}
+    """
+    if conversion_mode not in {"swl_to_spl", "spl_to_swl"}:
+        raise ValueError("conversion_mode must be 'swl_to_spl' or 'spl_to_swl'")
+    if source_type not in SPREADING_MODELS:
+        raise ValueError("source_type must be 'point', 'line', or 'plane'")
+    if distance_m <= 0:
+        raise ValueError("distance_m must be positive")
+    if distance_min_m <= 0 or distance_max_m <= 0:
+        raise ValueError("distance_min_m and distance_max_m must be positive")
+    if distance_max_m <= distance_min_m:
+        raise ValueError("distance_max_m must exceed distance_min_m")
+    if directivity_q <= 0:
+        raise ValueError("directivity_q must be positive")
+    if band_weighting not in {"Z", "A", "C"}:
+        raise ValueError("band_weighting must be 'Z', 'A', or 'C'")
+
+    model = SPREADING_MODELS[source_type]
+    k = model["k"]
+    c = model["c"]
+    divergence_loss_db = k * log10(distance_m) + c
+    directivity_gain_db = 10.0 * log10(directivity_q)
+
+    if conversion_mode == "swl_to_spl":
+        swl_db = float(known_level_db)
+        spl_db = swl_db - divergence_loss_db + directivity_gain_db
+    else:
+        spl_db = float(known_level_db)
+        swl_db = spl_db + divergence_loss_db - directivity_gain_db
+
+    sweep_points = 45
+    if source_type == "point":
+        distance_sweep_m = _logspace(distance_min_m, distance_max_m, sweep_points)
+    else:
+        distance_sweep_m = _linspace(distance_min_m, distance_max_m, sweep_points)
+
+    spl_sweep_db = [
+        swl_db - (k * log10(dist) + c) + directivity_gain_db
+        for dist in distance_sweep_m
+    ]
+
+    combine_levels = _parse_level_list(combine_levels_db)
+    combined_level_db = _combine_levels(combine_levels)
+
+    octave_levels_db = [
+        float(band_63_db),
+        float(band_125_db),
+        float(band_250_db),
+        float(band_500_db),
+        float(band_1000_db),
+        float(band_2000_db),
+        float(band_4000_db),
+        float(band_8000_db),
+    ]
+    octave_overall_db = _combine_levels(octave_levels_db)
+
+    weighting_map = OCTAVE_WEIGHTING_A if band_weighting == "A" else OCTAVE_WEIGHTING_C
+    octave_weighted_levels_db = []
+    for band, level in zip(OCTAVE_BANDS_HZ, octave_levels_db):
+        if band_weighting == "Z":
+            octave_weighted_levels_db.append(level)
+        else:
+            octave_weighted_levels_db.append(level + weighting_map[band])
+
+    octave_weighted_db = _combine_levels(octave_weighted_levels_db)
+
+    subst_divergence_loss_db = (
+        f"A_{{div}} = {k:.1f} \\log_{{10}}({distance_m:.3g}) + {c:.1f}"
+        f" = {divergence_loss_db:.2f}"
+    )
+    subst_directivity_gain_db = (
+        f"G_{{dir}} = 10 \\log_{{10}}({directivity_q:.3g})"
+        f" = {directivity_gain_db:.2f}"
+    )
+    subst_spl_db = (
+        f"L_{{p}} = {swl_db:.2f} - {divergence_loss_db:.2f} + {directivity_gain_db:.2f}"
+        f" = {spl_db:.2f}"
+    )
+    subst_swl_db = (
+        f"L_{{w}} = {spl_db:.2f} + {divergence_loss_db:.2f} - {directivity_gain_db:.2f}"
+        f" = {swl_db:.2f}"
+    )
+    subst_combined_level_db = ""
+    if combine_levels:
+        sum_terms = " + ".join([f"10^{{{level:.1f}/10}}" for level in combine_levels])
+        subst_combined_level_db = (
+            f"L_{{tot}} = 10 \\log_{{10}}({sum_terms}) = {combined_level_db:.2f}"
+        )
+
+    octave_sum_terms = " + ".join([f"10^{{{level:.1f}/10}}" for level in octave_levels_db])
+    subst_octave_overall_db = (
+        f"L_{{tot}} = 10 \\log_{{10}}({octave_sum_terms}) = {octave_overall_db:.2f}"
+    )
+    weighted_terms = " + ".join(
+        [f"10^{{{level:.1f}/10}}" for level in octave_weighted_levels_db]
+    )
+    subst_octave_weighted_db = (
+        f"L_{{tot}} = 10 \\log_{{10}}({weighted_terms}) = {octave_weighted_db:.2f}"
+    )
+
+    return {
+        "spl_db": round(spl_db, 2),
+        "swl_db": round(swl_db, 2),
+        "divergence_loss_db": round(divergence_loss_db, 2),
+        "directivity_gain_db": round(directivity_gain_db, 2),
+        "combined_level_db": round(combined_level_db, 2) if combine_levels else float("nan"),
+        "combine_count": len(combine_levels),
+        "octave_overall_db": round(octave_overall_db, 2),
+        "octave_weighted_db": round(octave_weighted_db, 2),
+        "octave_weighting_label": band_weighting,
+        "distance_sweep_m": distance_sweep_m,
+        "spl_sweep_db": spl_sweep_db,
+        "octave_bands_hz": OCTAVE_BANDS_HZ,
+        "octave_levels_db": octave_levels_db,
+        "octave_weighted_levels_db": octave_weighted_levels_db,
+        "subst_spl_db": subst_spl_db,
+        "subst_swl_db": subst_swl_db,
+        "subst_divergence_loss_db": subst_divergence_loss_db,
+        "subst_directivity_gain_db": subst_directivity_gain_db,
+        "subst_combined_level_db": subst_combined_level_db,
+        "subst_octave_overall_db": subst_octave_overall_db,
+        "subst_octave_weighted_db": subst_octave_weighted_db,
+    }

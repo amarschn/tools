@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example Tool - Settings Panel</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #111827;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #1f2937;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #111827;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #1f2937;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            }
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
+        h2 { font-size: 1.35rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
+        .nav-brand:hover { text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.05fr); gap: 22px; align-items: start; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 22px; }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.05rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 0.75rem; }
+        .input-tabs { display: flex; gap: 6px; margin-bottom: 1rem; flex-wrap: wrap; }
+        .input-tab {
+            flex: 1 1 auto;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-light);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+        }
+        .input-tab.active { background: var(--bg-card); color: var(--text-color); border-color: var(--text-color); }
+        .input-section { display: none; animation: fadeIn 0.3s ease; }
+        .input-section.active { display: block; }
+        .input-group { margin-bottom: 1rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            padding-right: 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
+        .input-group select {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: none;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+        .input-note { font-size: 0.85rem; color: var(--text-light); margin-top: -0.4rem; margin-bottom: 0.6rem; }
+
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 38px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 240px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--text-color); color: var(--bg-card); width: 100%; font-size: 1rem; padding: 12px; }
+        .btn-primary:hover { background-color: var(--accent-color); }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+        .calc-hint { font-size: 0.85rem; color: var(--text-light); text-align: center; margin-top: 0.6rem; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #results-display { background-color: var(--primary-light); border-radius: 6px; padding: 16px; margin-bottom: 1.5rem; }
+        #plot-container { width: 100%; min-height: 300px; background-color: var(--primary-light); border: 1px dashed var(--border-color); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-light); }
+
+        .result-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-item:first-child { padding-top: 0; }
+        .result-header { display: flex; justify-content: space-between; align-items: center; }
+        .result-header p { margin: 0; font-size: 1.05rem; }
+        .result-header p strong { color: var(--text-color); }
+        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.85rem; }
+        details.inline-details > summary::after { content: '[Show Equation]'; }
+        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
+        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
+        .equation-details p { margin-bottom: 0.5rem; }
+
+        .def { position: relative; cursor: help; border-bottom: 1px dotted var(--border-color); }
+        .def::after {
+            content: attr(data-def);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+        }
+        .def:hover::after { opacity: 1; visibility: visible; }
+
+        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.85rem; }
+        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 14px 16px; }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 340px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.2s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; font-size: 1.05rem; }
+        .settings-close {
+            background: none;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 16px 20px; overflow-y: auto; }
+        .settings-section { margin-bottom: 20px; }
+        .settings-section h4 { margin-bottom: 10px; }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); }
+
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.2s;
+            border-radius: 999px;
+        }
+        .slider::before {
+            position: absolute;
+            content: '';
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: var(--bg-card);
+            transition: 0.2s;
+            border-radius: 50%;
+            box-shadow: var(--shadow);
+        }
+        .switch input:checked + .slider { background-color: var(--accent-color); }
+        .switch input:checked + .slider::before { transform: translateX(20px); }
+
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+        .segmented button.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        .settings-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); }
+
+        body[data-density="compact"] .card { padding: 16px; }
+        body[data-density="compact"] .input-group label { font-size: 0.82rem; }
+        body[data-density="compact"] .input-group input,
+        body[data-density="compact"] .input-group select { padding: 9px 12px; font-size: 0.9rem; }
+        body[data-density="compact"] .tool-description { font-size: 0.95rem; }
+        body[data-density="compact"] .tabs { margin-bottom: 16px; }
+
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            background-color: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .settings-panel { width: 100%; }
+            .settings-button { padding: 8px 12px; }
+        }
+    </style>
+</head>
+<body data-theme="system" data-density="comfortable">
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Auto-calculate</div>
+                        <div class="setting-help">Update results as inputs change.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-auto-calc">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show equations by default</div>
+                        <div class="setting-help">Open the equation panels in results.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-equations">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and input height.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2 dp</button>
+                        <button type="button" data-precision="3">3 dp</button>
+                        <button type="button" data-precision="4">4 dp</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button">Reset to defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Example Tool - Settings Panel</h1>
+        <p class="tool-description" id="tool-description">
+            This example demonstrates a tool-level settings panel that controls auto-calculate, theme,
+            density, and result formatting.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <div class="input-tabs">
+                    <button class="input-tab active" type="button" data-input-target="core-inputs">Core Inputs</button>
+                    <button class="input-tab" type="button" data-input-target="advanced-inputs">Advanced Inputs</button>
+                </div>
+
+                <form id="calc-form">
+                    <div class="input-section active" id="core-inputs">
+                        <div class="input-group">
+                            <label for="base_value">Base Value (B)</label>
+                            <input type="number" id="base_value" name="base_value" value="12" step="0.1">
+                            <span class="tooltip-trigger" id="tooltip-base_value" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="scale_factor">Scale Factor (k)</label>
+                            <input type="number" id="scale_factor" name="scale_factor" value="1.4" step="0.1">
+                            <span class="tooltip-trigger" id="tooltip-scale_factor" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-section" id="advanced-inputs">
+                        <p class="input-note">Advanced inputs refine the output normalization.</p>
+                        <div class="input-group">
+                            <label for="reference_value">Reference Value (R)</label>
+                            <input type="number" id="reference_value" name="reference_value" value="8" step="0.1">
+                            <span class="tooltip-trigger" id="tooltip-reference_value" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" disabled>Loading...</button>
+                    <p class="calc-hint" id="calc-hint">Auto-calc is off. Press Calculate to update results.</p>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="plot">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <div id="results-display">
+                        <p id="results-placeholder" style="text-align: center; color: var(--text-light); padding: 40px;">
+                            Enter parameters and press Calculate to see results.
+                        </p>
+                    </div>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <div id="plot-container">
+                        <p>Plot placeholder for future visualization.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">General principles and theory will be loaded here from the docstring.</p>
+                    <h4>Equations</h4>
+                    <div class="equation-container" id="equation-container"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        let toolDocumentation = {};
+        let pyUtils = null;
+        let pyToolModule = null;
+        let calcDebounce = null;
+        let latestResult = null;
+
+        const TOOL_MODULE_NAME = 'settings_demo';
+        const TOOL_FUNCTION_NAME = 'calculate_settings_demo';
+        const PARAM_ORDER = ['base_value', 'scale_factor', 'reference_value'];
+        const RESULT_ORDER = ['scaled_value', 'normalized_value', 'percent_of_reference'];
+        const STORAGE_KEY = 'example-tool-settings-panel';
+
+        const defaultSettings = {
+            autoCalc: false,
+            showEquations: false,
+            theme: 'system',
+            density: 'comfortable',
+            precision: 2,
+        };
+        let settings = { ...defaultSettings };
+
+        const equationVariableMap = {
+            scaled_value: [
+                { symbol: 'S', key: 'scaled_value' },
+                { symbol: 'B', key: 'base_value' },
+                { symbol: 'k', key: 'scale_factor' },
+            ],
+            normalized_value: [
+                { symbol: 'N', key: 'normalized_value' },
+                { symbol: 'S', key: 'scaled_value' },
+                { symbol: 'R', key: 'reference_value' },
+            ],
+            percent_of_reference: [
+                { symbol: 'P', key: 'percent_of_reference' },
+                { symbol: 'N', key: 'normalized_value' },
+            ],
+        };
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function openTab(targetId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(targetId).style.display = 'block';
+            document.querySelector(`.tab-link[data-target="${targetId}"]`).classList.add('active');
+        }
+
+        function openInputTab(targetId) {
+            document.querySelectorAll('.input-section').forEach(section => section.classList.remove('active'));
+            document.querySelectorAll('.input-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(targetId).classList.add('active');
+            document.querySelector(`.input-tab[data-input-target="${targetId}"]`).classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(selector).forEach(button => {
+                const isActive = button.dataset[dataAttr] === value;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                settings = { ...defaultSettings };
+                return;
+            }
+            try {
+                settings = { ...defaultSettings, ...JSON.parse(stored) };
+            } catch (error) {
+                settings = { ...defaultSettings };
+            }
+        }
+
+        function applySettings() {
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+            document.getElementById('setting-auto-calc').checked = settings.autoCalc;
+            document.getElementById('setting-show-equations').checked = settings.showEquations;
+            setSegmentedActive('.settings-panel [data-theme]', settings.theme, 'theme');
+            setSegmentedActive('.settings-panel [data-density]', settings.density, 'density');
+            setSegmentedActive('.settings-panel [data-precision]', String(settings.precision), 'precision');
+            updateCalcHint();
+            if (latestResult) {
+                renderResults(latestResult);
+            }
+        }
+
+        function updateCalcHint() {
+            const hint = document.getElementById('calc-hint');
+            hint.textContent = settings.autoCalc
+                ? 'Auto-calc is enabled. Results update as you type.'
+                : 'Auto-calc is off. Press Calculate to update results.';
+        }
+
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = open ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+            panel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        }
+
+        function handleSettingChange(key, value) {
+            settings[key] = value;
+            saveSettings();
+            applySettings();
+            if (key === 'autoCalc') {
+                scheduleCalculation();
+            }
+        }
+
+        function populateUiFromDocs() {
+            if (!toolDocumentation.description) {
+                return;
+            }
+            document.getElementById('tool-description').textContent = toolDocumentation.description;
+            document.getElementById('background-description').innerHTML = escapeHtml(toolDocumentation.description).replace(/\n/g, '<br>');
+
+            PARAM_ORDER.forEach((param) => {
+                const tooltip = document.getElementById(`tooltip-${param}`);
+                if (tooltip && toolDocumentation.parameters && toolDocumentation.parameters[param]) {
+                    tooltip.dataset.tooltip = toolDocumentation.parameters[param];
+                }
+            });
+
+            renderEquations();
+        }
+
+        function renderEquations() {
+            const container = document.getElementById('equation-container');
+            container.innerHTML = '';
+            const expressions = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').map(line => line.trim()).filter(line => line)
+                : [];
+
+            expressions.forEach((expression, index) => {
+                const returnKey = RESULT_ORDER[index];
+                const variables = equationVariableMap[returnKey] || [];
+                const legend = variables.map((item) => {
+                    const description = toolDocumentation.parameters?.[item.key] || toolDocumentation.returns?.[item.key] || '';
+                    return `<li><strong>${escapeHtml(item.symbol)}</strong>: ${escapeHtml(description)}</li>`;
+                }).join('');
+
+                const card = document.createElement('div');
+                card.className = 'equation-card';
+                card.innerHTML = `
+                    <strong>Equation (${index + 1})</strong>
+                    <div class="equation-expression">\\[ ${escapeHtml(expression)} \\]</div>
+                    <ul>${legend}</ul>
+                `;
+                container.appendChild(card);
+            });
+            typesetMath();
+        }
+
+        function formatNumber(value) {
+            if (!Number.isFinite(value)) {
+                return 'N/A';
+            }
+            return value.toFixed(settings.precision);
+        }
+
+        function renderResults(result) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+            document.getElementById('results-placeholder')?.remove();
+
+            const returnDefs = toolDocumentation.returns || {};
+            const equations = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').map(line => line.trim()).filter(line => line)
+                : [];
+
+            RESULT_ORDER.forEach((key, index) => {
+                const definition = returnDefs[key] || '';
+                const value = result[key];
+                const substString = result[`subst_${key}`];
+                const equation = equations[index] || '';
+                const displayName = key.replace(/_/g, ' ');
+                const detailsOpen = settings.showEquations ? 'open' : '';
+
+                const html = `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <p><strong><span class="def" data-def="${escapeHtml(definition)}">${escapeHtml(displayName)}</span>:</strong> ${formatNumber(value)}</p>
+                            <details class="inline-details" ${detailsOpen}>
+                                <summary></summary>
+                                <div class="equation-details">
+                                    <p><strong>Equation:</strong> $$${escapeHtml(equation)}$$</p>
+                                    ${substString ? `<p><strong>Substituted:</strong> $$${escapeHtml(substString)}$$</p>` : ''}
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                `;
+                resultsDiv.innerHTML += html;
+            });
+            typesetMath();
+        }
+
+        function gatherInputs() {
+            const inputs = {};
+            PARAM_ORDER.forEach(param => {
+                const element = document.getElementById(param);
+                const value = parseFloat(element.value);
+                if (!Number.isFinite(value)) {
+                    throw new Error(`Invalid value for ${param.replace(/_/g, ' ')}`);
+                }
+                inputs[param] = value;
+            });
+            return inputs;
+        }
+
+        function scheduleCalculation() {
+            if (!settings.autoCalc || !pyToolModule) {
+                return;
+            }
+            if (calcDebounce) {
+                window.clearTimeout(calcDebounce);
+            }
+            calcDebounce = window.setTimeout(() => {
+                handleCalculation();
+            }, 300);
+        }
+
+        async function handleCalculation(event) {
+            if (event) {
+                event.preventDefault();
+            }
+            if (!pyToolModule) {
+                return;
+            }
+
+            const button = document.getElementById('calculate-btn');
+            const originalLabel = button.textContent;
+            button.textContent = 'Calculating...';
+            button.disabled = true;
+
+            try {
+                const inputs = gatherInputs();
+                const args = PARAM_ORDER.map(param => inputs[param]);
+                const resultProxy = pyToolModule[TOOL_FUNCTION_NAME](...args);
+                const result = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                resultProxy.destroy();
+
+                latestResult = result;
+                renderResults(result);
+            } catch (error) {
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: var(--danger-color); font-weight: 600;">Calculation Error</p>
+                    <p style="color: var(--danger-color);">${escapeHtml(error.message || 'Unable to calculate.')}</p>
+                `;
+            } finally {
+                button.textContent = originalLabel;
+                button.disabled = false;
+            }
+        }
+
+        async function loadReadme() {
+            const container = document.getElementById('readme-content');
+            try {
+                const response = await fetch('./README.md');
+                if (!response.ok) {
+                    throw new Error('README not found');
+                }
+                const markdown = await response.text();
+                container.innerHTML = markdown
+                    .split('\n\n')
+                    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+                    .join('');
+            } catch (error) {
+                container.innerHTML = `<p>Unable to load README: ${escapeHtml(error.message)}</p>`;
+            }
+        }
+
+        async function initializePython() {
+            const button = document.getElementById('calculate-btn');
+            button.textContent = 'Loading Pyodide...';
+            try {
+                const pyodide = await loadPyodide();
+                await pyodide.loadPackage('micropip');
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w', encoding='utf-8') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w', encoding='utf-8') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                const docProxy = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
+                const docMap = docProxy.toJs({ dict_converter: Object.fromEntries });
+                if (docMap.error) {
+                    throw new Error(docMap.error);
+                }
+                toolDocumentation = docMap;
+                if (toolDocumentation.parameters) {
+                    toolDocumentation.parameters = Object.fromEntries(Object.entries(toolDocumentation.parameters));
+                }
+                if (toolDocumentation.returns) {
+                    toolDocumentation.returns = Object.fromEntries(Object.entries(toolDocumentation.returns));
+                }
+
+                populateUiFromDocs();
+                button.textContent = 'Calculate';
+                button.disabled = false;
+
+                if (settings.autoCalc) {
+                    handleCalculation();
+                }
+            } catch (error) {
+                button.textContent = 'Unavailable';
+                button.disabled = true;
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: var(--danger-color); font-weight: 600;">Initialization Error</p>
+                    <p style="color: var(--danger-color);">${escapeHtml(error.message)}</p>
+                `;
+            }
+        }
+
+        function bindSettingsControls() {
+            document.getElementById('setting-auto-calc').addEventListener('change', (event) => {
+                handleSettingChange('autoCalc', event.target.checked);
+            });
+            document.getElementById('setting-show-equations').addEventListener('change', (event) => {
+                handleSettingChange('showEquations', event.target.checked);
+            });
+
+            document.querySelectorAll('.settings-panel [data-theme]').forEach((button) => {
+                button.addEventListener('click', () => handleSettingChange('theme', button.dataset.theme));
+            });
+            document.querySelectorAll('.settings-panel [data-density]').forEach((button) => {
+                button.addEventListener('click', () => handleSettingChange('density', button.dataset.density));
+            });
+            document.querySelectorAll('.settings-panel [data-precision]').forEach((button) => {
+                button.addEventListener('click', () => handleSettingChange('precision', Number(button.dataset.precision)));
+            });
+
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+                if (settings.autoCalc) {
+                    handleCalculation();
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            applySettings();
+            loadReadme();
+            initializePython();
+            bindSettingsControls();
+
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+
+            document.getElementById('calc-form').addEventListener('submit', handleCalculation);
+            document.querySelectorAll('#calc-form input, #calc-form select').forEach((element) => {
+                element.addEventListener('input', scheduleCalculation);
+                element.addEventListener('change', scheduleCalculation);
+            });
+
+            document.querySelectorAll('.tab-link').forEach((tab) => {
+                tab.addEventListener('click', () => openTab(tab.dataset.target));
+            });
+            document.querySelectorAll('.input-tab').forEach((tab) => {
+                tab.addEventListener('click', () => openInputTab(tab.dataset.inputTarget));
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    toggleSettingsPanel(false);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

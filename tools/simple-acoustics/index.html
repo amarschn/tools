@@ -1,932 +1,1531 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sound Level Calculator (SPL/SWL) - Python Powered</title>
-  <!-- Load Pyodide -->
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-  <!-- Load Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Load Math.js (Optional, kept if needed elsewhere) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f8f9fa;
-      color: #212529;
-      line-height: 1.6;
-    }
-    header, footer {
-      background: #343a40;
-      color: #fff;
-      padding: 1rem;
-      text-align: center;
-    }
-    h1 { margin: 0; font-size: 1.75rem; }
-    main {
-      max-width: 1200px;
-      margin: 1rem auto;
-      background: #fff;
-      border-radius: 5px;
-      padding: 1rem 2rem;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    details { margin-bottom: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #dee2e6; }
-    summary { cursor: pointer; font-size: 1.2rem; font-weight: bold; color: #495057; outline: none; margin-bottom: 0.5rem; }
-    label { display: inline-block; width: 220px; margin-right: 0.5rem; vertical-align: middle; }
-    input, select { width: 120px; margin-bottom: 0.5rem; padding: 0.3rem; border: 1px solid #ced4da; border-radius: 4px; }
-    button { display: inline-block; margin-top: 1rem; margin-right: 0.5rem; padding: 0.5rem 1rem; border: none; border-radius: 4px; background: #007bff; color: #fff; font-size: 1rem; cursor: pointer; }
-    button:hover { background: #0056b3; }
-    button:disabled { background: #6c757d; cursor: not-allowed; } /* Style for disabled button */
-    .charts-container { display: flex; flex-wrap: wrap; gap: 2rem; justify-content: space-around; margin-top: 1rem; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sound Level Calculator (Experimental) - Engineering Tools</title>
 
-    /* --- Chart Box Styling --- */
-    .chart-box {
-      flex: 1 1 450px;
-      min-width: 300px;
-      max-width: 100%;
-      margin-bottom: 2rem;
-      position: relative; /* Needed for canvas sizing */
-      height: 400px; /* Fixed height for the container */
-    }
-    .chart-box canvas {
-      display: block; /* Prevent extra space */
-      box-sizing: border-box; /* Include padding/border */
-      height: 100%; /* Fill container height */
-      width: 100%; /* Fill container width */
-    }
-    /* --- End Chart Box Styling --- */
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    .chart-title { text-align: center; margin-bottom: 0.5rem; font-weight: bold; }
-    .results-panel { background: #e9f5ff; padding: 1rem; border-radius: 4px; margin: 1rem 0; border: 1px solid #b8d6f3; }
-    .math-formula { font-family: 'Times New Roman', Times, serif; background: #f8f9fa; padding: 0.5rem; margin: 0.5rem 0; border-left: 3px solid #007bff; }
-    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-    table, th, td { border: 1px solid #dee2e6; }
-    th, td { padding: 0.5rem; text-align: left; }
-    th { background-color: #f8f9fa; }
-    .reference { font-size: 0.85rem; color: #6c757d; margin-top: 0.2rem; display: block; /* Ensure it takes its own line */ }
-    .tab-container { margin: 1rem 0; }
-    .tab-buttons { display: flex; overflow-x: auto; border-bottom: 1px solid #dee2e6; }
-    .tab-button { background: #f1f1f1; border: none; outline: none; cursor: pointer; padding: 0.7rem 1.2rem; margin-right: 0.2rem; font-size: 0.95rem; border-radius: 4px 4px 0 0; border-bottom: none; margin-bottom: -1px; /* Overlap border */ }
-    .tab-button:hover { background: #ddd; }
-    .tab-button.active { background: #fff; color: #007bff; border: 1px solid #dee2e6; border-bottom: 1px solid #fff; font-weight: bold; }
-    .tab-content { display: none; padding: 1.5rem; border: 1px solid #dee2e6; border-top: none; border-radius: 0 4px 4px 4px; }
-    .tab-content.active { display: block; }
-    .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; } /* Increased gap */
-    .grid-item { background: #f8f9fa; padding: 1rem; border-radius: 4px; border: 1px solid #eee; }
-    .loading-indicator, #errorDisplay {
-        display: none; /* Hidden by default */
-        padding: 10px 15px;
-        margin: 15px 0;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        text-align: center;
-        font-weight: bold;
-    }
-    .loading-indicator { background-color: #e9ecef; color: #495057; }
-    #errorDisplay { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-
-    @media (max-width: 768px) {
-      label { width: 100%; display: block; margin-bottom: 0.2rem;}
-      input, select { width: calc(100% - 1rem); /* Adjust for padding */ }
-      .grid-container { grid-template-columns: 1fr; } /* Stack items on small screens */
-      .chart-box { flex: 1 1 100%; height: 300px; /* Adjust height for smaller screens */ }
-    }
-  </style>
-</head>
-
-<body>
-  <header>
-    <h1>Sound Level Calculator (SPL/SWL) - Python Powered</h1>
-  </header>
-
-  <main>
-    <!-- Loading Indicator -->
-    <div id="loadingIndicator" class="loading-indicator" style="display: block;"> <!-- Show initially -->
-      Initializing Pyodide (Python runtime)... Please wait. This may take a moment.
-    </div>
-
-    <!-- TABS NAVIGATION -->
-    <div class="tab-container">
-       <div class="tab-buttons">
-        <button class="tab-button active" onclick="openTab(event, 'calculator')">Calculator</button>
-        <button class="tab-button" onclick="openTab(event, 'theory')">Theory</button>
-        <button class="tab-button" onclick="openTab(event, 'references')">References</button>
-      </div>
-
-      <!-- CALCULATOR TAB -->
-      <div id="calculator" class="tab-content active">
-        <!-- Calculation Indicator -->
-        <div id="calculatingIndicator" class="loading-indicator">
-          Calculating with Python...
-        </div>
-         <!-- Error Display -->
-        <div id="errorDisplay"></div> <!-- Display calculation errors here -->
-
-        <details open>
-          <summary>1) Source Properties</summary>
-           <div class="grid-container">
-            <div class="grid-item">
-              <label for="sourceType">Source Type:</label>
-              <select id="sourceType">
-                <option value="point">Point Source</option>
-                <option value="line">Line Source</option>
-                <option value="plane">Plane Source</option>
-              </select>
-              <div class="reference">Geometric spreading model used.</div>
-
-              <div id="sourceInputContainer">
-                <label for="sourceLevel">Source Sound Power Level (SWL):</label>
-                <input type="number" id="sourceLevel" value="100" step="1"> dB
-                 <div class="reference">Total acoustic power emitted by the source.</div>
-              </div>
-
-              <label for="frequency">Frequency:</label>
-              <select id="frequency">
-                <option value="broadband">Broadband</option>
-                <option value="63">63 Hz</option>
-                <option value="125">125 Hz</option>
-                <option value="250">250 Hz</option>
-                <option value="500">500 Hz</option>
-                <option value="1000">1000 Hz</option>
-                <option value="2000">2000 Hz</option>
-                <option value="4000">4000 Hz</option>
-                <option value="8000">8000 Hz</option>
-              </select>
-               <div class="reference">Affects air/ground absorption & weighting.</div>
-            </div>
-
-            <div class="grid-item">
-              <label for="weighting">Frequency Weighting:</label>
-              <select id="weighting">
-                <option value="Z">Z (None)</option>
-                <option value="A" selected>A</option>
-                <option value="C">C</option>
-              </select>
-               <div class="reference">Adjusts SPL for human hearing perception.</div>
-
-              <div id="sourcePresets">
-                <label>SWL Presets:</label>
-                <select id="sourcePresetSelect">
-                  <option value="custom">Custom SWL</option>
-                  <option value="conversation">Normal conversation (~75 dB SWL)</option>
-                  <option value="vacuum">Vacuum cleaner (~85 dB SWL)</option>
-                  <option value="lawnmower">Lawn mower (~100 dB SWL)</option>
-                  <option value="concert">Rock concert (~125 dB SWL)</option>
-                  <option value="jetEngine">Jet engine (~165 dB SWL)</option>
-                </select>
-                <button type="button" id="applyPresetBtn">Apply SWL</button>
-                 <div class="reference">Note: SWL values are rough estimates.</div>
-              </div>
-
-              <div id="directivity">
-                <label for="dirFactor">Directivity Factor (Q):</label>
-                <select id="dirFactor">
-                  <option value="1">Spherical - Free field (Q=1)</option>
-                  <option value="2" selected>Hemispherical - On ground/wall (Q=2)</option>
-                  <option value="4">Quarter sphere - Wall corner (Q=4)</option>
-                  <option value="8">Eighth sphere - Floor-wall corner (Q=8)</option>
-                </select>
-                 <div class="reference">Accounts for reflections near source.</div>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details open>
-          <summary>2) Propagation Path</summary>
-            <div class="grid-container">
-                <div class="grid-item">
-                  <label for="distanceMin">Distance Range (min):</label>
-                  <input type="number" id="distanceMin" value="1" min="0.1" step="0.1"> m
-
-                  <label for="distanceMax">Distance Range (max):</label>
-                  <input type="number" id="distanceMax" value="100" min="1" step="1"> m
-                   <div class="reference">Range for the SPL vs. Distance chart.</div>
-
-
-                  <label for="tempC">Air Temperature:</label>
-                  <input type="number" id="tempC" value="20" min="-50" max="50"> °C
-
-                  <label for="humidity">Relative Humidity:</label>
-                  <input type="number" id="humidity" value="60" min="0" max="100"> %
-                   <div class="reference">Affects air absorption (mainly high freq).</div>
-                </div>
-
-                <div class="grid-item">
-                  <label for="groundAbsorption">Ground Absorption (G):</label>
-                  <select id="groundAbsorption">
-                    <option value="0">Hard (G=0)</option>
-                    <option value="0.5" selected>Mixed (G=0.5)</option>
-                    <option value="1">Soft (G=1)</option>
-                  </select>
-                   <div class="reference">G=0: Concrete; G=0.5: Grass; G=1: Snow</div>
-
-
-                  <label for="airAttenuationEnabled">Atmospheric Absorption:</label>
-                  <input type="checkbox" id="airAttenuationEnabled" checked style="width: auto; vertical-align: middle;"> Enable
-                   <div class="reference">Attenuation due to air viscosity & relaxation.</div>
-
-
-                  <label for="barriers">Number of Barriers:</label>
-                  <input type="number" id="barriers" value="0" min="0" max="5" step="1">
-
-                  <label for="barrierAttenuation">Attenuation per Barrier:</label>
-                  <input type="number" id="barrierAttenuation" value="5" min="0" max="30" step="1"> dB
-                   <div class="reference">Simplified barrier model (total dB reduction).</div>
-                </div>
-            </div>
-          <button type="button" id="calculateBtn" disabled>Calculate SPL</button> <!-- Disabled initially -->
-          <button type="button" id="resetBtn">Reset Defaults</button>
-        </details>
-
-        <details open>
-          <summary>3) Results</summary>
-          <div class="results-panel" id="resultsContainer">
-            <div id="singlePointResult">
-              <h3 id="singlePointTitle">Sound Level at 1m:</h3>
-              <p id="spl1m">SPL (Z): -</p>
-              <p id="splWeighted1m">Weighted SPL: -</p>
-            </div>
-          </div>
-
-          <div class="charts-container">
-            <div class="chart-box">
-              <div class="chart-title">SPL vs. Distance</div>
-              <canvas id="distanceChart"></canvas>
-            </div>
-
-            <div class="chart-box">
-              <div class="chart-title">Equal Loudness Contours (ISO 226:2003)</div>
-              <canvas id="loudnessChart"></canvas>
-               <div class="reference">Shows perceived loudness (Phon) levels.</div>
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <!-- THEORY TAB -->
-       <div id="theory" class="tab-content">
-         <!-- (Keep existing detailed theory content here) -->
-           <h2>Sound Pressure and Power Level Calculations</h2>
-
-            <h3>Basic Definitions</h3>
-            <p>
-            <strong>Sound Pressure Level (SPL)</strong> is the local pressure deviation from ambient atmospheric pressure caused by a sound wave, measured in decibels (dB) relative to a reference pressure.
-            </p>
-            <div class="math-formula">
-            SPL = 20 × log₁₀(p/p₀) dB
-            </div>
-            <p>where p is the root-mean-square (RMS) sound pressure and p₀ is the reference pressure of 20 µPa (micropascals), the approximate threshold of human hearing.</p>
-
-            <p>
-            <strong>Sound Power Level (SWL or L<small>W</small>)</strong> is the total acoustic power emitted by a sound source in all directions, measured in decibels (dB) relative to a reference power. It's an intrinsic property of the source, independent of distance or environment.
-            </p>
-            <div class="math-formula">
-            SWL = 10 × log₁₀(W/W₀) dB
-            </div>
-            <p>where W is the sound power in watts and W₀ is the reference power of 10⁻¹² watts (1 picowatt).</p>
-
-            <h3>Relationship between SWL and SPL (Point Source)</h3>
-            <p>For a point source radiating into a free field, the relationship depends on distance (r) and directivity (Q):</p>
-             <div class="math-formula">
-             SPL ≈ SWL - 20 × log₁₀(r) - 11 + 10 × log₁₀(Q) dB
-            </div>
-            <p>The '-11' term arises from 10 × log₁₀(4π), representing the surface area of a sphere.</p>
-
-
-            <h3>Propagation Models & Attenuation</h3>
-            <p>As sound travels from source to receiver, its level decreases due to several factors:</p>
-            <ul>
-                <li><strong>Geometric Divergence (A<sub>div</sub>):</strong> Spreading of sound energy over an increasing area.
-                    <ul>
-                        <li>Point Source (Spherical): Energy spreads over 4πr². Attenuation = 20 log₁₀(r) + 11 dB (relative to SWL). SPL drops 6 dB per doubling distance.</li>
-                        <li>Line Source (Cylindrical): Energy spreads over 2πrL. Attenuation ≈ 10 log₁₀(r) + 8 dB (relative to SWL'). SPL drops 3 dB per doubling distance.</li>
-                        <li>Plane Source: Theoretically no divergence loss in the near field (this calculator uses a simple model).</li>
-                    </ul>
-                </li>
-                 <li><strong>Atmospheric Absorption (A<sub>atm</sub>):</strong> Energy loss to heat in the air. Significant at higher frequencies, longer distances, and dependent on temperature/humidity. Calculated based on ISO 9613-1 (simplified here).</li>
-                 <li><strong>Ground Effect (A<sub>gr</sub>):</strong> Interference between direct and ground-reflected sound, plus absorption by the ground. Dependent on ground type (G=0 hard to G=1 soft), frequency, and geometry. Can cause significant attenuation (or sometimes amplification) in the 250-1000 Hz range over soft ground.</li>
-                 <li><strong>Barrier Attenuation (A<sub>bar</sub>):</strong> Reduction due to obstacles blocking the line of sight. Dependent on diffraction over/around the barrier (related to path length difference, frequency). Calculated very simply here.</li>
-                 <li><strong>Other Effects:</strong> Foliage, scattering, meteorological effects (wind, temperature gradients) are not included in this calculator.</li>
-            </ul>
-            <p>The total SPL at the receiver is calculated as:</p>
-            <div class="math-formula">
-                SPL = SWL - A<sub>div</sub> - A<sub>atm</sub> - A<sub>gr</sub> - A<sub>bar</sub> + 10 log₁₀(Q)  (Conceptual formula for point source)
-            </div>
-
-
-            <h3>Frequency Weighting</h3>
-            <p>
-            Adjusts measured SPL to better reflect human loudness perception, which varies with frequency:
-            </p>
-            <ul>
-            <li><strong>A-weighting (dBA):</strong> Standard for environmental noise assessment and hearing risk. Mimics ear sensitivity at moderate levels (~40 phon). De-emphasizes low frequencies.</li>
-            <li><strong>C-weighting (dBC):</strong> Flatter response, better for high levels or low-frequency noise. Mimics ear sensitivity at high levels (~100 phon).</li>
-            <li><strong>Z-weighting (dBZ):</strong> Zero weighting (flat response). Used for unweighted measurements or frequency analysis.</li>
-            </ul>
-
-            <h3>Directivity Factor (Q)</h3>
-            <p>
-            Ratio of intensity in a specific direction to the average intensity over all directions. Accounts for reflections near the source increasing SPL:
-            </p>
-            <ul>
-            <li>Q=1: Free space (no reflections).</li>
-            <li>Q=2: On one large plane (e.g., ground). (+3 dB vs Q=1).</li>
-            <li>Q=4: At junction of two planes (e.g., wall/floor). (+6 dB vs Q=1).</li>
-            <li>Q=8: At junction of three planes (e.g., corner). (+9 dB vs Q=1).</li>
-            </ul>
-
-            <h3>Equal Loudness Contours (Phon Curves)</h3>
-            <p>
-            Based on ISO 226:2003. Each curve represents combinations of frequency and SPL perceived as equally loud as a 1000 Hz tone at the phon level indicated (e.g., 40 phon). Shows the ear is most sensitive around 3-4 kHz and less sensitive at low and very high frequencies, especially at lower overall levels.
-            </p>
-       </div>
-
-      <!-- REFERENCES TAB -->
-      <div id="references" class="tab-content">
-         <!-- (Keep existing detailed references content here) -->
-         <h2>References and Further Reading</h2>
-
-        <h3>Standards</h3>
-        <ul>
-          <li>ISO 9613-1: "Acoustics — Attenuation of sound during propagation outdoors — Part 1: Calculation of the absorption of sound by the atmosphere"</li>
-          <li>ISO 9613-2: "Acoustics — Attenuation of sound during propagation outdoors — Part 2: General method of calculation" (Covers divergence, ground, barrier effects)</li>
-          <li>ISO 226:2003: "Acoustics — Normal equal-loudness-level contours"</li>
-          <li>IEC 61672-1: "Electroacoustics — Sound level meters — Part 1: Specifications" (Defines weightings)</li>
-        </ul>
-
-        <h3>Books</h3>
-        <ul>
-          <li>Bies, D. A., & Hansen, C. H., & Zander, A. C. (2017). "Engineering Noise Control: Theory and Practice, Fifth Edition." CRC Press.</li>
-          <li>Crocker, M. J. (Ed.). (2007). "Handbook of Noise and Vibration Control." John Wiley & Sons.</li>
-          <li>Kuttruff, H. (2007). "Acoustics: An Introduction." Taylor & Francis.</li>
-        </ul>
-
-        <h3>Online Resources</h3>
-        <ul>
-          <li><a href="https://www.engineeringtoolbox.com/sound-power-level-d_58.html" target="_blank">Engineering ToolBox: Sound Power</a></li>
-          <li><a href="https://www.engineeringtoolbox.com/outdoor-sound-propagation-d_18.html" target="_blank">Engineering ToolBox: Outdoor Sound Propagation</a></li>
-          <li><a href="https://www.noisemeters.com/apps/db-calculator/" target="_blank">NoiseMeters: Decibel Calculator</a></li>
-          <li><a href="https://www.cdc.gov/niosh/topics/noise/abouthlp/noiseprotection_hearingloss.html" target="_blank">NIOSH: Noise and Hearing Loss Prevention</a></li>
-
-        </ul>
-
-        <h3>Common Sound Levels Table (Approximate SPL)</h3>
-        <table>
-          <thead> <tr> <th>Source (Typical Distance)</th> <th>dBA</th> <th>Perceived Loudness</th> </tr> </thead>
-          <tbody>
-            <tr><td>Threshold of hearing</td><td>0</td><td>-</td></tr>
-            <tr><td>Rustling leaves (nearby)</td><td>20</td><td>Very Faint</td></tr>
-            <tr><td>Whisper (1m)</td><td>30</td><td>Faint</td></tr>
-            <tr><td>Quiet Library</td><td>40</td><td>Quiet</td></tr>
-            <tr><td>Normal conversation (1m)</td><td>60-65</td><td>Moderate</td></tr>
-            <tr><td>Vacuum cleaner (1m)</td><td>75</td><td>Loud</td></tr>
-            <tr><td>Heavy traffic (15m)</td><td>85</td><td>Very Loud</td></tr>
-            <tr><td>Lawn mower (operator)</td><td>90-100</td><td>Very Loud</td></tr>
-            <tr><td>Rock concert (near stage)</td><td>110-120</td><td>Extremely Loud</td></tr>
-            <tr><td>Jet engine (30m)</td><td>140</td><td>Painful</td></tr>
-          </tbody>
-        </table>
-
-        <h3>NIOSH Recommended Exposure Limits (REL)</h3>
-        <p>Maximum recommended time-weighted average exposure for an 8-hour workday:</p>
-        <ul><li>**85 dBA**</li></ul>
-        <p>Exchange Rate: 3 dB (exposure time halves for every 3 dB increase)</p>
-        <table>
-          <thead> <tr> <th>Exposure Level (dBA)</th> <th>Maximum Duration per Day</th> </tr> </thead>
-          <tbody>
-            <tr><td>85</td><td>8 hours</td></tr>
-            <tr><td>88</td><td>4 hours</td></tr>
-            <tr><td>91</td><td>2 hours</td></tr>
-            <tr><td>94</td><td>1 hour</td></tr>
-            <tr><td>97</td><td>30 minutes</td></tr>
-            <tr><td>100</td><td>15 minutes</td></tr>
-            <tr><td>103</td><td>7.5 minutes</td></tr>
-            <tr><td>106</td><td>~4 minutes</td></tr>
-          </tbody>
-        </table>
-        <p class="reference">Note: Regulations (e.g., OSHA) may differ.</p>
-      </div>
-    </div>
-  </main>
-
-  <footer>
-    <p>&copy; 2025 - Sound Level Calculator - Part of Engineering Tools Collection</p>
-  </footer>
-
-  <script>
-    // =====================================================================
-    // GLOBAL VARIABLES
-    // =====================================================================
-    let pyodide = null;
-    let pythonAcousticsCode = '';
-    let distanceChart = null;
-    let loudnessChart = null;
-    let isPyodideReady = false;
-    let pyodideLoadPromise = null; // To track loading state
-
-    // Equal loudness contour data (kept in JS for the chart)
-    const PHON_DATA = [
-       [20, 74.3, 74.3, 74.3, 74.3, 74.3, 74.3, 76.8, 81.0, 85.5, 90.8, 96.3],[25, 65.0, 65.0, 65.4, 66.1, 66.8, 68.1, 71.0, 75.4, 80.2, 85.7, 91.5],[31.5, 55.9, 56.3, 57.2, 58.5, 60.3, 62.6, 66.0, 70.7, 75.9, 81.8, 88.0],[40, 48.0, 48.5, 50.0, 52.0, 54.6, 57.5, 61.4, 66.3, 71.8, 78.1, 84.8],[50, 41.5, 42.3, 44.3, 47.0, 50.0, 53.4, 57.7, 62.8, 68.5, 75.0, 82.0],[63, 35.6, 36.8, 39.3, 42.5, 46.0, 49.8, 54.4, 59.8, 65.7, 72.5, 79.8],[80, 30.2, 31.8, 34.8, 38.5, 42.5, 46.7, 51.4, 57.0, 63.2, 70.3, 77.8],[100, 25.5, 27.5, 31.0, 35.0, 39.5, 44.0, 49.0, 54.8, 61.2, 68.5, 76.3],[125, 21.5, 24.0, 27.8, 32.5, 37.3, 42.0, 47.4, 53.4, 60.0, 67.5, 75.4],[160, 17.8, 20.8, 25.0, 30.0, 35.0, 40.0, 45.6, 51.8, 58.6, 66.4, 74.5],[200, 14.3, 17.5, 22.5, 27.8, 33.0, 38.2, 44.0, 50.4, 57.5, 65.4, 73.7],[250, 11.4, 14.8, 20.0, 25.8, 31.3, 36.8, 42.7, 49.3, 56.5, 64.5, 73.0],[315, 8.6, 12.1, 17.7, 23.8, 29.5, 35.3, 41.5, 48.3, 55.6, 63.8, 72.3],[400, 6.2, 9.8, 15.8, 22.0, 28.0, 34.0, 40.4, 47.3, 54.7, 63.1, 71.8],[500, 4.4, 8.0, 14.0, 20.5, 26.8, 33.0, 39.6, 46.5, 54.0, 62.5, 71.3],[630, 3.0, 6.6, 12.6, 19.2, 25.6, 32.0, 38.8, 45.8, 53.4, 62.0, 70.8],[800, 2.2, 5.5, 11.6, 18.2, 24.8, 31.3, 38.1, 45.1, 52.8, 61.5, 70.4],[1000, 2.4, 4.8, 11.0, 17.5, 24.0, 30.6, 37.5, 44.5, 52.2, 61.0, 70.0],[1250, 3.5, 5.0, 11.0, 17.5, 24.0, 30.7, 37.5, 44.4, 52.0, 60.5, 69.5],[1600, 1.7, 6.0, 12.0, 18.2, 24.5, 31.0, 37.7, 44.3, 51.7, 60.0, 69.0],[2000, -1.3, 4.0, 11.0, 17.5, 24.0, 30.5, 37.2, 43.8, 51.3, 59.5, 68.5],[2500, -4.2, 2.5, 10.0, 17.0, 23.5, 30.0, 36.8, 43.4, 51.0, 59.0, 68.0],[3150, -6.0, 1.0, 9.0, 16.5, 23.0, 29.6, 36.4, 43.0, 50.6, 58.5, 67.5],[4000, -5.4, 1.0, 9.0, 16.0, 22.5, 29.2, 36.0, 42.6, 50.2, 58.0, 67.0],[5000, -1.5, 4.0, 10.5, 16.5, 22.5, 29.0, 35.8, 42.4, 50.0, 57.5, 66.5],[6300, 6.0, 10.0, 15.0, 19.5, 24.5, 30.0, 36.0, 42.5, 49.8, 57.0, 66.0],[8000, 15.0, 17.0, 20.5, 24.0, 28.0, 32.5, 37.5, 43.5, 50.0, 57.0, 65.7],[10000, 16.5, 20.0, 25.0, 28.0, 32.0, 36.0, 40.0, 45.5, 51.5, 58.0, 66.0],[12500, 15.5, 18.5, 24.0, 28.5, 32.5, 37.0, 41.5, 47.0, 53.0, 59.5, 67.0]
-    ];
-
-     // Source presets - Estimated SWL values
-    const SOURCE_PRESETS = {
-      'custom': { swl: 100 },
-      // SWL roughly estimated: SWL = SPL@ref + 20log10(ref_dist) + 11 - 10log10(Q)
-      // Assuming ref SPL is dBA, Q=2 (ground reflection, adds 3dB) -> SWL = dBA@ref + 20log10(ref_dist) + 8
-      'conversation': { swl: 65 + 20*Math.log10(1) + 8 }, // ~73 -> Use 75
-      'vacuum':       { swl: 75 + 20*Math.log10(1) + 8 }, // ~83 -> Use 85
-      'lawnmower':    { swl: 95 + 20*Math.log10(1) + 8 }, // Use 95dBA ref -> ~103 -> Use 100
-      'concert':      { swl: 110 + 20*Math.log10(10) + 8}, // Ref 110dBA @ 10m -> 110+20+8 = 138 -> Use 125-135? Use 125
-      'jetEngine':    { swl: 140 + 20*Math.log10(30) + 8 } // Ref 140dBA @ 30m -> 140 + 29.5 + 8 = ~177. Use 165
-    };
-
-
-    // =====================================================================
-    // PYODIDE INITIALIZATION
-    // =====================================================================
-    async function loadPyodideAndPackages() {
-      console.log("Starting Pyodide load...");
-      document.getElementById('loadingIndicator').style.display = 'block';
-      try {
-        // Load Pyodide engine itself
-        pyodide = await loadPyodide();
-        console.log("Pyodide engine loaded. Loading packages...");
-        document.getElementById('loadingIndicator').textContent = 'Loading Python packages (numpy)...';
-
-        // Load required Python packages
-        await pyodide.loadPackage("numpy");
-        console.log("NumPy package loaded. Fetching Python script...");
-        document.getElementById('loadingIndicator').textContent = 'Loading acoustics calculation script...';
-
-
-        // Fetch the Python calculation script
-        const response = await fetch('./acoustics_calculator.py'); // Ensure this path is correct
-        if (!response.ok) {
-            throw new Error(`HTTP error loading acoustics_calculator.py: ${response.status} ${response.statusText}`);
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 10px 24px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
         }
-        pythonAcousticsCode = await response.text();
-        console.log("Python script fetched. Running script in Pyodide...");
-        document.getElementById('loadingIndicator').textContent = 'Initializing Python functions...';
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.35rem; letter-spacing: -0.02em; }
+        h2 { font-size: 1.35rem; margin-bottom: 12px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); margin-bottom: 10px; }
+        h4 { font-size: 0.95rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 600; }
+        a:hover { text-decoration: underline; }
 
-        // Execute the Python script to define functions in Pyodide's global scope
-        await pyodide.runPythonAsync(pythonAcousticsCode);
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
 
-        console.log("Pyodide and Python script initialized successfully.");
-        isPyodideReady = true;
-        document.getElementById('calculateBtn').disabled = false; // Enable calculate button
-        document.getElementById('loadingIndicator').style.display = 'none'; // Hide loading indicator
+        main.container { flex-grow: 1; }
+        .tool-header { margin-bottom: 16px; }
+        .tool-description { font-size: 1.02rem; max-width: 72ch; margin-top: 6px; }
 
-        // Perform an initial calculation now that everything is ready
-        console.log("Running initial calculation...");
-        await handleCalculate();
+        .tool-layout { display: grid; grid-template-columns: 1fr 1.55fr; gap: 20px; }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
 
-      } catch (error) {
-        console.error("Pyodide initialization failed:", error);
-        document.getElementById('loadingIndicator').textContent = `Error loading Python environment: ${error.message}. Check console.`;
-        document.getElementById('loadingIndicator').style.backgroundColor = '#f8d7da'; // Error styling
-        document.getElementById('loadingIndicator').style.color = '#721c24';
-        document.getElementById('loadingIndicator').style.borderColor = '#f5c6cb';
-        // Keep button disabled if loading fails
-        document.getElementById('calculateBtn').disabled = true;
-      }
-    }
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.05rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; font-family: var(--font-mono); }
+        .purpose-content ul { padding-left: 20px; margin: 12px 0; }
 
-    // =====================================================================
-    // CHART FUNCTIONS (Keep in JS)
-    // =====================================================================
-     function createDistanceChart(distances, spls, splsWeighted, weightingType, sourceType) {
-      const ctx = document.getElementById('distanceChart').getContext('2d');
-      if (distanceChart) {
-        distanceChart.destroy(); // Clear previous chart instance
-        distanceChart = null;
-      }
+        .input-section {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 14px;
+            background: #fbfcfe;
+        }
+        .input-section h3 { margin-bottom: 6px; }
+        .input-section p { margin-bottom: 12px; font-size: 0.9rem; }
+        .input-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .input-row.compact { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+        .input-group { position: relative; margin-bottom: 10px; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 12px 14px;
+            padding-right: 36px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.92rem;
+            background: #fff;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
+        .input-group select {
+            appearance: none;
+            background-image: none;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
 
-      // Format labels, showing fewer labels for clarity, especially on log scale
-       const labels = distances.map((d, i, arr) => {
-           // Simple strategy: show label for first, last, and some intermediates
-           const numLabelsToShow = 10;
-           if (i === 0 || i === arr.length - 1 || (arr.length > numLabelsToShow && i % Math.floor(arr.length / numLabelsToShow) === 0)) {
-               if (d < 1) return d.toFixed(2) + 'm';
-               if (d < 10) return d.toFixed(1) + 'm';
-               else return Math.round(d) + 'm';
-           }
-           return ''; // Hide label otherwise
-       });
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: #f1f5f9;
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 240px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
 
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.05rem; padding: 12px; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
 
-      distanceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          // Use actual distances for plotting, labels are just for display
-          labels: labels, // Use the sparse labels for axis display
-          datasets: [
-            {
-              label: 'SPL (Z)', // Unweighted is Z
-              data: spls.map((y, i) => ({ x: distances[i], y: y })), // Use {x,y} data format
-              borderColor: 'rgb(75, 192, 192)',
-              backgroundColor: 'rgba(75, 192, 192, 0.1)',
-              tension: 0.1,
-              pointRadius: 0,
-              borderWidth: 1.5,
-            },
-            {
-              label: `SPL (${weightingType})`,
-              data: splsWeighted.map((y, i) => ({ x: distances[i], y: y })), // Use {x,y} data format
-              borderColor: 'rgb(255, 99, 132)',
-              backgroundColor: 'rgba(255, 99, 132, 0.1)',
-              tension: 0.1,
-              pointRadius: 0,
-               borderWidth: 1.5,
+        .mode-toggle-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .mode-toggle { display: flex; gap: 4px; background: var(--bg-card); padding: 4px; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
+        .mode-btn { padding: 8px 16px; border: none; background: transparent; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; color: var(--text-light); transition: all 0.2s; }
+        .mode-btn.active { background: var(--accent-color); color: white; }
+        .mode-btn:hover:not(.active) { background: var(--primary-light); color: var(--text-color); }
+        .mode-desc { font-size: 0.85rem; color: var(--text-light); flex: 1; min-width: 260px; }
+
+        .advanced-section { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); }
+        .advanced-section.visible { display: block; }
+        .advanced-toggle { background: none; border: none; color: var(--accent-color); cursor: pointer; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 0; }
+        .advanced-toggle:hover { text-decoration: underline; }
+        .compact-note { font-size: 0.85rem; color: var(--text-light); padding: 10px 12px; border-radius: 8px; border: 1px dashed var(--border-color); background: var(--primary-light); }
+
+        .input-disclosure { border: 1px dashed var(--border-color); border-radius: 10px; background: #fff; margin-bottom: 14px; }
+        .input-disclosure summary { padding: 12px 14px; font-weight: 600; color: var(--secondary-color); cursor: pointer; }
+        .input-disclosure summary::after { content: '[Expand]'; float: right; color: var(--text-light); font-weight: 500; }
+        .input-disclosure[open] summary::after { content: '[Collapse]'; }
+        .input-disclosure .disclosure-body { padding: 0 14px 14px; border-top: 1px dashed var(--border-color); }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; gap: 4px; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.82rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .status-banner {
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--primary-light);
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+        .status-banner.success { border-color: rgba(15, 118, 110, 0.3); color: var(--success-color); }
+        .status-banner.error { border-color: rgba(185, 28, 28, 0.3); color: var(--danger-color); }
+
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .result-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+            background: #fafbfe;
+        }
+        .result-label { font-size: 0.85rem; color: var(--text-light); margin-bottom: 6px; }
+        .result-value { font-size: 1.5rem; font-weight: 600; color: var(--text-color); font-family: var(--font-mono); }
+        .result-note { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; }
+        .result-details summary { font-size: 0.82rem; color: var(--secondary-color); cursor: pointer; }
+        .result-details summary::after { content: ' [Show Equation]'; }
+        .result-details[open] summary::after { content: ' [Hide Equation]'; }
+        .equation-block {
+            margin-top: 10px;
+            border-radius: 6px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            color: var(--text-color);
+        }
+        .advanced-results {
+            border: 1px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+            margin-bottom: 12px;
+        }
+        .advanced-results summary {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--secondary-color);
+            cursor: pointer;
+        }
+        .advanced-results summary::after {
+            content: ' [Expand]';
+            float: right;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+        .advanced-results[open] summary::after { content: ' [Collapse]'; }
+
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .chart-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            background: #fbfcfe;
+        }
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .chart-meta { font-size: 0.8rem; color: var(--text-light); }
+        .chart-body { position: relative; height: 280px; }
+        .chart-body canvas { width: 100%; height: 100%; }
+        .chart-empty {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            background: rgba(248, 250, 252, 0.85);
+            border-radius: 8px;
+        }
+
+        .background-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+        .background-tab {
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .background-tab.active {
+            color: var(--text-color);
+            background: var(--primary-light);
+            border-color: rgba(17, 24, 39, 0.2);
+        }
+        .background-panel { display: none; }
+        .background-panel.active { display: block; }
+        .background-section { margin-bottom: 18px; }
+        .equation-container { display: grid; gap: 12px; }
+        .equation-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        .equation-card strong { display: block; color: var(--secondary-color); margin-bottom: 6px; }
+        .equation-card ul { list-style: none; padding: 0; display: grid; gap: 6px 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); font-size: 0.85rem; color: var(--text-light); }
+        .equation-card li span { font-weight: 600; color: var(--secondary-color); }
+
+        .glossary-grid { display: grid; gap: 12px; }
+        .glossary-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: #fff;
+        }
+        .glossary-item .term { font-weight: 600; font-size: 0.9rem; color: var(--text-color); display: flex; gap: 8px; align-items: center; }
+        .glossary-item .term code { font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-color); padding: 2px 6px; border-radius: 4px; }
+        .glossary-item .definition { font-size: 0.88rem; color: var(--text-light); margin-top: 6px; }
+
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            background-color: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: 30px;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(248, 249, 251, 0.92);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .loading-overlay.hidden { display: none; }
+        .loading-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px 30px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+            min-width: 280px;
+        }
+        .loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--text-color);
+            border-radius: 50%;
+            margin: 0 auto 12px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 980px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+
+        body[data-mode="quick"] .full-only { display: none; }
+        body[data-mode="quick"] .advanced-toggle { display: none; }
+        body[data-mode="quick"] #advanced-results { display: none; }
+        body[data-mode="full"] .quick-only { display: none; }
+    </style>
+</head>
+<body data-mode="quick">
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-card">
+            <div class="loading-spinner"></div>
+            <p>Initializing Python runtime and loading acoustics models.</p>
+        </div>
+    </div>
+
+    <main class="container">
+        <div class="tool-header">
+            <h1>Sound Level Calculator (Experimental)</h1>
+            <p class="tool-description" id="tool-description">
+                Convert between sound pressure and sound power levels, combine sources, and summarize octave-band spectra.
+            </p>
+        </div>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="mode-toggle-wrap">
+                        <div class="mode-toggle" role="group" aria-label="Analysis mode">
+                            <button type="button" class="mode-btn active" data-mode="quick">Quick Estimate</button>
+                            <button type="button" class="mode-btn" data-mode="full">Full Analysis</button>
+                        </div>
+                        <div class="mode-desc" id="mode-desc">
+                            Start with the minimum inputs. Full Analysis unlocks source stacking and octave-band detail.
+                        </div>
+                    </div>
+                    <div class="input-section">
+                        <h3>1) SPL / SWL Conversion</h3>
+                        <p>Define the source model and distance used to translate between sound power and pressure.</p>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="conversion_mode">Conversion Mode</label>
+                                <select id="conversion_mode" name="conversion_mode">
+                                    <option value="swl_to_spl">SWL to SPL</option>
+                                    <option value="spl_to_swl">SPL to SWL</option>
+                                </select>
+                                <span class="tooltip-trigger" id="tooltip-conversion_mode" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="source_type">Source Type</label>
+                                <select id="source_type" name="source_type">
+                                    <option value="point">Point (spherical)</option>
+                                    <option value="line">Line (cylindrical)</option>
+                                    <option value="plane">Plane (planar)</option>
+                                </select>
+                                <span class="tooltip-trigger" id="tooltip-source_type" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="known_level_db" id="known-level-label">Known SWL (dB re 1 pW)</label>
+                                <input type="number" id="known_level_db" name="known_level_db" value="100" step="0.1">
+                                <span class="tooltip-trigger" id="tooltip-known_level_db" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="distance_m">Distance (m)</label>
+                                <input type="number" id="distance_m" name="distance_m" value="10" step="0.1" min="0.1">
+                                <span class="tooltip-trigger" id="tooltip-distance_m" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="advanced-section" id="conversion-advanced">
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="directivity_q">Directivity Q</label>
+                                    <input type="number" id="directivity_q" name="directivity_q" value="2" step="0.1" min="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-directivity_q" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="distance_min_m">Distance Sweep Min (m)</label>
+                                    <input type="number" id="distance_min_m" name="distance_min_m" value="1" step="0.1" min="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-distance_min_m" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="distance_max_m">Distance Sweep Max (m)</label>
+                                    <input type="number" id="distance_max_m" name="distance_max_m" value="100" step="1" min="0.2">
+                                    <span class="tooltip-trigger" id="tooltip-distance_max_m" data-tooltip="Loading...">?</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="advanced-toggle" id="toggle-conversion-advanced">
+                            <span id="toggle-conversion-icon">+</span> Show advanced propagation
+                        </button>
+                    </div>
+
+                    <details class="input-disclosure full-only" id="section-combine">
+                        <summary>2) Combine Sources</summary>
+                        <div class="disclosure-body">
+                            <p>Sum multiple incoherent sources using logarithmic addition.</p>
+                            <div class="input-group">
+                                <label for="combine_levels_db">Source Levels (dB, comma-separated)</label>
+                                <input type="text" id="combine_levels_db" name="combine_levels_db" placeholder="72, 76, 80">
+                                <span class="tooltip-trigger" id="tooltip-combine_levels_db" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="input-disclosure full-only" id="section-spectrum">
+                        <summary>3) Octave-Band Spectrum</summary>
+                        <div class="disclosure-body">
+                            <p>Provide octave-band SPLs to compute overall levels and spectrum plots.</p>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="band_weighting">Band Weighting</label>
+                                    <select id="band_weighting" name="band_weighting">
+                                        <option value="Z">Z (flat)</option>
+                                        <option value="A">A-weighted</option>
+                                        <option value="C">C-weighted</option>
+                                    </select>
+                                    <span class="tooltip-trigger" id="tooltip-band_weighting" data-tooltip="Loading...">?</span>
+                                </div>
+                            </div>
+                            <div class="input-row compact">
+                                <div class="input-group">
+                                    <label for="band_63_db">63 Hz (dB)</label>
+                                    <input type="number" id="band_63_db" name="band_63_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_63_db" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="band_125_db">125 Hz (dB)</label>
+                                    <input type="number" id="band_125_db" name="band_125_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_125_db" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="band_250_db">250 Hz (dB)</label>
+                                    <input type="number" id="band_250_db" name="band_250_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_250_db" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="band_500_db">500 Hz (dB)</label>
+                                    <input type="number" id="band_500_db" name="band_500_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_500_db" data-tooltip="Loading...">?</span>
+                                </div>
+                            </div>
+                            <div class="input-row compact">
+                                <div class="input-group">
+                                    <label for="band_1000_db">1000 Hz (dB)</label>
+                                    <input type="number" id="band_1000_db" name="band_1000_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_1000_db" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="band_2000_db">2000 Hz (dB)</label>
+                                    <input type="number" id="band_2000_db" name="band_2000_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_2000_db" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="band_4000_db">4000 Hz (dB)</label>
+                                    <input type="number" id="band_4000_db" name="band_4000_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_4000_db" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="band_8000_db">8000 Hz (dB)</label>
+                                    <input type="number" id="band_8000_db" name="band_8000_db" value="60" step="0.1">
+                                    <span class="tooltip-trigger" id="tooltip-band_8000_db" data-tooltip="Loading...">?</span>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="compact-note full-only">
+                        Full Analysis uses defaults for advanced fields unless you override them.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" disabled>Loading...</button>
+                    <button type="button" class="btn btn-secondary" id="reset-btn" style="margin-top: 12px; width: 100%;">Reset Defaults</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="visuals">Visualization</button>
+                    <button class="tab-link" data-target="background">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <div class="status-banner" id="status-banner">Waiting for calculation inputs.</div>
+
+                    <div class="input-section" style="margin-bottom: 16px;">
+                        <h3>Configuration Summary</h3>
+                        <p id="summary-line">Conversion mode, source model, and band weighting will appear here.</p>
+                    </div>
+
+                    <div class="input-section">
+                        <h3>Primary Results</h3>
+                        <div class="results-grid">
+                            <div class="result-card">
+                                <div class="result-label">Sound Pressure Level (SPL)</div>
+                                <div class="result-value" id="result-spl_db">--</div>
+                                <details class="result-details">
+                                    <summary></summary>
+                                    <div class="equation-block" id="eq-spl_db"></div>
+                                </details>
+                            </div>
+                            <div class="result-card">
+                                <div class="result-label">Sound Power Level (SWL)</div>
+                                <div class="result-value" id="result-swl_db">--</div>
+                                <details class="result-details">
+                                    <summary></summary>
+                                    <div class="equation-block" id="eq-swl_db"></div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="advanced-results" id="advanced-results">
+                        <summary>Show advanced results</summary>
+                        <div class="input-section">
+                            <h3>Propagation Detail</h3>
+                            <div class="results-grid">
+                                <div class="result-card">
+                                    <div class="result-label">Geometric Spreading Loss</div>
+                                    <div class="result-value" id="result-divergence_loss_db">--</div>
+                                    <details class="result-details">
+                                        <summary></summary>
+                                        <div class="equation-block" id="eq-divergence_loss_db"></div>
+                                    </details>
+                                </div>
+                                <div class="result-card">
+                                    <div class="result-label">Directivity Gain</div>
+                                    <div class="result-value" id="result-directivity_gain_db">--</div>
+                                    <details class="result-details">
+                                        <summary></summary>
+                                        <div class="equation-block" id="eq-directivity_gain_db"></div>
+                                    </details>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-section full-only">
+                            <h3>Combined Source Level</h3>
+                            <div class="results-grid">
+                                <div class="result-card">
+                                    <div class="result-label">Combined Level</div>
+                                    <div class="result-value" id="result-combined_level_db">--</div>
+                                    <div class="result-note" id="result-combine_count">Provide levels to combine sources.</div>
+                                    <details class="result-details">
+                                        <summary></summary>
+                                        <div class="equation-block" id="eq-combined_level_db"></div>
+                                    </details>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-section full-only">
+                            <h3>Octave-Band Summary</h3>
+                            <div class="results-grid">
+                                <div class="result-card">
+                                    <div class="result-label">Overall Level (Z)</div>
+                                    <div class="result-value" id="result-octave_overall_db">--</div>
+                                    <details class="result-details">
+                                        <summary></summary>
+                                        <div class="equation-block" id="eq-octave_overall_db"></div>
+                                    </details>
+                                </div>
+                                <div class="result-card">
+                                    <div class="result-label" id="octave-weighted-label">Weighted Overall (A)</div>
+                                    <div class="result-value" id="result-octave_weighted_db">--</div>
+                                    <details class="result-details">
+                                        <summary></summary>
+                                        <div class="equation-block" id="eq-octave_weighted_db"></div>
+                                    </details>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="compact-note quick-only" id="quick-results-note">
+                        Switch to Full Analysis to review source summation and octave-band outputs.
+                    </div>
+                </div>
+
+                <div id="visuals" class="tab-content">
+                    <div class="chart-grid">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h4>SPL vs Distance</h4>
+                                <span class="chart-meta" id="distance-scale-label">Scale: log</span>
+                            </div>
+                            <div class="chart-body">
+                                <canvas id="distance-chart"></canvas>
+                                <div class="chart-empty" id="distance-empty">Run a calculation to plot the distance sweep.</div>
+                            </div>
+                        </div>
+                        <div class="chart-card full-only">
+                            <div class="chart-header">
+                                <h4>Octave-Band Spectrum</h4>
+                                <span class="chart-meta" id="octave-weighting-label">Weighting: Z</span>
+                            </div>
+                            <div class="chart-body">
+                                <canvas id="octave-chart"></canvas>
+                                <div class="chart-empty" id="octave-empty">Provide octave-band values to plot the spectrum.</div>
+                            </div>
+                        </div>
+                        <div class="compact-note quick-only" style="grid-column: 1 / -1;">
+                            Switch to Full Analysis to enable the octave-band spectrum plot.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <div class="background-tabs">
+                        <button class="background-tab active" data-bg-target="bg-overview">Overview</button>
+                        <button class="background-tab" data-bg-target="bg-glossary">Inputs & Outputs Glossary</button>
+                        <button class="background-tab" data-bg-target="bg-theory">Theory</button>
+                        <button class="background-tab" data-bg-target="bg-equations">Equations</button>
+                        <button class="background-tab" data-bg-target="bg-implementation">Implementation Notes</button>
+                        <button class="background-tab" data-bg-target="bg-references">References</button>
+                    </div>
+
+                    <div id="bg-overview" class="background-panel active">
+                        <div class="background-section">
+                            <h3>Tool Overview</h3>
+                            <p id="background-description">Summary text will load from the calculation docstring.</p>
+                            <h4>What You Can Do</h4>
+                            <ul>
+                                <li>Convert between sound power (SWL) and sound pressure (SPL).</li>
+                                <li>Estimate geometric spreading and directivity adjustments.</li>
+                                <li>Combine multiple incoherent sources using decibel addition.</li>
+                                <li>Summarize octave-band spectra and apply A/C weighting.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-glossary" class="background-panel">
+                        <div class="background-section">
+                            <h3>Inputs & Outputs Glossary</h3>
+                            <p>Definitions are pulled directly from the calculation docstring.</p>
+                            <h4>Inputs</h4>
+                            <div class="glossary-grid" id="glossary-inputs"></div>
+                            <h4 style="margin-top: 16px;">Outputs</h4>
+                            <div class="glossary-grid" id="glossary-outputs"></div>
+                        </div>
+                    </div>
+
+                    <div id="bg-theory" class="background-panel">
+                        <div class="background-section">
+                            <h3>Sound Level Fundamentals</h3>
+                            <p>
+                                Sound pressure level (SPL) describes the pressure fluctuation at a receiver, while
+                                sound power level (SWL) describes the total acoustic power emitted by a source. The
+                                conversion depends on distance, geometric spreading, and directivity. When multiple
+                                sources contribute, their energies add, not their decibel values.
+                            </p>
+                            <p>
+                                Octave-band data captures how energy distributes across frequency. Weighting curves
+                                (A and C) apply frequency-dependent offsets to approximate human hearing sensitivity.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="bg-equations" class="background-panel">
+                        <div class="background-section">
+                            <h3>Equations</h3>
+                            <div class="equation-container" id="equation-container"></div>
+                        </div>
+                    </div>
+
+                    <div id="bg-implementation" class="background-panel">
+                        <div class="background-section">
+                            <h3>Implementation Notes</h3>
+                            <ul>
+                                <li>Geometric spreading uses simplified constants (11 dB for spherical, 8 dB for cylindrical) based on ISO 9613 guidance.</li>
+                                <li>Directivity gain is applied as 10 log10(Q) for the selected mounting condition.</li>
+                                <li>Octave-band weighting uses standard octave-band approximations from IEC 61672.</li>
+                                <li>Line and plane models are idealized for quick estimates rather than full propagation modeling.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-references" class="background-panel">
+                        <div class="background-section">
+                            <h3>References</h3>
+                            <ul>
+                                <li>ISO 9613-2: Acoustics - Attenuation of sound during propagation outdoors.</li>
+                                <li>IEC 61672-1: Electroacoustics - Sound level meters (frequency weighting).</li>
+                                <li>ISO 226: Normal equal-loudness-level contours.</li>
+                                <li>Bies, Hansen, and Zander. Engineering Noise Control (5th ed.).</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        let pyodideInstance = null;
+        let pyToolModule = null;
+        let pyUtils = null;
+        let toolDocumentation = {};
+        let distanceChart = null;
+        let octaveChart = null;
+        let analysisMode = 'quick';
+        let latestInputs = null;
+        let latestResult = null;
+        let calcDebounce = null;
+
+        const TOOL_MODULE_NAME = 'acoustics';
+        const TOOL_FUNCTION_NAME = 'calculate_sound_levels';
+        const PARAM_ORDER = [
+            'conversion_mode',
+            'source_type',
+            'known_level_db',
+            'distance_m',
+            'directivity_q',
+            'distance_min_m',
+            'distance_max_m',
+            'combine_levels_db',
+            'band_weighting',
+            'band_63_db',
+            'band_125_db',
+            'band_250_db',
+            'band_500_db',
+            'band_1000_db',
+            'band_2000_db',
+            'band_4000_db',
+            'band_8000_db',
+        ];
+
+        const RESULT_LABELS = {
+            spl_db: 'Sound Pressure Level (SPL)',
+            swl_db: 'Sound Power Level (SWL)',
+            divergence_loss_db: 'Geometric Spreading Loss',
+            directivity_gain_db: 'Directivity Gain',
+            combined_level_db: 'Combined Level',
+            octave_overall_db: 'Overall Level (Z)',
+            octave_weighted_db: 'Weighted Overall',
+        };
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function openTab(targetId) {
+            document.querySelectorAll('.tab-content').forEach((tab) => {
+                tab.style.display = 'none';
+            });
+            document.querySelectorAll('.tab-link').forEach((tab) => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(targetId).style.display = 'block';
+            document.querySelector(`.tab-link[data-target="${targetId}"]`).classList.add('active');
+        }
+
+        function openBackgroundTab(targetId) {
+            document.querySelectorAll('.background-panel').forEach((panel) => {
+                panel.classList.remove('active');
+            });
+            document.querySelectorAll('.background-tab').forEach((tab) => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(targetId).classList.add('active');
+            document.querySelector(`.background-tab[data-bg-target="${targetId}"]`).classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
             }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false, // Crucial with fixed container height
-          scales: {
-            x: {
-              title: { display: true, text: 'Distance (m)' },
-              // Use logarithmic scale for point source if min distance > 0
-              type: (sourceType === 'point' && distances.length > 0 && distances[0] > 0) ? 'logarithmic' : 'linear',
-              min: distances.length > 0 ? distances[0] : 0.1, // Set min/max based on data
-              max: distances.length > 0 ? distances[distances.length - 1] : 100,
-              ticks: {
-                    // Use the sparse labels generated above
-                    autoSkip: false, // We control skipping via the labels array
-                    maxRotation: 0,
-              }
-            },
-            y: {
-              title: { display: true, text: 'Sound Pressure Level (dB)' },
-              min: 0,
-              // Suggest max based on data, rounded up nicely
-              suggestedMax: Math.ceil((Math.max(0, ...spls, ...splsWeighted) + 5) / 10) * 10
+        }
+
+        function setStatus(message, tone = 'neutral') {
+            const banner = document.getElementById('status-banner');
+            banner.textContent = message;
+            banner.classList.remove('success', 'error');
+            if (tone === 'success') {
+                banner.classList.add('success');
             }
-          },
-           plugins: {
-                tooltip: {
-                    mode: 'index', // Show tooltips for both lines at the same x-index
-                    intersect: false,
-                    callbacks: {
-                         // Show actual distance in tooltip title
-                        title: function(tooltipItems) {
-                             // Find the underlying distance from the first tooltip item's parsed data
-                             if (tooltipItems.length > 0) {
-                                 const xValue = tooltipItems[0].parsed.x;
-                                 return `Distance: ${xValue.toFixed(1)} m`;
-                             }
-                             return '';
-                         },
-                         // Format tooltip body labels
-                         label: function(context) {
-                             let label = context.dataset.label || '';
-                             if (label) {
-                                 label += ': ';
-                             }
-                             if (context.parsed.y !== null) {
-                                 label += context.parsed.y.toFixed(1) + ' dB';
-                             }
-                             return label;
-                         }
-                    }
-                },
-                legend: {
-                    position: 'top',
+            if (tone === 'error') {
+                banner.classList.add('error');
+            }
+        }
+
+        function updateKnownLabel() {
+            const mode = document.getElementById('conversion_mode').value;
+            const label = document.getElementById('known-level-label');
+            label.textContent = mode === 'swl_to_spl'
+                ? 'Known SWL (dB re 1 pW)'
+                : 'Known SPL (dB re 20 uPa)';
+        }
+
+        function setMode(mode) {
+            analysisMode = mode;
+            document.body.dataset.mode = mode;
+            document.querySelectorAll('.mode-btn').forEach((button) => {
+                const isActive = button.dataset.mode === mode;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+            const desc = document.getElementById('mode-desc');
+            desc.textContent = mode === 'full'
+                ? 'Full Analysis exposes source stacking, octave-band spectra, and advanced propagation controls.'
+                : 'Start with the minimum inputs. Full Analysis unlocks source stacking and octave-band detail.';
+
+            if (mode === 'quick') {
+                const advancedSection = document.getElementById('conversion-advanced');
+                const toggleIcon = document.getElementById('toggle-conversion-icon');
+                if (advancedSection) {
+                    advancedSection.classList.remove('visible');
+                }
+                if (toggleIcon) {
+                    toggleIcon.textContent = '+';
+                }
+                const advancedResults = document.getElementById('advanced-results');
+                if (advancedResults) {
+                    advancedResults.open = false;
+                }
+            } else {
+                const combineDisclosure = document.getElementById('section-combine');
+                const spectrumDisclosure = document.getElementById('section-spectrum');
+                if (combineDisclosure && document.getElementById('combine_levels_db')?.value.trim()) {
+                    combineDisclosure.open = true;
+                }
+                if (spectrumDisclosure && document.getElementById('band_weighting')?.value !== 'Z') {
+                    spectrumDisclosure.open = true;
                 }
             }
-        }
-      });
-    }
-
-    function createLoudnessChart() {
-      const ctx = document.getElementById('loudnessChart').getContext('2d');
-      if (loudnessChart) {
-        loudnessChart.destroy(); // Clear previous chart instance
-         loudnessChart = null;
-      }
-
-      const frequencies = PHON_DATA.map(row => row[0]);
-      // Show curves: 0, 20, 40, 60, 80, 100 phon
-      const datasets = [0, 2, 4, 6, 8, 10].map(phonIndex => {
-        const phonLevel = phonIndex * 10;
-        return {
-          label: `${phonLevel} phon`,
-          data: PHON_DATA.map(row => ({ x: row[0], y: row[phonIndex + 1] })), // Use {x,y} format
-          borderColor: getColorForPhon(phonLevel),
-          backgroundColor: 'transparent',
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 0
-        };
-      });
-
-      loudnessChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          // labels: frequencies, // No need for separate labels when using {x,y} data
-          datasets: datasets
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false, // Crucial with fixed container height
-          scales: {
-            x: {
-              type: 'logarithmic',
-              title: { display: true, text: 'Frequency (Hz)' },
-              min: 20,
-              max: 16000,
-              ticks: {
-                 // Manual ticks for standard frequencies
-                 callback: function(value, index, values) {
-                    const standard = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 16000];
-                     // Check if the value is close to a standard frequency
-                     for (const freq of standard) {
-                         if (Math.abs(value - freq) < freq * 0.01) { // Allow 1% tolerance for log scale
-                             return freq.toString();
-                         }
-                     }
-                     return ''; // Hide other ticks
-                 },
-                  minRotation: 0,
-                  maxRotation: 0,
-                  autoSkip: false
-              }
-            },
-            y: {
-              title: { display: true, text: 'Sound Pressure Level (dB SPL)' },
-              min: -10,
-              max: 130,
-              ticks: { stepSize: 10 }
+            if (latestInputs && latestResult) {
+                updateSummary(latestInputs, latestResult);
             }
-          },
-          plugins: {
-              legend: {
-                  position: 'top',
-              },
-              tooltip: {
-                 mode: 'index',
-                 intersect: false,
-                 callbacks: {
-                     title: function(tooltipItems) {
-                          if (tooltipItems.length > 0) {
-                             const xValue = tooltipItems[0].parsed.x;
-                             return `Frequency: ${Math.round(xValue)} Hz`;
-                         }
-                         return '';
-                     },
-                     label: function(context) {
-                          let label = context.dataset.label || '';
-                         if (label) { label += ': '; }
-                         if (context.parsed.y !== null) {
-                             label += context.parsed.y.toFixed(1) + ' dB SPL';
-                         }
-                         return label;
-                     }
-                 }
-              }
-          }
-        }
-      });
-    }
-
-    function getColorForPhon(phon) {
-       const hue = 240 - (phon * 2.4); // Blue (240) to Red (0)
-       return `hsl(${hue}, 75%, 55%)`; // Adjusted saturation/lightness
-    }
-
-
-    // =====================================================================
-    // UI EVENT HANDLERS & LOGIC
-    // =====================================================================
-
-    async function handleCalculate() {
-      // Ensure Pyodide is fully loaded before attempting calculation
-      if (!isPyodideReady || !pyodide) {
-         // Wait if loading is still in progress
-         if (pyodideLoadPromise) {
-             console.log("Calculation deferred: Pyodide still loading...");
-             document.getElementById('calculatingIndicator').textContent = 'Waiting for Python initialization...';
-             document.getElementById('calculatingIndicator').style.display = 'block';
-             await pyodideLoadPromise; // Wait for the existing load process to finish
-             document.getElementById('calculatingIndicator').style.display = 'none';
-              if (!isPyodideReady || !pyodide) { // Check again after waiting
-                 console.error("Calculation aborted: Pyodide failed to initialize.");
-                 showError("Python environment failed to load. Cannot calculate.");
-                 return;
-             }
-         } else {
-             // This shouldn't happen if loadPyodideAndPackages was called, but handle defensively
-             console.error("Calculation aborted: Pyodide not initialized and not loading.");
-             showError("Python environment not ready. Please reload the page.");
-             return;
-         }
-      }
-      console.log("Starting calculation...");
-
-      // Show calculating indicator and disable button
-      document.getElementById('calculatingIndicator').textContent = 'Calculating with Python...';
-      document.getElementById('calculatingIndicator').style.display = 'block';
-      hideError(); // Clear previous errors
-      document.getElementById('calculateBtn').disabled = true;
-      document.getElementById('resetBtn').disabled = true; // Also disable reset during calculation
-
-      try {
-        // 1. Gather Input Values from DOM
-        const inputs = {
-          sourceType: document.getElementById('sourceType').value,
-          swl: parseFloat(document.getElementById('sourceLevel').value),
-          distanceMin: parseFloat(document.getElementById('distanceMin').value),
-          distanceMax: parseFloat(document.getElementById('distanceMax').value),
-          directivityFactor: document.getElementById('dirFactor').value,
-          frequency: document.getElementById('frequency').value,
-          weighting: document.getElementById('weighting').value,
-          groundAbsorption: parseFloat(document.getElementById('groundAbsorption').value),
-          airAttenuationEnabled: document.getElementById('airAttenuationEnabled').checked,
-          tempC: parseFloat(document.getElementById('tempC').value),
-          humidity: parseFloat(document.getElementById('humidity').value),
-          barriers: parseInt(document.getElementById('barriers').value),
-          barrierAttenuation: parseFloat(document.getElementById('barrierAttenuation').value)
-        };
-
-         // 2. Basic Input Validation (before sending to Python)
-         let invalidFields = [];
-         for (const key in inputs) {
-             // Check numeric fields specifically
-              if (['swl', 'distanceMin', 'distanceMax', 'groundAbsorption', 'tempC', 'humidity', 'barriers', 'barrierAttenuation'].includes(key)) {
-                   if (isNaN(inputs[key])) {
-                      invalidFields.push(key);
-                  }
-              }
-         }
-         if (invalidFields.length > 0) {
-             throw new Error(`Invalid numeric input for: ${invalidFields.join(', ')}. Please check values.`);
-         }
-          // Adjust distances if logically inconsistent
-          if (inputs.distanceMin <= 0) {
-              inputs.distanceMin = 0.1;
-              document.getElementById('distanceMin').value = 0.1; // Update UI
-               console.warn("Minimum distance adjusted to 0.1m.");
-          }
-          if (inputs.distanceMax <= inputs.distanceMin) {
-               inputs.distanceMax = inputs.distanceMin + 10;
-              document.getElementById('distanceMax').value = inputs.distanceMax; // Update UI
-               console.warn("Maximum distance adjusted to be greater than minimum distance.");
-          }
-
-
-        // 3. Call Python Function via Pyodide
-        const runCalculationPy = pyodide.globals.get('run_calculation');
-        if (typeof runCalculationPy !== 'function') {
-             throw new Error("Python function 'run_calculation' not found. Script might not have loaded correctly.");
+            scheduleCalculation();
         }
 
-        // Pass inputs as a JS object (Pyodide converts to Python dict via proxy)
-        // Use await since the Python function might be async (though ours is sync)
-        const resultsProxy = await runCalculationPy(inputs);
-
-        // Convert PyProxy map (dict) to a JS object for easier handling
-        // Use dict_converter to handle potential Map objects within the result
-        const results = resultsProxy.toJs({ dict_converter: Object.fromEntries });
-        resultsProxy.destroy(); // IMPORTANT: Clean up the PyProxy to free memory
-
-        // 4. Check for Python Errors returned in the results structure
-        if (results.error) {
-          console.error("Python calculation returned an error:", results.error);
-          // The Python traceback should have already been printed in the console by the Python script
-          throw new Error(`Python calculation error: ${results.error}. Check console for details.`);
+        function toggleConversionAdvanced() {
+            const advancedSection = document.getElementById('conversion-advanced');
+            const toggleIcon = document.getElementById('toggle-conversion-icon');
+            if (!advancedSection || !toggleIcon) {
+                return;
+            }
+            advancedSection.classList.toggle('visible');
+            toggleIcon.textContent = advancedSection.classList.contains('visible') ? '-' : '+';
         }
 
-        // 5. Update UI with Results
-        console.log("Calculation successful. Updating UI.", results);
-        const weightingType = inputs.weighting;
-        const dist1mLabel = results.calc_dist_1m === 1.0 ? "1m" : `${results.calc_dist_1m.toFixed(1)}m`;
+        function hasIncompleteInputs() {
+            const requiredFields = [
+                'known_level_db', 'distance_m', 'directivity_q', 'distance_min_m', 'distance_max_m',
+                'band_63_db', 'band_125_db', 'band_250_db', 'band_500_db', 'band_1000_db', 'band_2000_db',
+                'band_4000_db', 'band_8000_db',
+            ];
+            return requiredFields.some((field) => {
+                const element = document.getElementById(field);
+                return element && element.value.trim() === '';
+            });
+        }
 
-         document.getElementById('singlePointTitle').textContent = `Sound Level at ${dist1mLabel}:`;
-         document.getElementById('spl1m').textContent = `SPL (Z): ${results.spl_1m.toFixed(1)} dB`; // Z for unweighted
-         document.getElementById('splWeighted1m').textContent =
-           `Weighted SPL (${weightingType}): ${results.spl_weighted_1m.toFixed(1)} dB`;
+        function scheduleCalculation() {
+            if (!pyToolModule) {
+                return;
+            }
+            if (hasIncompleteInputs()) {
+                return;
+            }
+            if (calcDebounce) {
+                window.clearTimeout(calcDebounce);
+            }
+            calcDebounce = window.setTimeout(() => {
+                handleCalculate({ preventDefault: () => {} });
+            }, 300);
+        }
 
-        // 6. Update Distance Chart
-        createDistanceChart(results.distances, results.spls, results.spls_weighted, weightingType, inputs.sourceType);
+        function getLabelForParam(paramName) {
+            const label = document.querySelector(`label[for="${paramName}"]`);
+            return label ? label.textContent : paramName.replace(/_/g, ' ');
+        }
 
-      } catch (error) {
-        console.error("JavaScript Calculation Handler Error:", error);
-        showError(`Calculation Failed: ${error.message}`); // Display error in the UI panel
-         // Clear potentially old/invalid results on error
-         document.getElementById('spl1m').textContent = 'SPL (Z): Error';
-         document.getElementById('splWeighted1m').textContent = 'Weighted SPL: Error';
-         // Optionally destroy the chart to show something went wrong
-          if (distanceChart) {
-              try { distanceChart.destroy(); distanceChart = null;} catch(e){}
-          }
+        function renderGlossary() {
+            const inputContainer = document.getElementById('glossary-inputs');
+            const outputContainer = document.getElementById('glossary-outputs');
+            inputContainer.innerHTML = '';
+            outputContainer.innerHTML = '';
 
-      } finally {
-        // Hide indicator and re-enable buttons regardless of success/failure
-        document.getElementById('calculatingIndicator').style.display = 'none';
-         if (isPyodideReady) { // Only re-enable if Pyodide itself didn't fail
-             document.getElementById('calculateBtn').disabled = false;
-             document.getElementById('resetBtn').disabled = false;
-         }
-         console.log("Calculation process finished.");
-      }
-    }
+            if (toolDocumentation.parameters) {
+                PARAM_ORDER.forEach((param) => {
+                    const description = toolDocumentation.parameters[param];
+                    if (!description) {
+                        return;
+                    }
+                    const item = document.createElement('div');
+                    item.className = 'glossary-item';
+                    item.innerHTML = `
+                        <div class="term">${escapeHtml(getLabelForParam(param))} <code>${escapeHtml(param)}</code></div>
+                        <div class="definition">${escapeHtml(description)}</div>
+                    `;
+                    inputContainer.appendChild(item);
+                });
+            }
 
-     function showError(message) {
-         const errorDiv = document.getElementById('errorDisplay');
-         errorDiv.textContent = message;
-         errorDiv.style.display = 'block';
-     }
+            if (toolDocumentation.returns) {
+                Object.keys(toolDocumentation.returns).forEach((key) => {
+                    if (key.startsWith('subst_')) {
+                        return;
+                    }
+                    const description = toolDocumentation.returns[key];
+                    const label = RESULT_LABELS[key] || key.replace(/_/g, ' ');
+                    const item = document.createElement('div');
+                    item.className = 'glossary-item';
+                    item.innerHTML = `
+                        <div class="term">${escapeHtml(label)} <code>${escapeHtml(key)}</code></div>
+                        <div class="definition">${escapeHtml(description)}</div>
+                    `;
+                    outputContainer.appendChild(item);
+                });
+            }
+        }
 
-     function hideError() {
-          document.getElementById('errorDisplay').style.display = 'none';
-          document.getElementById('errorDisplay').textContent = '';
-     }
+        function renderEquations() {
+            const container = document.getElementById('equation-container');
+            container.innerHTML = '';
+            const lines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').map((line) => line.trim()).filter((line) => line)
+                : [];
 
-    // Attach handlers
-    document.getElementById('calculateBtn').addEventListener('click', handleCalculate);
+            const legends = [
+                [
+                    { symbol: 'L_p', key: 'spl_db' },
+                    { symbol: 'L_w', key: 'swl_db' },
+                    { symbol: 'A_div', key: 'divergence_loss_db' },
+                    { symbol: 'G_dir', key: 'directivity_gain_db' },
+                ],
+                [
+                    { symbol: 'r', text: 'Distance between source and receiver (m)' },
+                    { symbol: 'k', text: 'Spreading slope (20 point, 10 line, 0 plane)' },
+                    { symbol: 'C', text: 'Spreading constant (11 point, 8 line, 0 plane)' },
+                ],
+                [
+                    { symbol: 'Q', key: 'directivity_q' },
+                    { symbol: 'G_dir', key: 'directivity_gain_db' },
+                ],
+                [
+                    { symbol: 'L_i', text: 'Individual levels (dB)' },
+                    { symbol: 'L_tot', text: 'Combined level (dB)' },
+                ],
+                [
+                    { symbol: 'W_i', text: 'Weighting adjustment for band i (dB)' },
+                    { symbol: 'L_{i,w}', text: 'Weighted band level (dB)' },
+                ],
+            ];
 
-    document.getElementById('resetBtn').addEventListener('click', () => {
-       console.log("Resetting form to defaults...");
-       // Reset form fields
-      document.getElementById('sourceType').value = 'point';
-      document.getElementById('sourceLevel').value = '100';
-      document.getElementById('distanceMin').value = '1';
-      document.getElementById('distanceMax').value = '100';
-      document.getElementById('dirFactor').value = '2';
-      document.getElementById('frequency').value = 'broadband';
-      document.getElementById('weighting').value = 'A';
-      document.getElementById('groundAbsorption').value = '0.5';
-      document.getElementById('airAttenuationEnabled').checked = true;
-      document.getElementById('tempC').value = '20';
-      document.getElementById('humidity').value = '60';
-      document.getElementById('barriers').value = '0';
-      document.getElementById('barrierAttenuation').value = '5';
-      document.getElementById('sourcePresetSelect').value = 'custom';
-      hideError(); // Clear any previous errors
+            lines.forEach((expression, index) => {
+                const card = document.createElement('div');
+                card.className = 'equation-card';
+                const legendItems = legends[index] || [];
+                const legendHtml = legendItems.map((item) => {
+                    const definition = item.key
+                        ? (toolDocumentation.parameters && toolDocumentation.parameters[item.key])
+                            || (toolDocumentation.returns && toolDocumentation.returns[item.key])
+                            || ''
+                        : item.text || '';
+                    return `<li><span>${escapeHtml(item.symbol)}</span>: ${escapeHtml(definition)}</li>`;
+                }).join('');
 
-      // Re-run calculation with defaults immediately after reset
-       if (isPyodideReady) {
-           handleCalculate();
-       } else {
-            console.warn("Cannot run calculation after reset: Pyodide not ready.")
-            // Clear results manually if Pyodide isn't ready
-            document.getElementById('spl1m').textContent = 'SPL (Z): -';
-            document.getElementById('splWeighted1m').textContent = 'Weighted SPL: -';
-            if(distanceChart) { distanceChart.destroy(); distanceChart = null; }
-       }
-    });
+                card.innerHTML = `
+                    <strong>Equation (${index + 1})</strong>
+                    <div class="equation-expression">\\[ ${escapeHtml(expression)} \\]</div>
+                    <ul>${legendHtml}</ul>
+                `;
+                container.appendChild(card);
+            });
+            typesetMath();
+        }
 
-    document.getElementById('applyPresetBtn').addEventListener('click', () => {
-      const presetKey = document.getElementById('sourcePresetSelect').value;
-      if (presetKey in SOURCE_PRESETS) {
-         const presetSWL = SOURCE_PRESETS[presetKey].swl;
-         document.getElementById('sourceLevel').value = Math.round(presetSWL);
-         console.log(`Applied preset '${presetKey}' with SWL ${Math.round(presetSWL)}`);
-         // Optionally trigger calculation after applying preset:
-         // if (isPyodideReady) { handleCalculate(); }
-      }
-    });
+        function populateDocContent() {
+            if (!toolDocumentation.description) {
+                return;
+            }
+            document.getElementById('tool-description').textContent = toolDocumentation.description;
+            document.getElementById('background-description').innerHTML = escapeHtml(toolDocumentation.description).replace(/\n/g, '<br>');
 
+            Object.keys(toolDocumentation.parameters || {}).forEach((param) => {
+                const tooltip = document.getElementById(`tooltip-${param}`);
+                if (tooltip) {
+                    tooltip.dataset.tooltip = toolDocumentation.parameters[param];
+                }
+            });
 
-    // Tab switching function
-    function openTab(evt, tabName) {
-      let i, tabcontent, tabbuttons;
-      tabcontent = document.getElementsByClassName("tab-content");
-      for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-      }
-      tabbuttons = document.getElementsByClassName("tab-button");
-      for (i = 0; i < tabbuttons.length; i++) {
-        tabbuttons[i].className = tabbuttons[i].className.replace(" active", "");
-      }
-      document.getElementById(tabName).style.display = "block";
-      evt.currentTarget.className += " active";
-    }
+            renderGlossary();
+            renderEquations();
+        }
 
-    // =====================================================================
-    // INITIALIZATION ON PAGE LOAD
-    // =====================================================================
-    window.addEventListener('load', () => {
-      console.log("Page loaded. Initializing components...");
-      // Initialize the static loudness chart first (doesn't need Python)
-      createLoudnessChart();
-      // Start loading Pyodide asynchronously
-      // Store the promise so handleCalculate can wait if needed
-      pyodideLoadPromise = loadPyodideAndPackages();
-       // Ensure initial tab state is correct
-      document.getElementById('calculator').style.display = 'block';
-      document.querySelector('.tab-button.active')?.classList.add('active'); // Ensure correct button styling
-       // Ensure error display is hidden initially
-       hideError();
-    });
+        function formatDb(value) {
+            if (!Number.isFinite(value)) {
+                return '--';
+            }
+            return `${value.toFixed(2)} dB`;
+        }
 
-  </script>
+        function updateResultsDisplay(result) {
+            document.getElementById('result-spl_db').textContent = formatDb(result.spl_db);
+            document.getElementById('result-swl_db').textContent = formatDb(result.swl_db);
+            document.getElementById('result-divergence_loss_db').textContent = formatDb(result.divergence_loss_db);
+            document.getElementById('result-directivity_gain_db').textContent = formatDb(result.directivity_gain_db);
+            document.getElementById('result-combined_level_db').textContent = formatDb(result.combined_level_db);
+            document.getElementById('result-octave_overall_db').textContent = formatDb(result.octave_overall_db);
+            document.getElementById('result-octave_weighted_db').textContent = formatDb(result.octave_weighted_db);
+
+            const countNote = result.combine_count > 0
+                ? `Combined ${result.combine_count} source(s).`
+                : 'Provide levels to combine sources.';
+            document.getElementById('result-combine_count').textContent = countNote;
+
+            const weightingLabel = result.octave_weighting_label || 'Z';
+            document.getElementById('octave-weighted-label').textContent = `Weighted Overall (${weightingLabel})`;
+            document.getElementById('octave-weighting-label').textContent = `Weighting: ${weightingLabel}`;
+
+            const equations = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').map((line) => line.trim()).filter((line) => line)
+                : [];
+
+            document.getElementById('eq-spl_db').innerHTML = `
+                <p><strong>Equation:</strong> $$${escapeHtml(equations[0] || '')}$$</p>
+                <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_spl_db || '')}$$</p>
+            `;
+            document.getElementById('eq-swl_db').innerHTML = `
+                <p><strong>Equation:</strong> $$${escapeHtml(equations[0] || '')}$$</p>
+                <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_swl_db || '')}$$</p>
+            `;
+            document.getElementById('eq-divergence_loss_db').innerHTML = `
+                <p><strong>Equation:</strong> $$${escapeHtml(equations[1] || '')}$$</p>
+                <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_divergence_loss_db || '')}$$</p>
+            `;
+            document.getElementById('eq-directivity_gain_db').innerHTML = `
+                <p><strong>Equation:</strong> $$${escapeHtml(equations[2] || '')}$$</p>
+                <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_directivity_gain_db || '')}$$</p>
+            `;
+            document.getElementById('eq-combined_level_db').innerHTML = result.subst_combined_level_db
+                ? `
+                    <p><strong>Equation:</strong> $$${escapeHtml(equations[3] || '')}$$</p>
+                    <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_combined_level_db || '')}$$</p>
+                `
+                : '<p>Provide at least one level to show the equation.</p>';
+            document.getElementById('eq-octave_overall_db').innerHTML = `
+                <p><strong>Equation:</strong> $$${escapeHtml(equations[3] || '')}$$</p>
+                <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_octave_overall_db || '')}$$</p>
+            `;
+            document.getElementById('eq-octave_weighted_db').innerHTML = `
+                <p><strong>Weighted Bands:</strong> $$${escapeHtml(equations[4] || '')}$$</p>
+                <p><strong>Combined:</strong> $$${escapeHtml(equations[3] || '')}$$</p>
+                <p><strong>Substituted:</strong> $$${escapeHtml(result.subst_octave_weighted_db || '')}$$</p>
+            `;
+
+            typesetMath();
+        }
+
+        function updateSummary(inputs, result) {
+            const summary = document.getElementById('summary-line');
+            const modeLabel = inputs.conversion_mode === 'swl_to_spl' ? 'SWL to SPL' : 'SPL to SWL';
+            const sourceLabel = `${inputs.source_type}`.replace(/^\w/, (c) => c.toUpperCase());
+            const combineLabel = analysisMode === 'full'
+                ? (result.combine_count > 0 ? `${result.combine_count} sources combined` : 'No source sum')
+                : 'No source sum';
+            const modeTag = analysisMode === 'full' ? `Band weighting ${result.octave_weighting_label}` : 'Quick estimate';
+            summary.textContent = `${modeLabel} | ${sourceLabel} source | Distance ${inputs.distance_m} m | Q=${inputs.directivity_q} | ${combineLabel} | ${modeTag}`;
+        }
+
+        function updateDistanceChart(result, inputs) {
+            const container = document.getElementById('distance-empty');
+            const canvas = document.getElementById('distance-chart');
+            const distances = result.distance_sweep_m || [];
+            const splValues = result.spl_sweep_db || [];
+
+            const valid = distances.length > 1 && distances.every(Number.isFinite) && splValues.every(Number.isFinite);
+            if (!valid) {
+                container.style.display = 'flex';
+                canvas.style.display = 'none';
+                if (distanceChart) {
+                    distanceChart.destroy();
+                    distanceChart = null;
+                }
+                return;
+            }
+
+            container.style.display = 'none';
+            canvas.style.display = 'block';
+            const scaleType = inputs.source_type === 'point' ? 'logarithmic' : 'linear';
+            document.getElementById('distance-scale-label').textContent = `Scale: ${scaleType}`;
+
+            const dataPoints = distances.map((value, index) => ({ x: value, y: splValues[index] }));
+            const ctx = canvas.getContext('2d');
+            if (distanceChart) {
+                distanceChart.destroy();
+            }
+
+            distanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'SPL (dB)',
+                        data: dataPoints,
+                        borderColor: 'rgb(17, 24, 39)',
+                        backgroundColor: 'rgba(17, 24, 39, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 0,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: scaleType,
+                            title: { display: true, text: 'Distance (m)' },
+                        },
+                        y: {
+                            title: { display: true, text: 'SPL (dB)' },
+                        },
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => `Distance: ${items[0].parsed.x.toFixed(2)} m`,
+                                label: (item) => `SPL: ${item.parsed.y.toFixed(2)} dB`,
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        function updateOctaveChart(result) {
+            const container = document.getElementById('octave-empty');
+            const canvas = document.getElementById('octave-chart');
+            const bands = result.octave_bands_hz || [];
+            const levels = result.octave_levels_db || [];
+            const weighted = result.octave_weighted_levels_db || [];
+            const valid = bands.length > 0 && levels.every(Number.isFinite) && weighted.every(Number.isFinite);
+
+            if (!valid) {
+                container.style.display = 'flex';
+                canvas.style.display = 'none';
+                if (octaveChart) {
+                    octaveChart.destroy();
+                    octaveChart = null;
+                }
+                return;
+            }
+
+            container.style.display = 'none';
+            canvas.style.display = 'block';
+            const ctx = canvas.getContext('2d');
+            if (octaveChart) {
+                octaveChart.destroy();
+            }
+
+            const weightingLabel = result.octave_weighting_label || 'Z';
+            const datasets = [
+                {
+                    label: 'Input (Z)',
+                    data: levels,
+                    backgroundColor: 'rgba(17, 24, 39, 0.2)',
+                    borderColor: 'rgba(17, 24, 39, 0.6)',
+                    borderWidth: 1.5,
+                },
+            ];
+            if (weightingLabel !== 'Z') {
+                datasets.push({
+                    label: `${weightingLabel}-weighted`,
+                    data: weighted,
+                    backgroundColor: 'rgba(15, 118, 110, 0.35)',
+                    borderColor: 'rgba(15, 118, 110, 0.7)',
+                    borderWidth: 1.5,
+                });
+            }
+
+            octaveChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: bands.map((band) => `${band} Hz`),
+                    datasets: datasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Octave Band (Hz)' } },
+                        y: { title: { display: true, text: 'Level (dB)' } },
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                    },
+                },
+            });
+        }
+
+        function gatherInputs() {
+            const inputs = {};
+            PARAM_ORDER.forEach((param) => {
+                const element = document.getElementById(param);
+                if (!element) {
+                    return;
+                }
+                if (element.type === 'text') {
+                    inputs[param] = element.value.trim();
+                } else if (element.tagName === 'SELECT') {
+                    inputs[param] = element.value;
+                } else {
+                    const value = parseFloat(element.value);
+                    inputs[param] = value;
+                }
+            });
+
+            const numericFields = [
+                'known_level_db', 'distance_m', 'directivity_q', 'distance_min_m', 'distance_max_m',
+                'band_63_db', 'band_125_db', 'band_250_db', 'band_500_db', 'band_1000_db', 'band_2000_db',
+                'band_4000_db', 'band_8000_db',
+            ];
+            numericFields.forEach((field) => {
+                if (!Number.isFinite(inputs[field])) {
+                    throw new Error(`Invalid value for ${field.replace(/_/g, ' ')}`);
+                }
+            });
+            if (inputs.distance_m <= 0) {
+                throw new Error('Distance must be positive.');
+            }
+            if (inputs.distance_min_m <= 0 || inputs.distance_max_m <= inputs.distance_min_m) {
+                throw new Error('Distance sweep range must be positive and max > min.');
+            }
+            if (inputs.directivity_q <= 0) {
+                throw new Error('Directivity Q must be positive.');
+            }
+
+            if (analysisMode === 'quick') {
+                inputs.combine_levels_db = '';
+                inputs.band_weighting = 'Z';
+            }
+
+            return inputs;
+        }
+
+        async function handleCalculate(event) {
+            event.preventDefault();
+            if (!pyToolModule) {
+                setStatus('Python environment not ready yet.', 'error');
+                return;
+            }
+
+            const button = document.getElementById('calculate-btn');
+            button.disabled = true;
+            const originalLabel = button.textContent;
+            button.textContent = 'Calculating...';
+
+            try {
+                const inputs = gatherInputs();
+                const args = PARAM_ORDER.map((param) => inputs[param]);
+
+                const resultProxy = pyToolModule[TOOL_FUNCTION_NAME](...args);
+                const result = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                resultProxy.destroy();
+
+                latestInputs = inputs;
+                latestResult = result;
+                updateSummary(inputs, result);
+                updateResultsDisplay(result);
+                updateDistanceChart(result, inputs);
+                updateOctaveChart(result);
+                const advancedResults = document.getElementById('advanced-results');
+                if (advancedResults) {
+                    const advancedVisible = document.getElementById('conversion-advanced')?.classList.contains('visible');
+                    const weighting = document.getElementById('band_weighting').value;
+                    advancedResults.open = analysisMode === 'full'
+                        && (advancedVisible || result.combine_count > 0 || weighting !== 'Z');
+                }
+                setStatus('Calculation complete.', 'success');
+            } catch (error) {
+                setStatus(error.message || 'Calculation failed.', 'error');
+            } finally {
+                button.textContent = originalLabel;
+                button.disabled = false;
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('conversion_mode').value = 'swl_to_spl';
+            document.getElementById('source_type').value = 'point';
+            document.getElementById('known_level_db').value = 100;
+            document.getElementById('distance_m').value = 10;
+            document.getElementById('directivity_q').value = 2;
+            document.getElementById('distance_min_m').value = 1;
+            document.getElementById('distance_max_m').value = 100;
+            document.getElementById('combine_levels_db').value = '';
+            document.getElementById('band_weighting').value = 'Z';
+            document.getElementById('band_63_db').value = 60;
+            document.getElementById('band_125_db').value = 60;
+            document.getElementById('band_250_db').value = 60;
+            document.getElementById('band_500_db').value = 60;
+            document.getElementById('band_1000_db').value = 60;
+            document.getElementById('band_2000_db').value = 60;
+            document.getElementById('band_4000_db').value = 60;
+            document.getElementById('band_8000_db').value = 60;
+            updateKnownLabel();
+            setMode('quick');
+            const combineDisclosure = document.getElementById('section-combine');
+            const spectrumDisclosure = document.getElementById('section-spectrum');
+            if (combineDisclosure) {
+                combineDisclosure.open = false;
+            }
+            if (spectrumDisclosure) {
+                spectrumDisclosure.open = false;
+            }
+            latestInputs = null;
+            latestResult = null;
+            document.getElementById('calc-form').dispatchEvent(new Event('submit'));
+        }
+
+        async function loadReadme() {
+            const container = document.getElementById('readme-content');
+            try {
+                const response = await fetch('./README.md');
+                if (!response.ok) {
+                    throw new Error('README not found');
+                }
+                const markdown = await response.text();
+                const blocks = markdown.split('\n\n');
+                container.innerHTML = blocks.map((block) => {
+                    const trimmed = block.trim();
+                    if (!trimmed) {
+                        return '';
+                    }
+                    if (trimmed.startsWith('## ')) {
+                        return `<h3>${escapeHtml(trimmed.slice(3))}</h3>`;
+                    }
+                    if (trimmed.startsWith('# ')) {
+                        return `<h2>${escapeHtml(trimmed.slice(2))}</h2>`;
+                    }
+                    if (trimmed.startsWith('- ')) {
+                        const items = trimmed.split('\n').map((line) => `<li>${escapeHtml(line.replace(/^[-*]\s+/, ''))}</li>`).join('');
+                        return `<ul>${items}</ul>`;
+                    }
+                    return `<p>${escapeHtml(trimmed).replace(/\n/g, '<br>')}</p>`;
+                }).join('');
+            } catch (error) {
+                container.innerHTML = `<p>Unable to load README: ${escapeHtml(error.message)}</p>`;
+            }
+        }
+
+        async function initializePython() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.classList.remove('hidden');
+            const button = document.getElementById('calculate-btn');
+
+            try {
+                pyodideInstance = await loadPyodide();
+                await pyodideInstance.loadPackage('micropip');
+
+                await pyodideInstance.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w', encoding='utf-8') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w', encoding='utf-8') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodideInstance.globals.get('utils');
+                pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+                const docProxy = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
+                const docMap = docProxy.toJs({ dict_converter: Object.fromEntries });
+                toolDocumentation = docMap;
+                if (toolDocumentation.parameters) {
+                    toolDocumentation.parameters = Object.fromEntries(Object.entries(toolDocumentation.parameters));
+                }
+                if (toolDocumentation.returns) {
+                    toolDocumentation.returns = Object.fromEntries(Object.entries(toolDocumentation.returns));
+                }
+
+                populateDocContent();
+                button.textContent = 'Calculate';
+                button.disabled = false;
+                setStatus('Ready for calculations.');
+                document.getElementById('calc-form').dispatchEvent(new Event('submit'));
+            } catch (error) {
+                setStatus(`Initialization failed: ${error.message}`, 'error');
+                button.textContent = 'Unavailable';
+                button.disabled = true;
+            } finally {
+                overlay.classList.add('hidden');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadReadme();
+            initializePython();
+            updateKnownLabel();
+            setMode('quick');
+
+            document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+            document.getElementById('reset-btn').addEventListener('click', resetForm);
+            document.getElementById('conversion_mode').addEventListener('change', updateKnownLabel);
+            document.getElementById('toggle-conversion-advanced').addEventListener('click', toggleConversionAdvanced);
+            document.querySelectorAll('.mode-btn').forEach((button) => {
+                button.addEventListener('click', () => setMode(button.dataset.mode));
+            });
+            document.querySelectorAll('#calc-form input, #calc-form select').forEach((element) => {
+                element.addEventListener('input', scheduleCalculation);
+                element.addEventListener('change', scheduleCalculation);
+            });
+
+            document.querySelectorAll('.tab-link').forEach((tab) => {
+                tab.addEventListener('click', () => openTab(tab.dataset.target));
+            });
+            document.querySelectorAll('.background-tab').forEach((tab) => {
+                tab.addEventListener('click', () => openBackgroundTab(tab.dataset.bgTarget));
+            });
+        });
+    </script>
 </body>
 </html>

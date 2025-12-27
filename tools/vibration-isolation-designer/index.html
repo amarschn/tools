@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibration Isolation Designer - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 {
+            color: var(--primary-color);
+            margin-bottom: 0.75em;
+            line-height: 1.2;
+            font-weight: 600;
+        }
+        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
+        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        /* --- 2. Navigation --- */
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        /* --- 3. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-description { font-size: 1.1rem; max-width: 80ch; margin: 0 auto; }
+        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        /* --- 3b. Purpose/README Section --- */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+
+        /* --- 4. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; }
+        .inputs-intro { font-size: 0.95rem; color: var(--text-light); margin-bottom: 1rem; }
+        .section-title { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); margin: 1.25rem 0 0.75rem; }
+        .input-group { margin-bottom: 1.25rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+            width: 100%;
+            padding: 12px 14px;
+            padding-right: 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
+        .input-group select {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: none;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .input-row > .input-group:only-child { grid-column: 1 / -1; }
+        .mode-toggle-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .mode-toggle { display: flex; gap: 4px; background: var(--bg-card); padding: 4px; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
+        .mode-btn {
+            padding: 10px 18px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            transition: all 0.2s ease;
+        }
+        .mode-btn.active { background: var(--text-color); color: #fff; }
+        .mode-btn:hover:not(.active) { background: var(--primary-light); color: var(--text-color); }
+        .mode-desc { font-size: 0.9rem; color: var(--text-light); flex: 1; min-width: 220px; }
+
+        /* --- 5. Input Tooltip --- */
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: #f1f5f9;
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 38px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 220px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 6. Advanced Section --- */
+        .advanced-section { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color); }
+        .advanced-section.visible { display: block; }
+        .advanced-toggle {
+            background: none;
+            border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 8px 0;
+        }
+        .advanced-toggle:hover { text-decoration: underline; }
+
+        /* --- 7. Button Styles --- */
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.1rem; padding: 12px; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* --- 8. Output Section --- */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .status-banner {
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--primary-light);
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .status-banner.success { border-color: rgba(15, 118, 110, 0.4); background-color: rgba(15, 118, 110, 0.08); color: #0f5b53; }
+        .status-banner.warning { border-color: rgba(180, 83, 9, 0.4); background-color: rgba(180, 83, 9, 0.08); color: #854a0e; }
+        .status-banner h4 { margin: 0; font-size: 1rem; }
+        .status-banner p { margin: 0; font-size: 0.9rem; }
+
+        #results-display { background-color: var(--primary-light); border-radius: 6px; padding: 16px; margin-bottom: 1.5rem; }
+        .results-section { margin-top: 1rem; }
+        .results-section h4 { margin-bottom: 0.5rem; }
+
+        .result-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-item:first-child { padding-top: 0; }
+        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .result-header p { margin: 0; font-size: 1.05rem; }
+        .result-header p strong { color: var(--text-color); }
+        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.85rem; }
+        details.inline-details > summary::after { content: '[Show Equation]'; }
+        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
+        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
+        .equation-details p { margin-bottom: 0.5rem; }
+
+        /* --- 9. Visualization --- */
+        #plot-container {
+            width: 100%;
+            min-height: 350px;
+            height: 360px;
+            background-color: var(--primary-light);
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            position: relative;
+            color: var(--text-light);
+        }
+        #plot-container canvas { width: 100% !important; height: 100% !important; }
+        .plot-message {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            color: var(--text-light);
+            pointer-events: none;
+        }
+        .plot-message.hidden { display: none; }
+        .chart-meta { margin-top: 12px; display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-light); }
+        .chart-checklist { margin-top: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); padding: 12px 16px; }
+        .chart-checklist summary { font-weight: 600; color: var(--secondary-color); }
+        .chart-checklist ul { padding-left: 20px; margin-top: 8px; }
+        .chart-checklist li { margin-bottom: 6px; color: var(--text-light); }
+
+        /* --- 10. Background --- */
+        .background-section { margin-bottom: 1.5rem; }
+        .glossary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+        .glossary-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background-color: var(--bg-card); }
+        .glossary-card strong { display: block; margin-bottom: 4px; color: var(--secondary-color); }
+
+        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
+        .equation-card {
+            background: rgba(248, 250, 252, 0.75);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
+        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
+        .equation-card ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            display: grid;
+            gap: 6px 18px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
+
+        /* --- 11. Footer --- */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* --- 12. Responsive Layout --- */
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .result-header { flex-direction: column; align-items: flex-start; }
+            .input-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div class="tool-header">
+            <h1>Vibration Isolation Designer</h1>
+            <p class="tool-description" id="tool-description">
+                Size and validate single-degree-of-freedom isolators using base or force excitation models.
+            </p>
+        </div>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <p class="inputs-intro">Choose a mode, enter the core inputs, then expand advanced options for response amplitudes and checks.</p>
+
+                <form id="calc-form">
+                    <input type="hidden" id="mode" name="mode" value="analyze">
+
+                    <div class="mode-toggle-wrap">
+                        <div class="mode-toggle" role="group" aria-label="Mode selection">
+                            <button type="button" class="mode-btn active" data-mode="analyze">Analyze</button>
+                            <button type="button" class="mode-btn" data-mode="design">Design</button>
+                        </div>
+                        <p class="mode-desc" id="mode-description">Analyze an existing isolator and check transmissibility at the excitation frequency.</p>
+                    </div>
+
+                    <div class="section-title">Core Inputs</div>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="excitation_type">Excitation type</label>
+                            <select id="excitation_type" name="excitation_type">
+                                <option value="base">Base displacement</option>
+                                <option value="force">Applied force</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-excitation_type">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="excitation_frequency_hz">Excitation frequency (Hz)</label>
+                            <input type="number" id="excitation_frequency_hz" name="excitation_frequency_hz" value="30" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-excitation_frequency_hz">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="mass_kg">Supported mass (kg)</label>
+                            <input type="number" id="mass_kg" name="mass_kg" value="50" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-mass_kg">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="num_mounts">Number of mounts</label>
+                            <input type="number" id="num_mounts" name="num_mounts" value="4" step="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-num_mounts">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group" id="damping-ratio-group">
+                            <label for="damping_ratio">Damping ratio (zeta)</label>
+                            <input type="number" id="damping_ratio" name="damping_ratio" value="0.05" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_ratio">?</span>
+                        </div>
+                        <div class="input-group mode-only" data-mode="design">
+                            <label for="target_transmissibility">Target transmissibility (T)</label>
+                            <input type="number" id="target_transmissibility" name="target_transmissibility" value="0.5" step="any" min="0" max="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-target_transmissibility">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row mode-only" data-mode="analyze">
+                        <div class="input-group">
+                            <label for="stiffness_input_mode">Stiffness input method</label>
+                            <select id="stiffness_input_mode" name="stiffness_input_mode">
+                                <option value="per_mount">Per-mount stiffness</option>
+                                <option value="static_deflection">Static deflection</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-stiffness_input_mode">?</span>
+                        </div>
+                        <div class="input-group stiffness-per-mount">
+                            <label for="mount_stiffness_n_per_m">Mount stiffness (N/m)</label>
+                            <input type="number" id="mount_stiffness_n_per_m" name="mount_stiffness_n_per_m" value="25000" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-mount_stiffness_n_per_m">?</span>
+                        </div>
+                        <div class="input-group stiffness-static" style="display:none;">
+                            <label for="static_deflection_m">Static deflection (m)</label>
+                            <input type="number" id="static_deflection_m" name="static_deflection_m" value="0.01" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-static_deflection_m">?</span>
+                        </div>
+                    </div>
+
+                    <div class="advanced-section" id="advanced-inputs">
+                        <div class="section-title">Advanced Inputs</div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="damping_input_mode">Damping input method</label>
+                                <select id="damping_input_mode" name="damping_input_mode">
+                                    <option value="ratio">Damping ratio</option>
+                                    <option value="coefficient">Damping coefficient</option>
+                                </select>
+                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_input_mode">?</span>
+                            </div>
+                            <div class="input-group" id="damping-coefficient-group" style="display:none;">
+                                <label for="damping_coefficient_ns_per_m">Damping coefficient (N*s/m)</label>
+                                <input type="number" id="damping_coefficient_ns_per_m" name="damping_coefficient_ns_per_m" value="350" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_coefficient_ns_per_m">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group" id="base-displacement-group">
+                                <label for="base_displacement_m">Base displacement amplitude (m)</label>
+                                <input type="number" id="base_displacement_m" name="base_displacement_m" value="0.001" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-base_displacement_m">?</span>
+                            </div>
+                            <div class="input-group" id="force-amplitude-group" style="display:none;">
+                                <label for="force_amplitude_n">Applied force amplitude (N)</label>
+                                <input type="number" id="force_amplitude_n" name="force_amplitude_n" value="250" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-force_amplitude_n">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="max_static_deflection_m">Allowable static deflection (m)</label>
+                                <input type="number" id="max_static_deflection_m" name="max_static_deflection_m" value="0" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-max_static_deflection_m">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="advanced-toggle" id="toggle-advanced" onclick="toggleAdvanced()">
+                        <span id="toggle-icon">+</span>
+                        <span id="toggle-text">Show advanced options</span>
+                    </button>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'plot')">Visualization</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Please enter inputs and press Calculate.</p>
+                    </div>
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <h3>Visualization</h3>
+                    <div id="plot-container">
+                        <canvas id="transmissibility-chart" aria-label="Transmissibility chart"></canvas>
+                        <div class="plot-message" id="plot-message">Plot will appear here after calculation.</div>
+                    </div>
+                    <div class="chart-meta">
+                        <span id="chart-scale">Scale: Linear</span>
+                        <span id="chart-series">Series: Transmissibility</span>
+                    </div>
+                    <details class="chart-checklist">
+                        <summary>Chart checklist</summary>
+                        <ul>
+                            <li>Axes are labeled and include units.</li>
+                            <li>Legend is present and matches the plotted series.</li>
+                            <li>Scale type is correct and stated (linear or log).</li>
+                            <li>Plotted values are finite (no NaN or infinity gaps).</li>
+                            <li>Ranges look physically plausible for the inputs.</li>
+                            <li>Annotations reflect the correct numeric values.</li>
+                        </ul>
+                    </details>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <div class="background-section">
+                        <h3>Overview</h3>
+                        <p id="background-overview">Loading overview...</p>
+                    </div>
+                    <div class="background-section">
+                        <h3>Inputs & Outputs Glossary</h3>
+                        <div class="glossary-grid" id="glossary-grid"></div>
+                    </div>
+                    <div class="background-section">
+                        <h3>Theory & Principles</h3>
+                        <p id="background-theory">A single-degree-of-freedom isolator is modeled as a mass, spring, and damper with harmonic excitation. Isolation begins when the excitation frequency exceeds sqrt(2) times the natural frequency. Damping lowers resonance amplitude but reduces high-frequency isolation effectiveness.</p>
+                    </div>
+                    <div class="background-section">
+                        <h3>Equations</h3>
+                        <div class="equation-container" id="equation-container"></div>
+                    </div>
+                    <div class="background-section">
+                        <h3>Implementation Notes</h3>
+                        <p id="background-notes">Design mode solves for the frequency ratio that matches the target transmissibility, then derives stiffness and deflection. The plot uses the resulting system parameters and excludes non-finite points near resonance.</p>
+                    </div>
+                    <div class="background-section">
+                        <h3>References</h3>
+                        <ul>
+                            <li>Inman, D. J., Engineering Vibration, 4th ed., 2014.</li>
+                            <li>Rao, S. S., Mechanical Vibrations, 6th ed., 2017.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+    </footer>
+
+    <script>
+        // --- 0. Global Store & Config ---
+        let toolDocumentation = {};
+        let pyUtils, pyToolModule;
+        let chartInstance = null;
+        let latexExpressions = [];
+
+        const TOOL_MODULE_NAME = 'vibration_isolation';
+        const TOOL_FUNCTION_NAME = 'calculate_vibration_isolation';
+
+        const PARAM_ORDER = [
+            'mode',
+            'excitation_type',
+            'mass_kg',
+            'num_mounts',
+            'stiffness_input_mode',
+            'mount_stiffness_n_per_m',
+            'static_deflection_m',
+            'damping_input_mode',
+            'damping_ratio',
+            'damping_coefficient_ns_per_m',
+            'excitation_frequency_hz',
+            'target_transmissibility',
+            'base_displacement_m',
+            'force_amplitude_n',
+            'max_static_deflection_m'
+        ];
+
+        const STRING_PARAMS = new Set([
+            'mode',
+            'excitation_type',
+            'stiffness_input_mode',
+            'damping_input_mode'
+        ]);
+
+        const RESULT_UNITS = {
+            natural_frequency_hz: 'Hz',
+            natural_angular_frequency_rad_s: 'rad/s',
+            total_stiffness_n_per_m: 'N/m',
+            mount_stiffness_n_per_m: 'N/m',
+            static_deflection_m: 'm',
+            damping_ratio: '',
+            damping_coefficient_ns_per_m: 'N*s/m',
+            frequency_ratio: '',
+            transmissibility: '',
+            isolation_frequency_hz: 'Hz',
+            isolation_margin: '',
+            relative_displacement_amplitude_m: 'm',
+            absolute_displacement_amplitude_m: 'm',
+            transmitted_force_amplitude_n: 'N',
+            acceleration_amplitude_m_s2: 'm/s^2',
+            dynamic_magnification: '',
+            static_deflection_utilization: ''
+        };
+
+        const RESULT_LABELS = {
+            natural_frequency_hz: 'Natural frequency',
+            natural_angular_frequency_rad_s: 'Natural angular frequency',
+            total_stiffness_n_per_m: 'Total stiffness',
+            mount_stiffness_n_per_m: 'Stiffness per mount',
+            static_deflection_m: 'Static deflection',
+            damping_ratio: 'Damping ratio',
+            damping_coefficient_ns_per_m: 'Damping coefficient',
+            frequency_ratio: 'Frequency ratio r',
+            transmissibility: 'Transmissibility',
+            isolation_frequency_hz: 'Isolation threshold frequency',
+            isolation_margin: 'Isolation margin r - sqrt(2)',
+            relative_displacement_amplitude_m: 'Relative displacement amplitude',
+            absolute_displacement_amplitude_m: 'Absolute displacement amplitude',
+            transmitted_force_amplitude_n: 'Transmitted force amplitude',
+            acceleration_amplitude_m_s2: 'Acceleration amplitude',
+            dynamic_magnification: 'Dynamic magnification',
+            static_deflection_utilization: 'Static deflection utilization'
+        };
+
+        const RESULT_SECTIONS = [
+            {
+                title: 'System',
+                keys: [
+                    'natural_frequency_hz',
+                    'natural_angular_frequency_rad_s',
+                    'total_stiffness_n_per_m',
+                    'mount_stiffness_n_per_m',
+                    'static_deflection_m',
+                    'damping_ratio',
+                    'damping_coefficient_ns_per_m'
+                ]
+            },
+            {
+                title: 'Isolation',
+                keys: [
+                    'frequency_ratio',
+                    'transmissibility',
+                    'isolation_frequency_hz',
+                    'isolation_margin'
+                ]
+            },
+            {
+                title: 'Response Amplitudes',
+                keys: [
+                    'absolute_displacement_amplitude_m',
+                    'relative_displacement_amplitude_m',
+                    'transmitted_force_amplitude_n',
+                    'acceleration_amplitude_m_s2',
+                    'dynamic_magnification'
+                ],
+                advancedOnly: true
+            },
+            {
+                title: 'Design Checks',
+                keys: ['static_deflection_utilization'],
+                advancedOnly: true
+            }
+        ];
+
+        const MODE_DESCRIPTIONS = {
+            analyze: 'Analyze an existing isolator and check transmissibility at the excitation frequency.',
+            design: 'Solve for the stiffness needed to reach a target transmissibility at the excitation frequency.'
+        };
+
+        const EQUATION_DESCRIPTIONS = [
+            'Total stiffness from per-mount stiffness.',
+            'Total stiffness from static deflection.',
+            'Total stiffness from natural frequency.',
+            'Per-mount stiffness from total stiffness.',
+            'Natural angular frequency of the isolated system.',
+            'Natural frequency in Hz.',
+            'Frequency ratio of excitation to natural frequency.',
+            'Damping ratio from viscous damping coefficient.',
+            'Damping coefficient from damping ratio.',
+            'Primary transmissibility for base or force excitation.',
+            'Relative displacement ratio for base excitation.',
+            'Transmitted force amplitude for base excitation.',
+            'Static deflection under gravity.',
+            'Dynamic magnification factor for force excitation.'
+        ];
+
+        const EQUATION_LEGENDS = [
+            [
+                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
+                { symbol: 'n', text: 'Number of mounts' },
+                { symbol: 'k_{mount}', text: 'Mount stiffness (N/m)' }
+            ],
+            [
+                { symbol: 'm', text: 'Supported mass (kg)' },
+                { symbol: 'g', text: 'Gravity (m/s^2)' },
+                { symbol: '\\delta_{static}', text: 'Static deflection (m)' }
+            ],
+            [
+                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
+                { symbol: 'm', text: 'Supported mass (kg)' },
+                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' }
+            ],
+            [
+                { symbol: 'k_{mount}', text: 'Mount stiffness (N/m)' },
+                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
+                { symbol: 'n', text: 'Number of mounts' }
+            ],
+            [
+                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' },
+                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
+                { symbol: 'm', text: 'Supported mass (kg)' }
+            ],
+            [
+                { symbol: 'f_n', text: 'Natural frequency (Hz)' },
+                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' }
+            ],
+            [
+                { symbol: 'r', text: 'Frequency ratio' },
+                { symbol: 'f_{exc}', text: 'Excitation frequency (Hz)' },
+                { symbol: 'f_n', text: 'Natural frequency (Hz)' }
+            ],
+            [
+                { symbol: '\\zeta', text: 'Damping ratio' },
+                { symbol: 'c', text: 'Damping coefficient (N*s/m)' },
+                { symbol: 'm', text: 'Supported mass (kg)' },
+                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' }
+            ],
+            [
+                { symbol: 'c', text: 'Damping coefficient (N*s/m)' },
+                { symbol: 'm', text: 'Supported mass (kg)' },
+                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' },
+                { symbol: '\\zeta', text: 'Damping ratio' }
+            ],
+            [
+                { symbol: 'T', text: 'Transmissibility' },
+                { symbol: '\\zeta', text: 'Damping ratio' },
+                { symbol: 'r', text: 'Frequency ratio' }
+            ],
+            [
+                { symbol: 'Z', text: 'Relative displacement amplitude (m)' },
+                { symbol: 'Y', text: 'Base displacement amplitude (m)' },
+                { symbol: 'r', text: 'Frequency ratio' },
+                { symbol: '\\zeta', text: 'Damping ratio' }
+            ],
+            [
+                { symbol: 'F_T', text: 'Transmitted force amplitude (N)' },
+                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
+                { symbol: 'Z', text: 'Relative displacement amplitude (m)' },
+                { symbol: '\\zeta', text: 'Damping ratio' },
+                { symbol: 'r', text: 'Frequency ratio' }
+            ],
+            [
+                { symbol: '\\delta_{static}', text: 'Static deflection (m)' },
+                { symbol: 'm', text: 'Supported mass (kg)' },
+                { symbol: 'g', text: 'Gravity (m/s^2)' },
+                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' }
+            ],
+            [
+                { symbol: 'M', text: 'Dynamic magnification' },
+                { symbol: '\\zeta', text: 'Damping ratio' },
+                { symbol: 'r', text: 'Frequency ratio' }
+            ]
+        ];
+
+        function getEquationIndex(key, inputs) {
+            if (key === 'total_stiffness_n_per_m') {
+                if (inputs.mode === 'design') {
+                    return 2;
+                }
+                if (inputs.stiffness_input_mode === 'static_deflection') {
+                    return 1;
+                }
+                return 0;
+            }
+            if (key === 'mount_stiffness_n_per_m') return 3;
+            if (key === 'natural_angular_frequency_rad_s') return 4;
+            if (key === 'natural_frequency_hz') return 5;
+            if (key === 'frequency_ratio') return 6;
+            if (key === 'damping_ratio') return 7;
+            if (key === 'damping_coefficient_ns_per_m') return 8;
+            if (key === 'transmissibility') return 9;
+            if (key === 'relative_displacement_amplitude_m') return 10;
+            if (key === 'transmitted_force_amplitude_n') return 11;
+            if (key === 'static_deflection_m') return 12;
+            if (key === 'dynamic_magnification') return 13;
+            return null;
+        }
+
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        }
+
+        function escapeHtml(value) {
+            return value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatValue(value) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return '—';
+            }
+            if (!Number.isFinite(value)) {
+                return value > 0 ? 'infinity' : value < 0 ? '-infinity' : '—';
+            }
+            const absVal = Math.abs(value);
+            if (absVal !== 0 && (absVal >= 1e4 || absVal < 1e-3)) {
+                return value.toExponential(4);
+            }
+            return value.toFixed(4);
+        }
+
+        function formatWithUnit(value, unit) {
+            const formatted = formatValue(value);
+            if (formatted === '—' || !unit) {
+                return formatted;
+            }
+            return `${formatted} ${unit}`;
+        }
+
+        function renderMarkdown(markdown) {
+            const lines = markdown.split('\n');
+            let html = '';
+            let inList = false;
+            let paragraph = [];
+
+            const flushParagraph = () => {
+                if (!paragraph.length) return;
+                const text = escapeHtml(paragraph.join(' '));
+                html += `<p>${text}</p>`;
+                paragraph = [];
+            };
+
+            const closeList = () => {
+                if (inList) {
+                    html += '</ul>';
+                    inList = false;
+                }
+            };
+
+            lines.forEach((line) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    flushParagraph();
+                    closeList();
+                    return;
+                }
+                if (trimmed.startsWith('# ')) {
+                    flushParagraph();
+                    closeList();
+                    html += `<h3>${escapeHtml(trimmed.slice(2))}</h3>`;
+                    return;
+                }
+                if (trimmed.startsWith('## ')) {
+                    flushParagraph();
+                    closeList();
+                    html += `<h4>${escapeHtml(trimmed.slice(3))}</h4>`;
+                    return;
+                }
+                if (trimmed.startsWith('- ')) {
+                    flushParagraph();
+                    if (!inList) {
+                        html += '<ul>';
+                        inList = true;
+                    }
+                    html += `<li>${escapeHtml(trimmed.slice(2))}</li>`;
+                    return;
+                }
+                paragraph.push(trimmed);
+            });
+            flushParagraph();
+            closeList();
+            return html;
+        }
+
+        async function loadReadme() {
+            const container = document.getElementById('readme-content');
+            try {
+                const response = await fetch('./README.md');
+                if (!response.ok) throw new Error('README not found');
+                const markdown = await response.text();
+                container.innerHTML = renderMarkdown(markdown);
+            } catch (error) {
+                container.innerHTML = `<p style="color:#c92a2a;">Unable to load README: ${escapeHtml(error.message)}</p>`;
+            }
+        }
+
+        function setMode(mode) {
+            document.getElementById('mode').value = mode;
+            document.querySelectorAll('.mode-btn').forEach((button) => {
+                button.classList.toggle('active', button.dataset.mode === mode);
+            });
+            document.querySelectorAll('.mode-only').forEach((section) => {
+                section.style.display = section.dataset.mode === mode ? '' : 'none';
+            });
+            const description = MODE_DESCRIPTIONS[mode] || '';
+            const descElement = document.getElementById('mode-description');
+            if (descElement) {
+                descElement.textContent = description;
+            }
+            updateStiffnessInputs();
+        }
+
+        function updateStiffnessInputs() {
+            const mode = document.getElementById('stiffness_input_mode').value;
+            const perMount = document.querySelector('.stiffness-per-mount');
+            const staticDeflection = document.querySelector('.stiffness-static');
+            const showPerMount = mode === 'per_mount';
+            perMount.style.display = showPerMount ? 'block' : 'none';
+            staticDeflection.style.display = showPerMount ? 'none' : 'block';
+        }
+
+        function updateDampingInputs() {
+            const mode = document.getElementById('damping_input_mode').value;
+            const ratioGroup = document.getElementById('damping-ratio-group');
+            const coefficientGroup = document.getElementById('damping-coefficient-group');
+            const showRatio = mode === 'ratio';
+            ratioGroup.style.display = showRatio ? 'block' : 'none';
+            coefficientGroup.style.display = showRatio ? 'none' : 'block';
+        }
+
+        function updateExcitationInputs() {
+            const excitation = document.getElementById('excitation_type').value;
+            const baseGroup = document.getElementById('base-displacement-group');
+            const forceGroup = document.getElementById('force-amplitude-group');
+            baseGroup.style.display = excitation === 'base' ? 'block' : 'none';
+            forceGroup.style.display = excitation === 'force' ? 'block' : 'none';
+        }
+
+        function toggleAdvanced() {
+            const advanced = document.getElementById('advanced-inputs');
+            const icon = document.getElementById('toggle-icon');
+            const text = document.getElementById('toggle-text');
+            const isVisible = advanced.classList.contains('visible');
+            if (isVisible) {
+                advanced.classList.remove('visible');
+                icon.textContent = '+';
+                text.textContent = 'Show advanced options';
+                document.getElementById('damping_input_mode').value = 'ratio';
+                updateDampingInputs();
+            } else {
+                advanced.classList.add('visible');
+                icon.textContent = '-';
+                text.textContent = 'Hide advanced options';
+            }
+        }
+
+        async function main() {
+            const button = document.getElementById('calculate-btn');
+            button.textContent = 'Loading Pyodide...';
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage('micropip');
+
+            button.textContent = 'Loading Python...';
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            pyUtils = pyodide.globals.get('utils');
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
+            const jsDoc = docMap.toJs();
+            if (jsDoc.has('error')) {
+                const message = jsDoc.get('error');
+                console.error('Docstring Error:', message);
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color:red; font-weight:bold;">Initialization Error:</p>
+                    <p style="color:red;">${escapeHtml(message)}</p>
+                `;
+                return;
+            }
+
+            const docEntries = jsDoc instanceof Map ? jsDoc : Object.entries(jsDoc);
+            toolDocumentation = Object.fromEntries(docEntries);
+            if (toolDocumentation.parameters) {
+                const paramEntries = toolDocumentation.parameters instanceof Map
+                    ? toolDocumentation.parameters
+                    : Object.entries(toolDocumentation.parameters);
+                toolDocumentation.parameters = Object.fromEntries(paramEntries);
+            }
+            if (toolDocumentation.returns) {
+                const returnEntries = toolDocumentation.returns instanceof Map
+                    ? toolDocumentation.returns
+                    : Object.entries(toolDocumentation.returns);
+                toolDocumentation.returns = Object.fromEntries(returnEntries);
+            }
+            latexExpressions = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+                : [];
+
+            populateUiFromDocs();
+            button.textContent = 'Calculate';
+            loadReadme();
+        }
+
+        main();
+
+        function populateUiFromDocs() {
+            if (!toolDocumentation || !toolDocumentation.parameters) return;
+
+            const description = toolDocumentation.description || '';
+            document.getElementById('tool-description').textContent = description;
+            document.getElementById('background-overview').innerHTML = escapeHtml(description).replace(/\n/g, '<br>');
+
+            PARAM_ORDER.forEach((param) => {
+                const tooltip = document.getElementById(`tooltip-${param}`);
+                if (tooltip && toolDocumentation.parameters[param]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[param]);
+                }
+            });
+
+            const glossary = document.getElementById('glossary-grid');
+            glossary.innerHTML = '';
+            const glossaryItems = [];
+
+            if (toolDocumentation.parameters) {
+                Object.entries(toolDocumentation.parameters).forEach(([key, value]) => {
+                    glossaryItems.push({
+                        title: key,
+                        description: value
+                    });
+                });
+            }
+            if (toolDocumentation.returns) {
+                Object.entries(toolDocumentation.returns).forEach(([key, value]) => {
+                    glossaryItems.push({
+                        title: key,
+                        description: value
+                    });
+                });
+            }
+
+            glossaryItems.forEach((item) => {
+                const card = document.createElement('div');
+                card.className = 'glossary-card';
+                card.innerHTML = `
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <span>${escapeHtml(item.description)}</span>
+                `;
+                glossary.appendChild(card);
+            });
+
+            const equationContainer = document.getElementById('equation-container');
+            equationContainer.innerHTML = '';
+            latexExpressions.forEach((expression, index) => {
+                const legendItems = (EQUATION_LEGENDS[index] || [])
+                    .map((item) => `<li><span class="math-inline">\\(${item.symbol}\\)</span>: ${escapeHtml(item.text)}</li>`)
+                    .join('');
+                const legendHtml = legendItems || '<li>Variable definitions to be provided.</li>';
+                const summaryText = EQUATION_DESCRIPTIONS[index] || '';
+
+                const card = document.createElement('div');
+                card.className = 'equation-card';
+                card.innerHTML = `
+                    <strong>Equation (${index + 1})</strong>
+                    <span class="equation-expression">\\[ ${expression} \\]</span>
+                    ${summaryText ? `<p style="font-size:0.85rem;color:var(--text-light);margin-bottom:0.35rem;">${escapeHtml(summaryText)}</p>` : ''}
+                    <ul>${legendHtml}</ul>
+                `;
+                equationContainer.appendChild(card);
+            });
+            typesetMath();
+        }
+
+        function parseInputs() {
+            const form = document.getElementById('calc-form');
+            const data = new FormData(form);
+            const inputs = {};
+            PARAM_ORDER.forEach((param) => {
+                if (STRING_PARAMS.has(param)) {
+                    inputs[param] = data.get(param) ? String(data.get(param)) : '';
+                } else {
+                    const numeric = Number(data.get(param));
+                    inputs[param] = Number.isFinite(numeric) ? numeric : 0;
+                }
+            });
+            return inputs;
+        }
+
+        function buildArgs(inputs) {
+            return PARAM_ORDER.map((param) => inputs[param]);
+        }
+
+        function getTransmissibilityLabel(excitationType) {
+            if (excitationType === 'force') {
+                return 'Transmissibility (F_T / F_0)';
+            }
+            return 'Transmissibility (X / Y)';
+        }
+
+        function isResultRelevant(key, inputs, advancedOpen) {
+            const hasBaseAmplitude = inputs.base_displacement_m > 0;
+            const hasForceAmplitude = inputs.force_amplitude_n > 0;
+
+            if (key === 'dynamic_magnification' && inputs.excitation_type !== 'force') {
+                return false;
+            }
+            if (key === 'relative_displacement_amplitude_m' && inputs.excitation_type === 'force' && !hasForceAmplitude) {
+                return false;
+            }
+            if (key === 'absolute_displacement_amplitude_m') {
+                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
+            }
+            if (key === 'relative_displacement_amplitude_m') {
+                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
+            }
+            if (key === 'transmitted_force_amplitude_n') {
+                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
+            }
+            if (key === 'acceleration_amplitude_m_s2') {
+                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
+            }
+            if (key === 'static_deflection_utilization') {
+                return inputs.max_static_deflection_m > 0;
+            }
+            if (key === 'damping_coefficient_ns_per_m' && !advancedOpen) {
+                return false;
+            }
+            return true;
+        }
+
+        function renderResults(results, inputs) {
+            const resultsDiv = document.getElementById('results-display');
+            resultsDiv.innerHTML = '';
+            document.getElementById('results-placeholder')?.remove();
+
+            const advancedOpen = document.getElementById('advanced-inputs').classList.contains('visible');
+            const summaryTitle = inputs.mode === 'design' ? 'Design target' : 'Analysis summary';
+            const isolationMargin = results.isolation_margin;
+            const statusClass = isolationMargin >= 0 ? 'success' : 'warning';
+            const statusText = isolationMargin >= 0
+                ? 'Isolation achieved at the excitation frequency.'
+                : 'Excitation is below the isolation threshold.';
+
+            const summary = document.createElement('div');
+            summary.className = `status-banner ${statusClass}`;
+            summary.innerHTML = `
+                <h4>${summaryTitle}</h4>
+                <p>${statusText}</p>
+                <p>Mode: ${inputs.mode} | Excitation: ${inputs.excitation_type} | r = ${formatValue(results.frequency_ratio)} | T = ${formatValue(results.transmissibility)}</p>
+            `;
+            resultsDiv.appendChild(summary);
+
+            RESULT_SECTIONS.forEach((section) => {
+                if (section.advancedOnly && !advancedOpen) {
+                    return;
+                }
+
+                const sectionEl = document.createElement('div');
+                sectionEl.className = 'results-section';
+                sectionEl.innerHTML = `<h4>${section.title}</h4>`;
+
+                let sectionHasItems = false;
+                section.keys.forEach((key) => {
+                    if (!isResultRelevant(key, inputs, advancedOpen)) {
+                        return;
+                    }
+                    const value = results[key];
+                    if (typeof value === 'number' && !Number.isFinite(value)) {
+                        return;
+                    }
+                    const definition = toolDocumentation.returns?.[key] || '';
+                    const label = key === 'transmissibility'
+                        ? getTransmissibilityLabel(inputs.excitation_type)
+                        : RESULT_LABELS[key] || key;
+                    const unit = RESULT_UNITS[key] || '';
+                    const equationIndex = getEquationIndex(key, inputs);
+                    const equation = equationIndex !== null ? latexExpressions[equationIndex] : '';
+                    const substString = results[`subst_${key}`];
+
+                    const detailsHtml = equation
+                        ? `
+                            <details class="inline-details">
+                                <summary></summary>
+                                <div class="equation-details">
+                                    <p><strong>Equation:</strong> $$${equation}$$</p>
+                                    ${substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : ''}
+                                </div>
+                            </details>
+                        `
+                        : '';
+
+                    sectionEl.innerHTML += `
+                        <div class="result-item">
+                            <div class="result-header">
+                                <p><strong><span class="def" data-def="${escapeHtml(definition)}">${escapeHtml(label)}</span>:</strong> ${formatWithUnit(value, unit)}</p>
+                                ${detailsHtml}
+                            </div>
+                        </div>
+                    `;
+                    sectionHasItems = true;
+                });
+
+                if (sectionHasItems) {
+                    resultsDiv.appendChild(sectionEl);
+                }
+            });
+            typesetMath();
+        }
+
+        function renderChart(results, inputs) {
+            const canvas = document.getElementById('transmissibility-chart');
+            const message = document.getElementById('plot-message');
+
+            const showMessage = (text) => {
+                message.textContent = text;
+                message.classList.remove('hidden');
+                if (chartInstance) {
+                    chartInstance.destroy();
+                    chartInstance = null;
+                }
+            };
+            const hideMessage = () => {
+                message.classList.add('hidden');
+            };
+
+            const rValues = results.plot_frequency_ratio;
+            const tValues = results.plot_transmissibility;
+
+            if (!Array.isArray(rValues) || !Array.isArray(tValues) || rValues.length === 0) {
+                showMessage('Plot unavailable due to missing data.');
+                return;
+            }
+
+            const cleaned = rValues.map((r, index) => {
+                const t = tValues[index];
+                if (!Number.isFinite(r) || !Number.isFinite(t)) {
+                    return null;
+                }
+                return { x: r, y: t };
+            }).filter(point => point !== null);
+
+            if (!cleaned.length) {
+                showMessage('Plot unavailable due to non-finite values.');
+                return;
+            }
+
+            const yMax = Math.max(...cleaned.map((point) => point.y), 1.2);
+            const resonanceLine = [
+                { x: 1, y: 0 },
+                { x: 1, y: yMax }
+            ];
+            const isolationLine = [
+                { x: Math.SQRT2, y: 0 },
+                { x: Math.SQRT2, y: yMax }
+            ];
+
+            const operatingPoint = {
+                x: results.frequency_ratio,
+                y: results.transmissibility
+            };
+
+            const label = inputs.excitation_type === 'force'
+                ? 'Transmissibility (F_T / F_0)'
+                : 'Transmissibility (X / Y)';
+            document.getElementById('chart-series').textContent = `Series: ${label}`;
+
+            const datasets = [
+                {
+                    label,
+                    data: cleaned,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.1
+                },
+                {
+                    label: 'Resonance (r = 1)',
+                    data: resonanceLine,
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    borderDash: [6, 6]
+                },
+                {
+                    label: 'Isolation threshold (r = sqrt(2))',
+                    data: isolationLine,
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    borderDash: [6, 6]
+                },
+                {
+                    label: 'Operating point',
+                    data: [operatingPoint],
+                    borderColor: '#f59e0b',
+                    backgroundColor: '#f59e0b',
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
+                }
+            ];
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(canvas, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: { display: true, text: 'Frequency ratio r = f_exc / f_n' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Transmissibility (dimensionless)' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            hideMessage();
+        }
+
+        const form = document.getElementById('calc-form');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!pyToolModule) {
+                return;
+            }
+
+            const inputs = parseInputs();
+            const args = buildArgs(inputs);
+
+            try {
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                renderResults(results, inputs);
+                renderChart(results, inputs);
+            } catch (error) {
+                console.error('Python calculation error:', error);
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
+                    <p style="color: red;">${escapeHtml(error.message)}</p>
+                `;
+            }
+        });
+
+        document.querySelectorAll('.mode-btn').forEach((button) => {
+            button.addEventListener('click', () => setMode(button.dataset.mode));
+        });
+
+        document.getElementById('stiffness_input_mode').addEventListener('change', updateStiffnessInputs);
+        document.getElementById('damping_input_mode').addEventListener('change', updateDampingInputs);
+        document.getElementById('excitation_type').addEventListener('change', updateExcitationInputs);
+
+        setMode('analyze');
+        updateStiffnessInputs();
+        updateDampingInputs();
+        updateExcitationInputs();
+    </script>
+</body>
+</html>
