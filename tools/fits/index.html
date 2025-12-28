@@ -3,544 +3,889 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engineering Fits Assistant - Engineering Tools</title>
+    <title>Engineering Fits Calculator - ISO 286</title>
+    <meta name="description" content="ISO 286 engineering fits calculator with tolerance zones, clearance/interference analysis, and fit selection guidance.">
 
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
 
     <style>
         :root {
-            --primary-color: #0b0d12;
-            --primary-light: #f4f5f7;
-            --secondary-color: #4b5563;
-            --accent-color: #111827;
-            --success-color: #0f766e;
-            --warning-color: #b45309;
-            --danger-color: #b91c1c;
-            --text-color: #111827;
-            --text-light: #6b7280;
-            --border-color: #e5e7eb;
-            --bg-color: #f8f9fb;
-            --bg-card: #ffffff;
-            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
-            --border-radius: 8px;
-            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
-            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-card: #1a1a1a;
+            --bg-input: #222222;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --border-color: #2a2a2a;
+            --border-light: #333333;
+            --accent-blue: #3b82f6;
+            --accent-orange: #f97316;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-yellow: #eab308;
+            --clearance-color: #22c55e;
+            --transition-color: #eab308;
+            --interference-color: #ef4444;
+            --hole-color: #60a5fa;
+            --shaft-color: #f97316;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            --radius: 8px;
+            --radius-lg: 12px;
+            --shadow: 0 4px 20px rgba(0,0,0,0.4);
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
+        html { scroll-behavior: smooth; }
+
         body {
             font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
             line-height: 1.6;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            min-height: 100vh;
+        }
+
+        /* Dark Navbar */
+        .navbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 64px;
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
         }
-        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
-        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
-        h1 { font-size: 2.3rem; letter-spacing: -0.01em; }
-        h2 { font-size: 1.35rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        h3 { font-size: 1rem; color: var(--secondary-color); }
-        h4 { font-size: 0.95rem; color: var(--secondary-color); }
-        p { margin-bottom: 1em; color: var(--text-light); }
-        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
-        a:hover { text-decoration: underline; }
-
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
-        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
-        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
-        .nav-brand:hover { text-decoration: none; }
-
-        main.container { flex-grow: 1; }
-        .tool-header { text-align: center; margin-bottom: 2rem; }
-        .tool-description { font-size: 1.05rem; max-width: 70ch; margin: 0.5rem auto 1.5rem; color: var(--text-light); }
-        .tool-layout { display: grid; grid-template-columns: minmax(320px, 0.95fr) minmax(480px, 1.15fr); gap: 28px; align-items: start; }
-        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
-
-        details > summary { list-style: none; cursor: pointer; }
-        details > summary::-webkit-details-marker { display: none; }
-        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
-        .purpose-section summary { padding: 16px 24px; font-size: 1rem; font-weight: 600; color: var(--text-color); display: flex; justify-content: space-between; align-items: center; }
-        .purpose-section summary::after {
-            content: 'Expand';
-            font-size: 0.7rem;
+        .nav-brand {
+            font-size: 1.25rem;
             font-weight: 600;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-light);
-            border: 1px solid var(--border-color);
-            padding: 2px 8px;
-            border-radius: 999px;
+            color: var(--text-primary);
+            text-decoration: none;
         }
-        .purpose-section[open] > summary::after { content: 'Collapse'; }
-        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
-        .purpose-content h3 { margin-top: 1rem; }
-        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
 
-        .tool-inputs h2 { margin-top: 0; }
-        .inputs-intro { font-size: 0.9rem; color: var(--text-light); margin-bottom: 1rem; }
-        .input-group { margin-bottom: 1.1rem; position: relative; }
-        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; color: var(--text-color); }
-        .input-group input[type="number"],
-        .input-group input[type="text"],
+        /* Mode Toggle */
+        .mode-toggle {
+            display: flex;
+            background: var(--bg-input);
+            border-radius: 999px;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .mode-btn {
+            padding: 8px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 999px;
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background: var(--text-primary);
+            color: var(--bg-primary);
+        }
+        .mode-btn:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* Header */
+        .tool-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .tool-header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+        .tool-description {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Layout */
+        .tool-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 32px;
+            align-items: start;
+        }
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        /* Form Elements */
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .input-group input,
         .input-group select {
             width: 100%;
-            padding: 12px 14px;
-            padding-right: 38px;
+            padding: 12px 16px;
+            background: var(--bg-input);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: var(--radius);
+            color: var(--text-primary);
             font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            background: #fff;
+            transition: border-color 0.2s;
         }
-        .input-group input:focus, .input-group select:focus {
+        .input-group input:focus,
+        .input-group select:focus {
             outline: none;
-            border-color: var(--text-color);
-            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+            border-color: var(--accent-blue);
         }
         .input-group select {
             cursor: pointer;
             appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            background-image: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a0a0a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
         }
-        .input-group input[type="number"]::-webkit-inner-spin-button,
-        .input-group input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
+        .input-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 6px;
         }
-        .input-group input[type="number"] { -moz-appearance: textfield; }
 
-        .tooltip-trigger {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 18px;
-            height: 18px;
-            background-color: #f1f5f9;
+        /* Simple Mode Quick Select */
+        .quick-select {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .quick-btn {
+            padding: 12px 8px;
+            background: var(--bg-input);
             border: 1px solid var(--border-color);
-            color: var(--text-light);
-            border-radius: 50%;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: help;
-            position: absolute;
-            right: 8px;
-            top: 42px;
-        }
-        .tooltip-trigger::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 130%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--text-color);
-            color: white;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 400;
-            line-height: 1.5;
-            white-space: normal;
-            width: 240px;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.2s, visibility 0.2s;
-            z-index: 100;
-            box-shadow: var(--shadow-lg);
-        }
-        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
-
-        .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
-        .filter-group { position: relative; }
-        .filter-group label { font-size: 0.8rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 6px; display: block; }
-        .filter-group input, .filter-group select {
-            width: 100%;
-            padding: 10px 12px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            font-size: 0.95rem;
-            background: #fff;
-        }
-        .filter-meta { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; }
-
-        .fit-details {
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 14px 16px;
-            background: var(--primary-light);
-            margin-top: 12px;
-        }
-        .fit-details h3 { margin-bottom: 0.4rem; font-size: 0.95rem; color: var(--text-color); }
-        .fit-details p { margin-bottom: 0.5rem; font-size: 0.9rem; }
-        .fit-applications { font-size: 0.85rem; color: var(--secondary-color); }
-        .fit-applications span { font-weight: 600; color: var(--text-color); }
-
-        .btn { display: inline-block; padding: 12px 20px; font-size: 1rem; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; text-align: center; transition: background-color 0.2s ease; }
-        .btn-primary { background-color: var(--text-color); color: #fff; width: 100%; font-size: 1.05rem; padding: 14px; }
-        .btn-primary:hover { background-color: #050608; }
-        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
-        .btn-secondary:hover { background-color: var(--primary-light); }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; gap: 6px; }
-        .tab-link {
-            padding: 12px 16px;
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
             cursor: pointer;
-            background-color: transparent;
-            border: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.03em;
-            text-transform: uppercase;
-            color: var(--text-light);
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-            transition: color 0.2s ease;
+            transition: all 0.2s;
+            text-align: center;
         }
-        .tab-link:hover { color: var(--text-color); }
-        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
-        .tab-content { display: none; animation: fadeIn 0.4s ease; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .quick-btn:hover {
+            border-color: var(--text-secondary);
+            color: var(--text-primary);
+        }
+        .quick-btn.active {
+            border-color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-blue);
+        }
+        .quick-btn.clearance { border-left: 3px solid var(--clearance-color); }
+        .quick-btn.transition { border-left: 3px solid var(--transition-color); }
+        .quick-btn.interference { border-left: 3px solid var(--interference-color); }
 
-        .results-placeholder { text-align: center; color: var(--text-light); padding: 32px 0; }
-        .result-summary {
-            background: var(--primary-light);
-            border-radius: 8px;
-            padding: 14px 16px;
-            margin-bottom: 18px;
-            font-size: 0.95rem;
-            color: var(--text-color);
-        }
-        .result-summary strong { font-weight: 700; }
-        .summary-meta { margin-top: 6px; color: var(--text-light); font-size: 0.85rem; }
-        .fit-badge {
+        /* Fit Type Indicator */
+        .fit-type-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 10px;
+            padding: 6px 12px;
             border-radius: 999px;
-            border: 1px solid var(--border-color);
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            background: #fff;
-            color: var(--secondary-color);
+        }
+        .fit-type-badge.clearance {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--clearance-color);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+        .fit-type-badge.transition {
+            background: rgba(234, 179, 8, 0.15);
+            color: var(--transition-color);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        .fit-type-badge.interference {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--interference-color);
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
-        .results-section { margin-bottom: 20px; }
-        .results-section h4 { margin-bottom: 12px; }
-        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-        .result-card {
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 14px;
-            background: #fff;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .result-card.primary {
-            background: var(--primary-light);
-            border-color: #d8dee8;
-        }
-        .result-card .label { font-size: 0.85rem; font-weight: 600; color: var(--secondary-color); }
-        .result-card .value { font-size: 1.1rem; font-family: var(--font-mono); color: var(--text-color); }
-        .result-card .value-main { font-size: 1.2rem; font-family: var(--font-mono); color: var(--text-color); }
-        .result-card .value-dev { font-size: 0.85rem; color: var(--secondary-color); margin-top: 4px; }
-        .result-card .subvalue { font-size: 0.8rem; color: var(--text-light); }
-        .result-card .unit { font-size: 0.75rem; color: var(--text-light); margin-left: 6px; }
-
-        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.85rem; cursor: pointer; }
-        details.inline-details > summary::after { content: 'Show equation'; }
-        details.inline-details[open] > summary::after { content: 'Hide equation'; }
-        .equation-details {
-            background-color: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 10px 12px;
-            margin-top: 10px;
-            font-size: 0.85rem;
-        }
-        .equation-details p { margin-bottom: 0.4rem; }
-
-        .plot-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; background: #fff; }
-        #plot-container { min-height: 320px; display: flex; align-items: center; justify-content: center; color: var(--text-light); }
-        .chart-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-light); margin-top: 8px; }
-        .chart-legend { display: flex; align-items: center; gap: 8px; }
-        .legend-swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
-        .chart-note { margin-top: 8px; font-size: 0.8rem; color: var(--text-light); }
-
-        .background-tabs { display: flex; gap: 6px; margin-bottom: 1.2rem; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .background-tab {
-            padding: 8px 14px;
-            border-radius: 999px;
-            border: 1px solid var(--border-color);
-            background: transparent;
-            color: var(--text-light);
+        /* Calculate Button */
+        .btn-calculate {
+            width: 100%;
+            padding: 16px;
+            background: var(--text-primary);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
+            transition: all 0.2s;
+        }
+        .btn-calculate:hover {
+            background: #e0e0e0;
+        }
+        .btn-calculate:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+        .tab-btn.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--text-primary);
+        }
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .tab-panel.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Results Grid */
+        .results-summary {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .summary-title {
+            font-size: 1.25rem;
             font-weight: 600;
         }
-        .background-tab:hover { border-color: var(--text-color); color: var(--text-color); }
-        .background-tab.active { background: var(--text-color); color: #fff; border-color: var(--text-color); }
-        .background-panel { display: none; }
-        .background-panel.active { display: block; animation: fadeIn 0.3s ease; }
-        .background-section h3 { margin-top: 0; font-size: 1.1rem; color: var(--text-color); }
-        .background-section p { font-size: 0.95rem; line-height: 1.6; }
-        .equation-container { display: grid; gap: 12px; }
-        .equation-card {
+        .summary-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        .result-card {
+            background: var(--bg-card);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 16px;
-            background: var(--primary-light);
+            border-radius: var(--radius);
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
-        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
-        .equation-card ul { list-style: none; padding-left: 0; margin: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
-        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
-        .equation-summary { margin-bottom: 8px; font-size: 0.85rem; color: var(--text-light); }
-        .equation-legend-title { font-size: 0.85rem; color: var(--secondary-color); margin-bottom: 6px; }
-
-        .glossary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-        .glossary-item { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background: #fff; }
-        .glossary-item .term { font-weight: 600; margin-bottom: 6px; color: var(--text-color); }
-        .glossary-item .term code { font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-color); padding: 2px 6px; border-radius: 4px; }
-        .glossary-item .definition { font-size: 0.85rem; color: var(--text-light); }
-        .glossary-item .units, .glossary-item .notes { font-size: 0.8rem; color: var(--secondary-color); margin-top: 6px; }
-
-        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
-        .def::after {
-            content: attr(data-def);
-            position: absolute;
-            bottom: 125%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--text-color);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 400;
-            line-height: 1.4;
-            white-space: normal;
-            width: 220px;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.2s, visibility 0.2s;
-            z-index: 10;
+        .result-card:hover {
+            border-color: var(--text-muted);
         }
-        .def:hover::after { opacity: 1; visibility: visible; }
+        .result-card.highlight {
+            border-color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .result-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .result-value {
+            font-size: 1.2rem;
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+        .result-unit {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+        .result-range {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
 
+        /* Size Display Cards */
+        .size-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .size-card {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 20px;
+            border-left: 4px solid;
+        }
+        .size-card.hole { border-left-color: var(--hole-color); }
+        .size-card.shaft { border-left-color: var(--shaft-color); }
+        .size-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .size-card-title {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .size-card-zone {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .size-nominal {
+            font-size: 1.5rem;
+            font-family: var(--font-mono);
+            margin-bottom: 8px;
+        }
+        .size-deviations {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .size-limits {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        /* Clearance/Interference Display */
+        .clearance-display {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+        }
+        .clearance-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .clearance-value {
+            font-size: 2rem;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .clearance-range {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* Visualization Container */
+        .viz-container {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 20px;
+            min-height: 400px;
+        }
+        .viz-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        #fit-diagram {
+            width: 100%;
+            min-height: 350px;
+        }
+
+        /* Theory Section */
+        .theory-section {
+            margin-bottom: 32px;
+        }
+        .theory-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        .theory-section p {
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            line-height: 1.7;
+        }
+        .equation-box {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 16px 0;
+            overflow-x: auto;
+        }
+
+        /* Fit Guide */
+        .fit-guide {
+            display: grid;
+            gap: 12px;
+        }
+        .fit-guide-item {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 16px;
+            border-left: 4px solid;
+        }
+        .fit-guide-item.clearance { border-left-color: var(--clearance-color); }
+        .fit-guide-item.transition { border-left-color: var(--transition-color); }
+        .fit-guide-item.interference { border-left-color: var(--interference-color); }
+        .fit-guide-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .fit-guide-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .fit-guide-examples {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        /* Loading Overlay */
         .loading-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(248, 249, 251, 0.96);
+            background: var(--bg-primary);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 9999;
         }
-        .loading-content { text-align: center; color: var(--text-color); }
         .spinner {
-            width: 40px;
-            height: 40px;
+            width: 48px;
+            height: 48px;
             border: 3px solid var(--border-color);
-            border-top-color: var(--text-color);
+            border-top-color: var(--text-primary);
             border-radius: 50%;
-            margin: 0 auto 12px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
-
-        @media (max-width: 900px) {
-            .tool-layout { grid-template-columns: 1fr; }
-            .filter-grid { grid-template-columns: 1fr; }
+        .loading-text {
+            margin-top: 16px;
+            color: var(--text-secondary);
         }
+
+        /* Placeholder */
+        .results-placeholder {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 48px;
+        }
+
+        /* Advanced Mode - Collapsible Sections */
+        .advanced-section {
+            margin-bottom: 20px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .section-header h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .section-toggle {
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+        .section-header.collapsed .section-toggle {
+            transform: rotate(-90deg);
+        }
+        .section-content {
+            padding-top: 16px;
+        }
+        .section-header.collapsed + .section-content {
+            display: none;
+        }
+
+        /* Derivation Panel */
+        .derivation-panel {
+            background: var(--bg-input);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-top: 12px;
+            display: none;
+        }
+        .derivation-panel.show { display: block; }
+        .derivation-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .tool-header h1 { font-size: 1.8rem; }
+            .quick-select { grid-template-columns: 1fr; }
+            .size-cards { grid-template-columns: 1fr; }
+            .results-grid { grid-template-columns: 1fr; }
+            .mode-toggle { display: none; }
+        }
+
+        /* Hidden by mode */
+        .simple-only { display: block; }
+        .advanced-only { display: none; }
+        body.advanced-mode .simple-only { display: none; }
+        body.advanced-mode .advanced-only { display: block; }
     </style>
 </head>
 <body>
     <div class="loading-overlay" id="loading-overlay">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <p>Loading ISO fits engine...</p>
-        </div>
+        <div class="spinner"></div>
+        <p class="loading-text">Loading ISO 286 fits engine...</p>
     </div>
 
-    <header class="navbar">
-        <nav class="nav-container">
+    <nav class="navbar">
+        <div class="nav-container">
             <a href="../../index.html" class="nav-brand">Engineering Tools</a>
-        </nav>
-    </header>
+            <div class="nav-controls">
+                <div class="mode-toggle">
+                    <button class="mode-btn active" data-mode="simple">Simple</button>
+                    <button class="mode-btn" data-mode="advanced">Advanced</button>
+                </div>
+            </div>
+        </div>
+    </nav>
 
     <main class="container">
-        <div class="tool-header">
-            <h1>Engineering Fits Assistant</h1>
-            <p class="tool-description" id="tool-description">
-                ISO 286 hole-basis fit calculator with tolerance zones, clearance ranges, and fit guidance.
+        <header class="tool-header">
+            <h1>Engineering Fits Calculator</h1>
+            <p class="tool-description">
+                ISO 286 tolerance calculator for hole-basis fits. Calculate clearance, transition, and interference fits with visualization.
             </p>
-        </div>
-
-        <details class="purpose-section">
-            <summary>Tool Purpose & README</summary>
-            <div class="purpose-content" id="readme-content">
-                <p>Loading README...</p>
-            </div>
-        </details>
+        </header>
 
         <div class="tool-layout">
-            <section class="tool-inputs card">
-                <h2>Inputs</h2>
-                <p class="inputs-intro">Select a standard fit and nominal diameter, then calculate ISO tolerance zones.</p>
+            <!-- Input Panel -->
+            <section class="card">
+                <h2 class="card-title">Inputs</h2>
 
-                <div class="filter-grid">
-                    <div class="filter-group">
-                        <label for="fit-filter-system">Fit system</label>
-                        <select id="fit-filter-system"></select>
-                        <div class="filter-meta" id="fit-system-note">All systems</div>
+                <!-- Simple Mode: Quick Select -->
+                <div class="simple-only">
+                    <div class="input-group">
+                        <label>Fit Type</label>
+                        <div class="quick-select" id="fit-type-select">
+                            <button class="quick-btn clearance" data-type="clearance">Clearance</button>
+                            <button class="quick-btn transition" data-type="transition">Transition</button>
+                            <button class="quick-btn interference" data-type="interference">Interference</button>
+                        </div>
                     </div>
-                    <div class="filter-group">
-                        <label for="fit-filter-type">Fit class</label>
-                        <select id="fit-filter-type">
-                            <option value="all">All classes</option>
-                            <option value="clearance">Clearance</option>
-                            <option value="transition">Transition</option>
-                            <option value="interference">Interference</option>
+
+                    <div class="input-group">
+                        <label for="simple-fit">Common Fit</label>
+                        <select id="simple-fit">
+                            <optgroup label="Clearance Fits">
+                                <option value="H11/c11">H11/c11 - Loose Running</option>
+                                <option value="H9/d9">H9/d9 - Free Running</option>
+                                <option value="H8/f7">H8/f7 - Close Running</option>
+                                <option value="H7/g6">H7/g6 - Sliding</option>
+                                <option value="H7/h6" selected>H7/h6 - Locational Clearance</option>
+                                <option value="H6/h5">H6/h5 - Precision Clearance</option>
+                            </optgroup>
+                            <optgroup label="Transition Fits">
+                                <option value="H7/js6">H7/js6 - Snug/Location</option>
+                                <option value="H7/k6">H7/k6 - Push/Location</option>
+                                <option value="H7/m6">H7/m6 - Light Keying</option>
+                                <option value="H7/n6">H7/n6 - Tight</option>
+                            </optgroup>
+                            <optgroup label="Interference Fits">
+                                <option value="H7/p6">H7/p6 - Light Press</option>
+                                <option value="H7/r6">H7/r6 - Medium Press</option>
+                                <option value="H7/s6">H7/s6 - Heavy Press</option>
+                                <option value="H7/t6">H7/t6 - Force/Shrink</option>
+                                <option value="H7/u6">H7/u6 - Heavy Shrink</option>
+                            </optgroup>
                         </select>
-                        <div class="filter-meta" id="fit-count">0 fits available</div>
-                    </div>
-                    <div class="filter-group">
-                        <label for="fit-filter-search">Search</label>
-                        <input type="text" id="fit-filter-search" placeholder="Search designation or keyword">
                     </div>
                 </div>
 
-                <form id="calc-form">
+                <!-- Advanced Mode: Custom Input -->
+                <div class="advanced-only">
                     <div class="input-group">
-                        <label for="fit_designation">Fit designation</label>
-                        <select id="fit_designation" name="fit_designation"></select>
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        <label for="hole-zone">Hole Tolerance Zone</label>
+                        <select id="hole-zone">
+                            <option value="H5">H5</option>
+                            <option value="H6">H6</option>
+                            <option value="H7" selected>H7</option>
+                            <option value="H8">H8</option>
+                            <option value="H9">H9</option>
+                            <option value="H10">H10</option>
+                            <option value="H11">H11</option>
+                        </select>
+                        <p class="input-hint">H = Hole basis (EI = 0)</p>
                     </div>
-                    <div class="input-group">
-                        <label for="nominal_diameter_mm">Nominal diameter (mm)</label>
-                        <input type="number" id="nominal_diameter_mm" name="nominal_diameter_mm" value="25" min="1" max="500" step="0.01">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
-                </form>
 
-                <div class="fit-details" id="fit-details">
-                    <h3>Fit details</h3>
-                    <p>Select a fit to view guidance.</p>
+                    <div class="input-group">
+                        <label for="shaft-zone">Shaft Tolerance Zone</label>
+                        <select id="shaft-zone">
+                            <optgroup label="Clearance (a-h)">
+                                <option value="c11">c11</option>
+                                <option value="d9">d9</option>
+                                <option value="e8">e8</option>
+                                <option value="f7">f7</option>
+                                <option value="g6">g6</option>
+                                <option value="h5">h5</option>
+                                <option value="h6" selected>h6</option>
+                                <option value="h7">h7</option>
+                            </optgroup>
+                            <optgroup label="Transition (js-n)">
+                                <option value="js5">js5</option>
+                                <option value="js6">js6</option>
+                                <option value="k5">k5</option>
+                                <option value="k6">k6</option>
+                                <option value="m5">m5</option>
+                                <option value="m6">m6</option>
+                                <option value="n5">n5</option>
+                                <option value="n6">n6</option>
+                            </optgroup>
+                            <optgroup label="Interference (p-u)">
+                                <option value="p5">p5</option>
+                                <option value="p6">p6</option>
+                                <option value="r6">r6</option>
+                                <option value="s6">s6</option>
+                                <option value="t6">t6</option>
+                                <option value="u6">u6</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Common to both modes -->
+                <div class="input-group">
+                    <label for="nominal-diameter">Nominal Diameter</label>
+                    <input type="number" id="nominal-diameter" value="25" min="1" max="500" step="0.1">
+                    <p class="input-hint">Basic size D in mm (1-500 mm)</p>
+                </div>
+
+                <button class="btn-calculate" id="calculate-btn">Calculate Fit</button>
+
+                <!-- Fit Description -->
+                <div id="fit-description" style="margin-top: 20px; padding: 16px; background: var(--bg-input); border-radius: var(--radius); display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <strong id="fit-name" style="font-size: 1rem;"></strong>
+                        <span id="fit-type-badge" class="fit-type-badge"></span>
+                    </div>
+                    <p id="fit-desc-text" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 8px;"></p>
+                    <p id="fit-applications" style="font-size: 0.85rem; color: var(--text-muted);"></p>
                 </div>
             </section>
 
-            <section class="tool-outputs card">
+            <!-- Results Panel -->
+            <section class="card">
                 <div class="tabs">
-                    <button class="tab-link active" data-target="results">Results</button>
-                    <button class="tab-link" data-target="plot">Visualization</button>
-                    <button class="tab-link" data-target="background">Background & Principles</button>
+                    <button class="tab-btn active" data-tab="results">Results</button>
+                    <button class="tab-btn" data-tab="diagram">Diagram</button>
+                    <button class="tab-btn" data-tab="equations">Equations</button>
+                    <button class="tab-btn" data-tab="guide">Fit Guide</button>
                 </div>
 
-                <div id="results" class="tab-content" style="display: block;">
+                <!-- Results Tab -->
+                <div id="results" class="tab-panel active">
                     <div id="results-display">
-                        <p class="results-placeholder">Enter inputs and press Calculate.</p>
+                        <div class="results-placeholder">
+                            <p>Select a fit and enter dimensions, then click Calculate.</p>
+                        </div>
                     </div>
-                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 16px;">Export Results</button>
                 </div>
 
-                <div id="plot" class="tab-content">
-                    <div class="plot-card">
-                        <h3>Fit Cross-Section & Tolerance Zoom</h3>
-                        <div id="plot-container">
-                            <p>Plot will appear here after calculation.</p>
+                <!-- Diagram Tab -->
+                <div id="diagram" class="tab-panel">
+                    <div class="viz-container">
+                        <h3 class="viz-title">Tolerance Zone Diagram</h3>
+                        <div id="fit-diagram"></div>
+                    </div>
+                </div>
+
+                <!-- Equations Tab -->
+                <div id="equations" class="tab-panel">
+                    <div class="theory-section">
+                        <h3>ISO 286 Tolerance Calculations</h3>
+                        <p>The ISO system uses a standard tolerance unit <em>i</em> that scales with diameter:</p>
+                        <div class="equation-box">
+                            \[ i = 0.45 \cdot D^{1/3} + 0.001 \cdot D \quad \text{(μm)} \]
                         </div>
-                        <div class="chart-meta">
-                            <div class="chart-legend">
-                                <span class="legend-swatch" style="background:#60a5fa"></span>Hole zone
-                                <span class="legend-swatch" style="background:#f97316"></span>Shaft zone
+                        <p>IT grade tolerances are multiples of this unit:</p>
+                        <div class="equation-box">
+                            \[ IT_n = k_n \cdot i \]
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 12px;">
+                                Where \(k_n\) is the grade multiplier (e.g., IT7 = 16i, IT6 = 10i)
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theory-section">
+                        <h3>Size Limits</h3>
+                        <div class="equation-box">
+                            \[ D_{hole,max} = D + ES \quad,\quad D_{hole,min} = D + EI \]
+                            \[ D_{shaft,max} = D + es \quad,\quad D_{shaft,min} = D + ei \]
+                        </div>
+                    </div>
+
+                    <div class="theory-section">
+                        <h3>Clearance / Interference</h3>
+                        <div class="equation-box">
+                            \[ C_{min} = D_{hole,min} - D_{shaft,max} = EI - es \]
+                            \[ C_{max} = D_{hole,max} - D_{shaft,min} = ES - ei \]
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 12px;">
+                                Positive = clearance, Negative = interference
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fit Guide Tab -->
+                <div id="guide" class="tab-panel">
+                    <div class="fit-guide">
+                        <div class="fit-guide-item clearance">
+                            <div class="fit-guide-title">Clearance Fits (a-h)</div>
+                            <div class="fit-guide-desc">Always positive clearance - parts move/slide freely</div>
+                            <div class="fit-guide-examples">
+                                <strong>H7/h6:</strong> Locational clearance<br>
+                                <strong>H7/g6:</strong> Sliding fit<br>
+                                <strong>H8/f7:</strong> Close running fit
                             </div>
-                            <div class="chart-scale">Scale: Linear</div>
                         </div>
-                        <p class="chart-note">Solid outlines show max size, dashed outlines show min size. Tolerances are exaggerated for clarity.</p>
-                    </div>
-                </div>
-
-                <div id="background" class="tab-content">
-                    <div class="background-tabs">
-                        <button class="background-tab active" data-bg-target="bg-overview">Overview</button>
-                        <button class="background-tab" data-bg-target="bg-glossary">Inputs & Outputs</button>
-                        <button class="background-tab" data-bg-target="bg-theory">Theory</button>
-                        <button class="background-tab" data-bg-target="bg-equations">Equations</button>
-                        <button class="background-tab" data-bg-target="bg-implementation">Implementation Notes</button>
-                        <button class="background-tab" data-bg-target="bg-references">References</button>
-                    </div>
-
-                    <div id="bg-overview" class="background-panel active">
-                        <div class="background-section">
-                            <h3>Overview</h3>
-                            <p id="background-description">Loading documentation...</p>
+                        <div class="fit-guide-item transition">
+                            <div class="fit-guide-title">Transition Fits (js-n)</div>
+                            <div class="fit-guide-desc">May have clearance or interference depending on actual sizes</div>
+                            <div class="fit-guide-examples">
+                                <strong>H7/js6:</strong> Snug fit, easy assembly<br>
+                                <strong>H7/k6:</strong> Push fit with light force<br>
+                                <strong>H7/n6:</strong> Tight, probable interference
+                            </div>
+                        </div>
+                        <div class="fit-guide-item interference">
+                            <div class="fit-guide-title">Interference Fits (p-u)</div>
+                            <div class="fit-guide-desc">Always interference - requires press or thermal assembly</div>
+                            <div class="fit-guide-examples">
+                                <strong>H7/p6:</strong> Light press fit<br>
+                                <strong>H7/s6:</strong> Heavy press fit<br>
+                                <strong>H7/u6:</strong> Shrink fit
+                            </div>
                         </div>
                     </div>
 
-                    <div id="bg-glossary" class="background-panel">
-                        <div class="background-section">
-                            <h3>Parameter Glossary</h3>
-                            <div id="input-glossary" class="glossary-grid"></div>
-                            <h3 style="margin-top: 1.5rem;">Output Glossary</h3>
-                            <div id="output-glossary" class="glossary-grid"></div>
-                        </div>
-                    </div>
-
-                    <div id="bg-theory" class="background-panel">
-                        <div class="background-section">
-                            <h3>Theory</h3>
-                            <p>ISO 286 defines standardized tolerance grades and fundamental deviations so that fits can be designed consistently across manufacturing processes.</p>
-                            <ul>
-                                <li>Hole-basis fits keep the hole at an H position while the shaft letter sets the fit class.</li>
-                                <li>Clearance fits guarantee positive clearance, transition fits straddle zero, and interference fits are negative.</li>
-                                <li>Standard tolerance unit i scales with diameter, producing IT grades for the tolerance width.</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div id="bg-equations" class="background-panel">
-                        <div class="background-section">
-                            <h3>Equations</h3>
-                            <div id="equations-container" class="equation-container"></div>
-                        </div>
-                    </div>
-
-                    <div id="bg-implementation" class="background-panel">
-                        <div class="background-section">
-                            <h3>Implementation Notes</h3>
-                            <ul>
-                                <li>Supported diameters: 1 to 500 mm (ISO diameter steps).</li>
-                                <li>Supported IT grades: 5 through 16.</li>
-                                <li>Hole letters supported: H, JS.</li>
-                                <li>Shaft letters supported: a-h, j/js, k, m, n, p, r, s, t.</li>
-                                <li>J fits are approximated as centered (js) zones in this implementation.</li>
-                                <li>ANSI/ASME B4.1 fits are mapped to ISO equivalents for sizing guidance.</li>
-                                <li>Surface finish guidance is typical; confirm with your manufacturing standard.</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div id="bg-references" class="background-panel">
-                        <div class="background-section">
-                            <h3>References</h3>
-                            <ul>
-                                <li>ISO 286-1:2010, Geometrical product specifications (GPS) - ISO code system for tolerances.</li>
-                                <li>ISO 286-2:2010, Tables of standard tolerance grades and limit deviations.</li>
-                            </ul>
-                        </div>
+                    <div class="theory-section" style="margin-top: 32px;">
+                        <h3>Surface Finish Recommendations</h3>
+                        <table style="width: 100%; font-size: 0.9rem; color: var(--text-secondary);">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="text-align: left; padding: 8px 0;">Fit Type</th>
+                                    <th style="text-align: left; padding: 8px 0;">Hole Ra (μm)</th>
+                                    <th style="text-align: left; padding: 8px 0;">Shaft Ra (μm)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: 8px 0;">Loose Running</td>
+                                    <td>3.2 - 6.3</td>
+                                    <td>1.6 - 3.2</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: 8px 0;">Running/Sliding</td>
+                                    <td>1.6 - 3.2</td>
+                                    <td>0.8 - 1.6</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: 8px 0;">Transition</td>
+                                    <td>0.8 - 1.6</td>
+                                    <td>0.4 - 0.8</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0;">Interference</td>
+                                    <td>0.8 - 1.6</td>
+                                    <td>0.4 - 0.8</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -548,914 +893,460 @@
     </main>
 
     <footer class="footer">
-        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes.</p>
+        <p>ISO 286-1:2010 / ISO 286-2:2010 | Engineering Tools</p>
     </footer>
 
     <script>
-        let toolDocumentation = {};
-        let pyUtils;
-        let pyToolModule;
-        let fitLibrary = [];
-        let fitSystems = [];
-        let fitTypeGuidance = {};
-        let latestResults = null;
-        let latestMeta = null;
+        // State
+        let pyodide = null;
+        let fitsModule = null;
+        let currentMode = 'simple';
+        let lastResults = null;
 
-        const TOOL_MODULE_NAME = 'fits';
-        const TOOL_FUNCTION_NAME = 'calculate_iso_fit';
-        const PARAM_ORDER = ['fit_designation', 'nominal_diameter_mm'];
+        // DOM Elements
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const calculateBtn = document.getElementById('calculate-btn');
+        const resultsDisplay = document.getElementById('results-display');
+        const fitDiagram = document.getElementById('fit-diagram');
+        const modeBtns = document.querySelectorAll('.mode-btn');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+        const quickBtns = document.querySelectorAll('.quick-btn');
+        const simpleFitSelect = document.getElementById('simple-fit');
+        const holeZoneSelect = document.getElementById('hole-zone');
+        const shaftZoneSelect = document.getElementById('shaft-zone');
+        const nominalInput = document.getElementById('nominal-diameter');
 
-        const PARAM_LABELS = {
-            fit_designation: 'Fit designation',
-            nominal_diameter_mm: 'Nominal diameter'
-        };
-
-        const PARAM_UNITS = {
-            fit_designation: 'ISO 286 designation',
-            nominal_diameter_mm: 'mm'
-        };
-
-        const PARAM_NOTES = {
-            fit_designation: 'Select from common ISO hole-basis fits.',
-            nominal_diameter_mm: 'Basic size between 1 and 500 mm.'
-        };
-
-        const RESULT_LABELS = {
-            hole_upper_dev_mm: 'Hole upper deviation (ES)',
-            hole_lower_dev_mm: 'Hole lower deviation (EI)',
-            shaft_upper_dev_mm: 'Shaft upper deviation (es)',
-            shaft_lower_dev_mm: 'Shaft lower deviation (ei)',
-            hole_min_mm: 'Hole minimum size',
-            hole_max_mm: 'Hole maximum size',
-            shaft_min_mm: 'Shaft minimum size',
-            shaft_max_mm: 'Shaft maximum size',
-            min_clearance_mm: 'Minimum clearance',
-            max_clearance_mm: 'Maximum clearance'
-        };
-
-        const RESULT_UNITS = {
-            hole_upper_dev_mm: 'mm',
-            hole_lower_dev_mm: 'mm',
-            shaft_upper_dev_mm: 'mm',
-            shaft_lower_dev_mm: 'mm',
-            hole_min_mm: 'mm',
-            hole_max_mm: 'mm',
-            shaft_min_mm: 'mm',
-            shaft_max_mm: 'mm',
-            min_clearance_mm: 'mm',
-            max_clearance_mm: 'mm'
-        };
-
-        const RESULT_NOTES = {
-            hole_upper_dev_mm: 'Deviation from nominal, positive above basic size.',
-            hole_lower_dev_mm: 'Deviation from nominal, negative below basic size.',
-            shaft_upper_dev_mm: 'Deviation from nominal, positive above basic size.',
-            shaft_lower_dev_mm: 'Deviation from nominal, negative below basic size.',
-            min_clearance_mm: 'If negative, the joint is interference at minimum clearance.',
-            max_clearance_mm: 'Largest possible clearance between hole and shaft.'
-        };
-
-        const RESULT_GROUPS = [
-            {
-                title: 'Tolerance Zone (Deviation from Nominal)',
-                keys: ['hole_upper_dev_mm', 'hole_lower_dev_mm', 'shaft_upper_dev_mm', 'shaft_lower_dev_mm']
-            },
-            {
-                title: 'Actual Size Limits',
-                keys: ['hole_min_mm', 'hole_max_mm', 'shaft_min_mm', 'shaft_max_mm']
-            },
-            {
-                title: 'Clearance / Interference Range',
-                keys: ['min_clearance_mm', 'max_clearance_mm']
-            }
-        ];
-
-        const EQUATION_LEGENDS = [
-            {
-                summary: 'Standard tolerance unit in ISO 286.',
-                variables: [
-                    ['i', 'Standard tolerance unit (um)'],
-                    ['D', 'Geometric mean diameter of the step (mm)']
-                ]
-            },
-            {
-                summary: 'IT grade tolerance from the standard unit.',
-                variables: [
-                    ['IT', 'Tolerance width (um)'],
-                    ['k_{IT}', 'Grade multiplier'],
-                    ['i', 'Standard tolerance unit (um)']
-                ]
-            },
-            {
-                summary: 'Hole deviations for H position.',
-                variables: [
-                    ['EI', 'Lower hole deviation (um)'],
-                    ['ES', 'Upper hole deviation (um)'],
-                    ['IT', 'Tolerance width (um)']
-                ]
-            },
-            {
-                summary: 'Shaft deviations from fundamental deviation and tolerance.',
-                variables: [
-                    ['es', 'Upper shaft deviation (um)'],
-                    ['ei', 'Lower shaft deviation (um)'],
-                    ['K', 'Letter coefficient'],
-                    ['n', 'Exponent']
-                ]
-            },
-            {
-                summary: 'Hole size limits from nominal size and deviations.',
-                variables: [
-                    ['D', 'Nominal diameter (mm)'],
-                    ['EI', 'Lower hole deviation (mm)'],
-                    ['ES', 'Upper hole deviation (mm)']
-                ]
-            },
-            {
-                summary: 'Shaft size limits from nominal size and deviations.',
-                variables: [
-                    ['D', 'Nominal diameter (mm)'],
-                    ['ei', 'Lower shaft deviation (mm)'],
-                    ['es', 'Upper shaft deviation (mm)']
-                ]
-            },
-            {
-                summary: 'Minimum clearance between hole and shaft.',
-                variables: [
-                    ['C_{min}', 'Minimum clearance (mm)'],
-                    ['D_{hole,min}', 'Minimum hole size (mm)'],
-                    ['D_{shaft,max}', 'Maximum shaft size (mm)']
-                ]
-            },
-            {
-                summary: 'Maximum clearance between hole and shaft.',
-                variables: [
-                    ['C_{max}', 'Maximum clearance (mm)'],
-                    ['D_{hole,max}', 'Maximum hole size (mm)'],
-                    ['D_{shaft,min}', 'Minimum shaft size (mm)']
-                ]
-            }
-        ];
-
-        const outputTabs = document.querySelectorAll('.tab-link');
-        const outputSections = document.querySelectorAll('.tab-content');
-        const bgTabs = document.querySelectorAll('.background-tab');
-        const bgPanels = document.querySelectorAll('.background-panel');
-
-        function setOutputTab(targetId) {
-            outputTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.target === targetId));
-            outputSections.forEach(section => {
-                section.style.display = section.id === targetId ? 'block' : 'none';
+        // Mode Toggle
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+                document.body.classList.toggle('advanced-mode', currentMode === 'advanced');
+                syncFitSelection();
             });
-        }
-
-        outputTabs.forEach(tab => {
-            tab.addEventListener('click', () => setOutputTab(tab.dataset.target));
         });
 
-        function setBackgroundTab(targetId) {
-            bgTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.bgTarget === targetId));
-            bgPanels.forEach(panel => panel.classList.toggle('active', panel.id === targetId));
-            typesetMath();
-        }
-
-        bgTabs.forEach(tab => {
-            tab.addEventListener('click', () => setBackgroundTab(tab.dataset.bgTarget));
+        // Tab Switching
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabPanels.forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+                if (btn.dataset.tab === 'equations' && window.MathJax) {
+                    MathJax.typesetPromise();
+                }
+            });
         });
 
-        function typesetMath() {
-            if (window.MathJax) { window.MathJax.typesetPromise(); }
-        }
+        // Quick Select Buttons
+        quickBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                quickBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                filterSimpleFits(btn.dataset.type);
+            });
+        });
 
-        function escapeHtml(value) {
-            return String(value)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
+        function filterSimpleFits(type) {
+            const options = simpleFitSelect.querySelectorAll('option');
+            const optgroups = simpleFitSelect.querySelectorAll('optgroup');
 
-        function toTitleCase(key) {
-            return key
-                .split('_')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ');
-        }
-
-        function formatValue(value) {
-            if (typeof value !== 'number' || Number.isNaN(value)) {
-                return '--';
-            }
-            if (!Number.isFinite(value)) {
-                return value > 0 ? '&infin;' : value < 0 ? '-&infin;' : '--';
-            }
-            const absValue = Math.abs(value);
-            if (absValue !== 0 && absValue < 0.0001) {
-                return value.toExponential(4);
-            }
-            return value.toFixed(6);
-        }
-
-        function formatSigned(value) {
-            if (typeof value !== 'number' || Number.isNaN(value)) {
-                return '--';
-            }
-            const sign = value >= 0 ? '+' : '-';
-            return `${sign}${Math.abs(value).toFixed(6)}`;
-        }
-
-        function formatPlusMinus(nominal, upperDev, lowerDev) {
-            return {
-                nominal: `${formatValue(nominal)} mm`,
-                deviations: `${formatSigned(upperDev)} / ${formatSigned(lowerDev)} mm`
+            // Map type to optgroup labels
+            const typeLabels = {
+                'clearance': 'Clearance Fits',
+                'transition': 'Transition Fits',
+                'interference': 'Interference Fits'
             };
+
+            optgroups.forEach(og => {
+                og.style.display = og.label === typeLabels[type] ? '' : 'none';
+            });
+
+            // Select first visible option
+            const targetGroup = Array.from(optgroups).find(og => og.label === typeLabels[type]);
+            if (targetGroup && targetGroup.querySelector('option')) {
+                simpleFitSelect.value = targetGroup.querySelector('option').value;
+                updateFitDescription();
+            }
         }
 
-        function classifyFit(minClearance, maxClearance) {
-            if (minClearance >= 0) return 'clearance';
-            if (maxClearance <= 0) return 'interference';
-            return 'transition';
-        }
-
-        async function loadReadme() {
-            const container = document.getElementById('readme-content');
-            try {
-                const response = await fetch('./README.md');
-                if (!response.ok) {
-                    throw new Error('README not found');
+        // Sync fit selection between modes
+        function syncFitSelection() {
+            if (currentMode === 'simple') {
+                const fit = simpleFitSelect.value;
+                const parts = fit.split('/');
+                if (parts.length === 2) {
+                    holeZoneSelect.value = parts[0];
+                    shaftZoneSelect.value = parts[1];
                 }
-                const markdown = await response.text();
-                const safeText = escapeHtml(markdown);
-                container.innerHTML = safeText
-                    .split('\n\n')
-                    .map((block) => `<p>${block.replace(/\n/g, '<br>')}</p>`)
-                    .join('');
-            } catch (error) {
-                container.innerHTML = `<p style="color: red;">Unable to load README: ${escapeHtml(error.message)}</p>`;
-            }
-        }
-
-        async function loadFitLibrary() {
-            const response = await fetch('./fit_library.json');
-            if (!response.ok) {
-                throw new Error('Fit library could not be loaded.');
-            }
-            const data = await response.json();
-            const groups = data.fit_groups || [];
-            fitTypeGuidance = data.fit_types || {};
-            fitSystems = groups.map(group => ({
-                id: group.id || 'system',
-                label: group.label || group.system || 'System',
-                description: group.description || '',
-                calculationNote: group.calculation_note || ''
-            }));
-            fitLibrary = groups.flatMap(group => (group.fits || []).map(fit => ({
-                ...fit,
-                id: `${group.id || 'system'}::${fit.designation}`,
-                systemId: group.id || 'system',
-                systemLabel: group.label || group.system || 'System',
-                systemDescription: group.description || '',
-                calculationNote: fit.calculation_note || group.calculation_note || '',
-                calcDesignation: fit.calc_fit || fit.equivalent_iso || fit.designation
-            })));
-        }
-
-        function populateSystemFilter() {
-            const select = document.getElementById('fit-filter-system');
-            select.innerHTML = '';
-
-            const allOption = document.createElement('option');
-            allOption.value = 'all';
-            allOption.textContent = 'All systems';
-            select.appendChild(allOption);
-
-            fitSystems.forEach(system => {
-                const option = document.createElement('option');
-                option.value = system.id;
-                option.textContent = system.label;
-                select.appendChild(option);
-            });
-
-            if (!select.value) {
-                select.value = 'all';
-            }
-            updateSystemNote();
-        }
-
-        function updateSystemNote() {
-            const systemId = document.getElementById('fit-filter-system').value;
-            const note = document.getElementById('fit-system-note');
-            if (systemId === 'all') {
-                note.textContent = 'All systems';
-                return;
-            }
-            const system = fitSystems.find(item => item.id === systemId);
-            note.textContent = system ? system.calculationNote || system.description || system.label : 'System selected';
-        }
-
-        function applyFitFilters() {
-            const systemFilter = document.getElementById('fit-filter-system').value;
-            const typeFilter = document.getElementById('fit-filter-type').value;
-            const searchTerm = document.getElementById('fit-filter-search').value.trim().toLowerCase();
-
-            return fitLibrary.filter(fit => {
-                const matchesSystem = systemFilter === 'all' || fit.systemId === systemFilter;
-                if (!matchesSystem) return false;
-                const matchesType = typeFilter === 'all' || fit.type === typeFilter;
-                if (!matchesType) return false;
-                if (!searchTerm) return true;
-                const equivalence = fit.equivalent_iso ? ` ${fit.equivalent_iso}` : '';
-                const systemInfo = `${fit.systemLabel || ''} ${fit.systemDescription || ''}`;
-                const haystack = `${fit.designation} ${fit.title} ${fit.description}${equivalence} ${systemInfo} ${(fit.applications || []).join(' ')}`.toLowerCase();
-                return haystack.includes(searchTerm);
-            });
-        }
-
-        function populateFitOptions() {
-            const select = document.getElementById('fit_designation');
-            const currentValue = select.value;
-            const filtered = applyFitFilters();
-            const count = document.getElementById('fit-count');
-            count.textContent = `${filtered.length} fits available`;
-
-            const grouped = {};
-            filtered.forEach((fit) => {
-                const key = `${fit.systemLabel}::${fit.type}`;
-                if (!grouped[key]) {
-                    grouped[key] = { systemLabel: fit.systemLabel, type: fit.type, fits: [] };
+            } else {
+                const fit = `${holeZoneSelect.value}/${shaftZoneSelect.value}`;
+                const option = simpleFitSelect.querySelector(`option[value="${fit}"]`);
+                if (option) {
+                    simpleFitSelect.value = fit;
                 }
-                grouped[key].fits.push(fit);
-            });
-
-            select.innerHTML = '';
-            const typeOrder = ['clearance', 'transition', 'interference'];
-            const groupList = Object.values(grouped).sort((a, b) => {
-                const systemCompare = a.systemLabel.localeCompare(b.systemLabel);
-                if (systemCompare !== 0) return systemCompare;
-                return typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type);
-            });
-
-            groupList.forEach((group) => {
-                if (!group.fits.length) return;
-                const optGroup = document.createElement('optgroup');
-                const typeLabel = group.type.charAt(0).toUpperCase() + group.type.slice(1);
-                optGroup.label = `${group.systemLabel} - ${typeLabel} fits`;
-                group.fits
-                    .sort((a, b) => a.designation.localeCompare(b.designation))
-                    .forEach((fit) => {
-                        const option = document.createElement('option');
-                        option.value = fit.id;
-                        option.textContent = `${fit.designation} - ${fit.title}`;
-                        optGroup.appendChild(option);
-                    });
-                select.appendChild(optGroup);
-            });
-
-            const availableIds = new Set(filtered.map(fit => fit.id));
-            if (currentValue && availableIds.has(currentValue)) {
-                select.value = currentValue;
-            } else if (select.options.length) {
-                select.value = select.options[0].value;
             }
-            updateFitDetails();
+            updateFitDescription();
         }
 
-        function updateFitDetails() {
-            const current = document.getElementById('fit_designation').value;
-            const fit = fitLibrary.find(item => item.id === current);
-            const details = document.getElementById('fit-details');
+        // Update fit description panel
+        function updateFitDescription() {
+            const fitDesignation = getFitDesignation();
+            const descPanel = document.getElementById('fit-description');
+            const fitName = document.getElementById('fit-name');
+            const fitBadge = document.getElementById('fit-type-badge');
+            const fitDescText = document.getElementById('fit-desc-text');
+            const fitApps = document.getElementById('fit-applications');
 
-            if (!fit) {
-                details.innerHTML = '<h3>Fit details</h3><p>No fit selected.</p>';
-                return;
+            // Common fits metadata
+            const fitData = {
+                'H11/c11': { name: 'Loose Running', type: 'clearance', desc: 'Very loose clearance for rough alignment and debris tolerance.', apps: 'Agricultural equipment, conveyor rollers' },
+                'H9/d9': { name: 'Free Running', type: 'clearance', desc: 'Large clearance for free running with lubricant film.', apps: 'Hinges, door hardware, low-speed bearings' },
+                'H8/f7': { name: 'Close Running', type: 'clearance', desc: 'Running fit with good guidance and moderate clearance.', apps: 'Electric motors, pumps, spindles' },
+                'H7/g6': { name: 'Sliding', type: 'clearance', desc: 'Small clearance for accurate sliding without perceptible play.', apps: 'Precision slides, spigots' },
+                'H7/h6': { name: 'Locational Clearance', type: 'clearance', desc: 'Snug fit providing accurate location with minimum clearance.', apps: 'Bearing caps, location fits, couplings' },
+                'H6/h5': { name: 'Precision Clearance', type: 'clearance', desc: 'Very accurate fit with minimal clearance for precision work.', apps: 'Gauge parts, precision instruments' },
+                'H7/js6': { name: 'Snug/Location', type: 'transition', desc: 'Centered transition providing accurate location.', apps: 'Dowel pins, alignment features' },
+                'H7/k6': { name: 'Push/Location', type: 'transition', desc: 'Location fit assembled with light hand pressure.', apps: 'Gear hubs, pulley hubs' },
+                'H7/m6': { name: 'Light Keying', type: 'transition', desc: 'Transition fit requiring light force for assembly.', apps: 'Coupling hubs, bearing races' },
+                'H7/n6': { name: 'Tight', type: 'transition', desc: 'Tight transition fit with probable small interference.', apps: 'Permanent locating, bushings' },
+                'H7/p6': { name: 'Light Press', type: 'interference', desc: 'Light interference for permanent assembly with press.', apps: 'Bushings, thin collars' },
+                'H7/r6': { name: 'Medium Press', type: 'interference', desc: 'Medium interference for torque transmission.', apps: 'Couplings, bearing housings' },
+                'H7/s6': { name: 'Heavy Press', type: 'interference', desc: 'Heavy interference requiring significant press force.', apps: 'Permanent hubs, heavy gears' },
+                'H7/t6': { name: 'Force/Shrink', type: 'interference', desc: 'Maximum interference for shrink or heavy press assembly.', apps: 'Permanent assemblies' },
+                'H7/u6': { name: 'Heavy Shrink', type: 'interference', desc: 'Very heavy interference typically requiring thermal assembly.', apps: 'Heavy machinery' }
+            };
+
+            const data = fitData[fitDesignation];
+            if (data) {
+                fitName.textContent = `${fitDesignation} - ${data.name}`;
+                fitBadge.textContent = data.type;
+                fitBadge.className = `fit-type-badge ${data.type}`;
+                fitDescText.textContent = data.desc;
+                fitApps.textContent = `Applications: ${data.apps}`;
+                descPanel.style.display = 'block';
+            } else {
+                fitName.textContent = fitDesignation;
+                fitBadge.textContent = 'Custom';
+                fitBadge.className = 'fit-type-badge';
+                fitDescText.textContent = 'Custom fit configuration.';
+                fitApps.textContent = '';
+                descPanel.style.display = 'block';
             }
-
-            const apps = (fit.applications || []).map(app => escapeHtml(app)).join(', ');
-            const typeMeta = fitTypeGuidance[fit.type] || {};
-            const finish = typeMeta.surface_finish_ra_um || {};
-            const finishText = finish.hole || finish.shaft
-                ? `Hole ${finish.hole || 'N/A'} um, Shaft ${finish.shaft || 'N/A'} um`
-                : 'Not specified';
-            const examples = (typeMeta.examples || []).map(item => escapeHtml(item)).join(', ');
-            const typeLabel = typeMeta.label || fit.type;
-            const calcNote = fit.calcDesignation && fit.calcDesignation !== fit.designation
-                ? `Calculated using ISO equivalent ${escapeHtml(fit.calcDesignation)}`
-                : fit.calculationNote || '';
-
-            details.innerHTML = `
-                <h3>${escapeHtml(fit.title)}</h3>
-                <p><strong>System:</strong> ${escapeHtml(fit.systemLabel)} | <strong>Fit class:</strong> ${escapeHtml(typeLabel)}</p>
-                <p>${escapeHtml(fit.description)}</p>
-                <p><strong>Recommended surface finish (Ra):</strong> ${escapeHtml(finishText)}</p>
-                <p><strong>Examples by class:</strong> ${examples || 'None listed'}</p>
-                <div class="fit-applications"><span>Typical applications:</span> ${apps || 'None listed'}</div>
-                ${calcNote ? `<p class="fit-applications"><span>Note:</span> ${escapeHtml(calcNote)}</p>` : ''}
-            `;
         }
 
-        function buildGlossary(containerId, keys, definitions, labelMap, unitMap, notesMap) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-
-            const items = keys.map((key) => {
-                const label = escapeHtml(labelMap[key] || toTitleCase(key));
-                const description = escapeHtml(definitions[key] || '');
-                const units = unitMap[key] ? `<div class="units">Unit: ${escapeHtml(unitMap[key])}</div>` : '';
-                const notes = notesMap[key] ? `<div class="notes">${escapeHtml(notesMap[key])}</div>` : '';
-                return `
-                    <div class="glossary-item">
-                        <div class="term">${label} <code>${key}</code></div>
-                        <div class="definition">${description}</div>
-                        ${units}
-                        ${notes}
-                    </div>
-                `;
-            }).join('');
-
-            container.innerHTML = items || '<p>No glossary data available.</p>';
+        // Get current fit designation
+        function getFitDesignation() {
+            if (currentMode === 'simple') {
+                return simpleFitSelect.value;
+            }
+            return `${holeZoneSelect.value}/${shaftZoneSelect.value}`;
         }
 
-        function renderFitVisualization(results, meta) {
-            const container = document.getElementById('plot-container');
-            const values = [
-                results.hole_lower_dev_mm,
-                results.hole_upper_dev_mm,
-                results.shaft_lower_dev_mm,
-                results.shaft_upper_dev_mm
-            ];
-
-            if (values.some(value => !Number.isFinite(value))) {
-                container.innerHTML = '<p>Chart unavailable due to non-finite values.</p>';
-                return;
-            }
-
-            const maxAbs = Math.max(...values.map(value => Math.abs(value)), 0);
-            if (maxAbs === 0) {
-                container.innerHTML = '<p>No tolerance range to plot.</p>';
-                return;
-            }
-
-            const width = 760;
-            const height = 360;
-            const cross = { x: 20, y: 20, width: 320, height: 320 };
-            const detail = { x: 380, y: 20, width: 360, height: 320 };
-
-            const crossRadius = Math.min(cross.width, cross.height) * 0.32;
-            const crossScale = (crossRadius * 0.25) / maxAbs;
-
-            const radiusFromDev = (dev) => crossRadius + (dev / 2) * crossScale;
-
-            const holeMinR = radiusFromDev(results.hole_lower_dev_mm);
-            const holeMaxR = radiusFromDev(results.hole_upper_dev_mm);
-            const shaftMinR = radiusFromDev(results.shaft_lower_dev_mm);
-            const shaftMaxR = radiusFromDev(results.shaft_upper_dev_mm);
-
-            const centerX = cross.x + cross.width / 2;
-            const centerY = cross.y + cross.height / 2;
-            const rectX = cross.x + 30;
-            const rectW = cross.width - 60;
-
-            const holeMaxY = centerY - holeMaxR;
-            const holeMinY = centerY - holeMinR;
-            const shaftMaxY = centerY - shaftMaxR;
-            const shaftMinY = centerY - shaftMinR;
-
-            const holeMaxH = holeMaxR * 2;
-            const holeMinH = holeMinR * 2;
-            const shaftMaxH = shaftMaxR * 2;
-            const shaftMinH = shaftMinR * 2;
-
-            const detailScale = (detail.height - 80) / crossRadius;
-            const detailBaseline = detail.y + detail.height - 30;
-            const detailLeft = detail.x + 20;
-            const detailRight = detail.x + detail.width - 20;
-            const lineLeft = detailLeft + 20;
-            const lineRight = detailRight - 120;
-            const labelX = lineRight + 10;
-
-            const detailY = (radius) => detailBaseline - radius * detailScale;
-
-            const yHoleMax = detailY(holeMaxR);
-            const yHoleMin = detailY(holeMinR);
-            const yShaftMax = detailY(shaftMaxR);
-            const yShaftMin = detailY(shaftMinR);
-
-            const minClear = results.min_clearance_mm;
-            const maxClear = results.max_clearance_mm;
-            const minGapTop = Math.min(yHoleMin, yShaftMax);
-            const minGapBottom = Math.max(yHoleMin, yShaftMax);
-            const maxGapTop = Math.min(yHoleMax, yShaftMin);
-            const maxGapBottom = Math.max(yHoleMax, yShaftMin);
-
-            const minColor = minClear >= 0 ? '#16a34a' : '#dc2626';
-            const minLabel = minClear >= 0 ? 'Min clearance' : 'Interference';
-            const maxColor = maxClear >= 0 ? '#0f766e' : '#b91c1c';
-            const maxLabel = maxClear >= 0 ? 'Max clearance' : 'Max interference';
-
-            const cap = 10;
-            const minArrow = `
-                <line x1="${detailRight - 40}" y1="${minGapTop}" x2="${detailRight - 40}" y2="${minGapBottom}" stroke="${minColor}" stroke-width="2" />
-                <line x1="${detailRight - 40 - cap / 2}" y1="${minGapTop}" x2="${detailRight - 40 + cap / 2}" y2="${minGapTop}" stroke="${minColor}" stroke-width="2" />
-                <line x1="${detailRight - 40 - cap / 2}" y1="${minGapBottom}" x2="${detailRight - 40 + cap / 2}" y2="${minGapBottom}" stroke="${minColor}" stroke-width="2" />
-                <text x="${detailRight - 48}" y="${(minGapTop + minGapBottom) / 2 - 4}" text-anchor="end" font-size="12" fill="${minColor}">
-                    ${minLabel}: ${formatValue(minClear)} mm
-                </text>
-            `;
-
-            const maxArrow = `
-                <line x1="${detailRight - 80}" y1="${maxGapTop}" x2="${detailRight - 80}" y2="${maxGapBottom}" stroke="${maxColor}" stroke-width="2" />
-                <line x1="${detailRight - 80 - cap / 2}" y1="${maxGapTop}" x2="${detailRight - 80 + cap / 2}" y2="${maxGapTop}" stroke="${maxColor}" stroke-width="2" />
-                <line x1="${detailRight - 80 - cap / 2}" y1="${maxGapBottom}" x2="${detailRight - 80 + cap / 2}" y2="${maxGapBottom}" stroke="${maxColor}" stroke-width="2" />
-                <text x="${detailRight - 88}" y="${(maxGapTop + maxGapBottom) / 2 - 4}" text-anchor="end" font-size="12" fill="${maxColor}">
-                    ${maxLabel}: ${formatValue(maxClear)} mm
-                </text>
-            `;
-
-            const svg = `
-                <svg viewBox="0 0 ${width} ${height}" width="100%" height="340" role="img" aria-label="Fit visualization">
-                    <title>Fit visualization</title>
-                    <desc>Orthogonal cross-section and detailed tolerance view for hole and shaft sizes.</desc>
-                    <rect x="0" y="0" width="${width}" height="${height}" fill="#f9fafb"></rect>
-
-                    <text x="${centerX}" y="${cross.y + 14}" text-anchor="middle" font-size="12" fill="#374151">Orthogonal cross-section (tolerances exaggerated)</text>
-                    <rect x="${rectX}" y="${holeMaxY}" width="${rectW}" height="${holeMaxH}" fill="none" stroke="#60a5fa" stroke-width="2" />
-                    <rect x="${rectX}" y="${holeMinY}" width="${rectW}" height="${holeMinH}" fill="none" stroke="#60a5fa" stroke-width="2" stroke-dasharray="6,4" />
-                    <rect x="${rectX}" y="${shaftMaxY}" width="${rectW}" height="${shaftMaxH}" fill="none" stroke="#f97316" stroke-width="2" />
-                    <rect x="${rectX}" y="${shaftMinY}" width="${rectW}" height="${shaftMinH}" fill="none" stroke="#f97316" stroke-width="2" stroke-dasharray="6,4" />
-                    <line x1="${rectX}" y1="${centerY}" x2="${rectX + rectW}" y2="${centerY}" stroke="#9ca3af" stroke-dasharray="4,4" />
-                    <text x="${centerX}" y="${centerY + crossRadius + 26}" text-anchor="middle" font-size="12" fill="#374151">Blue = hole, Orange = shaft</text>
-
-                    <text x="${detail.x + detail.width / 2}" y="${detail.y + 14}" text-anchor="middle" font-size="12" fill="#374151">Zoomed edge detail (same orientation)</text>
-                    <line x1="${lineLeft}" y1="${detailBaseline}" x2="${lineRight}" y2="${detailBaseline}" stroke="#9ca3af" stroke-dasharray="4,4" />
-                    <text x="${lineRight}" y="${detailBaseline + 16}" text-anchor="end" font-size="12" fill="#6b7280">Centerline</text>
-
-                    <line x1="${lineLeft}" y1="${yHoleMax}" x2="${lineRight}" y2="${yHoleMax}" stroke="#60a5fa" stroke-width="2" />
-                    <line x1="${lineLeft}" y1="${yHoleMin}" x2="${lineRight}" y2="${yHoleMin}" stroke="#60a5fa" stroke-width="2" stroke-dasharray="6,4" />
-                    <line x1="${lineLeft}" y1="${yShaftMax}" x2="${lineRight}" y2="${yShaftMax}" stroke="#f97316" stroke-width="2" />
-                    <line x1="${lineLeft}" y1="${yShaftMin}" x2="${lineRight}" y2="${yShaftMin}" stroke="#f97316" stroke-width="2" stroke-dasharray="6,4" />
-
-                    <text x="${labelX}" y="${yHoleMax + 4}" font-size="12" fill="#1f2937">Hole max ${formatSigned(results.hole_upper_dev_mm)} mm</text>
-                    <text x="${labelX}" y="${yHoleMin + 4}" font-size="12" fill="#1f2937">Hole min ${formatSigned(results.hole_lower_dev_mm)} mm</text>
-                    <text x="${labelX}" y="${yShaftMax + 4}" font-size="12" fill="#1f2937">Shaft max ${formatSigned(results.shaft_upper_dev_mm)} mm</text>
-                    <text x="${labelX}" y="${yShaftMin + 4}" font-size="12" fill="#1f2937">Shaft min ${formatSigned(results.shaft_lower_dev_mm)} mm</text>
-
-                    ${maxArrow}
-                    ${minArrow}
-                    <text x="${detailLeft}" y="${detail.y + detail.height - 6}" font-size="12" fill="#6b7280">Nominal diameter: ${formatValue(meta.nominalDiameter)} mm</text>
-                </svg>
-            `;
-
-            container.innerHTML = svg;
+        // Format number with appropriate precision
+        function formatNum(value, decimals = 4) {
+            if (typeof value !== 'number' || !isFinite(value)) return '—';
+            return value.toFixed(decimals);
         }
 
-        function renderResults(results, meta) {
-            const resultsDiv = document.getElementById('results-display');
-            const returnDefs = toolDocumentation.returns || {};
-            const equations = toolDocumentation.latex
-                ? toolDocumentation.latex.split('\n').map(line => line.trim()).filter(line => line.length > 0)
-                : [];
-            const returnKeys = Object.keys(returnDefs);
-            const equationMap = {};
-            returnKeys.forEach((key, index) => {
-                equationMap[key] = equations[index] || '';
-            });
+        // Format deviation with sign
+        function formatDev(value) {
+            if (typeof value !== 'number' || !isFinite(value)) return '—';
+            const sign = value >= 0 ? '+' : '';
+            return `${sign}${value.toFixed(1)} μm`;
+        }
 
-            const computedClass = classifyFit(results.min_clearance_mm, results.max_clearance_mm);
-            const metaClass = meta.fitMeta ? meta.fitMeta.type : null;
-            const mismatch = metaClass && metaClass !== computedClass;
-            const typeKey = meta.fitMeta ? meta.fitMeta.type : computedClass;
-            const typeMeta = fitTypeGuidance[typeKey] || {};
-            const finish = typeMeta.surface_finish_ra_um || {};
-            const finishText = finish.hole || finish.shaft
-                ? `Hole ${finish.hole || 'N/A'} um, Shaft ${finish.shaft || 'N/A'} um`
-                : 'Not specified';
-            const exampleText = (typeMeta.examples || []).map(item => escapeHtml(item)).join(', ');
+        // Render results
+        function renderResults(results) {
+            const fitType = results.fit_type;
+            const fitTypeColors = {
+                'clearance': 'var(--clearance-color)',
+                'transition': 'var(--transition-color)',
+                'interference': 'var(--interference-color)'
+            };
 
-            const noteParts = [];
-            if (mismatch) {
-                noteParts.push(`Library class: ${metaClass}, computed: ${computedClass}`);
-            }
-            if (/\/j\d+/i.test(meta.fitDesignation) && !/\/js\d+/i.test(meta.fitDesignation)) {
-                noteParts.push('J fits are approximated as centered (js) zones in this tool.');
-            }
-            if (meta.calcDesignation && meta.calcDesignation !== meta.fitDesignation) {
-                noteParts.push(`Calculated using ISO equivalent ${meta.calcDesignation}`);
+            const minClear = results.min_clearance_mm * 1000;
+            const maxClear = results.max_clearance_mm * 1000;
+
+            let clearanceLabel = 'Clearance Range';
+            let clearanceValue = `${formatNum(minClear, 1)} to ${formatNum(maxClear, 1)} μm`;
+            if (fitType === 'interference') {
+                clearanceLabel = 'Interference Range';
+                clearanceValue = `${formatNum(results.min_interference_mm * 1000, 1)} to ${formatNum(results.max_interference_mm * 1000, 1)} μm`;
+            } else if (fitType === 'transition') {
+                clearanceLabel = 'Clearance / Interference';
             }
 
-            const notes = noteParts.length ? `<div class="summary-meta">${noteParts.map(escapeHtml).join(' | ')}</div>` : '';
-
-            const holeSummary = formatPlusMinus(meta.nominalDiameter, results.hole_upper_dev_mm, results.hole_lower_dev_mm);
-            const shaftSummary = formatPlusMinus(meta.nominalDiameter, results.shaft_upper_dev_mm, results.shaft_lower_dev_mm);
-
-            let html = `
-                <div class="result-summary">
-                    <div>System <strong>${escapeHtml(meta.fitMeta ? meta.fitMeta.systemLabel : 'ISO 286')}</strong> | Fit <strong>${escapeHtml(meta.fitDesignation)}</strong></div>
-                    <div class="summary-meta">Nominal diameter: ${formatValue(meta.nominalDiameter)} mm</div>
-                    <div class="summary-meta">
-                        <span class="fit-badge">${escapeHtml(computedClass)}</span>
-                        ${meta.fitMeta ? ` ${escapeHtml(meta.fitMeta.title)}` : ''}
-                    </div>
-                    <div class="summary-meta">Recommended surface finish (Ra): ${escapeHtml(finishText)}</div>
-                    <div class="summary-meta">Examples: ${exampleText || 'None listed'}</div>
-                    ${notes}
-                </div>
-                <div class="results-section">
-                    <h4>Key Sizes (Nominal + Deviations)</h4>
-                    <div class="results-grid">
-                        <div class="result-card primary">
-                            <div class="label">Hole size</div>
-                            <div class="value">
-                                <div class="value-main">${holeSummary.nominal}</div>
-                                <div class="value-dev">${holeSummary.deviations}</div>
-                            </div>
-                            <div class="subvalue">Limits: ${formatValue(results.hole_min_mm)} to ${formatValue(results.hole_max_mm)} mm</div>
+            resultsDisplay.innerHTML = `
+                <div class="results-summary">
+                    <div class="summary-header">
+                        <div>
+                            <div class="summary-title">${results.fit_designation}</div>
+                            <div class="summary-subtitle">Nominal: ${formatNum(results.nominal_diameter_mm, 2)} mm | Step: ${results.diameter_step}</div>
                         </div>
-                        <div class="result-card primary">
-                            <div class="label">Shaft size</div>
-                            <div class="value">
-                                <div class="value-main">${shaftSummary.nominal}</div>
-                                <div class="value-dev">${shaftSummary.deviations}</div>
-                            </div>
-                            <div class="subvalue">Limits: ${formatValue(results.shaft_min_mm)} to ${formatValue(results.shaft_max_mm)} mm</div>
+                        <span class="fit-type-badge ${fitType}">${fitType}</span>
+                    </div>
+                </div>
+
+                <div class="size-cards">
+                    <div class="size-card hole">
+                        <div class="size-card-header">
+                            <span class="size-card-title">Hole</span>
+                            <span class="size-card-zone">${results.hole_zone}</span>
+                        </div>
+                        <div class="size-nominal">${formatNum(results.nominal_diameter_mm, 2)} mm</div>
+                        <div class="size-deviations">
+                            ES: ${formatDev(results.hole_upper_dev_um)}<br>
+                            EI: ${formatDev(results.hole_lower_dev_um)}
+                        </div>
+                        <div class="size-limits">
+                            ${formatNum(results.hole_min_mm, 4)} to ${formatNum(results.hole_max_mm, 4)} mm
+                        </div>
+                    </div>
+                    <div class="size-card shaft">
+                        <div class="size-card-header">
+                            <span class="size-card-title">Shaft</span>
+                            <span class="size-card-zone">${results.shaft_zone}</span>
+                        </div>
+                        <div class="size-nominal">${formatNum(results.nominal_diameter_mm, 2)} mm</div>
+                        <div class="size-deviations">
+                            es: ${formatDev(results.shaft_upper_dev_um)}<br>
+                            ei: ${formatDev(results.shaft_lower_dev_um)}
+                        </div>
+                        <div class="size-limits">
+                            ${formatNum(results.shaft_min_mm, 4)} to ${formatNum(results.shaft_max_mm, 4)} mm
                         </div>
                     </div>
                 </div>
+
+                <div class="clearance-display" style="border-left: 4px solid ${fitTypeColors[fitType]};">
+                    <div class="clearance-label">${clearanceLabel}</div>
+                    <div class="clearance-value" style="color: ${fitTypeColors[fitType]};">${clearanceValue}</div>
+                    <div class="clearance-range">
+                        Tolerance band: ${formatNum(results.hole_tolerance_um, 1)} μm (hole) + ${formatNum(results.shaft_tolerance_um, 1)} μm (shaft)
+                    </div>
+                </div>
+
+                <div style="margin-top: 24px; padding: 16px; background: var(--bg-input); border-radius: var(--radius);">
+                    <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 12px;">Surface Finish Recommendations</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.85rem; color: var(--text-secondary);">
+                        <div><strong>Hole Ra:</strong> ${results.recommended_hole_finish_ra} μm</div>
+                        <div><strong>Shaft Ra:</strong> ${results.recommended_shaft_finish_ra} μm</div>
+                    </div>
+                </div>
             `;
-
-            RESULT_GROUPS.forEach(group => {
-                html += `<div class="results-section"><h4>${group.title}</h4><div class="results-grid">`;
-                group.keys.forEach(key => {
-                    const definition = escapeHtml(returnDefs[key] || '');
-                    const value = results[key];
-                    const substString = results[`subst_${key}`];
-                    const equation = equationMap[key] || '';
-                    const displayName = RESULT_LABELS[key] || toTitleCase(key);
-                    const unitLabel = RESULT_UNITS[key] ? `<span class="unit">${RESULT_UNITS[key]}</span>` : '';
-                    html += `
-                        <div class="result-card">
-                            <div class="label"><span class="def" data-def="${definition}">${displayName}</span></div>
-                            <div class="value">${formatValue(value)} ${unitLabel}</div>
-                            <details class="inline-details">
-                                <summary></summary>
-                                <div class="equation-details">
-                                    <p><strong>Equation:</strong> $$${equation}$$</p>
-                                    ${substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : ''}
-                                </div>
-                            </details>
-                        </div>
-                    `;
-                });
-                html += '</div></div>';
-            });
-
-            resultsDiv.innerHTML = html;
         }
 
-        function exportResults() {
-            if (!latestResults || !latestMeta) {
-                alert('Run a calculation before exporting.');
+        // Render tolerance zone diagram
+        function renderDiagram(results) {
+            const holeMin = results.hole_lower_dev_um;
+            const holeMax = results.hole_upper_dev_um;
+            const shaftMin = results.shaft_lower_dev_um;
+            const shaftMax = results.shaft_upper_dev_um;
+
+            const allVals = [holeMin, holeMax, shaftMin, shaftMax];
+            const yMin = Math.min(...allVals) - 10;
+            const yMax = Math.max(...allVals) + 10;
+
+            // Hole tolerance zone
+            const holeTrace = {
+                x: ['Hole', 'Hole'],
+                y: [holeMin, holeMax],
+                mode: 'lines+markers',
+                type: 'scatter',
+                name: `Hole (${results.hole_zone})`,
+                line: { color: '#60a5fa', width: 20 },
+                marker: { size: 12 }
+            };
+
+            // Shaft tolerance zone
+            const shaftTrace = {
+                x: ['Shaft', 'Shaft'],
+                y: [shaftMin, shaftMax],
+                mode: 'lines+markers',
+                type: 'scatter',
+                name: `Shaft (${results.shaft_zone})`,
+                line: { color: '#f97316', width: 20 },
+                marker: { size: 12 }
+            };
+
+            // Zero line
+            const zeroLine = {
+                x: ['Hole', 'Shaft'],
+                y: [0, 0],
+                mode: 'lines',
+                type: 'scatter',
+                name: 'Nominal',
+                line: { color: '#666', width: 1, dash: 'dash' },
+                showlegend: false
+            };
+
+            const layout = {
+                title: {
+                    text: `Tolerance Zones: ${results.fit_designation}`,
+                    font: { color: '#fff', size: 16 }
+                },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { color: '#a0a0a0' },
+                yaxis: {
+                    title: 'Deviation (μm)',
+                    zeroline: true,
+                    zerolinecolor: '#444',
+                    gridcolor: '#333',
+                    range: [yMin, yMax]
+                },
+                xaxis: {
+                    gridcolor: '#333'
+                },
+                showlegend: true,
+                legend: {
+                    x: 1,
+                    y: 1,
+                    bgcolor: 'transparent'
+                },
+                margin: { t: 60, r: 40, b: 60, l: 60 },
+                annotations: [
+                    {
+                        x: 'Hole',
+                        y: (holeMin + holeMax) / 2,
+                        xref: 'x',
+                        yref: 'y',
+                        text: `IT${results.hole_tolerance_grade}: ${formatNum(results.hole_tolerance_um, 1)} μm`,
+                        showarrow: false,
+                        xanchor: 'left',
+                        xshift: 30,
+                        font: { size: 11, color: '#60a5fa' }
+                    },
+                    {
+                        x: 'Shaft',
+                        y: (shaftMin + shaftMax) / 2,
+                        xref: 'x',
+                        yref: 'y',
+                        text: `IT${results.shaft_tolerance_grade}: ${formatNum(results.shaft_tolerance_um, 1)} μm`,
+                        showarrow: false,
+                        xanchor: 'left',
+                        xshift: 30,
+                        font: { size: 11, color: '#f97316' }
+                    }
+                ]
+            };
+
+            const config = {
+                responsive: true,
+                displayModeBar: false
+            };
+
+            Plotly.newPlot(fitDiagram, [zeroLine, holeTrace, shaftTrace], layout, config);
+        }
+
+        // Calculate button handler
+        async function calculate() {
+            if (!fitsModule) {
+                alert('Calculation engine not ready. Please wait.');
                 return;
             }
 
-            const typeKey = latestMeta.fitMeta ? latestMeta.fitMeta.type : classifyFit(latestResults.min_clearance_mm, latestResults.max_clearance_mm);
-            const typeMeta = fitTypeGuidance[typeKey] || {};
-            const finish = typeMeta.surface_finish_ra_um || {};
-            const finishText = finish.hole || finish.shaft
-                ? `Hole ${finish.hole || 'N/A'} um, Shaft ${finish.shaft || 'N/A'} um`
-                : 'Not specified';
-            const examplesText = (typeMeta.examples || []).join('; ');
-            const holeSummary = formatPlusMinus(latestMeta.nominalDiameter, latestResults.hole_upper_dev_mm, latestResults.hole_lower_dev_mm);
-            const shaftSummary = formatPlusMinus(latestMeta.nominalDiameter, latestResults.shaft_upper_dev_mm, latestResults.shaft_lower_dev_mm);
+            const fitDesignation = getFitDesignation();
+            const nominalDiameter = parseFloat(nominalInput.value);
 
-            const rows = [
-                ['System', latestMeta.fitMeta ? latestMeta.fitMeta.systemLabel : 'ISO 286'],
-                ['Fit designation', latestMeta.fitDesignation],
-                ['Calculation basis', latestMeta.calcDesignation || latestMeta.fitDesignation],
-                ['Nominal diameter (mm)', latestMeta.nominalDiameter],
-                ['Computed class', classifyFit(latestResults.min_clearance_mm, latestResults.max_clearance_mm)],
-                ['Recommended surface finish (Ra)', finishText],
-                ['Examples', examplesText || 'None listed'],
-                ['Hole size (nominal)', holeSummary.nominal],
-                ['Hole deviations', holeSummary.deviations],
-                ['Shaft size (nominal)', shaftSummary.nominal],
-                ['Shaft deviations', shaftSummary.deviations]
-            ];
-
-            RESULT_GROUPS.forEach(group => {
-                rows.push(['', '']);
-                rows.push([group.title, '']);
-                group.keys.forEach(key => {
-                    rows.push([
-                        RESULT_LABELS[key] || key,
-                        `${latestResults[key]} ${RESULT_UNITS[key] || ''}`.trim()
-                    ]);
-                });
-            });
-
-            const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `iso-fit-${latestMeta.fitDesignation.replace('/', '-')}-${latestMeta.nominalDiameter}mm.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-
-        async function main() {
-            const button = document.getElementById('calculate-btn');
-            button.textContent = 'Loading Pyodide...';
-            const pyodide = await loadPyodide();
-            await pyodide.loadPackage('micropip');
-
-            button.textContent = 'Loading Python...';
-            await pyodide.runPythonAsync(`
-                import micropip
-                from pyodide.http import pyfetch
-
-                response_utils = await pyfetch('../../pycalcs/utils.py')
-                with open('utils.py', 'w') as f:
-                    f.write(await response_utils.string())
-
-                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
-                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
-                    f.write(await response_tool.string())
-
-                import utils
-                import ${TOOL_MODULE_NAME}
-            `);
-
-            pyUtils = pyodide.globals.get('utils');
-            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
-
-            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
-            const jsDoc = docMap.toJs();
-            const hasError = jsDoc instanceof Map
-                ? jsDoc.has('error')
-                : Object.prototype.hasOwnProperty.call(jsDoc, 'error');
-
-            if (hasError) {
-                const errorMessage = jsDoc instanceof Map ? jsDoc.get('error') : jsDoc.error;
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight: bold;">Initialization Error:</p>
-                    <p style="color: red;">${escapeHtml(errorMessage)}</p>
-                `;
-                document.getElementById('loading-overlay').style.display = 'none';
+            if (isNaN(nominalDiameter) || nominalDiameter < 1 || nominalDiameter > 500) {
+                alert('Nominal diameter must be between 1 and 500 mm.');
                 return;
             }
 
-            const docEntries = jsDoc instanceof Map ? jsDoc : Object.entries(jsDoc);
-            toolDocumentation = Object.fromEntries(docEntries);
-
-            if (toolDocumentation.parameters) {
-                const paramEntries = toolDocumentation.parameters instanceof Map
-                    ? toolDocumentation.parameters
-                    : Object.entries(toolDocumentation.parameters);
-                toolDocumentation.parameters = Object.fromEntries(paramEntries);
-            }
-
-            if (toolDocumentation.returns) {
-                const returnEntries = toolDocumentation.returns instanceof Map
-                    ? toolDocumentation.returns
-                    : Object.entries(toolDocumentation.returns);
-                toolDocumentation.returns = Object.fromEntries(returnEntries);
-            }
+            calculateBtn.disabled = true;
+            calculateBtn.textContent = 'Calculating...';
 
             try {
-                await loadFitLibrary();
-                populateSystemFilter();
-                populateFitOptions();
+                const resultProxy = fitsModule.calculate_iso_fit(nominalDiameter, fitDesignation);
+                const results = resultProxy.toJs();
+                lastResults = Object.fromEntries(results);
+
+                renderResults(lastResults);
+                renderDiagram(lastResults);
+
+                // Switch to results tab
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabPanels.forEach(p => p.classList.remove('active'));
+                document.querySelector('[data-tab="results"]').classList.add('active');
+                document.getElementById('results').classList.add('active');
+
             } catch (error) {
-                document.getElementById('fit-details').innerHTML = `
-                    <h3>Fit details</h3>
-                    <p style="color: red;">${escapeHtml(error.message)}</p>
-                `;
-                document.getElementById('fit-count').textContent = '0 fits available';
-            }
-
-            populateUiFromDocs();
-            loadReadme();
-
-            button.textContent = 'Calculate';
-            document.getElementById('loading-overlay').style.display = 'none';
-        }
-
-        function populateUiFromDocs() {
-            if (!toolDocumentation || !toolDocumentation.parameters) return;
-
-            const description = toolDocumentation.description || '';
-            const summary = description.split('\n\n')[0];
-            document.getElementById('tool-description').textContent = summary || description;
-            const background = document.getElementById('background-description');
-            if (background) {
-                background.innerHTML = escapeHtml(description).replace(/\n/g, '<br>');
-            }
-
-            PARAM_ORDER.forEach((param) => {
-                const tooltip = toolDocumentation.parameters[param] || 'N/A';
-                document.querySelector(`#${param} + .tooltip-trigger`)
-                    ?.setAttribute('data-tooltip', tooltip);
-            });
-
-            const latexLines = toolDocumentation.latex
-                ? toolDocumentation.latex.split('\n').map(line => line.trim()).filter(line => line.length > 0)
-                : [];
-
-            const equationCards = latexLines.map((expression, index) => {
-                const meta = EQUATION_LEGENDS[index] || { summary: '', variables: [] };
-                const legendItems = (meta.variables || []).map(([symbol, note]) => (
-                    `<li><span class="math-inline">\\(${symbol}\\)</span>: ${escapeHtml(note)}</li>`
-                )).join('');
-                const summaryLine = meta.summary
-                    ? `<p class="equation-summary">${escapeHtml(meta.summary)}</p>`
-                    : '';
-                const legendTitle = legendItems
-                    ? '<p class="equation-legend-title">Variables:</p>'
-                    : '';
-                const legendBlock = legendItems ? `<ul>${legendItems}</ul>` : '';
-                return `
-                    <div class="equation-card">
-                        <strong>Equation (${index + 1})</strong>
-                        <span class="equation-expression">\\[ ${expression} \\]</span>
-                        ${summaryLine}
-                        ${legendTitle}
-                        ${legendBlock}
+                resultsDisplay.innerHTML = `
+                    <div class="results-placeholder" style="color: var(--accent-red);">
+                        <p><strong>Calculation Error</strong></p>
+                        <p>${error.message}</p>
                     </div>
                 `;
-            }).join('');
-
-            const equationsContainer = document.getElementById('equations-container');
-            if (equationsContainer) {
-                equationsContainer.innerHTML = equationCards || '<p>No equations provided.</p>';
+            } finally {
+                calculateBtn.disabled = false;
+                calculateBtn.textContent = 'Calculate Fit';
             }
-
-            buildGlossary('input-glossary', PARAM_ORDER, toolDocumentation.parameters, PARAM_LABELS, PARAM_UNITS, PARAM_NOTES);
-            buildGlossary('output-glossary', Object.keys(toolDocumentation.returns || {}), toolDocumentation.returns, RESULT_LABELS, RESULT_UNITS, RESULT_NOTES);
-            typesetMath();
         }
 
-        const form = document.getElementById('calc-form');
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
+        // Event listeners
+        calculateBtn.addEventListener('click', calculate);
+        simpleFitSelect.addEventListener('change', () => {
+            syncFitSelection();
+            updateFitDescription();
+        });
+        holeZoneSelect.addEventListener('change', () => {
+            syncFitSelection();
+            updateFitDescription();
+        });
+        shaftZoneSelect.addEventListener('change', () => {
+            syncFitSelection();
+            updateFitDescription();
+        });
 
-            const nominalInput = Number.parseFloat(document.getElementById('nominal_diameter_mm').value);
-            const nominalDiameter = Number.isFinite(nominalInput) ? nominalInput : 0;
-            const fitSelectionId = document.getElementById('fit_designation').value;
-            const selectedFit = fitLibrary.find(item => item.id === fitSelectionId);
-            if (!selectedFit) {
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight:bold;">Selection Error:</p>
-                    <p style="color: red;">No fit metadata found for the current selection.</p>
-                `;
-                return;
-            }
-            const fitDesignation = selectedFit.designation;
-            const calcDesignation = selectedFit.calcDesignation;
-            if (!calcDesignation) {
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
-                    <p style="color: red;">No calculation mapping available for this fit.</p>
-                `;
-                return;
-            }
+        // Initialize
+        async function init() {
+            calculateBtn.disabled = true;
+            calculateBtn.textContent = 'Loading...';
 
             try {
-                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](nominalDiameter, calcDesignation).toJs();
-                const results = Object.fromEntries(resultMap);
+                pyodide = await loadPyodide();
 
-                renderResults(results, {
-                    nominalDiameter,
-                    fitDesignation,
-                    calcDesignation,
-                    fitMeta: selectedFit
-                });
-                renderFitVisualization(results, { nominalDiameter, fitMeta: selectedFit });
-                latestResults = results;
-                latestMeta = { nominalDiameter, fitDesignation, calcDesignation, fitMeta: selectedFit };
-                typesetMath();
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+
+                    response = await pyfetch('../../pycalcs/fits.py')
+                    with open('fits.py', 'w') as f:
+                        f.write(await response.string())
+
+                    import fits
+                `);
+
+                fitsModule = pyodide.globals.get('fits');
+
+                calculateBtn.disabled = false;
+                calculateBtn.textContent = 'Calculate Fit';
+                loadingOverlay.style.display = 'none';
+
+                // Initialize UI
+                updateFitDescription();
+
+                // Typeset MathJax
+                if (window.MathJax) {
+                    MathJax.typesetPromise();
+                }
 
             } catch (error) {
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
-                    <p style="color: red;">${escapeHtml(error.message)}</p>
+                console.error('Initialization error:', error);
+                loadingOverlay.innerHTML = `
+                    <div style="text-align: center; color: var(--accent-red);">
+                        <p><strong>Failed to load calculation engine</strong></p>
+                        <p>${error.message}</p>
+                    </div>
                 `;
-                document.getElementById('plot-container').innerHTML = '<p>Unable to render chart.</p>';
             }
-        });
+        }
 
-        document.getElementById('fit-filter-system').addEventListener('change', () => {
-            updateSystemNote();
-            populateFitOptions();
-        });
-        document.getElementById('fit-filter-type').addEventListener('change', populateFitOptions);
-        document.getElementById('fit-filter-search').addEventListener('input', populateFitOptions);
-        document.getElementById('fit_designation').addEventListener('change', updateFitDetails);
-        document.getElementById('export-btn').addEventListener('click', exportResults);
-
-        main();
+        init();
     </script>
 </body>
 </html>

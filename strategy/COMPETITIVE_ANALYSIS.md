@@ -29,7 +29,7 @@ The online engineering calculator market is established with several free, ad-su
 
 **Monetization:** Display ads (heavy), some affiliate links
 
-**Traffic estimate:** 5-10M monthly visits
+**Traffic:** ~3-5M monthly visits (estimate based on similar sites; direct data unavailable)
 
 ---
 
@@ -52,7 +52,11 @@ The online engineering calculator market is established with several free, ad-su
 
 **Monetization:** Display ads, premium membership ($), training courses
 
-**Traffic estimate:** 1-3M monthly visits
+**Traffic:** ~500K-4M monthly visits (sources vary widely)
+- Semrush (2022): 556K monthly
+- HypeStat: 4.1M monthly
+- Self-reported: 55K daily visitors (~1.7M/mo)
+- Source: [SimilarWeb](https://www.similarweb.com/website/engineersedge.com/), [HypeStat](https://hypestat.com/info/engineersedge.com)
 
 ---
 
@@ -76,7 +80,12 @@ The online engineering calculator market is established with several free, ad-su
 
 **Monetization:** Display ads, B2B licensing, API access
 
-**Traffic estimate:** 30-50M monthly visits
+**Traffic:** 14.6M monthly visits (Nov 2024)
+- Bounce rate: 66%, Avg duration: 1:09
+- 71% organic search, 27% direct
+- Global rank: #6,062
+- Top competitor: calculator.net (50M/mo)
+- Source: [SimilarWeb](https://www.similarweb.com/website/omnicalculator.com/)
 
 ---
 
@@ -98,7 +107,12 @@ The online engineering calculator market is established with several free, ad-su
 
 **Monetization:** Freemium ($15/mo or $99/year for premium)
 
-**Traffic estimate:** 200-500K monthly visits
+**Traffic:** 115K monthly visits (Sep 2024)
+- Bounce rate: 55%, Avg duration: 0:49
+- Global rank: #413,138
+- Source: [SimilarWeb](https://www.similarweb.com/website/mechanicalc.com/)
+
+**Note:** Mechanicalc has 100x less traffic than Omnicalculator but runs a successful freemium business. Quality over quantity.
 
 ---
 
@@ -227,6 +241,35 @@ Rather than 3,000 shallow calculators (Omni), fewer tools with real depth (like 
 3. **SEO is critical** - can't monetize what no one finds
 4. **Trust is earned** - verification badges and transparency matter
 5. **Niche beats broad** - better to be best at bolts than okay at everything
+
+---
+
+## Traffic Estimation Methodology
+
+### Free Tools
+| Tool | Accuracy | Notes |
+|------|----------|-------|
+| [SimilarWeb](https://similarweb.com) | ±30-50% | Best free option, requires 5K+ monthly visits to show data |
+| [Ubersuggest](https://neilpatel.com/ubersuggest/) | Rough | SEO-focused, 3 free searches/day |
+| [HypeStat](https://hypestat.com) | Rough | Often overestimates |
+| [StatShow](https://statshow.com) | Very rough | Often outdated |
+
+### Paid Tools
+| Tool | Cost | Accuracy |
+|------|------|----------|
+| [Semrush](https://semrush.com) | $130+/mo | Good |
+| [Ahrefs](https://ahrefs.com) | $99+/mo | Good |
+| [SimilarWeb Pro](https://similarweb.com) | $$$  | Best |
+
+### Key Insights
+- **Traffic estimates vary 2-10x between sources** - treat all numbers as rough guides
+- **SimilarWeb** is the industry standard but still ±30% at best
+- **Small sites (<50K/mo)** often don't show up in free tools
+- **Self-reported numbers** (on advertising pages) tend to be inflated
+- **Engagement metrics** (bounce rate, time on site) are often more useful than raw traffic
+
+### How to Monitor Your Own Traffic
+Once launched, use **Google Analytics 4** (free) for accurate first-party data. Third-party tools will undercount your traffic until you reach ~5-10K monthly visits.
 
 ---
 

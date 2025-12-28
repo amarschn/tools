@@ -3,137 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beam Bending Response - Engineering Tools</title>
+    <title>Beam Bending Calculator - Engineering Tools</title>
+    <meta name="description" content="Calculate deflection, stress, shear and bending moment for beams with various support conditions and loading. Includes safety checks and interactive diagrams.">
 
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
     <style>
+        /* =============================================================================
+           1. CSS VARIABLES & RESET (Polestar-Inspired)
+           ============================================================================= */
         :root {
-            --primary-color: #212529;
-            --primary-light: #f8f9fa;
-            --secondary-color: #495057;
-            --text-color: #212529;
-            --text-light: #6c757d;
-            --border-color: #dee2e6;
-            --bg-color: #f8f9fa;
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
             --bg-card: #ffffff;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
             --border-radius: 8px;
-            --success: #2f9e44;
-            --error: #d9480f;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; }
-
         body {
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            font-family: var(--font-sans);
             line-height: 1.6;
-            background-color: var(--bg-color);
+            background: var(--bg-color);
             color: var(--text-color);
             display: flex;
             flex-direction: column;
+            min-height: 100vh;
         }
 
-        .container {
-            width: 92%;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 24px 0 48px 0;
+        /* =============================================================================
+           2. LOADING OVERLAY
+           ============================================================================= */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
         }
-
-        h1, h2, h3, h4 {
-            color: var(--primary-color);
-            margin-bottom: 0.75em;
-            line-height: 1.2;
-            font-weight: 600;
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; color: var(--text-color); }
 
-        h1 { font-size: 2.25rem; }
-        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
-        h3 { font-size: 1.25rem; color: var(--secondary-color); }
-        h4 { font-size: 1rem; color: var(--text-color); }
-        p { margin-bottom: 1em; color: var(--text-light); }
-        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
-        a:hover { text-decoration: underline; }
-
+        /* =============================================================================
+           3. LAYOUT
+           ============================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
         .navbar {
-            background-color: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+            background: var(--primary-color);
+            border-bottom: none;
+            box-shadow: var(--shadow);
             padding: 0 5%;
         }
-
         .nav-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 60px;
-            max-width: 1200px;
+            height: 56px;
+            max-width: 1400px;
             margin: 0 auto;
         }
-
-        .nav-brand {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-
-        .nav-brand:hover { text-decoration: none; }
+        .nav-brand { font-size: 1.25rem; font-weight: 600; color: #fff; text-decoration: none; }
+        .nav-brand:hover { text-decoration: none; opacity: 0.85; }
 
         main.container { flex-grow: 1; }
 
-        .tool-description {
-            font-size: 1.05rem;
-            max-width: 85ch;
-            margin-bottom: 1rem;
-        }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; }
+        h2 { font-size: 1.375rem; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+        h3 { font-size: 1.1rem; color: var(--secondary-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
 
-        details > summary { list-style: none; cursor: pointer; }
-        details > summary::-webkit-details-marker { display: none; }
-        .purpose-section {
-            margin-bottom: 24px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            background-color: var(--bg-card);
-        }
-
-        .purpose-section summary {
-            padding: 18px 24px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--secondary-color);
-        }
-
-        .purpose-section summary::after {
-            content: '[Expand]';
-            float: right;
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: var(--text-light);
-        }
-
-        .purpose-section[open] > summary::after { content: '[Shrink]'; }
-
-        .purpose-content {
-            padding: 0 24px 24px 24px;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .purpose-content h3 { margin-top: 1rem; }
-        .purpose-content ul { padding-left: 20px; }
-        .purpose-content code {
-            background-color: var(--bg-color);
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-header h1 { margin-bottom: 0.5rem; }
+        .tool-description { font-size: 1.1rem; max-width: 70ch; margin: 0 auto 1.5rem; color: var(--text-light); }
 
         .tool-layout {
             display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 24px;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px;
+            align-items: start;
         }
 
         .card {
@@ -144,412 +118,791 @@
             padding: 24px;
         }
 
-        form .input-group {
-            margin-bottom: 1.25rem;
-            position: relative;
+        /* =============================================================================
+           4. PURPOSE/README SECTION
+           ============================================================================= */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section {
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background-color: var(--bg-card);
         }
-
-        .input-group label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .purpose-section summary {
+            padding: 16px 24px;
+            font-size: 1.05rem;
             font-weight: 600;
-            margin-bottom: 6px;
-            font-size: 0.92rem;
-        }
-
-        .input-row {
+            color: var(--secondary-color);
             display: flex;
-            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
         }
+        .purpose-section summary::after {
+            content: 'Expand';
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--accent-color);
+            background: var(--primary-light);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        .purpose-section[open] > summary::after { content: 'Collapse'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
 
-        .input-row input[type="number"],
-        .input-row select,
+        /* =============================================================================
+           5. MODE TOGGLE
+           ============================================================================= */
+        .mode-toggle-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .mode-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-card);
+            padding: 4px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+        }
+        .mode-btn {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            transition: all 0.2s;
+        }
+        .mode-btn.active { background: var(--accent-color); color: white; }
+        .mode-btn:hover:not(.active) { background: var(--primary-light); color: var(--text-color); }
+        .mode-desc { font-size: 0.875rem; color: var(--text-light); flex: 1; min-width: 300px; }
+
+        /* =============================================================================
+           6. INPUT SECTION
+           ============================================================================= */
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+        .tool-inputs h2::before { content: ''; width: 4px; height: 24px; background: var(--accent-color); border-radius: 2px; }
+
+        .input-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .input-tab {
+            flex: 1 1 auto;
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            color: var(--secondary-color);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+            text-align: center;
+        }
+        .input-tab:hover { border-color: var(--text-color); color: var(--text-color); }
+        .input-tab.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+        .input-section { display: none; animation: fadeIn 0.3s ease; }
+        .input-section.active { display: block; }
+
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            font-size: 0.875rem;
+            color: var(--text-color);
+        }
         .input-group input[type="number"],
+        .input-group input[type="text"],
         .input-group select {
             width: 100%;
-            padding: 10px 12px;
+            padding: 11px 14px;
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            transition: border-color 0.15s ease;
+            background: var(--bg-card);
         }
-
-        input[type="number"]:focus,
-        select:focus {
+        .input-group input:focus,
+        .input-group select:focus {
             outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(33, 37, 41, 0.1);
+            border-color: var(--text-color);
         }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
+        .input-helper { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; }
+
+        /* Tooltip */
         .tooltip-trigger {
             display: inline-flex;
-            justify-content: center;
             align-items: center;
-            width: 18px;
-            height: 18px;
+            justify-content: center;
+            width: 18px; height: 18px;
             background-color: var(--border-color);
             color: var(--text-light);
             border-radius: 50%;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
             cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 42px;
         }
-
-        .dimension-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-            margin-top: 12px;
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 220px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 100;
+            box-shadow: var(--shadow-lg);
         }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
 
-        .dimension-card {
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 12px;
-            background-color: #fdfdff;
-        }
-
-        .dimension-card label {
-            font-size: 0.85rem;
-            margin-bottom: 6px;
-            display: block;
-            color: var(--secondary-color);
-        }
-
-        .dimension-card span {
-            display: block;
-            margin-top: 4px;
-            font-size: 0.82rem;
-            color: var(--text-light);
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            padding: 10px 16px;
-            font-weight: 600;
-            font-size: 0.95rem;
+        /* Advanced section */
+        .advanced-section { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color); }
+        .advanced-section.visible { display: block; }
+        .advanced-toggle {
+            background: none;
+            border: none;
+            color: var(--accent-color);
             cursor: pointer;
-            border: 1px solid transparent;
-            transition: transform 0.1s ease;
-        }
-
-        .btn:hover { transform: translateY(-1px); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-        .btn-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-            color: #fff;
-        }
-
-        .btn-secondary {
-            background-color: #f1f3f5;
-            border-color: var(--border-color);
-            color: var(--secondary-color);
-        }
-
-        .tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 8px;
-        }
-
-        .tab-link {
-            padding: 8px 16px;
-            border-radius: 999px;
-            background-color: #f1f3f5;
-            color: var(--secondary-color);
-            border: 1px solid transparent;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .tab-link.active {
-            background-color: var(--primary-color);
-            color: #fff;
-        }
-
-        .tab-content { display: none; }
-
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-        }
-
-        .result-card {
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 16px;
-            background-color: #fcfcff;
-        }
-
-        .result-card h4 {
-            font-size: 0.95rem;
-            margin-bottom: 6px;
-        }
-
-        .result-value {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-
-        .result-units {
-            font-size: 0.85rem;
-            color: var(--text-light);
-        }
-
-        .status-banner {
-            display: none;
-            margin-bottom: 16px;
-            padding: 12px 16px;
-            border-radius: 6px;
-            font-size: 0.95rem;
-        }
-
-        .status-banner.error {
-            display: block;
-            background-color: rgba(217, 72, 15, 0.08);
-            border: 1px solid rgba(217, 72, 15, 0.3);
-            color: var(--error);
-        }
-
-        .status-banner.success {
-            display: block;
-            background-color: rgba(47, 158, 68, 0.08);
-            border: 1px solid rgba(47, 158, 68, 0.3);
-            color: var(--success);
-        }
-
-        .chart-wrapper {
-            margin-top: 18px;
-        }
-
-        .chart-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .chart-controls label {
-            font-size: 0.85rem;
-            color: var(--text-light);
-        }
-
-        .section-properties {
-            margin-top: 18px;
-            border-top: 1px solid var(--border-color);
-            padding-top: 16px;
-        }
-
-        .section-properties ul {
-            list-style: none;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .section-properties li {
             font-size: 0.9rem;
-            color: var(--text-light);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 12px;
+            padding: 8px 0;
         }
+        .advanced-toggle:hover { text-decoration: underline; }
 
-        .footer {
-            margin-top: auto;
-            padding: 16px 0;
+        /* =============================================================================
+           7. BUTTONS
+           ============================================================================= */
+        .btn {
+            display: inline-block;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
             text-align: center;
+            transition: background-color 0.15s ease, opacity 0.15s ease;
+        }
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+            width: 100%;
+            font-size: 1rem;
+            padding: 14px;
+            margin-top: 8px;
+            box-shadow: var(--shadow);
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary {
+            background-color: var(--bg-card);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* =============================================================================
+           8. OUTPUT SECTION
+           ============================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 18px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); font-weight: 600; border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Results grid */
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .result-card:hover { border-color: var(--accent-color); }
+        .result-card.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
+        .result-card .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 6px; font-weight: 500; }
+        .result-card .value { font-size: 1.4rem; font-weight: 600; color: var(--primary-color); font-family: var(--font-mono); }
+        .result-card .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 4px; }
+
+        /* Safety gauges */
+        .safety-section { margin-top: 24px; }
+        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
+        .safety-gauge {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+        .gauge-label { min-width: 140px; font-weight: 600; font-size: 0.9rem; }
+        .gauge-bar-container { flex: 1; height: 8px; background: var(--border-color); border-radius: 4px; position: relative; overflow: visible; }
+        .gauge-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .gauge-bar.success { background: var(--success-color); }
+        .gauge-bar.warning { background: var(--warning-color); }
+        .gauge-bar.danger { background: var(--danger-color); }
+        .gauge-value { min-width: 60px; text-align: right; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
+        .gauge-value.success { color: var(--success-color); }
+        .gauge-value.warning { color: var(--warning-color); }
+        .gauge-value.danger { color: var(--danger-color); }
+        .gauge-threshold { position: absolute; width: 2px; height: 16px; background: var(--text-color); top: -4px; }
+
+        /* Status banner */
+        .status-banner {
+            padding: 18px 24px;
+            border-radius: var(--border-radius);
+            margin-top: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+        .status-banner .icon { font-size: 1.25rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
+        .status-banner.acceptable { background: #ecfdf5; border: 1px solid var(--success-color); }
+        .status-banner.acceptable h4 { color: var(--success-color); }
+        .status-banner.marginal { background: #fffbeb; border: 1px solid var(--warning-color); }
+        .status-banner.marginal h4 { color: var(--warning-color); }
+        .status-banner.unacceptable { background: #fef2f2; border: 1px solid var(--danger-color); }
+        .status-banner.unacceptable h4 { color: var(--danger-color); }
+        .recommendations { margin-top: 8px; padding-left: 20px; }
+        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; }
+
+        /* =============================================================================
+           9. BEAM DIAGRAM SVG
+           ============================================================================= */
+        .beam-diagram-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .beam-diagram-container h4 { margin-bottom: 12px; font-size: 0.95rem; }
+        #beam-diagram { width: 100%; height: 200px; }
+
+        /* =============================================================================
+           10. CHARTS
+           ============================================================================= */
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; }
+        .chart-plot { width: 100%; min-height: 300px; }
+        .chart-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .chart-tab {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            background: var(--bg-card);
+            color: var(--text-light);
+            cursor: pointer;
             font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .chart-tab.active { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .chart-tab:hover:not(.active) { border-color: var(--text-color); }
+
+        /* =============================================================================
+           11. DERIVATION PANELS
+           ============================================================================= */
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-close:hover { color: var(--text-color); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; }
+        .derivation-step .equation { background: white; padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
+
+        /* =============================================================================
+           12. EQUATION CARDS
+           ============================================================================= */
+        .equation-container { display: flex; flex-direction: column; gap: 16px; margin-top: 1rem; }
+        .equation-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+        }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+
+        /* =============================================================================
+           13. SECTION PROPERTIES TABLE
+           ============================================================================= */
+        .properties-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            margin-top: 16px;
+        }
+        .properties-table th, .properties-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .properties-table th { font-weight: 600; color: var(--secondary-color); }
+        .properties-table td:last-child { font-family: var(--font-mono); text-align: right; }
+
+        /* =============================================================================
+           14. UNIT TOGGLE
+           ============================================================================= */
+        .unit-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--primary-light);
+            padding: 3px;
+            border-radius: 6px;
+            margin-left: auto;
+        }
+        .unit-btn {
+            padding: 6px 12px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
             color: var(--text-light);
         }
+        .unit-btn.active { background: var(--bg-card); color: var(--text-color); box-shadow: var(--shadow); }
 
-        @media (max-width: 1024px) {
-            .tool-layout { grid-template-columns: 1fr; }
+        /* =============================================================================
+           15. FOOTER
+           ============================================================================= */
+        .footer {
+            text-align: center;
+            padding: 24px 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: auto;
         }
 
-        @media (max-width: 680px) {
-            .dimension-grid { grid-template-columns: 1fr; }
+        /* =============================================================================
+           16. RESPONSIVE
+           ============================================================================= */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .input-row { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 600px) {
+            .input-tabs { flex-direction: column; }
+            .results-grid { grid-template-columns: 1fr; }
+            .mode-toggle-wrap { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
 
 <body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Python environment...</div>
+    </div>
+
     <header class="navbar">
         <nav class="nav-container">
             <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="unit-toggle">
+                <button class="unit-btn active" data-unit="si">SI</button>
+                <button class="unit-btn" data-unit="imperial">Imperial</button>
+            </div>
         </nav>
     </header>
 
     <main class="container">
-        <h1>Beam Bending Response</h1>
-        <p class="tool-description" id="tool-description">
-            Analyse deflection, shear, bending moment, and extreme fibre stress for standard beam loading scenarios using SI units.
-        </p>
+        <div class="tool-header">
+            <h1>Beam Bending Calculator</h1>
+            <p class="tool-description">
+                Calculate deflection, stress, shear force, and bending moment for beams with various support conditions.
+                Includes safety checks against deflection limits and allowable stress.
+            </p>
+        </div>
 
         <details class="purpose-section">
-            <summary>Tool Purpose & README</summary>
-            <div class="purpose-content" id="readme-content">
-                <p>Loading README...</p>
+            <summary>About This Tool</summary>
+            <div class="purpose-content">
+                <h3>Purpose</h3>
+                <p>This calculator analyzes elastic beam behavior using Euler-Bernoulli beam theory.
+                   It supports multiple load cases, cross-section types, and materials with full equation transparency.</p>
+
+                <h3>Features</h3>
+                <ul>
+                    <li>10 common load/support configurations</li>
+                    <li>8 cross-section types including standard steel shapes</li>
+                    <li>Material library with common engineering materials</li>
+                    <li>Interactive diagrams showing deflected shape</li>
+                    <li>Safety checks for deflection limits and stress utilization</li>
+                    <li>Full derivation display with governing equations</li>
+                </ul>
+
+                <h3>Limitations</h3>
+                <ul>
+                    <li>Linear elastic analysis only (small deflections)</li>
+                    <li>Prismatic beams (constant cross-section)</li>
+                    <li>Does not account for shear deformation (slender beams only)</li>
+                    <li>Single-span beams only</li>
+                </ul>
+
+                <h3>References</h3>
+                <ul>
+                    <li>Roark's Formulas for Stress and Strain, 8th Edition</li>
+                    <li>AISC Steel Construction Manual, 15th Edition</li>
+                    <li>Gere & Timoshenko, Mechanics of Materials</li>
+                </ul>
             </div>
         </details>
 
+        <div class="mode-toggle-wrap">
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="simple">Simple</button>
+                <button class="mode-btn" data-mode="advanced">Advanced</button>
+            </div>
+            <p class="mode-desc" id="mode-description">
+                Quick analysis with common defaults. Switch to Advanced for full control over materials, safety factors, and deflection limits.
+            </p>
+        </div>
+
         <div class="tool-layout">
+            <!-- INPUT SECTION -->
             <section class="tool-inputs card">
                 <h2>Inputs</h2>
-                <p style="font-size:0.85rem; color:var(--text-light); margin-bottom: 12px;">
-                    Enter all quantities in base SI units (metres, newtons, pascals).
-                </p>
 
-                <div id="status-banner" class="status-banner"></div>
+                <div class="input-tabs">
+                    <button class="input-tab active" data-section="geometry">Geometry</button>
+                    <button class="input-tab" data-section="loading">Loading</button>
+                    <button class="input-tab" data-section="material">Material</button>
+                </div>
 
-                <form id="calc-form">
+                <!-- GEOMETRY TAB -->
+                <div id="geometry-section" class="input-section active">
                     <div class="input-group">
-                        <label for="load-case">
-                            Loading scenario
-                            <span class="tooltip-trigger" data-tooltip="Select the support and loading combination to analyse.">
-                                ?
-                            </span>
-                        </label>
-                        <select id="load-case" name="load-case">
-                            <option value="simply_supported_point_midspan">Simply supported — point load at midspan</option>
-                            <option value="simply_supported_uniform">Simply supported — uniform distributed load</option>
-                            <option value="cantilever_point_free_end">Cantilever — point load at free end</option>
-                            <option value="cantilever_uniform">Cantilever — uniform distributed load</option>
+                        <label for="load-case">Support & Loading</label>
+                        <select id="load-case">
+                            <optgroup label="Simply Supported">
+                                <option value="simply_supported_point_center">Point Load at Center</option>
+                                <option value="simply_supported_point_any">Point Load at Any Position</option>
+                                <option value="simply_supported_udl" selected>Uniform Distributed Load</option>
+                                <option value="simply_supported_triangular">Triangular Load</option>
+                            </optgroup>
+                            <optgroup label="Cantilever">
+                                <option value="cantilever_point_end">Point Load at Free End</option>
+                                <option value="cantilever_point_any">Point Load at Any Position</option>
+                                <option value="cantilever_udl">Uniform Distributed Load</option>
+                            </optgroup>
+                            <optgroup label="Fixed-Fixed">
+                                <option value="fixed_fixed_point_center">Point Load at Center</option>
+                                <option value="fixed_fixed_udl">Uniform Distributed Load</option>
+                            </optgroup>
+                            <optgroup label="Other">
+                                <option value="propped_cantilever_udl">Propped Cantilever - UDL</option>
+                            </optgroup>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Select the beam support conditions and type of loading">?</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="span">Span Length</label>
+                        <div class="input-row">
+                            <input type="number" id="span" value="5" min="0.01" step="0.1">
+                            <select id="span-unit">
+                                <option value="m" selected>m</option>
+                                <option value="mm">mm</option>
+                                <option value="ft">ft</option>
+                                <option value="in">in</option>
+                            </select>
+                        </div>
+                        <span class="tooltip-trigger" data-tooltip="Clear span between supports, or cantilever length">?</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="section-type">Cross-Section Type</label>
+                        <select id="section-type">
+                            <option value="rectangular" selected>Rectangular Solid</option>
+                            <option value="circular_solid">Circular Solid</option>
+                            <option value="circular_hollow">Circular Hollow (Tube)</option>
+                            <option value="i_beam">I-Beam (Custom)</option>
+                            <option value="box">Box / RHS</option>
+                            <option value="c_channel">C-Channel</option>
+                            <option value="t_section">T-Section</option>
+                            <option value="standard_steel">Standard Steel (AISC W-Shape)</option>
+                            <option value="custom">Custom Properties</option>
                         </select>
                     </div>
 
+                    <div id="section-dimensions"></div>
+                </div>
+
+                <!-- LOADING TAB -->
+                <div id="loading-section" class="input-section">
+                    <div class="input-group" id="load-value-group">
+                        <label for="load-value" id="load-value-label">Distributed Load (w)</label>
+                        <div class="input-row">
+                            <input type="number" id="load-value" value="10000" min="0" step="100">
+                            <select id="load-unit">
+                                <option value="N/m" selected>N/m</option>
+                                <option value="kN/m">kN/m</option>
+                                <option value="lb/ft">lb/ft</option>
+                                <option value="N">N</option>
+                                <option value="kN">kN</option>
+                                <option value="lb">lb</option>
+                            </select>
+                        </div>
+                        <p class="input-helper" id="load-helper">Total load on beam: <span id="total-load">50,000 N</span></p>
+                    </div>
+
+                    <div class="input-group" id="load-position-group" style="display: none;">
+                        <label for="load-position">Load Position from Left Support</label>
+                        <div class="input-row">
+                            <input type="number" id="load-position" value="2" min="0.01" step="0.1">
+                            <select id="load-position-unit">
+                                <option value="m" selected>m</option>
+                                <option value="mm">mm</option>
+                                <option value="ft">ft</option>
+                            </select>
+                        </div>
+                        <p class="input-helper">Distance from left support (or fixed end for cantilevers)</p>
+                    </div>
+                </div>
+
+                <!-- MATERIAL TAB -->
+                <div id="material-section" class="input-section">
                     <div class="input-group">
-                        <label for="section-type">
-                            Cross-section
-                            <span class="tooltip-trigger" data-tooltip="Choose the beam cross-section. Dimensions are entered in metres.">
-                                ?
-                            </span>
-                        </label>
-                        <select id="section-type" name="section-type">
-                            <option value="rectangular">Rectangular (width × depth)</option>
-                            <option value="i_beam">Symmetric I-beam</option>
-                            <option value="circular_solid">Circular solid</option>
-                            <option value="circular_hollow">Circular hollow (tube)</option>
-                            <option value="custom">Custom properties</option>
+                        <label for="material">Material</label>
+                        <select id="material">
+                            <option value="steel_structural" selected>Structural Steel (A36)</option>
+                            <option value="steel_stainless_304">Stainless Steel 304</option>
+                            <option value="aluminum_6061_t6">Aluminum 6061-T6</option>
+                            <option value="aluminum_7075_t6">Aluminum 7075-T6</option>
+                            <option value="wood_douglas_fir">Douglas Fir</option>
+                            <option value="wood_oak">Red Oak</option>
+                            <option value="titanium_6al4v">Titanium 6Al-4V</option>
+                            <option value="custom">Custom Material</option>
                         </select>
                     </div>
 
-                    <div class="input-group">
-                        <label for="span">
-                            Beam span / length (m)
-                            <span class="tooltip-trigger" data-tooltip="Clear span for simply supported beams or free length for cantilevers.">
-                                ?
-                            </span>
-                        </label>
-                        <input type="number" id="span" name="span" step="0.001" min="0" value="5">
+                    <div id="material-props" class="input-helper" style="margin-bottom: 16px;">
+                        E = 200 GPa, Fy = 250 MPa
                     </div>
 
-                    <div class="input-group">
-                        <label for="load-value" id="load-label">
-                            Point load magnitude (N)
-                            <span class="tooltip-trigger" data-tooltip="Total applied load. For distributed cases use N/m.">
-                                ?
-                            </span>
-                        </label>
-                        <input type="number" id="load-value" name="load-value" step="0.01" min="0" value="15000">
+                    <div class="advanced-section" id="material-advanced">
+                        <div class="input-group">
+                            <label for="elastic-modulus">Elastic Modulus (E)</label>
+                            <div class="input-row">
+                                <input type="number" id="elastic-modulus" value="200" step="1">
+                                <select id="e-unit">
+                                    <option value="GPa" selected>GPa</option>
+                                    <option value="MPa">MPa</option>
+                                    <option value="psi">psi</option>
+                                    <option value="ksi">ksi</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="yield-strength">Yield Strength (Fy)</label>
+                            <div class="input-row">
+                                <input type="number" id="yield-strength" value="250" step="1">
+                                <select id="fy-unit">
+                                    <option value="MPa" selected>MPa</option>
+                                    <option value="GPa">GPa</option>
+                                    <option value="psi">psi</option>
+                                    <option value="ksi">ksi</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="safety-factor">Safety Factor</label>
+                            <input type="number" id="safety-factor" value="1.5" min="1" step="0.1">
+                            <p class="input-helper">Allowable stress = Fy / SF</p>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="deflection-limit">Deflection Limit</label>
+                            <select id="deflection-limit">
+                                <option value="L/180">L/180 - Roofs</option>
+                                <option value="L/240">L/240 - General floors</option>
+                                <option value="L/360" selected>L/360 - Brittle finishes</option>
+                                <option value="L/480">L/480 - Precision</option>
+                                <option value="L/600">L/600 - High precision</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="input-group">
-                        <label for="elastic-modulus">
-                            Young's modulus (Pa)
-                            <span class="tooltip-trigger" data-tooltip="Elastic modulus of the material in Pascals.">
-                                ?
-                            </span>
-                        </label>
-                        <input type="number" id="elastic-modulus" name="elastic-modulus" step="1e7" min="0" value="200000000000">
-                    </div>
+                    <button class="advanced-toggle" id="toggle-material-advanced">
+                        <span>▼</span> Show Advanced Options
+                    </button>
+                </div>
 
-                    <div class="input-group">
-                        <label>Section dimensions / properties</label>
-                        <div id="section-dimensions" class="dimension-grid"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="num-points">
-                            Diagram resolution
-                            <span class="tooltip-trigger" data-tooltip="Number of stations used to discretise the beam for plotting.">
-                                ?
-                            </span>
-                        </label>
-                        <input type="number" id="num-points" name="num-points" min="21" max="401" step="20" value="101">
-                    </div>
-
-                    <div class="input-group" style="display: flex; gap: 12px;">
-                        <button type="submit" id="calculate-btn" class="btn btn-primary" style="flex: 1;">
-                            Calculate
-                        </button>
-                        <button type="button" id="reset-btn" class="btn btn-secondary" style="flex: 1;">
-                            Reset to defaults
-                        </button>
-                    </div>
-                </form>
+                <button class="btn btn-primary" id="calculate-btn" disabled>Calculate</button>
             </section>
 
+            <!-- OUTPUT SECTION -->
             <section class="tool-outputs card">
                 <div class="tabs">
                     <button class="tab-link active" data-target="results">Results</button>
-                    <button class="tab-link" data-target="plot">Visualization</button>
-                    <button class="tab-link" data-target="background">Background &amp; Equations</button>
+                    <button class="tab-link" data-target="diagram">Diagram</button>
+                    <button class="tab-link" data-target="charts">Charts</button>
+                    <button class="tab-link" data-target="equations">Equations</button>
                 </div>
 
+                <!-- RESULTS TAB -->
                 <div id="results" class="tab-content" style="display: block;">
-                    <h3>Key Results</h3>
-                    <div id="results-placeholder" style="margin-top: 16px;">
-                        <p>Enter the beam parameters and press Calculate to view response metrics.</p>
+                    <div id="results-placeholder">
+                        <p style="text-align: center; color: var(--text-light); padding: 40px 0;">
+                            Configure beam parameters and click Calculate to see results.
+                        </p>
                     </div>
-                    <div id="results-display" class="results-grid"></div>
 
-                    <div class="section-properties" id="section-properties" style="display: none;">
-                        <h4>Section properties (SI)</h4>
-                        <ul id="section-properties-list"></ul>
+                    <div id="results-display" style="display: none;">
+                        <div class="results-grid" id="results-grid"></div>
+
+                        <div class="safety-section">
+                            <h4>Safety Checks</h4>
+                            <div class="safety-gauge" id="deflection-gauge">
+                                <span class="gauge-label">Deflection</span>
+                                <div class="gauge-bar-container">
+                                    <div class="gauge-bar" id="deflection-bar"></div>
+                                    <div class="gauge-threshold" style="left: 100%;"></div>
+                                </div>
+                                <span class="gauge-value" id="deflection-value">—</span>
+                            </div>
+                            <div class="safety-gauge" id="stress-gauge">
+                                <span class="gauge-label">Stress</span>
+                                <div class="gauge-bar-container">
+                                    <div class="gauge-bar" id="stress-bar"></div>
+                                    <div class="gauge-threshold" style="left: 100%;"></div>
+                                </div>
+                                <span class="gauge-value" id="stress-value">—</span>
+                            </div>
+                        </div>
+
+                        <div class="status-banner" id="status-banner" style="display: none;">
+                            <div class="icon" id="status-icon">✓</div>
+                            <div class="content">
+                                <h4 id="status-title">Design Acceptable</h4>
+                                <p id="status-message">All safety checks passed.</p>
+                                <ul class="recommendations" id="recommendations-list"></ul>
+                            </div>
+                        </div>
+
+                        <div class="derivation-panel" id="derivation-panel">
+                            <div class="derivation-header">
+                                <span class="derivation-title" id="derivation-title">Derivation</span>
+                                <button class="derivation-close" id="close-derivation">×</button>
+                            </div>
+                            <div id="derivation-content"></div>
+                        </div>
+
+                        <h4 style="margin-top: 24px;">Section Properties</h4>
+                        <table class="properties-table" id="section-properties-table">
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div id="plot" class="tab-content">
-                    <h3>Response Diagram</h3>
-                    <div class="chart-controls">
-                        <label for="chart-mode">Quantity</label>
-                        <select id="chart-mode">
-                            <option value="deflection">Deflection (m)</option>
-                            <option value="moment">Bending moment (N·m)</option>
-                            <option value="shear">Shear force (N)</option>
-                        </select>
+                <!-- DIAGRAM TAB -->
+                <div id="diagram" class="tab-content">
+                    <div class="beam-diagram-container">
+                        <h4>Beam Configuration</h4>
+                        <svg id="beam-diagram" viewBox="0 0 600 200"></svg>
                     </div>
-                    <div class="chart-wrapper">
-                        <canvas id="response-chart" height="260"></canvas>
+                    <div class="beam-diagram-container">
+                        <h4>Deflected Shape (Exaggerated)</h4>
+                        <svg id="deflection-diagram" viewBox="0 0 600 150"></svg>
                     </div>
                 </div>
 
-                <div id="background" class="tab-content">
-                    <h3>Underlying Principles</h3>
-                    <p id="background-description">
-                        The theory, governing equations, and derivations will load once the Python module initialises.
-                    </p>
-                    <div class="equation-container" id="equation-container"></div>
-                    <div style="margin-top: 18px;">
-                        <h4>Variable legend</h4>
-                        <ul style="margin-top: 8px; padding-left: 20px; color: var(--text-light); font-size: 0.9rem;">
-                            <li><span class="math-inline">\(L\)</span> — Beam span or cantilever length (m)</li>
-                            <li><span class="math-inline">\(x\)</span> — Distance from the left or fixed support (m)</li>
-                            <li><span class="math-inline">\(E\)</span> — Young's modulus (Pa)</li>
-                            <li><span class="math-inline">\(I\)</span> — Second moment of area about the strong axis (m⁴)</li>
-                            <li><span class="math-inline">\(P\)</span> — Concentrated load magnitude (N)</li>
-                            <li><span class="math-inline">\(w\)</span> — Uniform distributed load intensity (N/m)</li>
-                            <li><span class="math-inline">\(y(x)\)</span> — Elastic deflection at position \(x\) (m)</li>
-                        </ul>
+                <!-- CHARTS TAB -->
+                <div id="charts" class="tab-content">
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" data-chart="deflection">Deflection</button>
+                        <button class="chart-tab" data-chart="moment">Bending Moment</button>
+                        <button class="chart-tab" data-chart="shear">Shear Force</button>
+                        <button class="chart-tab" data-chart="combined">Combined</button>
+                    </div>
+                    <div class="chart-container">
+                        <div id="response-chart" class="chart-plot"></div>
+                    </div>
+                </div>
+
+                <!-- EQUATIONS TAB -->
+                <div id="equations" class="tab-content">
+                    <h3>Governing Equations</h3>
+                    <p>Equations for the selected load case are shown below.</p>
+                    <div class="equation-container" id="equation-container">
+                        <div class="equation-card">
+                            <strong>Maximum Deflection</strong>
+                            <div class="equation-expression" id="eq-deflection">Select a load case to see equations</div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Maximum Bending Moment</strong>
+                            <div class="equation-expression" id="eq-moment"></div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Maximum Shear Force</strong>
+                            <div class="equation-expression" id="eq-shear"></div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Maximum Bending Stress</strong>
+                            <div class="equation-expression">\[ \sigma_{max} = \frac{M_{max} \cdot c}{I} \]</div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -557,569 +910,832 @@
     </main>
 
     <footer class="footer">
-        <p>&copy; 2025 Engineering Tools. Educational use only.</p>
+        <p>Engineering Tools — For educational and preliminary design purposes only.</p>
     </footer>
 
     <script>
-        let pyodideInstance;
-        let pyUtils;
-        let pyToolModule;
-        let toolDocumentation = {};
-        let latestResult = null;
-        let chartInstance = null;
+        // =============================================================================
+        // GLOBAL STATE
+        // =============================================================================
+        let pyodideInstance = null;
+        let beamModule = null;
+        let currentResult = null;
+        let currentMode = 'simple';
+        let currentUnit = 'si';
 
-        const TOOL_MODULE_NAME = "structures";
-        const TOOL_FUNCTION_NAME = "beam_deflection_analysis";
+        // Unit conversion factors to SI (meters, Newtons, Pascals)
+        const LENGTH_TO_M = { m: 1, mm: 0.001, ft: 0.3048, in: 0.0254 };
+        const FORCE_TO_N = { N: 1, kN: 1000, lb: 4.44822, kip: 4448.22 };
+        const DISTRIBUTED_TO_NM = { 'N/m': 1, 'kN/m': 1000, 'lb/ft': 14.5939 };
+        const PRESSURE_TO_PA = { Pa: 1, MPa: 1e6, GPa: 1e9, psi: 6894.76, ksi: 6894760 };
 
-        const SECTION_LIBRARY = {
-            rectangular: {
-                label: "Rectangular",
-                description: "Solid rectangle with width \(b\) and depth \(h\). Neutral axis at mid-depth.",
-                dimensions: [
-                    { key: "width", label: "Width \(b\)", defaultValue: 0.2 },
-                    { key: "depth", label: "Depth \(h\)", defaultValue: 0.4 },
-                ],
-            },
-            i_beam: {
-                label: "Symmetric I-beam",
-                description: "Doubly symmetric I-section defined by overall depth, flange width, flange thickness, and web thickness.",
-                dimensions: [
-                    { key: "overall_depth", label: "Overall depth \(d\)", defaultValue: 0.45 },
-                    { key: "flange_width", label: "Flange width \(b_f\)", defaultValue: 0.2 },
-                    { key: "flange_thickness", label: "Flange thickness \(t_f\)", defaultValue: 0.02 },
-                    { key: "web_thickness", label: "Web thickness \(t_w\)", defaultValue: 0.01 },
-                ],
-            },
-            circular_solid: {
-                label: "Circular solid",
-                description: "Solid circular section defined by the outer diameter.",
-                dimensions: [
-                    { key: "diameter", label: "Diameter \(d\)", defaultValue: 0.12 },
-                ],
-            },
-            circular_hollow: {
-                label: "Circular hollow (tube)",
-                description: "Hollow circular tube defined by outer and inner diameters.",
-                dimensions: [
-                    { key: "outer_diameter", label: "Outer diameter \(d_o\)", defaultValue: 0.16 },
-                    { key: "inner_diameter", label: "Inner diameter \(d_i\)", defaultValue: 0.1 },
-                ],
-            },
-            custom: {
-                label: "Custom properties",
-                description: "Provide known section properties directly (moment of inertia in m⁴ and fibre distances in m).",
-                dimensions: [
-                    { key: "moment_of_inertia", label: "Moment of inertia \(I\) (m⁴)", defaultValue: 8e-6 },
-                    { key: "section_modulus", label: "Section modulus \(S\) (m³)", defaultValue: "" },
-                    { key: "c_top", label: "Distance to top fibre \(c_{top}\) (m)", defaultValue: "" },
-                    { key: "c_bottom", label: "Distance to bottom fibre \(c_{bot}\) (m)", defaultValue: "" },
-                ],
-            },
+        // Section dimension configs
+        const SECTION_CONFIGS = {
+            rectangular: [
+                { id: 'width', label: 'Width (b)', default: 0.2, unit: 'm' },
+                { id: 'depth', label: 'Depth (h)', default: 0.4, unit: 'm' },
+            ],
+            circular_solid: [
+                { id: 'diameter', label: 'Diameter (d)', default: 0.2, unit: 'm' },
+            ],
+            circular_hollow: [
+                { id: 'outer_diameter', label: 'Outer Diameter', default: 0.2, unit: 'm' },
+                { id: 'inner_diameter', label: 'Inner Diameter', default: 0.15, unit: 'm' },
+            ],
+            i_beam: [
+                { id: 'overall_depth', label: 'Overall Depth (d)', default: 0.4, unit: 'm' },
+                { id: 'flange_width', label: 'Flange Width (bf)', default: 0.2, unit: 'm' },
+                { id: 'flange_thickness', label: 'Flange Thickness (tf)', default: 0.02, unit: 'm' },
+                { id: 'web_thickness', label: 'Web Thickness (tw)', default: 0.012, unit: 'm' },
+            ],
+            box: [
+                { id: 'width', label: 'Width', default: 0.2, unit: 'm' },
+                { id: 'depth', label: 'Depth', default: 0.3, unit: 'm' },
+                { id: 'wall_thickness', label: 'Wall Thickness', default: 0.01, unit: 'm' },
+            ],
+            c_channel: [
+                { id: 'depth', label: 'Depth', default: 0.25, unit: 'm' },
+                { id: 'flange_width', label: 'Flange Width', default: 0.1, unit: 'm' },
+                { id: 'flange_thickness', label: 'Flange Thickness', default: 0.015, unit: 'm' },
+                { id: 'web_thickness', label: 'Web Thickness', default: 0.01, unit: 'm' },
+            ],
+            t_section: [
+                { id: 'flange_width', label: 'Flange Width', default: 0.2, unit: 'm' },
+                { id: 'flange_thickness', label: 'Flange Thickness', default: 0.02, unit: 'm' },
+                { id: 'stem_depth', label: 'Stem Depth', default: 0.2, unit: 'm' },
+                { id: 'stem_thickness', label: 'Stem Thickness', default: 0.015, unit: 'm' },
+            ],
+            standard_steel: [
+                { id: 'designation', label: 'AISC Designation', type: 'select',
+                  options: ['W8x31', 'W10x49', 'W12x26', 'W14x30', 'W16x40', 'W18x50', 'W21x62', 'W24x76'] },
+            ],
+            custom: [
+                { id: 'moment_of_inertia', label: 'Moment of Inertia (I)', default: 1e-4, unit: 'm⁴' },
+                { id: 'c_top', label: 'Distance to Top Fiber (c_top)', default: 0.2, unit: 'm' },
+                { id: 'c_bottom', label: 'Distance to Bottom Fiber (c_bot)', default: 0.2, unit: 'm' },
+                { id: 'area', label: 'Area (optional)', default: 0.01, unit: 'm²' },
+            ],
         };
 
-        function openTab(target) {
-            document.querySelectorAll(".tab-link").forEach((btn) => {
-                btn.classList.toggle("active", btn.dataset.target === target);
-            });
-            document.querySelectorAll(".tab-content").forEach((panel) => {
-                panel.style.display = panel.id === target ? "block" : "none";
-            });
-        }
+        const MATERIAL_PROPS = {
+            steel_structural: { E: 200, Fy: 250, name: 'Structural Steel (A36)' },
+            steel_stainless_304: { E: 193, Fy: 215, name: 'Stainless Steel 304' },
+            aluminum_6061_t6: { E: 68.9, Fy: 276, name: 'Aluminum 6061-T6' },
+            aluminum_7075_t6: { E: 71.7, Fy: 503, name: 'Aluminum 7075-T6' },
+            wood_douglas_fir: { E: 12.4, Fy: 7.6, name: 'Douglas Fir' },
+            wood_oak: { E: 12.5, Fy: 10.3, name: 'Red Oak' },
+            titanium_6al4v: { E: 113.8, Fy: 880, name: 'Titanium 6Al-4V' },
+            custom: { E: 200, Fy: 250, name: 'Custom' },
+        };
 
-        function typesetMath() {
-            if (window.MathJax) {
-                window.MathJax.typesetPromise();
-            }
-        }
+        // =============================================================================
+        // INITIALIZATION
+        // =============================================================================
+        async function initPyodide() {
+            const loadingText = document.getElementById('loading-text');
 
-        function setStatus(message, kind = "error") {
-            const banner = document.getElementById("status-banner");
-            if (!message) {
-                banner.style.display = "none";
-                banner.textContent = "";
-                banner.classList.remove("error", "success");
-                return;
-            }
-
-            banner.textContent = message;
-            banner.classList.remove("error", "success");
-            banner.classList.add(kind);
-        }
-
-        function attachTooltipListeners() {
-            document.querySelectorAll(".tooltip-trigger").forEach((trigger) => {
-                trigger.addEventListener("mouseenter", (event) => {
-                    const tooltipText = event.currentTarget.dataset.tooltip;
-                    if (!tooltipText) return;
-
-                    const tooltip = document.createElement("div");
-                    tooltip.className = "tooltip-popover";
-                    tooltip.style.position = "absolute";
-                    tooltip.style.background = "rgba(33, 37, 41, 0.92)";
-                    tooltip.style.color = "#fff";
-                    tooltip.style.padding = "8px 10px";
-                    tooltip.style.borderRadius = "6px";
-                    tooltip.style.fontSize = "0.75rem";
-                    tooltip.style.maxWidth = "240px";
-                    tooltip.style.zIndex = "1000";
-                    tooltip.textContent = tooltipText;
-
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    tooltip.style.left = `${rect.left + window.scrollX}px`;
-                    tooltip.style.top = `${rect.bottom + window.scrollY + 8}px`;
-                    tooltip.dataset.source = "dynamic-tooltip";
-
-                    document.body.appendChild(tooltip);
-
-                    event.currentTarget.addEventListener("mouseleave", () => {
-                        tooltip.remove();
-                    }, { once: true });
-                });
-            });
-        }
-
-        async function loadReadme() {
-            const container = document.getElementById("readme-content");
             try {
-                const response = await fetch("./README.md");
-                if (!response.ok) throw new Error("README not found");
-                const markdown = await response.text();
-                container.innerHTML = markdown
-                    .split("\n\n")
-                    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
-                    .join("");
+                loadingText.textContent = 'Loading Python runtime...';
+                pyodideInstance = await loadPyodide();
+
+                loadingText.textContent = 'Loading beam analysis module...';
+                await pyodideInstance.runPythonAsync(`
+                    from pyodide.http import pyfetch
+
+                    response = await pyfetch('../../pycalcs/beam_analysis.py')
+                    with open('beam_analysis.py', 'w') as f:
+                        f.write(await response.string())
+
+                    import beam_analysis
+                `);
+
+                beamModule = pyodideInstance.globals.get('beam_analysis');
+
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('calculate-btn').disabled = false;
+
+                renderSectionFields();
+                updateLoadLabel();
+                updateMaterialDisplay();
+
             } catch (error) {
-                container.innerHTML = `<p style="color: var(--error);">Unable to load README: ${error.message}</p>`;
+                loadingText.textContent = `Error: ${error.message}`;
+                console.error('Pyodide init error:', error);
             }
         }
 
-        function populateDocContent() {
-            if (!toolDocumentation.description) return;
-
-            document.getElementById("tool-description").textContent = toolDocumentation.description;
-            const background = document.getElementById("background-description");
-            background.innerHTML = toolDocumentation.description.replace(/\n/g, "<br>");
-
-            const equationContainer = document.getElementById("equation-container");
-            equationContainer.innerHTML = "";
-            if (toolDocumentation.latex) {
-                const expressions = toolDocumentation.latex
-                    .split("\n")
-                    .map((line) => line.trim())
-                    .filter((line) => line.length > 0);
-
-                expressions.forEach((expression, index) => {
-                    const card = document.createElement("div");
-                    card.className = "equation-card";
-                    card.innerHTML = `
-                        <strong>Equation (${index + 1})</strong>
-                        <div class="equation-expression">\\[ ${expression} \\]</div>
-                        <p style="font-size:0.82rem; color:var(--text-light); margin-top:8px;">
-                            Expressions follow classic Euler–Bernoulli beam theory for the listed load cases.
-                        </p>
-                    `;
-                    equationContainer.appendChild(card);
-                });
-            }
-            typesetMath();
+        // =============================================================================
+        // UI HELPERS
+        // =============================================================================
+        function openTab(target) {
+            document.querySelectorAll('.tab-link').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.target === target);
+            });
+            document.querySelectorAll('.tab-content').forEach(panel => {
+                panel.style.display = panel.id === target ? 'block' : 'none';
+            });
         }
 
-        function populateLoadLabel(loadCase) {
-            const loadLabel = document.getElementById("load-label");
-            const tooltip = loadLabel.querySelector(".tooltip-trigger");
+        function openInputSection(section) {
+            document.querySelectorAll('.input-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.section === section);
+            });
+            document.querySelectorAll('.input-section').forEach(panel => {
+                panel.classList.toggle('active', panel.id === `${section}-section`);
+            });
+        }
 
-            if (loadCase.includes("uniform")) {
-                loadLabel.childNodes[0].textContent = "Distributed load intensity (N/m) ";
-                tooltip.dataset.tooltip = "Uniform load applied across the span with intensity in N/m.";
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+
+            const desc = document.getElementById('mode-description');
+            if (mode === 'simple') {
+                desc.textContent = 'Quick analysis with common defaults. Switch to Advanced for full control over materials, safety factors, and deflection limits.';
+                document.getElementById('material-advanced').classList.remove('visible');
             } else {
-                loadLabel.childNodes[0].textContent = "Point load magnitude (N) ";
-                tooltip.dataset.tooltip = "Concentrated load applied at the specified position.";
+                desc.textContent = 'Full control over material properties, safety factors, and deflection criteria.';
+                document.getElementById('material-advanced').classList.add('visible');
             }
         }
 
-        function renderSectionFields() {
-            const sectionType = document.getElementById("section-type").value;
-            const container = document.getElementById("section-dimensions");
-
-            const previousValues = {};
-            container.querySelectorAll("input[id^='dim-']").forEach((input) => {
-                const key = input.id.replace("dim-", "");
-                previousValues[key] = input.value;
-            });
-
-            container.innerHTML = "";
-            const config = SECTION_LIBRARY[sectionType];
-            if (!config) return;
-
-            const description = document.createElement("p");
-            description.style.gridColumn = "1 / -1";
-            description.style.fontSize = "0.9rem";
-            description.style.color = "var(--text-light)";
-            description.innerHTML = config.description;
-            container.appendChild(description);
-
-            config.dimensions.forEach((dim) => {
-                const card = document.createElement("div");
-                card.className = "dimension-card";
-
-                const label = document.createElement("label");
-                label.setAttribute("for", `dim-${dim.key}`);
-                label.innerHTML = dim.label;
-                card.appendChild(label);
-
-                const input = document.createElement("input");
-                input.type = "number";
-                input.id = `dim-${dim.key}`;
-                input.step = "0.0001";
-                input.min = "0";
-                input.value = previousValues[dim.key] ?? dim.defaultValue ?? "";
-                card.appendChild(input);
-
-                const helper = document.createElement("span");
-                helper.textContent = dim.key === "moment_of_inertia" || dim.key === "section_modulus"
-                    ? "Use SI base units."
-                    : "Enter length in metres.";
-                card.appendChild(helper);
-
-                container.appendChild(card);
-            });
-        }
-
-        function formatNumber(value) {
-            if (!Number.isFinite(value)) return "—";
-            if (Math.abs(value) >= 1000 || Math.abs(value) < 0.01) {
-                return value.toExponential(3);
+        function formatNumber(value, decimals = 3) {
+            if (!Number.isFinite(value)) return '—';
+            if (Math.abs(value) >= 1e6 || (Math.abs(value) < 0.001 && value !== 0)) {
+                return value.toExponential(decimals);
             }
-            return value.toFixed(3);
+            return value.toLocaleString(undefined, { maximumFractionDigits: decimals });
         }
 
-        function updateResultsDisplay(result) {
-            const returnsMeta = toolDocumentation.returns || {};
-            const resultsDiv = document.getElementById("results-display");
-            const placeholder = document.getElementById("results-placeholder");
-            if (placeholder) placeholder.remove();
-            resultsDiv.innerHTML = "";
-
-            const cards = [
-                {
-                    key: "max_deflection",
-                    title: "Maximum deflection",
-                    units: "m",
-                    description: returnsMeta.max_deflection,
-                    substitution: result.subst_max_deflection,
-                },
-                {
-                    key: "max_deflection_position",
-                    title: "Location of max deflection",
-                    units: "m",
-                    description: returnsMeta.max_deflection_position,
-                },
-                {
-                    key: "max_bending_moment",
-                    title: "Peak bending moment",
-                    units: "N·m",
-                    description: returnsMeta.max_bending_moment,
-                    substitution: result.subst_max_bending_moment,
-                },
-                {
-                    key: "max_shear_force",
-                    title: "Peak shear force",
-                    units: "N",
-                    description: returnsMeta.max_shear_force,
-                    substitution: result.subst_max_shear_force,
-                },
-                {
-                    key: "extreme_fiber_stress",
-                    title: "Extreme fibre stress",
-                    units: "Pa",
-                    description: returnsMeta.extreme_fiber_stress,
-                    substitution: result.subst_extreme_fiber_stress,
-                },
+        function formatEngineering(value, unit) {
+            if (!Number.isFinite(value)) return '—';
+            const prefixes = [
+                { threshold: 1e9, prefix: 'G', divisor: 1e9 },
+                { threshold: 1e6, prefix: 'M', divisor: 1e6 },
+                { threshold: 1e3, prefix: 'k', divisor: 1e3 },
+                { threshold: 1, prefix: '', divisor: 1 },
+                { threshold: 1e-3, prefix: 'm', divisor: 1e-3 },
+                { threshold: 1e-6, prefix: 'μ', divisor: 1e-6 },
             ];
 
-            cards.forEach((cardInfo) => {
-                if (!(cardInfo.key in result)) return;
-                const rawValue = result[cardInfo.key];
-                const card = document.createElement("div");
-                card.className = "result-card";
-                card.innerHTML = `
-                    <h4>${cardInfo.title}</h4>
-                    <div class="result-value">${formatNumber(rawValue)}</div>
-                    <div class="result-units">${cardInfo.units}</div>
-                    ${
-                        cardInfo.description
-                            ? `<p style="font-size:0.85rem; margin-top:8px; color:var(--text-light);">${cardInfo.description}</p>`
-                            : ""
-                    }
-                    ${
-                        cardInfo.substitution
-                            ? `<details style="margin-top:10px;">
-                                    <summary style="font-size:0.85rem; cursor:pointer; color:var(--secondary-color);">Derivation</summary>
-                                    <p style="margin-top:6px; font-size:0.85rem;">\\(${cardInfo.substitution}\\)</p>
-                               </details>`
-                            : ""
-                    }
-                `;
-                resultsDiv.appendChild(card);
-            });
-
-            const properties = result.section_properties || {};
-            const propList = document.getElementById("section-properties-list");
-            if (Object.keys(properties).length > 0) {
-                document.getElementById("section-properties").style.display = "block";
-                propList.innerHTML = `
-                    <li><strong>I</strong> = ${formatNumber(properties.ix)} m⁴</li>
-                    <li><strong>S<sub>top</sub></strong> = ${formatNumber(properties.section_modulus_top)} m³</li>
-                    <li><strong>S<sub>bot</sub></strong> = ${formatNumber(properties.section_modulus_bottom)} m³</li>
-                    <li><strong>c<sub>top</sub></strong> = ${formatNumber(properties.c_top)} m</li>
-                    <li><strong>c<sub>bot</sub></strong> = ${formatNumber(properties.c_bottom)} m</li>
-                    <li><strong>Area</strong> = ${formatNumber(properties.area)} m²</li>
-                `;
-            } else {
-                document.getElementById("section-properties").style.display = "none";
+            const absVal = Math.abs(value);
+            for (const p of prefixes) {
+                if (absVal >= p.threshold || p.threshold === 1e-6) {
+                    return `${(value / p.divisor).toFixed(3)} ${p.prefix}${unit}`;
+                }
             }
-
-            typesetMath();
+            return `${value.toExponential(3)} ${unit}`;
         }
 
-        function updateChart(result) {
-            if (!result || !result.curve) return;
-            const curve = result.curve;
-            const mode = document.getElementById("chart-mode").value;
+        // =============================================================================
+        // SECTION FIELDS
+        // =============================================================================
+        function renderSectionFields() {
+            const sectionType = document.getElementById('section-type').value;
+            const container = document.getElementById('section-dimensions');
+            const config = SECTION_CONFIGS[sectionType] || [];
 
-            const xValues = curve.map((point) => point.x);
-            const yValues = curve.map((point) => {
-                if (mode === "deflection") return point.deflection;
-                if (mode === "moment") return point.moment;
-                return point.shear;
-            });
+            container.innerHTML = '';
 
-            const yLabel = mode === "deflection"
-                ? "Deflection (m)"
-                : mode === "moment"
-                    ? "Bending moment (N·m)"
-                    : "Shear force (N)";
+            config.forEach(field => {
+                const group = document.createElement('div');
+                group.className = 'input-group';
 
-            const ctx = document.getElementById("response-chart").getContext("2d");
-            if (chartInstance) {
-                chartInstance.destroy();
-            }
+                if (field.type === 'select') {
+                    group.innerHTML = `
+                        <label for="dim-${field.id}">${field.label}</label>
+                        <select id="dim-${field.id}">
+                            ${field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                        </select>
+                    `;
+                } else {
+                    group.innerHTML = `
+                        <label for="dim-${field.id}">${field.label}</label>
+                        <div class="input-row">
+                            <input type="number" id="dim-${field.id}" value="${field.default}" step="0.001" min="0">
+                            <span style="padding: 11px; background: var(--primary-light); border-radius: 0 6px 6px 0; font-size: 0.9rem;">${field.unit}</span>
+                        </div>
+                    `;
+                }
 
-            chartInstance = new Chart(ctx, {
-                type: "line",
-                data: {
-                    labels: xValues.map((value) => value.toFixed(3)),
-                    datasets: [
-                        {
-                            label: yLabel,
-                            data: yValues,
-                            borderColor: "#3b5bdb",
-                            tension: 0.2,
-                            fill: false,
-                        },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: "index",
-                    },
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: "Position along beam (m)",
-                            },
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: yLabel,
-                            },
-                        },
-                    },
-                },
+                container.appendChild(group);
             });
         }
 
-        async function initialisePyodide() {
-            const button = document.getElementById("calculate-btn");
-            button.textContent = "Booting Python...";
-            button.disabled = true;
-
-            pyodideInstance = await loadPyodide();
-            await pyodideInstance.loadPackage("micropip");
-
-            button.textContent = "Loading modules...";
-            await pyodideInstance.runPythonAsync(`
-                import micropip
-                from pyodide.http import pyfetch
-
-                response_utils = await pyfetch('../../pycalcs/utils.py')
-                with open('utils.py', 'w', encoding='utf-8') as f:
-                    f.write(await response_utils.string())
-
-                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
-                with open('${TOOL_MODULE_NAME}.py', 'w', encoding='utf-8') as f:
-                    f.write(await response_tool.string())
-
-                import utils
-                import ${TOOL_MODULE_NAME}
-            `);
-
-            pyUtils = pyodideInstance.globals.get("utils");
-            pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
-
-            const docProxy = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
-            const docMap = docProxy.toJs({ create_proxies: false, dict_converter: Object.fromEntries });
-            toolDocumentation = docMap;
-            if (toolDocumentation.parameters) {
-                toolDocumentation.parameters = Object.fromEntries(Object.entries(toolDocumentation.parameters));
-            }
-            if (toolDocumentation.returns) {
-                toolDocumentation.returns = Object.fromEntries(Object.entries(toolDocumentation.returns));
-            }
-
-            populateDocContent();
-            button.textContent = "Calculate";
-            button.disabled = false;
-        }
-
-        function gatherSectionDimensions(sectionType) {
-            const config = SECTION_LIBRARY[sectionType];
-            if (!config) return {};
+        function getSectionDimensions() {
+            const sectionType = document.getElementById('section-type').value;
+            const config = SECTION_CONFIGS[sectionType] || [];
             const dims = {};
 
-            for (const dim of config.dimensions) {
-                const input = document.getElementById(`dim-${dim.key}`);
-                if (!input) continue;
-                const rawValue = input.value;
-                if (rawValue === "" && dim.defaultValue === "") {
-                    continue;
+            config.forEach(field => {
+                const el = document.getElementById(`dim-${field.id}`);
+                if (el) {
+                    dims[field.id] = field.type === 'select' ? el.value : parseFloat(el.value);
                 }
-                const numeric = parseFloat(rawValue);
-                if (Number.isNaN(numeric) || numeric <= 0) {
-                    throw new Error(`Dimension "${dim.label}" must be greater than zero.`);
-                }
-                dims[dim.key] = numeric;
-            }
+            });
 
             return dims;
         }
 
-        async function handleCalculation(event) {
-            event.preventDefault();
-            if (!pyToolModule) {
-                setStatus("Python environment not ready yet. Please wait a moment.", "error");
+        // =============================================================================
+        // LOAD CASE HANDLING
+        // =============================================================================
+        function updateLoadLabel() {
+            const loadCase = document.getElementById('load-case').value;
+            const label = document.getElementById('load-value-label');
+            const unitSelect = document.getElementById('load-unit');
+            const posGroup = document.getElementById('load-position-group');
+
+            const isDistributed = loadCase.includes('udl') || loadCase.includes('triangular');
+            const needsPosition = loadCase.includes('_any');
+
+            if (isDistributed) {
+                label.textContent = 'Distributed Load (w)';
+                unitSelect.innerHTML = `
+                    <option value="N/m" selected>N/m</option>
+                    <option value="kN/m">kN/m</option>
+                    <option value="lb/ft">lb/ft</option>
+                `;
+            } else {
+                label.textContent = 'Point Load (P)';
+                unitSelect.innerHTML = `
+                    <option value="N" selected>N</option>
+                    <option value="kN">kN</option>
+                    <option value="lb">lb</option>
+                `;
+            }
+
+            posGroup.style.display = needsPosition ? 'block' : 'none';
+            updateTotalLoad();
+        }
+
+        function updateTotalLoad() {
+            const loadCase = document.getElementById('load-case').value;
+            const loadValue = parseFloat(document.getElementById('load-value').value) || 0;
+            const span = parseFloat(document.getElementById('span').value) || 1;
+            const helper = document.getElementById('load-helper');
+
+            if (loadCase.includes('udl') || loadCase.includes('triangular')) {
+                const total = loadCase.includes('triangular') ? loadValue * span / 2 : loadValue * span;
+                helper.innerHTML = `Total load on beam: <strong>${formatNumber(total)} N</strong>`;
+                helper.style.display = 'block';
+            } else {
+                helper.style.display = 'none';
+            }
+        }
+
+        // =============================================================================
+        // MATERIAL HANDLING
+        // =============================================================================
+        function updateMaterialDisplay() {
+            const material = document.getElementById('material').value;
+            const props = MATERIAL_PROPS[material];
+            const display = document.getElementById('material-props');
+
+            if (material === 'custom') {
+                display.textContent = 'Enter custom values below';
+            } else {
+                display.textContent = `E = ${props.E} GPa, Fy = ${props.Fy} MPa`;
+                document.getElementById('elastic-modulus').value = props.E;
+                document.getElementById('yield-strength').value = props.Fy;
+            }
+        }
+
+        // =============================================================================
+        // CALCULATION
+        // =============================================================================
+        async function calculate() {
+            if (!beamModule) return;
+
+            const btn = document.getElementById('calculate-btn');
+            btn.disabled = true;
+            btn.textContent = 'Calculating...';
+
+            try {
+                // Gather inputs
+                const loadCase = document.getElementById('load-case').value;
+                const sectionType = document.getElementById('section-type').value;
+                const span = parseFloat(document.getElementById('span').value);
+                const loadValue = parseFloat(document.getElementById('load-value').value);
+                const material = document.getElementById('material').value;
+                const E = parseFloat(document.getElementById('elastic-modulus').value) * 1e9; // GPa to Pa
+                const Fy = parseFloat(document.getElementById('yield-strength').value) * 1e6; // MPa to Pa
+                const safetyFactor = parseFloat(document.getElementById('safety-factor').value) || 1.5;
+                const deflectionLimit = document.getElementById('deflection-limit').value;
+
+                const dims = getSectionDimensions();
+                const loadPosition = loadCase.includes('_any') ?
+                    parseFloat(document.getElementById('load-position').value) : null;
+
+                // Convert load to SI
+                const loadUnit = document.getElementById('load-unit').value;
+                let loadSI = loadValue;
+                if (loadUnit === 'kN/m' || loadUnit === 'kN') loadSI *= 1000;
+                if (loadUnit === 'lb/ft') loadSI *= 14.5939;
+                if (loadUnit === 'lb') loadSI *= 4.44822;
+
+                // Call Python
+                const pyDims = pyodideInstance.toPy(dims);
+                const result = beamModule.beam_analysis(
+                    loadCase,
+                    sectionType,
+                    pyDims,
+                    span,
+                    loadSI,
+                    material,
+                    E,
+                    Fy,
+                    loadPosition,
+                    deflectionLimit,
+                    null, // custom ratio
+                    101,  // num_points
+                    safetyFactor
+                );
+
+                currentResult = result.toJs({ dict_converter: Object.fromEntries });
+                pyDims.destroy();
+                result.destroy();
+
+                if (currentResult.error) {
+                    alert(`Error: ${currentResult.error}`);
+                } else {
+                    displayResults(currentResult);
+                    updateDiagrams(currentResult);
+                    updateCharts(currentResult);
+                    updateEquations(currentResult);
+                }
+
+            } catch (error) {
+                console.error('Calculation error:', error);
+                alert(`Calculation error: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Calculate';
+            }
+        }
+
+        // =============================================================================
+        // RESULTS DISPLAY
+        // =============================================================================
+        function displayResults(result) {
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-display').style.display = 'block';
+
+            // Results grid
+            const grid = document.getElementById('results-grid');
+            grid.innerHTML = '';
+
+            const cards = [
+                { label: 'Max Deflection', value: result.max_deflection, unit: 'm', key: 'deflection' },
+                { label: 'Max Moment', value: result.max_moment, unit: 'N·m', key: 'moment' },
+                { label: 'Max Shear', value: result.max_shear, unit: 'N', key: 'shear' },
+                { label: 'Max Stress', value: result.max_stress, unit: 'Pa', key: 'stress' },
+                { label: 'Beam Weight', value: result.beam_weight, unit: 'N', key: 'weight' },
+            ];
+
+            cards.forEach(card => {
+                const div = document.createElement('div');
+                div.className = 'result-card';
+                div.innerHTML = `
+                    <div class="label">${card.label}</div>
+                    <div class="value">${formatEngineering(card.value, card.unit.replace('·', ''))}</div>
+                `;
+                div.onclick = () => showDerivation(card.key, result);
+                grid.appendChild(div);
+            });
+
+            // Safety gauges
+            updateGauge('deflection', result.deflection_utilization);
+            updateGauge('stress', result.stress_utilization);
+
+            // Status banner
+            const banner = document.getElementById('status-banner');
+            const icon = document.getElementById('status-icon');
+            const title = document.getElementById('status-title');
+            const msg = document.getElementById('status-message');
+            const recList = document.getElementById('recommendations-list');
+
+            banner.style.display = 'flex';
+            banner.className = `status-banner ${result.status}`;
+
+            if (result.status === 'acceptable') {
+                icon.textContent = '✓';
+                title.textContent = 'Design Acceptable';
+                msg.textContent = 'All safety checks passed with adequate margin.';
+            } else if (result.status === 'marginal') {
+                icon.textContent = '⚠';
+                title.textContent = 'Design Marginal';
+                msg.textContent = 'Design passes but utilization is high.';
+            } else {
+                icon.textContent = '✗';
+                title.textContent = 'Design Not Acceptable';
+                msg.textContent = 'One or more safety checks failed.';
+            }
+
+            recList.innerHTML = '';
+            (result.recommendations || []).forEach(rec => {
+                const li = document.createElement('li');
+                li.textContent = rec;
+                recList.appendChild(li);
+            });
+
+            // Section properties table
+            const tbody = document.querySelector('#section-properties-table tbody');
+            tbody.innerHTML = '';
+            const props = result.section_properties;
+            const propRows = [
+                ['Area (A)', formatEngineering(props.area, 'm²')],
+                ['Moment of Inertia (I)', formatEngineering(props.Ix, 'm⁴')],
+                ['Section Modulus - Top (Sx)', formatEngineering(props.Sx_top, 'm³')],
+                ['Section Modulus - Bottom (Sx)', formatEngineering(props.Sx_bottom, 'm³')],
+                ['Distance to Top Fiber (c)', formatNumber(props.c_top * 1000, 1) + ' mm'],
+                ['Distance to Bottom Fiber (c)', formatNumber(props.c_bottom * 1000, 1) + ' mm'],
+            ];
+
+            propRows.forEach(([label, value]) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${label}</td><td>${value}</td>`;
+                tbody.appendChild(tr);
+            });
+
+            // Typeset math
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        function updateGauge(type, utilization) {
+            const bar = document.getElementById(`${type}-bar`);
+            const value = document.getElementById(`${type}-value`);
+
+            const pct = Math.min(utilization, 150);
+            bar.style.width = `${Math.min(pct, 100)}%`;
+
+            let colorClass = 'success';
+            if (utilization > 100) colorClass = 'danger';
+            else if (utilization > 85) colorClass = 'warning';
+
+            bar.className = `gauge-bar ${colorClass}`;
+            value.className = `gauge-value ${colorClass}`;
+            value.textContent = `${utilization.toFixed(1)}%`;
+        }
+
+        function showDerivation(key, result) {
+            const panel = document.getElementById('derivation-panel');
+            const title = document.getElementById('derivation-title');
+            const content = document.getElementById('derivation-content');
+
+            panel.classList.add('visible');
+
+            const info = result.load_case_info;
+
+            if (key === 'deflection') {
+                title.textContent = 'Maximum Deflection Derivation';
+                content.innerHTML = `
+                    <div class="derivation-step">
+                        <div class="step-title">Formula</div>
+                        <div class="equation">\\[ ${info.max_deflection_formula} \\]</div>
+                    </div>
+                    <div class="derivation-step">
+                        <div class="step-title">Result</div>
+                        <div class="result-box">${formatEngineering(result.max_deflection, 'm')} at x = ${formatNumber(result.max_deflection_position)} m</div>
+                    </div>
+                    <div class="derivation-step">
+                        <div class="step-title">Allowable</div>
+                        <p>${result.deflection_limit_code} = ${formatEngineering(result.allowable_deflection, 'm')}</p>
+                    </div>
+                `;
+            } else if (key === 'moment') {
+                title.textContent = 'Maximum Bending Moment Derivation';
+                content.innerHTML = `
+                    <div class="derivation-step">
+                        <div class="step-title">Formula</div>
+                        <div class="equation">\\[ ${info.max_moment_formula} \\]</div>
+                    </div>
+                    <div class="derivation-step">
+                        <div class="step-title">Result</div>
+                        <div class="result-box">${formatEngineering(result.max_moment, 'N·m')}</div>
+                    </div>
+                `;
+            } else if (key === 'stress') {
+                title.textContent = 'Maximum Stress Derivation';
+                content.innerHTML = `
+                    <div class="derivation-step">
+                        <div class="step-title">Formula</div>
+                        <div class="equation">\\[ \\sigma_{max} = \\frac{M_{max} \\cdot c}{I} \\]</div>
+                    </div>
+                    <div class="derivation-step">
+                        <div class="step-title">Result</div>
+                        <div class="result-box ${result.stress_utilization > 100 ? 'bad' : ''}">${formatEngineering(result.max_stress, 'Pa')}</div>
+                    </div>
+                    <div class="derivation-step">
+                        <div class="step-title">Allowable</div>
+                        <p>Fy / SF = ${formatEngineering(result.allowable_stress, 'Pa')}</p>
+                    </div>
+                `;
+            }
+
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        // =============================================================================
+        // DIAGRAMS
+        // =============================================================================
+        function updateDiagrams(result) {
+            drawBeamDiagram(result);
+            drawDeflectionDiagram(result);
+        }
+
+        function drawBeamDiagram(result) {
+            const svg = document.getElementById('beam-diagram');
+            const loadCase = document.getElementById('load-case').value;
+            const span = parseFloat(document.getElementById('span').value);
+
+            const margin = 60;
+            const width = 600 - 2 * margin;
+            const beamY = 100;
+
+            let html = '';
+
+            // Beam line
+            html += `<line x1="${margin}" y1="${beamY}" x2="${margin + width}" y2="${beamY}"
+                     stroke="#111827" stroke-width="8" stroke-linecap="round"/>`;
+
+            // Supports
+            const supportType = result.load_case_info.support_type;
+
+            if (supportType === 'simply_supported') {
+                // Pin at left
+                html += `<polygon points="${margin},${beamY+5} ${margin-15},${beamY+30} ${margin+15},${beamY+30}"
+                         fill="none" stroke="#111827" stroke-width="2"/>`;
+                // Roller at right
+                html += `<polygon points="${margin+width},${beamY+5} ${margin+width-15},${beamY+30} ${margin+width+15},${beamY+30}"
+                         fill="none" stroke="#111827" stroke-width="2"/>`;
+                html += `<circle cx="${margin+width}" cy="${beamY+35}" r="5" fill="none" stroke="#111827" stroke-width="2"/>`;
+            } else if (supportType === 'cantilever') {
+                // Fixed at left
+                html += `<rect x="${margin-15}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+                html += `<line x1="${margin-15}" y1="${beamY-30}" x2="${margin-15}" y2="${beamY+30}" stroke="#111827" stroke-width="3"/>`;
+            } else if (supportType === 'fixed_fixed') {
+                // Fixed at both ends
+                html += `<rect x="${margin-15}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+                html += `<rect x="${margin+width}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+            } else if (supportType === 'propped') {
+                // Fixed at left, pin at right
+                html += `<rect x="${margin-15}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+                html += `<polygon points="${margin+width},${beamY+5} ${margin+width-15},${beamY+30} ${margin+width+15},${beamY+30}"
+                         fill="none" stroke="#111827" stroke-width="2"/>`;
+            }
+
+            // Load arrows
+            const loadType = result.load_case_info.load_type;
+
+            if (loadType === 'point') {
+                let loadX = margin + width / 2;
+                if (loadCase.includes('_end')) loadX = margin + width;
+                if (loadCase.includes('_any')) {
+                    const pos = parseFloat(document.getElementById('load-position').value) || span/2;
+                    loadX = margin + (pos / span) * width;
+                }
+
+                html += `<line x1="${loadX}" y1="${beamY-60}" x2="${loadX}" y2="${beamY-10}"
+                         stroke="#b91c1c" stroke-width="3"/>`;
+                html += `<polygon points="${loadX},${beamY-10} ${loadX-8},${beamY-25} ${loadX+8},${beamY-25}"
+                         fill="#b91c1c"/>`;
+                html += `<text x="${loadX}" y="${beamY-70}" text-anchor="middle" font-size="14" font-weight="600" fill="#b91c1c">P</text>`;
+            } else if (loadType === 'distributed') {
+                // UDL arrows
+                const numArrows = 8;
+                for (let i = 0; i <= numArrows; i++) {
+                    const x = margin + (i / numArrows) * width;
+                    html += `<line x1="${x}" y1="${beamY-50}" x2="${x}" y2="${beamY-10}"
+                             stroke="#b91c1c" stroke-width="2"/>`;
+                    html += `<polygon points="${x},${beamY-10} ${x-5},${beamY-20} ${x+5},${beamY-20}"
+                             fill="#b91c1c"/>`;
+                }
+                html += `<line x1="${margin}" y1="${beamY-50}" x2="${margin+width}" y2="${beamY-50}"
+                         stroke="#b91c1c" stroke-width="2"/>`;
+                html += `<text x="${margin+width/2}" y="${beamY-60}" text-anchor="middle" font-size="14" font-weight="600" fill="#b91c1c">w</text>`;
+            }
+
+            // Dimension line
+            html += `<line x1="${margin}" y1="${beamY+50}" x2="${margin+width}" y2="${beamY+50}"
+                     stroke="#6b7280" stroke-width="1" marker-start="url(#arrow)" marker-end="url(#arrow)"/>`;
+            html += `<text x="${margin+width/2}" y="${beamY+70}" text-anchor="middle" font-size="12" fill="#6b7280">L = ${span} m</text>`;
+
+            // Arrow marker definition
+            html = `<defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 Z" fill="#6b7280"/>
+                </marker>
+            </defs>` + html;
+
+            svg.innerHTML = html;
+        }
+
+        function drawDeflectionDiagram(result) {
+            const svg = document.getElementById('deflection-diagram');
+            const curve = result.curve;
+
+            if (!curve || curve.length === 0) {
+                svg.innerHTML = '<text x="300" y="75" text-anchor="middle" fill="#6b7280">No data</text>';
                 return;
             }
 
-            const button = document.getElementById("calculate-btn");
-            button.disabled = true;
-            const originalLabel = button.textContent;
-            button.textContent = "Calculating...";
-            setStatus("");
+            const margin = 60;
+            const width = 600 - 2 * margin;
+            const height = 100;
+            const baseY = 40;
 
-            try {
-                const loadCase = document.getElementById("load-case").value;
-                const sectionType = document.getElementById("section-type").value;
-                const span = parseFloat(document.getElementById("span").value);
-                const loadValue = parseFloat(document.getElementById("load-value").value);
-                const elasticModulus = parseFloat(document.getElementById("elastic-modulus").value);
-                const numPoints = parseInt(document.getElementById("num-points").value, 10);
+            // Find max deflection for scaling
+            const maxDefl = Math.max(...curve.map(p => Math.abs(p.deflection)));
+            const scale = maxDefl > 0 ? (height * 0.8) / maxDefl : 1;
 
-                if (Number.isNaN(span) || span <= 0) throw new Error("Beam span must be greater than zero.");
-                if (Number.isNaN(loadValue) || loadValue <= 0) throw new Error("Applied load must be greater than zero.");
-                if (Number.isNaN(elasticModulus) || elasticModulus <= 0) throw new Error("Elastic modulus must be greater than zero.");
+            // Build path
+            const points = curve.map((p, i) => {
+                const x = margin + (i / (curve.length - 1)) * width;
+                const y = baseY + p.deflection * scale;
+                return `${x},${y}`;
+            });
 
-                const sectionDimensions = gatherSectionDimensions(sectionType);
+            let html = '';
 
-                const pySection = pyodideInstance.toPy(sectionDimensions);
-                const pyResult = pyToolModule[TOOL_FUNCTION_NAME](
-                    sectionType,
-                    pySection,
-                    span,
-                    elasticModulus,
-                    loadCase,
-                    loadValue,
-                    null,
-                    numPoints,
-                );
-                const result = pyResult.toJs({ create_proxies: false, dict_converter: Object.fromEntries });
-                pySection.destroy();
-                pyResult.destroy();
+            // Original beam line (dashed)
+            html += `<line x1="${margin}" y1="${baseY}" x2="${margin + width}" y2="${baseY}"
+                     stroke="#e5e7eb" stroke-width="2" stroke-dasharray="8,4"/>`;
 
-                if (result.error) {
-                    throw new Error(result.error);
-                }
+            // Deflected shape
+            html += `<polyline points="${points.join(' ')}"
+                     fill="none" stroke="#3b82f6" stroke-width="3"/>`;
 
-                latestResult = result;
-                updateResultsDisplay(result);
-                updateChart(result);
-                setStatus("Calculation complete.", "success");
-            } catch (error) {
-                setStatus(error.message || "An unexpected error occurred.", "error");
-            } finally {
-                button.textContent = originalLabel;
-                button.disabled = false;
-                typesetMath();
-            }
+            // Max deflection annotation
+            const maxIdx = curve.findIndex(p => Math.abs(p.deflection) === maxDefl);
+            const maxX = margin + (maxIdx / (curve.length - 1)) * width;
+            const maxY = baseY + curve[maxIdx].deflection * scale;
+
+            html += `<circle cx="${maxX}" cy="${maxY}" r="5" fill="#3b82f6"/>`;
+            html += `<text x="${maxX}" y="${maxY + 20}" text-anchor="middle" font-size="11" fill="#3b82f6">
+                     δ = ${formatEngineering(maxDefl, 'm')}</text>`;
+
+            svg.innerHTML = html;
         }
 
-        function resetForm() {
-            document.getElementById("load-case").value = "simply_supported_point_midspan";
-            document.getElementById("section-type").value = "rectangular";
-            document.getElementById("span").value = 5;
-            document.getElementById("load-value").value = 15000;
-            document.getElementById("elastic-modulus").value = 200000000000;
-            document.getElementById("num-points").value = 101;
-            latestResult = null;
-            document.getElementById("results-display").innerHTML = "";
-            document.getElementById("results").insertAdjacentHTML(
-                "afterbegin",
-                '<div id="results-placeholder" style="margin-top: 16px;"><p>Enter the beam parameters and press Calculate to view response metrics.</p></div>',
-            );
-            document.getElementById("section-properties").style.display = "none";
-            if (chartInstance) {
-                chartInstance.destroy();
-                chartInstance = null;
-            }
-            populateLoadLabel("simply_supported_point_midspan");
-            renderSectionFields();
-            setStatus("");
+        // =============================================================================
+        // CHARTS
+        // =============================================================================
+        let currentChartType = 'deflection';
+
+        function updateCharts(result) {
+            drawChart(currentChartType, result);
         }
 
-        document.addEventListener("DOMContentLoaded", () => {
-            loadReadme();
-            initialisePyodide().then(() => {
-                attachTooltipListeners();
-                typesetMath();
+        function drawChart(chartType, result) {
+            const curve = result.curve;
+            if (!curve) return;
+
+            const x = curve.map(p => p.x);
+            let y, title, yLabel;
+
+            if (chartType === 'deflection') {
+                y = curve.map(p => p.deflection * 1000); // mm
+                title = 'Deflection Along Beam';
+                yLabel = 'Deflection (mm)';
+            } else if (chartType === 'moment') {
+                y = curve.map(p => p.moment / 1000); // kN·m
+                title = 'Bending Moment Diagram';
+                yLabel = 'Moment (kN·m)';
+            } else if (chartType === 'shear') {
+                y = curve.map(p => p.shear / 1000); // kN
+                title = 'Shear Force Diagram';
+                yLabel = 'Shear (kN)';
+            } else if (chartType === 'combined') {
+                // Multiple traces
+                const traces = [
+                    {
+                        x: x,
+                        y: curve.map(p => p.deflection * 1000),
+                        name: 'Deflection (mm)',
+                        yaxis: 'y',
+                    },
+                    {
+                        x: x,
+                        y: curve.map(p => p.moment / 1000),
+                        name: 'Moment (kN·m)',
+                        yaxis: 'y2',
+                    },
+                ];
+
+                Plotly.newPlot('response-chart', traces, {
+                    title: 'Combined Response',
+                    xaxis: { title: 'Position (m)' },
+                    yaxis: { title: 'Deflection (mm)', side: 'left' },
+                    yaxis2: { title: 'Moment (kN·m)', side: 'right', overlaying: 'y' },
+                    legend: { x: 0.5, y: 1.1, orientation: 'h' },
+                    margin: { t: 60, b: 50, l: 60, r: 60 },
+                }, { responsive: true });
+                return;
+            }
+
+            const trace = {
+                x: x,
+                y: y,
+                type: 'scatter',
+                mode: 'lines',
+                fill: chartType === 'deflection' ? 'tozeroy' : 'none',
+                line: { color: '#3b82f6', width: 2 },
+                fillcolor: 'rgba(59, 130, 246, 0.1)',
+            };
+
+            Plotly.newPlot('response-chart', [trace], {
+                title: title,
+                xaxis: { title: 'Position along beam (m)' },
+                yaxis: { title: yLabel },
+                margin: { t: 50, b: 50, l: 60, r: 30 },
+            }, { responsive: true });
+        }
+
+        // =============================================================================
+        // EQUATIONS
+        // =============================================================================
+        function updateEquations(result) {
+            const info = result.load_case_info;
+
+            document.getElementById('eq-deflection').innerHTML = `\\[ ${info.max_deflection_formula} \\]`;
+            document.getElementById('eq-moment').innerHTML = `\\[ ${info.max_moment_formula} \\]`;
+            document.getElementById('eq-shear').innerHTML = `\\[ ${info.max_shear_formula} \\]`;
+
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        // =============================================================================
+        // EVENT LISTENERS
+        // =============================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            initPyodide();
+
+            // Mode toggle
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => setMode(btn.dataset.mode));
             });
 
-            renderSectionFields();
-            populateLoadLabel(document.getElementById("load-case").value);
-            attachTooltipListeners();
-
-            document.querySelectorAll(".tab-link").forEach((button) => {
-                button.addEventListener("click", () => openTab(button.dataset.target));
+            // Unit toggle
+            document.querySelectorAll('.unit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentUnit = btn.dataset.unit;
+                });
             });
 
-            document.getElementById("calc-form").addEventListener("submit", handleCalculation);
-            document.getElementById("reset-btn").addEventListener("click", resetForm);
-
-            document.getElementById("load-case").addEventListener("change", (event) => {
-                populateLoadLabel(event.target.value);
+            // Output tabs
+            document.querySelectorAll('.tab-link').forEach(btn => {
+                btn.addEventListener('click', () => openTab(btn.dataset.target));
             });
 
-            document.getElementById("section-type").addEventListener("change", () => {
-                renderSectionFields();
+            // Input tabs
+            document.querySelectorAll('.input-tab').forEach(btn => {
+                btn.addEventListener('click', () => openInputSection(btn.dataset.section));
             });
 
-            document.getElementById("chart-mode").addEventListener("change", () => {
-                updateChart(latestResult);
+            // Chart tabs
+            document.querySelectorAll('.chart-tab').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentChartType = btn.dataset.chart;
+                    if (currentResult) drawChart(currentChartType, currentResult);
+                });
             });
+
+            // Section type change
+            document.getElementById('section-type').addEventListener('change', renderSectionFields);
+
+            // Load case change
+            document.getElementById('load-case').addEventListener('change', updateLoadLabel);
+
+            // Material change
+            document.getElementById('material').addEventListener('change', updateMaterialDisplay);
+
+            // Load value change for total load display
+            document.getElementById('load-value').addEventListener('input', updateTotalLoad);
+            document.getElementById('span').addEventListener('input', updateTotalLoad);
+
+            // Advanced toggle
+            document.getElementById('toggle-material-advanced').addEventListener('click', () => {
+                const section = document.getElementById('material-advanced');
+                const btn = document.getElementById('toggle-material-advanced');
+                section.classList.toggle('visible');
+                btn.innerHTML = section.classList.contains('visible') ?
+                    '<span>▲</span> Hide Advanced Options' : '<span>▼</span> Show Advanced Options';
+            });
+
+            // Derivation close
+            document.getElementById('close-derivation').addEventListener('click', () => {
+                document.getElementById('derivation-panel').classList.remove('visible');
+            });
+
+            // Calculate button
+            document.getElementById('calculate-btn').addEventListener('click', calculate);
         });
     </script>
 </body>
