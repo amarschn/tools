@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RLC Circuit Analyzer (Experimental)</title>
+    <link rel="stylesheet" href="style.css">
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body data-theme="system">
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <div class="tool-header">
+            <h1>RLC Circuit Analyzer (Experimental)</h1>
+            <p>An interactive tool to analyze the frequency response of a series RLC circuit.</p>
+        </div>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Controls</h2>
+                <div class="control-group">
+                    <label for="resistance">Resistance (R): <span id="r-val">10</span> &Omega;</label>
+                    <input type="range" id="resistance" min="1" max="1000" step="1" value="10">
+                </div>
+                <div class="control-group">
+                    <label for="inductance">Inductance (L): <span id="l-val">100</span> &micro;H</label>
+                    <input type="range" id="inductance" min="1" max="1000" step="1" value="100">
+                </div>
+                <div class="control-group">
+                    <label for="capacitance">Capacitance (C): <span id="c-val">100</span> nF</label>
+                    <input type="range" id="capacitance" min="1" max="1000" step="1" value="100">
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-item">
+                        <div class="label">Resonant Frequency (f₀)</div>
+                        <div class="value" id="resonant-freq-val">--</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="label">Q Factor</div>
+                        <div class="value" id="q-factor-val">--</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-tab="analysis">Live Analysis</button>
+                    <button class="tab-link" data-tab="theory">Background & Theory</button>
+                </div>
+
+                <div id="analysis" class="tab-content active">
+                    <div class="plot-container">
+                        <div id="impedance-plot"></div>
+                    </div>
+                    <div class="plot-container">
+                        <div id="phase-plot"></div>
+                    </div>
+                </div>
+
+                <div id="theory" class="tab-content">
+                    <div class="theory-section">
+                        <h3>Overview</h3>
+                        <p>
+                            A series RLC circuit is a fundamental building block in electronics, consisting of a Resistor (R), an Inductor (L), and a Capacitor (C) connected in series. Its behavior changes dramatically with the frequency of the applied voltage, making it crucial for applications like filters, oscillators, and tuning circuits.
+                        </p>
+                        <p>
+                            The key characteristic of an RLC circuit is its <strong>resonant frequency (f₀)</strong>, the frequency at which the circuit's inductive and capacitive reactances cancel each other out. At this frequency, the circuit's impedance is at its minimum, and the current is at its maximum for a given voltage. This tool allows you to explore this behavior interactively.
+                        </p>
+                    </div>
+
+                    <div class="theory-section">
+                        <h3>Circuit Components</h3>
+                        <h4>The Resistor (R)</h4>
+                        <p>The resistor is the simplest component. It resists the flow of electric current, dissipating energy as heat. Its opposition to current is called <strong>resistance</strong> and is constant regardless of frequency. It is measured in Ohms (&Omega;).</p>
+                        
+                        <h4>The Inductor (L)</h4>
+                        <p>An inductor stores energy in a magnetic field when current flows through it. It opposes changes in current. Its opposition to alternating current is called <strong>inductive reactance (X_L)</strong> and increases linearly with frequency.</p>
+                        
+                        <h4>The Capacitor (C)</h4>
+                        <p>A capacitor stores energy in an electric field. It opposes changes in voltage. Its opposition to alternating current is called <strong>capacitive reactance (X_C)</strong> and decreases as the frequency increases.</p>
+                    </div>
+
+                    <div class="theory-section">
+                        <h3>Key Concepts</h3>
+                        <h4>Reactance (X)</h4>
+                        <p>Reactance is the opposition of a circuit element to alternating current, caused by its inductance or capacitance. It is measured in Ohms (&Omega;).</p>
+                        <ul>
+                            <li><strong>Inductive Reactance (X_L):</strong> Increases with frequency. At 0 Hz (DC), an ideal inductor has zero reactance (it's a short circuit). As frequency approaches infinity, its reactance also approaches infinity (it's an open circuit).</li>
+                            <li><strong>Capacitive Reactance (X_C):</strong> Decreases with frequency. At 0 Hz (DC), an ideal capacitor has infinite reactance (it's an open circuit). As frequency approaches infinity, its reactance approaches zero (it's a short circuit).</li>
+                        </ul>
+
+                        <h4>Impedance (Z)</h4>
+                        <p>Impedance is the total opposition that a circuit presents to alternating current. It is a complex value that combines both resistance (the real part) and reactance (the imaginary part). The magnitude of the impedance in a series RLC circuit is calculated by geometrically adding the resistance and the total reactance (X_L - X_C).</p>
+
+                        <h4>Resonance</h4>
+                        <p>Resonance occurs at the specific frequency (f₀) where the inductive reactance equals the capacitive reactance (X_L = X_C). At this point, the two reactances cancel each other out, and the circuit's total impedance is purely resistive and at its minimum value (Z = R). This allows the maximum current to flow.</p>
+
+                        <h4>Quality Factor (Q)</h4>
+                        <p>The Q Factor is a dimensionless parameter that describes how underdamped a resonator is. In an RLC circuit, it relates the energy stored to the energy dissipated. A high Q factor results in a "sharper" or more narrow resonance peak, meaning the circuit is more selective about the frequencies it allows to pass. A low Q factor gives a broader peak.</p>
+
+                        <h4>Phase Angle (φ)</h4>
+                        <p>The phase angle describes the timing difference between the voltage across the circuit and the current flowing through it.
+                            <ul>
+                                <li>If X_L > X_C (at high frequencies), the circuit is inductive, and the current <strong>lags</strong> the voltage (positive phase angle).</li>
+                                <li>If X_C > X_L (at low frequencies), the circuit is capacitive, and the current <strong>leads</strong> the voltage (negative phase angle).</li>
+                                <li>At resonance (X_L = X_C), the circuit is purely resistive, and the current and voltage are <strong>in phase</strong> (0° phase angle).</li>
+                            </ul>
+                        </p>
+                    </div>
+
+                    <div class="theory-section">
+                        <h3>Key Equations</h3>
+                        <div class="equation-card">
+                            <strong>Inductive Reactance (X_L):</strong>
+                            <div class="equation-expression">$$ X_L = 2 \pi f L $$</div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Capacitive Reactance (X_C):</strong>
+                            <div class="equation-expression">$$ X_C = \frac{1}{2 \pi f C} $$</div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Total Impedance (Z):</strong>
+                            <div class="equation-expression">$$ Z = \sqrt{R^2 + (X_L - X_C)^2} $$</div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Resonant Frequency (f₀):</strong>
+                            <div class="equation-expression">$$ f_0 = \frac{1}{2 \pi \sqrt{LC}} $$</div>
+                        </div>
+                         <div class="equation-card">
+                            <strong>Phase Angle (φ):</strong>
+                            <div class="equation-expression">$$ \phi = \arctan\left(\frac{X_L - X_C}{R}\right) $$</div>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Quality Factor (Q):</strong>
+                            <div class="equation-expression">$$ Q = \frac{1}{R} \sqrt{\frac{L}{C}} $$</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>Investigate the interplay of resistance, inductance, and capacitance.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

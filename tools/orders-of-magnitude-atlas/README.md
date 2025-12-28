@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This tool helps build intuition for the scale of engineering quantities by mapping log10 orders of magnitude to real-world anchors. Users can sweep a magnitude slider, see base and scaled values, and compare against familiar reference points in each domain.
+This tool helps build intuition for the scale of engineering quantities by mapping log10 orders of magnitude to real-world anchors. Users select a domain and explore the ordered anchor list plus multiple visualization styles.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ This tool helps build intuition for the scale of engineering quantities by mappi
 - Span in decades between the smallest and largest anchors.
 - Ratio between the smallest and largest anchors.
 - Anchor count for the selected domain.
-- Log-scale ladder visualization of anchors.
+- Multiple visualization modes (constellation map, bars, bands, spine, histogram, cards).
 
 ### Assumptions & Limitations
 

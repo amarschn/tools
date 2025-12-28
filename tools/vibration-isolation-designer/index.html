@@ -7,10 +7,12 @@
 
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
     <style>
-        /* --- 1. Global Styles & Variables --- */
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
         :root {
             --primary-color: #0b0d12;
             --primary-light: #f4f5f7;
@@ -25,10 +27,80 @@
             --bg-color: #f8f9fb;
             --bg-card: #ffffff;
             --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
             --border-radius: 8px;
-            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
             --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #111827;
+            --tooltip-text: #ffffff;
+            --callout-info-bg: #dbeafe;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #fef3c7;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #fef2f2;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #d1fae5;
+            --callout-success-border: #22c55e;
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #1f2937;
+            --tooltip-text: #f9fafb;
+            --callout-info-bg: #1e3a5f;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #422006;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #450a0a;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #052e16;
+            --callout-success-border: #22c55e;
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+                --tooltip-bg: #1f2937;
+                --tooltip-text: #f9fafb;
+                --callout-info-bg: #1e3a5f;
+                --callout-info-border: #3b82f6;
+                --callout-warning-bg: #422006;
+                --callout-warning-border: #f59e0b;
+                --callout-danger-bg: #450a0a;
+                --callout-danger-border: #ef4444;
+                --callout-success-bg: #052e16;
+                --callout-success-border: #22c55e;
+            }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; }
@@ -39,87 +111,163 @@
             color: var(--text-color);
             display: flex;
             flex-direction: column;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
-        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
-        h1, h2, h3, h4 {
-            color: var(--primary-color);
-            margin-bottom: 0.75em;
-            line-height: 1.2;
+
+        /* =================================================================
+           2. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            transition: background-color 0.2s ease;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
             font-weight: 600;
+            color: var(--text-color);
         }
-        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
-        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        h3 { font-size: 1.05rem; color: var(--secondary-color); }
-        h4 { font-size: 0.95rem; color: var(--text-color); }
+
+        /* =================================================================
+           3. LAYOUT & CONTAINERS
+           ================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-brand:hover { text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        main.container { flex-grow: 1; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
         p { margin-bottom: 1em; color: var(--text-light); }
-        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a { color: var(--accent-color); text-decoration: none; }
         a:hover { text-decoration: underline; }
 
-        /* --- 2. Navigation --- */
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
-        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
-        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
-        .nav-brand:hover { text-decoration: none; }
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
 
-        /* --- 3. Main Tool Layout --- */
-        main.container { flex-grow: 1; }
-        .tool-header { text-align: center; margin-bottom: 2rem; }
-        .tool-description { font-size: 1.1rem; max-width: 80ch; margin: 0 auto; }
-        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
-        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
-
-        /* --- 3b. Purpose/README Section --- */
+        /* =================================================================
+           4. PURPOSE/README SECTION
+           ================================================================= */
         details > summary { list-style: none; cursor: pointer; }
         details > summary::-webkit-details-marker { display: none; }
         .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
         .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
         .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
-        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
         .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
         .purpose-content h3 { margin-top: 1rem; }
-        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
-        .purpose-content ul { padding-left: 20px; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .purpose-content code { background-color: var(--primary-light); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
 
-        /* --- 4. Input Section --- */
+        /* =================================================================
+           5. INPUT SECTION
+           ================================================================= */
         .tool-inputs h2 { margin-top: 0; }
-        .inputs-intro { font-size: 0.95rem; color: var(--text-light); margin-bottom: 1rem; }
-        .section-title { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); margin: 1.25rem 0 0.75rem; }
-        .input-group { margin-bottom: 1.25rem; position: relative; }
-        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
-        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
             width: 100%;
-            padding: 12px 14px;
-            padding-right: 38px;
+            padding: 11px 14px;
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            background: #fff;
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            color: var(--text-color);
+            transition: border-color 0.15s ease;
         }
         .input-group input:focus, .input-group select:focus {
             outline: none;
             border-color: var(--text-color);
-            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
-        }
-        .input-group select {
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            background-image: none;
         }
         .input-group input[type="number"]::-webkit-inner-spin-button,
-        .input-group input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
         .input-group input[type="number"] { -moz-appearance: textfield; }
 
-        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
         .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .input-row > .input-group:only-child { grid-column: 1 / -1; }
+
+        .tooltip-trigger {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px; font-weight: bold;
+            cursor: help;
+            position: absolute; right: 10px; top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--tooltip-bg); color: var(--tooltip-text);
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5;
+            white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+        .tooltip-trigger.slider-tooltip {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        /* Mode Toggle */
         .mode-toggle-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 1.25rem; flex-wrap: wrap; }
-        .mode-toggle { display: flex; gap: 4px; background: var(--bg-card); padding: 4px; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
+        .mode-toggle { display: flex; gap: 4px; background: var(--primary-light); padding: 4px; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
         .mode-btn {
             padding: 10px 18px;
             border: none;
@@ -133,212 +281,456 @@
             color: var(--text-light);
             transition: all 0.2s ease;
         }
-        .mode-btn.active { background: var(--text-color); color: #fff; }
-        .mode-btn:hover:not(.active) { background: var(--primary-light); color: var(--text-color); }
+        .mode-btn.active { background: var(--btn-primary-bg); color: var(--btn-primary-text); }
+        .mode-btn:hover:not(.active) { background: var(--bg-card); color: var(--text-color); }
         .mode-desc { font-size: 0.9rem; color: var(--text-light); flex: 1; min-width: 220px; }
 
-        /* --- 5. Input Tooltip --- */
-        .tooltip-trigger {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 18px;
-            height: 18px;
-            background-color: #f1f5f9;
-            border: 1px solid var(--border-color);
-            color: var(--text-light);
-            border-radius: 50%;
-            text-align: center;
-            font-size: 11px;
-            font-weight: bold;
-            line-height: 18px;
-            cursor: help;
-            position: absolute;
-            right: 8px;
-            top: 38px;
-        }
-        .tooltip-trigger::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 130%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--text-color);
-            color: white;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 400;
-            line-height: 1.5;
-            white-space: normal;
-            width: 220px;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.2s, visibility 0.2s;
-            z-index: 10;
-            box-shadow: var(--shadow-lg);
-        }
-        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
-
-        /* --- 6. Advanced Section --- */
-        .advanced-section { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color); }
-        .advanced-section.visible { display: block; }
-        .advanced-toggle {
-            background: none;
-            border: none;
-            color: var(--accent-color);
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 500;
+        /* Expert Mode Toggle */
+        .expert-mode-bar {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 12px;
-            padding: 8px 0;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 16px;
+        }
+        .expert-mode-label { font-size: 0.9rem; font-weight: 600; color: var(--text-color); }
+        .expert-mode-hint { font-size: 0.8rem; color: var(--text-light); margin-left: 8px; font-weight: 400; }
+        .expert-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .expert-toggle input {
+            width: 40px; height: 22px;
+            appearance: none; -webkit-appearance: none;
+            background: var(--border-color);
+            border-radius: 999px;
+            position: relative; cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .expert-toggle input::before {
+            content: '';
+            position: absolute;
+            width: 16px; height: 16px;
+            background: var(--bg-card);
+            border-radius: 50%;
+            top: 3px; left: 3px;
+            transition: transform 0.2s ease;
+            box-shadow: var(--shadow);
+        }
+        .expert-toggle input:checked { background: var(--success-color); }
+        .expert-toggle input:checked::before { transform: translateX(18px); }
+        .expert-toggle-label { font-size: 0.85rem; font-weight: 600; color: var(--text-color); }
+
+        /* Advanced Section */
+        .advanced-section {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border-color);
+        }
+        .advanced-section.visible { display: block; }
+        .advanced-section h4 { margin-bottom: 12px; color: var(--secondary-color); font-size: 0.9rem; }
+        .advanced-toggle {
+            background: none; border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 0.9rem; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 12px; padding: 8px 0;
         }
         .advanced-toggle:hover { text-decoration: underline; }
+        .toggle-icon { font-family: var(--font-mono); font-weight: 600; }
 
-        /* --- 7. Button Styles --- */
-        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
-        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.1rem; padding: 12px; }
-        .btn-primary:hover { background-color: #050608; }
+        body.expert-mode .advanced-toggle { display: none; }
+        body.expert-mode .advanced-section { display: block; }
+
+        .section-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); margin: 1.25rem 0 0.75rem; font-weight: 600; }
+
+        /* Buttons */
+        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s, opacity 0.15s; }
+        .btn-primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); width: 100%; }
+        .btn-primary:hover { opacity: 0.9; }
         .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
         .btn-secondary:hover { background-color: var(--primary-light); }
 
-        /* --- 8. Output Section --- */
-        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        /* =================================================================
+           6. TABS
+           ================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
         .tab-link {
-            padding: 12px 16px;
-            cursor: pointer;
-            background-color: transparent;
-            border: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.03em;
-            text-transform: uppercase;
+            padding: 12px 16px; cursor: pointer;
+            background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
             color: var(--text-light);
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
             transition: color 0.2s ease;
         }
         .tab-link:hover { color: var(--text-color); }
-        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
-        .tab-content { display: none; animation: fadeIn 0.5s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-        .status-banner {
-            padding: 12px 16px;
-            border-radius: 8px;
+        /* =================================================================
+           7. RESULTS SECTION
+           ================================================================= */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .result-item {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .result-item:hover { border-color: var(--border-color); }
+        .result-item.expanded { border-color: var(--accent-color); background: var(--primary-light); }
+        .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
+        .result-item .icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.4; }
+
+        /* Derivation Panel */
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
             border: 1px solid var(--border-color);
-            background-color: var(--primary-light);
-            margin-bottom: 16px;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-close:hover { color: var(--text-color); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); font-size: 0.9rem; }
+        .derivation-step .equation { background: var(--bg-card); padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+        .derivation-step .inputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .derivation-step .input-tag { background: var(--bg-card); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-color); }
+        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
+
+        /* =================================================================
+           8. SAFETY GAUGES
+           ================================================================= */
+        .safety-section { margin-top: 24px; }
+        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
+        .safety-gauge {
+            display: flex; align-items: center; gap: 14px;
+            margin-bottom: 12px; padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+        }
+        .gauge-label { min-width: 140px; font-weight: 600; font-size: 0.85rem; }
+        .gauge-bar-container { flex: 1; height: 8px; background: var(--border-color); border-radius: 4px; position: relative; overflow: visible; }
+        .gauge-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .gauge-bar.success { background: var(--success-color); }
+        .gauge-bar.warning { background: var(--warning-color); }
+        .gauge-bar.danger { background: var(--danger-color); }
+        .gauge-value { min-width: 70px; text-align: right; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
+        .gauge-value.success { color: var(--success-color); }
+        .gauge-value.warning { color: var(--warning-color); }
+        .gauge-value.danger { color: var(--danger-color); }
+        .gauge-threshold { position: absolute; width: 2px; height: 16px; background: var(--text-color); top: -4px; }
+
+        .gauge-explainer {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        .gauge-explainer.visible { display: block; }
+        .gauge-explainer .explainer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .gauge-explainer p { font-size: 0.9rem; margin-bottom: 10px; }
+        .gauge-explainer .explainer-equation { background: var(--bg-card); padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.95rem; }
+        .gauge-explainer .explainer-values { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+        .gauge-explainer .value-tag { background: var(--bg-card); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-color); }
+        .gauge-explainer .explainer-guidance { font-size: 0.85rem; padding: 10px; border-radius: 6px; margin-bottom: 0; }
+        .gauge-explainer .explainer-guidance.good { background: var(--callout-success-bg); color: var(--success-color); }
+        .gauge-explainer .explainer-guidance.marginal { background: var(--callout-warning-bg); color: var(--warning-color); }
+        .gauge-explainer .explainer-guidance.bad { background: var(--callout-danger-bg); color: var(--danger-color); }
+
+        /* =================================================================
+           9. STATUS BANNER
+           ================================================================= */
+        .status-banner { padding: 18px 24px; border-radius: var(--border-radius); margin-top: 24px; display: flex; align-items: flex-start; gap: 14px; }
+        .status-banner .icon { font-size: 1.25rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
+        .status-banner.acceptable { background: var(--callout-success-bg); border: 1px solid var(--success-color); }
+        .status-banner.acceptable h4 { color: var(--success-color); }
+        .status-banner.marginal { background: var(--callout-warning-bg); border: 1px solid var(--warning-color); }
+        .status-banner.marginal h4 { color: var(--warning-color); }
+        .status-banner.unacceptable { background: var(--callout-danger-bg); border: 1px solid var(--danger-color); }
+        .status-banner.unacceptable h4 { color: var(--danger-color); }
+        .recommendations { margin-top: 8px; padding-left: 20px; }
+        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; color: var(--text-color); }
+
+        /* =================================================================
+           10. CHARTS
+           ================================================================= */
+        .chart-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 18px; margin-bottom: 20px; }
+        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+        .chart-plot { width: 100%; min-height: 350px; height: 350px; }
+        .chart-explanation { margin-top: 12px; font-size: 0.85rem; color: var(--text-light); line-height: 1.5; padding: 10px; background: var(--primary-light); border-radius: 6px; }
+        .chart-explanation strong { color: var(--text-color); }
+
+        /* =================================================================
+           11. BACKGROUND TAB
+           ================================================================= */
+        .toc-card { background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px; }
+        .toc-card strong { color: var(--primary-color); }
+        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
+        .toc-card a { color: var(--accent-color); }
+
+        .bg-section { margin-bottom: 32px; }
+        .bg-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-bottom: 16px; }
+        .bg-section h4 { margin-top: 20px; color: var(--secondary-color); }
+
+        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin: 16px 0; }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+
+        .callout-info { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-info strong { color: var(--callout-info-border); }
+        .callout-warning { background: var(--callout-warning-bg); border-left: 4px solid var(--callout-warning-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-warning strong { color: var(--callout-warning-border); }
+        .callout-success { background: var(--callout-success-bg); border-left: 4px solid var(--callout-success-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-success strong { color: var(--callout-success-border); }
+
+        /* =================================================================
+           12. SETTINGS PANEL
+           ================================================================= */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0; right: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
             display: flex;
             flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border-color); }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close { background: none; border: none; font-size: 0.9rem; font-weight: 600; color: var(--text-light); cursor: pointer; }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider-toggle {
+            position: absolute; cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.2s;
+            border-radius: 999px;
+        }
+        .switch .slider-toggle::before {
+            position: absolute; content: '';
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: var(--bg-card);
+            transition: 0.2s;
+            border-radius: 50%;
+            box-shadow: var(--shadow);
+        }
+        .switch input:checked + .slider-toggle { background-color: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(20px); }
+
+        .segmented {
+            display: inline-flex;
             gap: 4px;
-        }
-        .status-banner.success { border-color: rgba(15, 118, 110, 0.4); background-color: rgba(15, 118, 110, 0.08); color: #0f5b53; }
-        .status-banner.warning { border-color: rgba(180, 83, 9, 0.4); background-color: rgba(180, 83, 9, 0.08); color: #854a0e; }
-        .status-banner h4 { margin: 0; font-size: 1rem; }
-        .status-banner p { margin: 0; font-size: 0.9rem; }
-
-        #results-display { background-color: var(--primary-light); border-radius: 6px; padding: 16px; margin-bottom: 1.5rem; }
-        .results-section { margin-top: 1rem; }
-        .results-section h4 { margin-bottom: 0.5rem; }
-
-        .result-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
-        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
-        .result-item:first-child { padding-top: 0; }
-        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-        .result-header p { margin: 0; font-size: 1.05rem; }
-        .result-header p strong { color: var(--text-color); }
-        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.85rem; }
-        details.inline-details > summary::after { content: '[Show Equation]'; }
-        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
-        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
-        .equation-details p { margin-bottom: 0.5rem; }
-
-        /* --- 9. Visualization --- */
-        #plot-container {
-            width: 100%;
-            min-height: 350px;
-            height: 360px;
-            background-color: var(--primary-light);
-            border: 1px dashed var(--border-color);
-            border-radius: 6px;
-            position: relative;
-            color: var(--text-light);
-        }
-        #plot-container canvas { width: 100% !important; height: 100% !important; }
-        .plot-message {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.95rem;
-            color: var(--text-light);
-            pointer-events: none;
-        }
-        .plot-message.hidden { display: none; }
-        .chart-meta { margin-top: 12px; display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-light); }
-        .chart-checklist { margin-top: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); padding: 12px 16px; }
-        .chart-checklist summary { font-weight: 600; color: var(--secondary-color); }
-        .chart-checklist ul { padding-left: 20px; margin-top: 8px; }
-        .chart-checklist li { margin-bottom: 6px; color: var(--text-light); }
-
-        /* --- 10. Background --- */
-        .background-section { margin-bottom: 1.5rem; }
-        .glossary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-        .glossary-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background-color: var(--bg-card); }
-        .glossary-card strong { display: block; margin-bottom: 4px; color: var(--secondary-color); }
-
-        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
-        .equation-card {
-            background: rgba(248, 250, 252, 0.75);
+            background: var(--primary-light);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 16px;
+            border-radius: 999px;
+            padding: 4px;
         }
-        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
-        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
-        .equation-card ul {
-            list-style: none;
-            padding-left: 0;
-            margin: 0;
-            display: grid;
-            gap: 6px 18px;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            font-size: 0.85rem;
+        .segmented button {
+            border: none;
+            background: transparent;
             color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
         }
-        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
 
-        /* --- 11. Footer --- */
+        /* =================================================================
+           13. COMPACT DENSITY MODE
+           ================================================================= */
+        body[data-density="compact"] .container { padding: 16px 0; }
+        body[data-density="compact"] .card { padding: 12px; }
+        body[data-density="compact"] .tool-layout { gap: 16px; }
+        body[data-density="compact"] h1 { font-size: 1.7rem; margin-bottom: 0.25rem; }
+        body[data-density="compact"] h2 { font-size: 1.1rem; padding-bottom: 8px; margin-bottom: 10px; }
+        body[data-density="compact"] .tool-description { font-size: 0.9rem; margin-bottom: 1rem; }
+        body[data-density="compact"] .input-group { margin-bottom: 10px; }
+        body[data-density="compact"] .input-group label { font-size: 0.78rem; margin-bottom: 3px; }
+        body[data-density="compact"] .input-group input,
+        body[data-density="compact"] .input-group select { padding: 6px 10px; font-size: 0.85rem; }
+        body[data-density="compact"] .input-group .tooltip-trigger { top: 28px; }
+        body[data-density="compact"] .input-row { gap: 10px; }
+        body[data-density="compact"] .btn-primary { padding: 10px 20px; font-size: 0.9rem; }
+
+        /* =================================================================
+           14. FOOTER
+           ================================================================= */
         .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
 
-        /* --- 12. Responsive Layout --- */
-        @media (max-width: 900px) {
+        /* =================================================================
+           15. RESPONSIVE
+           ================================================================= */
+        @media (max-width: 1000px) {
             .tool-layout { grid-template-columns: 1fr; }
-            .result-header { flex-direction: column; align-items: flex-start; }
+        }
+        @media (max-width: 720px) {
+            .settings-panel { width: 100%; }
+            .settings-button { padding: 8px 12px; font-size: 0.8rem; }
+        }
+        @media (max-width: 600px) {
             .input-row { grid-template-columns: 1fr; }
+            .results-grid { grid-template-columns: 1fr; }
+            .safety-gauge { flex-direction: column; align-items: flex-start; }
+            .gauge-bar-container { width: 100%; }
+            .tabs { flex-direction: column; }
+            .mode-toggle-wrap { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
 
-<body>
+<body data-theme="system" data-density="comfortable">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
     <header class="navbar">
         <nav class="nav-container">
             <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Settings</button>
+            </div>
         </nav>
     </header>
 
-    <main class="container">
-        <div class="tool-header">
-            <h1>Vibration Isolation Designer</h1>
-            <p class="tool-description" id="tool-description">
-                Size and validate single-degree-of-freedom isolators using base or force excitation models.
-            </p>
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
         </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show derivations by default</div>
+                        <div class="setting-help">Auto-expand derivation panels.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-derivations">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show gauge explainers</div>
+                        <div class="setting-help">Auto-expand isolation gauge details.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-gauges">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2 dp</button>
+                        <button type="button" data-precision="3">3 dp</button>
+                        <button type="button" data-precision="4">4 dp</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Vibration Isolation Designer</h1>
+        <p class="tool-description" id="tool-description">
+            Size and validate single-degree-of-freedom isolators using base or force excitation models.
+        </p>
 
         <details class="purpose-section">
             <summary>Tool Purpose & README</summary>
@@ -348,13 +740,26 @@
         </details>
 
         <div class="tool-layout">
+            <!-- ============== INPUTS ============== -->
             <section class="tool-inputs card">
                 <h2>Inputs</h2>
-                <p class="inputs-intro">Choose a mode, enter the core inputs, then expand advanced options for response amplitudes and checks.</p>
+
+                <!-- Expert Mode Toggle -->
+                <div class="expert-mode-bar">
+                    <div>
+                        <span class="expert-mode-label">Expert Mode</span>
+                        <span class="expert-mode-hint">Show all parameters</span>
+                    </div>
+                    <label class="expert-toggle">
+                        <input type="checkbox" id="expert-mode-toggle" onchange="toggleExpertMode()">
+                        <span class="expert-toggle-label" id="expert-mode-status">Off</span>
+                    </label>
+                </div>
 
                 <form id="calc-form">
                     <input type="hidden" id="mode" name="mode" value="analyze">
 
+                    <!-- Mode Toggle -->
                     <div class="mode-toggle-wrap">
                         <div class="mode-toggle" role="group" aria-label="Mode selection">
                             <button type="button" class="mode-btn active" data-mode="analyze">Analyze</button>
@@ -364,9 +769,10 @@
                     </div>
 
                     <div class="section-title">Core Inputs</div>
+
                     <div class="input-row">
                         <div class="input-group">
-                            <label for="excitation_type">Excitation type</label>
+                            <label for="excitation_type">Excitation Type</label>
                             <select id="excitation_type" name="excitation_type">
                                 <option value="base">Base displacement</option>
                                 <option value="force">Applied force</option>
@@ -374,7 +780,7 @@
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-excitation_type">?</span>
                         </div>
                         <div class="input-group">
-                            <label for="excitation_frequency_hz">Excitation frequency (Hz)</label>
+                            <label for="excitation_frequency_hz">Excitation Frequency (Hz)</label>
                             <input type="number" id="excitation_frequency_hz" name="excitation_frequency_hz" value="30" step="any">
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-excitation_frequency_hz">?</span>
                         </div>
@@ -382,33 +788,29 @@
 
                     <div class="input-row">
                         <div class="input-group">
-                            <label for="mass_kg">Supported mass (kg)</label>
+                            <label for="mass_kg">Supported Mass (kg)</label>
                             <input type="number" id="mass_kg" name="mass_kg" value="50" step="any">
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-mass_kg">?</span>
                         </div>
                         <div class="input-group">
-                            <label for="num_mounts">Number of mounts</label>
-                            <input type="number" id="num_mounts" name="num_mounts" value="4" step="1">
+                            <label for="num_mounts">Number of Mounts</label>
+                            <input type="number" id="num_mounts" name="num_mounts" value="4" step="1" min="1">
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-num_mounts">?</span>
                         </div>
                     </div>
 
-                    <div class="input-row">
-                        <div class="input-group" id="damping-ratio-group">
-                            <label for="damping_ratio">Damping ratio (zeta)</label>
-                            <input type="number" id="damping_ratio" name="damping_ratio" value="0.05" step="any">
-                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_ratio">?</span>
-                        </div>
-                        <div class="input-group mode-only" data-mode="design">
-                            <label for="target_transmissibility">Target transmissibility (T)</label>
-                            <input type="number" id="target_transmissibility" name="target_transmissibility" value="0.5" step="any" min="0" max="1">
+                    <div class="input-row mode-only" data-mode="design">
+                        <div class="input-group">
+                            <label for="target_transmissibility">Target Transmissibility</label>
+                            <input type="number" id="target_transmissibility" name="target_transmissibility" value="0.1" step="any" min="0.001" max="0.999">
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-target_transmissibility">?</span>
                         </div>
                     </div>
 
+                    <!-- Analyze Mode Stiffness Inputs -->
                     <div class="input-row mode-only" data-mode="analyze">
                         <div class="input-group">
-                            <label for="stiffness_input_mode">Stiffness input method</label>
+                            <label for="stiffness_input_mode">Stiffness Input Method</label>
                             <select id="stiffness_input_mode" name="stiffness_input_mode">
                                 <option value="per_mount">Per-mount stiffness</option>
                                 <option value="static_deflection">Static deflection</option>
@@ -416,128 +818,413 @@
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-stiffness_input_mode">?</span>
                         </div>
                         <div class="input-group stiffness-per-mount">
-                            <label for="mount_stiffness_n_per_m">Mount stiffness (N/m)</label>
+                            <label for="mount_stiffness_n_per_m">Mount Stiffness (N/m)</label>
                             <input type="number" id="mount_stiffness_n_per_m" name="mount_stiffness_n_per_m" value="25000" step="any">
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-mount_stiffness_n_per_m">?</span>
                         </div>
                         <div class="input-group stiffness-static" style="display:none;">
-                            <label for="static_deflection_m">Static deflection (m)</label>
-                            <input type="number" id="static_deflection_m" name="static_deflection_m" value="0.01" step="any">
+                            <label for="static_deflection_m">Static Deflection (m)</label>
+                            <input type="number" id="static_deflection_m" name="static_deflection_m" value="0.005" step="any">
                             <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-static_deflection_m">?</span>
                         </div>
                     </div>
 
+                    <!-- Advanced Section -->
                     <div class="advanced-section" id="advanced-inputs">
-                        <div class="section-title">Advanced Inputs</div>
+                        <h4>Advanced Inputs</h4>
+
+                        <div class="section-title">Damping</div>
+                        <p class="help-text" style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-muted);">
+                            By default, plots show curves for a range of typical damping ratios (zeta). Enable specific zeta to calculate for a known value.
+                        </p>
+
                         <div class="input-row">
-                            <div class="input-group">
-                                <label for="damping_input_mode">Damping input method</label>
-                                <select id="damping_input_mode" name="damping_input_mode">
-                                    <option value="ratio">Damping ratio</option>
-                                    <option value="coefficient">Damping coefficient</option>
-                                </select>
-                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_input_mode">?</span>
-                            </div>
-                            <div class="input-group" id="damping-coefficient-group" style="display:none;">
-                                <label for="damping_coefficient_ns_per_m">Damping coefficient (N*s/m)</label>
-                                <input type="number" id="damping_coefficient_ns_per_m" name="damping_coefficient_ns_per_m" value="350" step="any">
-                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_coefficient_ns_per_m">?</span>
+                            <div class="input-group" style="flex: 0 0 auto;">
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="use_specific_zeta" name="use_specific_zeta">
+                                    <span>Use specific damping ratio</span>
+                                </label>
                             </div>
                         </div>
+
+                        <div id="specific-zeta-inputs" style="display: none;">
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="damping_input_mode">Damping Input Method</label>
+                                    <select id="damping_input_mode" name="damping_input_mode">
+                                        <option value="ratio">Damping ratio</option>
+                                        <option value="coefficient">Damping coefficient</option>
+                                    </select>
+                                    <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_input_mode">?</span>
+                                </div>
+                                <div class="input-group" id="damping-ratio-group">
+                                    <label for="damping_ratio">Damping Ratio (zeta)</label>
+                                    <input type="number" id="damping_ratio" name="damping_ratio" value="0.05" step="any" min="0" max="1">
+                                    <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_ratio">?</span>
+                                </div>
+                                <div class="input-group" id="damping-coefficient-group" style="display:none;">
+                                    <label for="damping_coefficient_ns_per_m">Damping Coefficient (N*s/m)</label>
+                                    <input type="number" id="damping_coefficient_ns_per_m" name="damping_coefficient_ns_per_m" value="350" step="any">
+                                    <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-damping_coefficient_ns_per_m">?</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="section-title">Response Amplitudes</div>
+
                         <div class="input-row">
                             <div class="input-group" id="base-displacement-group">
-                                <label for="base_displacement_m">Base displacement amplitude (m)</label>
-                                <input type="number" id="base_displacement_m" name="base_displacement_m" value="0.001" step="any">
+                                <label for="base_displacement_m">Base Displacement Amplitude (m)</label>
+                                <input type="number" id="base_displacement_m" name="base_displacement_m" value="0.001" step="any" min="0">
                                 <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-base_displacement_m">?</span>
                             </div>
                             <div class="input-group" id="force-amplitude-group" style="display:none;">
-                                <label for="force_amplitude_n">Applied force amplitude (N)</label>
-                                <input type="number" id="force_amplitude_n" name="force_amplitude_n" value="250" step="any">
+                                <label for="force_amplitude_n">Applied Force Amplitude (N)</label>
+                                <input type="number" id="force_amplitude_n" name="force_amplitude_n" value="250" step="any" min="0">
                                 <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-force_amplitude_n">?</span>
                             </div>
                         </div>
-                        <div class="input-row">
-                            <div class="input-group">
-                                <label for="max_static_deflection_m">Allowable static deflection (m)</label>
-                                <input type="number" id="max_static_deflection_m" name="max_static_deflection_m" value="0" step="any">
-                                <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-max_static_deflection_m">?</span>
-                            </div>
+
+                        <div class="section-title">Design Checks</div>
+
+                        <div class="input-group">
+                            <label for="max_static_deflection_m">Allowable Static Deflection (m)</label>
+                            <input type="number" id="max_static_deflection_m" name="max_static_deflection_m" value="0.01" step="any" min="0">
+                            <span class="tooltip-trigger" data-tooltip="Loading..." id="tooltip-max_static_deflection_m">?</span>
                         </div>
                     </div>
 
-                    <button type="button" class="advanced-toggle" id="toggle-advanced" onclick="toggleAdvanced()">
-                        <span id="toggle-icon">+</span>
-                        <span id="toggle-text">Show advanced options</span>
+                    <button type="button" class="advanced-toggle" onclick="toggleAdvanced()">
+                        <span class="toggle-icon" id="toggle-icon">+</span> Show advanced options
                     </button>
 
-                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" style="margin-top: 16px;">Calculate</button>
                 </form>
             </section>
 
+            <!-- ============== OUTPUTS ============== -->
             <section class="tool-outputs card">
                 <div class="tabs">
                     <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
-                    <button class="tab-link" onclick="openTab(event, 'plot')">Visualization</button>
-                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                    <button class="tab-link" onclick="openTab(event, 'visualization')">Transmissibility</button>
+                    <button class="tab-link" onclick="openTab(event, 'phase')">Phase</button>
+                    <button class="tab-link" onclick="openTab(event, 'sensitivity')">Sensitivity</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background</button>
                 </div>
 
+                <!-- Results Tab -->
                 <div id="results" class="tab-content" style="display: block;">
                     <h3>Key Results</h3>
-                    <div id="results-display">
-                        <p id="results-placeholder">Please enter inputs and press Calculate.</p>
+                    <p id="results-placeholder" style="color: var(--text-light);">Enter inputs and press Calculate to see results.</p>
+
+                    <div class="results-grid" id="results-grid" style="display: none;">
+                        <div class="result-item highlight" data-key="transmissibility" onclick="toggleDerivation('transmissibility')">
+                            <div class="label">Transmissibility</div>
+                            <div class="value" id="val-transmissibility">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="natural_frequency_hz" onclick="toggleDerivation('natural_frequency_hz')">
+                            <div class="label">Natural Frequency</div>
+                            <div class="value" id="val-natural_frequency_hz">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="frequency_ratio" onclick="toggleDerivation('frequency_ratio')">
+                            <div class="label">Frequency Ratio (r)</div>
+                            <div class="value" id="val-frequency_ratio">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="phase_angle_deg" onclick="toggleDerivation('phase_angle_deg')">
+                            <div class="label">Phase Angle</div>
+                            <div class="value" id="val-phase_angle_deg">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="mount_stiffness_n_per_m">
+                            <div class="label">Mount Stiffness</div>
+                            <div class="value" id="val-mount_stiffness_n_per_m">--</div>
+                        </div>
+                        <div class="result-item" data-key="static_deflection_m">
+                            <div class="label">Static Deflection</div>
+                            <div class="value" id="val-static_deflection_m">--</div>
+                        </div>
+                        <div class="result-item" data-key="isolation_frequency_hz">
+                            <div class="label">Isolation Threshold</div>
+                            <div class="value" id="val-isolation_frequency_hz">--</div>
+                        </div>
                     </div>
-                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
+
+                    <!-- Derivation Panels -->
+                    <div class="derivation-panel" id="deriv-transmissibility">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Transmissibility Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('transmissibility')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Transmissibility Equation</div>
+                            <div class="equation">$$ T = \frac{\sqrt{1 + (2\zeta r)^2}}{\sqrt{(1-r^2)^2 + (2\zeta r)^2}} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-transmissibility">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-natural_frequency_hz">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Natural Frequency Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('natural_frequency_hz')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Natural Frequency Equation</div>
+                            <div class="equation">$$ f_n = \frac{1}{2\pi}\sqrt{\frac{k_{total}}{m}} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-natural_frequency_hz">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-frequency_ratio">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Frequency Ratio Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('frequency_ratio')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Frequency Ratio Definition</div>
+                            <div class="equation">$$ r = \frac{f_{exc}}{f_n} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-frequency_ratio">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-phase_angle_deg">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Phase Angle Derivation</span>
+                            <button class="derivation-close" onclick="toggleDerivation('phase_angle_deg')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Phase Angle Equation</div>
+                            <div class="equation">$$ \phi = \arctan\left(\frac{2\zeta r}{1 - r^2}\right) $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Physical Interpretation</div>
+                            <p style="color: var(--text-light); font-size: 0.9rem; line-height: 1.5;">
+                                The phase angle describes the time lag between excitation and response:<br>
+                                &bull; At low frequencies (r &lt;&lt; 1): &phi; &asymp; 0&deg; (in-phase)<br>
+                                &bull; At resonance (r = 1): &phi; = 90&deg; (quadrature)<br>
+                                &bull; At high frequencies (r &gt;&gt; 1): &phi; &asymp; 180&deg; (anti-phase)
+                            </p>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">3. Substituted Values</div>
+                            <div class="equation" id="subst-phase_angle_deg">Loading...</div>
+                        </div>
+                    </div>
+
+                    <!-- Safety Gauges -->
+                    <div class="safety-section" id="safety-section" style="display: none;">
+                        <h4>Isolation Assessment <span style="font-weight: normal; font-size: 0.8rem; color: var(--text-light);">(click for details)</span></h4>
+
+                        <div class="safety-gauge" onclick="toggleGaugeExplainer('isolation')" style="cursor: pointer;">
+                            <div class="gauge-label">Isolation Margin</div>
+                            <div class="gauge-bar-container">
+                                <div class="gauge-bar" id="gauge-isolation-bar"></div>
+                                <div class="gauge-threshold" id="gauge-isolation-threshold"></div>
+                            </div>
+                            <div class="gauge-value" id="gauge-isolation-value">--</div>
+                            <span class="icon" style="font-size: 0.7rem; opacity: 0.5;">&#9660;</span>
+                        </div>
+                        <div class="gauge-explainer" id="explainer-isolation">
+                            <div class="explainer-header">
+                                <strong>Isolation Margin: r - sqrt(2)</strong>
+                                <button class="derivation-close" onclick="event.stopPropagation(); toggleGaugeExplainer('isolation')">&times;</button>
+                            </div>
+                            <p>Vibration isolation begins when the frequency ratio r exceeds sqrt(2) = 1.414. Above this threshold, the transmitted vibration is less than the input.</p>
+                            <div class="explainer-equation">$$\text{Margin} = r - \sqrt{2}$$</div>
+                            <div class="explainer-values">
+                                <span class="value-tag" id="explainer-isolation-r">r: --</span>
+                                <span class="value-tag" id="explainer-isolation-threshold">Threshold: 1.414</span>
+                                <span class="value-tag" id="explainer-isolation-margin">Margin: --</span>
+                            </div>
+                            <p class="explainer-guidance" id="explainer-isolation-guidance">Guidance will appear here based on your results.</p>
+                        </div>
+
+                        <div class="safety-gauge" onclick="toggleGaugeExplainer('deflection')" style="cursor: pointer;" id="deflection-gauge-row">
+                            <div class="gauge-label">Deflection Utilization</div>
+                            <div class="gauge-bar-container">
+                                <div class="gauge-bar" id="gauge-deflection-bar"></div>
+                                <div class="gauge-threshold" id="gauge-deflection-threshold"></div>
+                            </div>
+                            <div class="gauge-value" id="gauge-deflection-value">--</div>
+                            <span class="icon" style="font-size: 0.7rem; opacity: 0.5;">&#9660;</span>
+                        </div>
+                        <div class="gauge-explainer" id="explainer-deflection">
+                            <div class="explainer-header">
+                                <strong>Static Deflection Utilization</strong>
+                                <button class="derivation-close" onclick="event.stopPropagation(); toggleGaugeExplainer('deflection')">&times;</button>
+                            </div>
+                            <p>Compares the calculated static deflection to your specified allowable limit. Values over 100% exceed your constraint.</p>
+                            <div class="explainer-equation">$$\text{Utilization} = \frac{\delta_{static}}{\delta_{allowable}} \times 100\%$$</div>
+                            <div class="explainer-values">
+                                <span class="value-tag" id="explainer-deflection-actual">Actual: --</span>
+                                <span class="value-tag" id="explainer-deflection-allowable">Allowable: --</span>
+                                <span class="value-tag" id="explainer-deflection-util">Utilization: --</span>
+                            </div>
+                            <p class="explainer-guidance" id="explainer-deflection-guidance">Guidance will appear here based on your results.</p>
+                        </div>
+                    </div>
+
+                    <!-- Status Banner -->
+                    <div class="status-banner" id="status-banner" style="display: none;">
+                        <div class="icon" id="status-icon">&#10003;</div>
+                        <div class="content">
+                            <h4 id="status-title">Isolation Status</h4>
+                            <p id="status-message">Status message here.</p>
+                            <ul class="recommendations" id="recommendations-list"></ul>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px; display: none;">Export Results</button>
                 </div>
 
-                <div id="plot" class="tab-content">
-                    <h3>Visualization</h3>
-                    <div id="plot-container">
-                        <canvas id="transmissibility-chart" aria-label="Transmissibility chart"></canvas>
-                        <div class="plot-message" id="plot-message">Plot will appear here after calculation.</div>
+                <!-- Visualization Tab -->
+                <div id="visualization" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Transmissibility vs Frequency Ratio</h4>
+                        <div id="transmissibility-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> Transmissibility as a function of frequency ratio r = f_exc / f_n.
+                            <strong>Key insight:</strong> The red dashed line marks resonance (r=1) where amplification is maximum. The green dashed line marks the isolation threshold (r=sqrt(2)) where isolation begins. Your operating point is shown as an orange marker.
+                        </div>
                     </div>
-                    <div class="chart-meta">
-                        <span id="chart-scale">Scale: Linear</span>
-                        <span id="chart-series">Series: Transmissibility</span>
-                    </div>
-                    <details class="chart-checklist">
-                        <summary>Chart checklist</summary>
-                        <ul>
-                            <li>Axes are labeled and include units.</li>
-                            <li>Legend is present and matches the plotted series.</li>
-                            <li>Scale type is correct and stated (linear or log).</li>
-                            <li>Plotted values are finite (no NaN or infinity gaps).</li>
-                            <li>Ranges look physically plausible for the inputs.</li>
-                            <li>Annotations reflect the correct numeric values.</li>
-                        </ul>
-                    </details>
                 </div>
 
+                <!-- Phase Tab -->
+                <div id="phase" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Phase Angle vs Frequency Ratio</h4>
+                        <div id="phase-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> The phase lag between excitation and response as a function of frequency ratio.
+                            <strong>Key insight:</strong> At low frequencies the response is in-phase with excitation (0&deg;). At resonance (r=1), the phase is exactly 90&deg;. At high frequencies, the response is nearly 180&deg; out of phase (anti-phase). The transition is sharper with lower damping.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sensitivity Tab -->
+                <div id="sensitivity" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Transmissibility vs Damping Ratio</h4>
+                        <div id="sensitivity-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> How transmissibility changes with damping ratio at your current frequency ratio.
+                            <strong>Key insight:</strong> Higher damping reduces resonance peaks but can increase transmissibility in the isolation region (r > sqrt(2)).
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Background Tab -->
                 <div id="background" class="tab-content">
-                    <div class="background-section">
-                        <h3>Overview</h3>
-                        <p id="background-overview">Loading overview...</p>
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-overview">Overview</a></li>
+                            <li><a href="#bg-equations">Key Equations</a></li>
+                            <li><a href="#bg-interpretation">Interpreting Results</a></li>
+                            <li><a href="#bg-limitations">Limitations</a></li>
+                            <li><a href="#bg-references">References</a></li>
+                        </ol>
                     </div>
-                    <div class="background-section">
-                        <h3>Inputs & Outputs Glossary</h3>
-                        <div class="glossary-grid" id="glossary-grid"></div>
+
+                    <div id="bg-overview" class="bg-section">
+                        <h3>1. Overview</h3>
+                        <p>
+                            This tool analyzes and designs <strong>single-degree-of-freedom (SDOF) vibration isolators</strong>.
+                            Vibration isolation is achieved by mounting equipment on compliant elements (springs/elastomers)
+                            that reduce the transmission of vibration between the equipment and its base.
+                        </p>
+                        <div class="callout-info">
+                            <strong>Key Principle:</strong> Isolation occurs when the excitation frequency exceeds sqrt(2) times
+                            the natural frequency of the isolated system. Below this threshold, the isolator amplifies vibration.
+                        </div>
                     </div>
-                    <div class="background-section">
-                        <h3>Theory & Principles</h3>
-                        <p id="background-theory">A single-degree-of-freedom isolator is modeled as a mass, spring, and damper with harmonic excitation. Isolation begins when the excitation frequency exceeds sqrt(2) times the natural frequency. Damping lowers resonance amplitude but reduces high-frequency isolation effectiveness.</p>
+
+                    <div id="bg-equations" class="bg-section">
+                        <h3>2. Key Equations</h3>
+
+                        <div class="equation-card">
+                            <strong>Natural Frequency</strong>
+                            <span class="equation-expression">$$ f_n = \frac{1}{2\pi}\sqrt{\frac{k_{total}}{m}} $$</span>
+                            <ul>
+                                <li>k_total: Total stiffness of all mounts in parallel (N/m)</li>
+                                <li>m: Supported mass (kg)</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Transmissibility (Base or Force Excitation)</strong>
+                            <span class="equation-expression">$$ T = \frac{\sqrt{1 + (2\zeta r)^2}}{\sqrt{(1-r^2)^2 + (2\zeta r)^2}} $$</span>
+                            <ul>
+                                <li>zeta: Damping ratio (dimensionless)</li>
+                                <li>r: Frequency ratio = f_exc / f_n</li>
+                                <li>For base excitation: T = X/Y (absolute/base displacement)</li>
+                                <li>For force excitation: T = F_T/F_0 (transmitted/applied force)</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Isolation Threshold</strong>
+                            <span class="equation-expression">$$ r > \sqrt{2} \approx 1.414 $$</span>
+                            <ul>
+                                <li>When r > sqrt(2), transmissibility T < 1 (isolation achieved)</li>
+                                <li>When r = 1, resonance occurs (maximum amplification)</li>
+                            </ul>
+                        </div>
                     </div>
-                    <div class="background-section">
-                        <h3>Equations</h3>
-                        <div class="equation-container" id="equation-container"></div>
+
+                    <div id="bg-interpretation" class="bg-section">
+                        <h3>3. Interpreting Results</h3>
+
+                        <h4>Isolation Region</h4>
+                        <div class="callout-success">
+                            <strong>r > sqrt(2):</strong> The system is in the isolation region. Transmissibility is less than 1,
+                            meaning vibration is reduced. Higher r values provide better isolation.
+                        </div>
+                        <div class="callout-warning">
+                            <strong>1 < r < sqrt(2):</strong> The system is past resonance but not yet isolating.
+                            Transmissibility may still be greater than 1.
+                        </div>
+                        <div class="callout-warning">
+                            <strong>r near 1:</strong> Resonance region - avoid operating here. Very high amplification occurs,
+                            especially with low damping.
+                        </div>
+
+                        <h4>Effect of Damping</h4>
+                        <p>
+                            Damping has a complex effect on isolation. High damping reduces the resonance peak, which is beneficial
+                            if the system must pass through resonance during startup/shutdown. However, high damping also reduces
+                            isolation effectiveness in the high-frequency region.
+                        </p>
                     </div>
-                    <div class="background-section">
-                        <h3>Implementation Notes</h3>
-                        <p id="background-notes">Design mode solves for the frequency ratio that matches the target transmissibility, then derives stiffness and deflection. The plot uses the resulting system parameters and excludes non-finite points near resonance.</p>
-                    </div>
-                    <div class="background-section">
-                        <h3>References</h3>
+
+                    <div id="bg-limitations" class="bg-section">
+                        <h3>4. Limitations</h3>
                         <ul>
-                            <li>Inman, D. J., Engineering Vibration, 4th ed., 2014.</li>
-                            <li>Rao, S. S., Mechanical Vibrations, 6th ed., 2017.</li>
+                            <li>This tool assumes linear, viscous damping and small displacements</li>
+                            <li>Real isolators may have nonlinear stiffness and hysteretic damping</li>
+                            <li>Multi-degree-of-freedom effects (rocking, bouncing) are not modeled</li>
+                            <li>Temperature and frequency dependence of material properties are not included</li>
+                            <li>Shock isolation requires separate analysis (transient response)</li>
+                        </ul>
+                    </div>
+
+                    <div id="bg-references" class="bg-section">
+                        <h3>5. References</h3>
+                        <ul>
+                            <li>Inman, D. J., <em>Engineering Vibration</em>, 4th ed., Pearson, 2014.</li>
+                            <li>Rao, S. S., <em>Mechanical Vibrations</em>, 6th ed., Pearson, 2017.</li>
+                            <li>Harris, C. M. & Piersol, A. G., <em>Harris' Shock and Vibration Handbook</em>, 5th ed., McGraw-Hill, 2002.</li>
                         </ul>
                     </div>
                 </div>
@@ -550,118 +1237,25 @@
     </footer>
 
     <script>
-        // --- 0. Global Store & Config ---
+        // =================================================================
+        // 0. GLOBAL STORE & CONFIG
+        // =================================================================
         let toolDocumentation = {};
         let pyUtils, pyToolModule;
-        let chartInstance = null;
-        let latexExpressions = [];
+        let lastResults = null;
+        let openDerivation = null;
+        let openExplainer = null;
 
         const TOOL_MODULE_NAME = 'vibration_isolation';
         const TOOL_FUNCTION_NAME = 'calculate_vibration_isolation';
+        const STORAGE_KEY = 'vibration-isolation-designer-settings';
 
         const PARAM_ORDER = [
-            'mode',
-            'excitation_type',
-            'mass_kg',
-            'num_mounts',
-            'stiffness_input_mode',
-            'mount_stiffness_n_per_m',
-            'static_deflection_m',
-            'damping_input_mode',
-            'damping_ratio',
-            'damping_coefficient_ns_per_m',
-            'excitation_frequency_hz',
-            'target_transmissibility',
-            'base_displacement_m',
-            'force_amplitude_n',
-            'max_static_deflection_m'
-        ];
-
-        const STRING_PARAMS = new Set([
-            'mode',
-            'excitation_type',
-            'stiffness_input_mode',
-            'damping_input_mode'
-        ]);
-
-        const RESULT_UNITS = {
-            natural_frequency_hz: 'Hz',
-            natural_angular_frequency_rad_s: 'rad/s',
-            total_stiffness_n_per_m: 'N/m',
-            mount_stiffness_n_per_m: 'N/m',
-            static_deflection_m: 'm',
-            damping_ratio: '',
-            damping_coefficient_ns_per_m: 'N*s/m',
-            frequency_ratio: '',
-            transmissibility: '',
-            isolation_frequency_hz: 'Hz',
-            isolation_margin: '',
-            relative_displacement_amplitude_m: 'm',
-            absolute_displacement_amplitude_m: 'm',
-            transmitted_force_amplitude_n: 'N',
-            acceleration_amplitude_m_s2: 'm/s^2',
-            dynamic_magnification: '',
-            static_deflection_utilization: ''
-        };
-
-        const RESULT_LABELS = {
-            natural_frequency_hz: 'Natural frequency',
-            natural_angular_frequency_rad_s: 'Natural angular frequency',
-            total_stiffness_n_per_m: 'Total stiffness',
-            mount_stiffness_n_per_m: 'Stiffness per mount',
-            static_deflection_m: 'Static deflection',
-            damping_ratio: 'Damping ratio',
-            damping_coefficient_ns_per_m: 'Damping coefficient',
-            frequency_ratio: 'Frequency ratio r',
-            transmissibility: 'Transmissibility',
-            isolation_frequency_hz: 'Isolation threshold frequency',
-            isolation_margin: 'Isolation margin r - sqrt(2)',
-            relative_displacement_amplitude_m: 'Relative displacement amplitude',
-            absolute_displacement_amplitude_m: 'Absolute displacement amplitude',
-            transmitted_force_amplitude_n: 'Transmitted force amplitude',
-            acceleration_amplitude_m_s2: 'Acceleration amplitude',
-            dynamic_magnification: 'Dynamic magnification',
-            static_deflection_utilization: 'Static deflection utilization'
-        };
-
-        const RESULT_SECTIONS = [
-            {
-                title: 'System',
-                keys: [
-                    'natural_frequency_hz',
-                    'natural_angular_frequency_rad_s',
-                    'total_stiffness_n_per_m',
-                    'mount_stiffness_n_per_m',
-                    'static_deflection_m',
-                    'damping_ratio',
-                    'damping_coefficient_ns_per_m'
-                ]
-            },
-            {
-                title: 'Isolation',
-                keys: [
-                    'frequency_ratio',
-                    'transmissibility',
-                    'isolation_frequency_hz',
-                    'isolation_margin'
-                ]
-            },
-            {
-                title: 'Response Amplitudes',
-                keys: [
-                    'absolute_displacement_amplitude_m',
-                    'relative_displacement_amplitude_m',
-                    'transmitted_force_amplitude_n',
-                    'acceleration_amplitude_m_s2',
-                    'dynamic_magnification'
-                ],
-                advancedOnly: true
-            },
-            {
-                title: 'Design Checks',
-                keys: ['static_deflection_utilization'],
-                advancedOnly: true
-            }
+            'mode', 'excitation_type', 'mass_kg', 'num_mounts',
+            'stiffness_input_mode', 'mount_stiffness_n_per_m', 'static_deflection_m',
+            'damping_input_mode', 'damping_ratio', 'damping_coefficient_ns_per_m',
+            'excitation_frequency_hz', 'target_transmissibility',
+            'base_displacement_m', 'force_amplitude_n', 'max_static_deflection_m'
         ];
 
         const MODE_DESCRIPTIONS = {
@@ -669,165 +1263,111 @@
             design: 'Solve for the stiffness needed to reach a target transmissibility at the excitation frequency.'
         };
 
-        const EQUATION_DESCRIPTIONS = [
-            'Total stiffness from per-mount stiffness.',
-            'Total stiffness from static deflection.',
-            'Total stiffness from natural frequency.',
-            'Per-mount stiffness from total stiffness.',
-            'Natural angular frequency of the isolated system.',
-            'Natural frequency in Hz.',
-            'Frequency ratio of excitation to natural frequency.',
-            'Damping ratio from viscous damping coefficient.',
-            'Damping coefficient from damping ratio.',
-            'Primary transmissibility for base or force excitation.',
-            'Relative displacement ratio for base excitation.',
-            'Transmitted force amplitude for base excitation.',
-            'Static deflection under gravity.',
-            'Dynamic magnification factor for force excitation.'
-        ];
+        const defaultSettings = {
+            expertMode: false,
+            showDerivations: false,
+            showGauges: false,
+            theme: 'system',
+            density: 'comfortable',
+            precision: 4
+        };
+        let settings = { ...defaultSettings };
 
-        const EQUATION_LEGENDS = [
-            [
-                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
-                { symbol: 'n', text: 'Number of mounts' },
-                { symbol: 'k_{mount}', text: 'Mount stiffness (N/m)' }
-            ],
-            [
-                { symbol: 'm', text: 'Supported mass (kg)' },
-                { symbol: 'g', text: 'Gravity (m/s^2)' },
-                { symbol: '\\delta_{static}', text: 'Static deflection (m)' }
-            ],
-            [
-                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
-                { symbol: 'm', text: 'Supported mass (kg)' },
-                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' }
-            ],
-            [
-                { symbol: 'k_{mount}', text: 'Mount stiffness (N/m)' },
-                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
-                { symbol: 'n', text: 'Number of mounts' }
-            ],
-            [
-                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' },
-                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
-                { symbol: 'm', text: 'Supported mass (kg)' }
-            ],
-            [
-                { symbol: 'f_n', text: 'Natural frequency (Hz)' },
-                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' }
-            ],
-            [
-                { symbol: 'r', text: 'Frequency ratio' },
-                { symbol: 'f_{exc}', text: 'Excitation frequency (Hz)' },
-                { symbol: 'f_n', text: 'Natural frequency (Hz)' }
-            ],
-            [
-                { symbol: '\\zeta', text: 'Damping ratio' },
-                { symbol: 'c', text: 'Damping coefficient (N*s/m)' },
-                { symbol: 'm', text: 'Supported mass (kg)' },
-                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' }
-            ],
-            [
-                { symbol: 'c', text: 'Damping coefficient (N*s/m)' },
-                { symbol: 'm', text: 'Supported mass (kg)' },
-                { symbol: '\\omega_n', text: 'Natural angular frequency (rad/s)' },
-                { symbol: '\\zeta', text: 'Damping ratio' }
-            ],
-            [
-                { symbol: 'T', text: 'Transmissibility' },
-                { symbol: '\\zeta', text: 'Damping ratio' },
-                { symbol: 'r', text: 'Frequency ratio' }
-            ],
-            [
-                { symbol: 'Z', text: 'Relative displacement amplitude (m)' },
-                { symbol: 'Y', text: 'Base displacement amplitude (m)' },
-                { symbol: 'r', text: 'Frequency ratio' },
-                { symbol: '\\zeta', text: 'Damping ratio' }
-            ],
-            [
-                { symbol: 'F_T', text: 'Transmitted force amplitude (N)' },
-                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' },
-                { symbol: 'Z', text: 'Relative displacement amplitude (m)' },
-                { symbol: '\\zeta', text: 'Damping ratio' },
-                { symbol: 'r', text: 'Frequency ratio' }
-            ],
-            [
-                { symbol: '\\delta_{static}', text: 'Static deflection (m)' },
-                { symbol: 'm', text: 'Supported mass (kg)' },
-                { symbol: 'g', text: 'Gravity (m/s^2)' },
-                { symbol: 'k_{total}', text: 'Total stiffness (N/m)' }
-            ],
-            [
-                { symbol: 'M', text: 'Dynamic magnification' },
-                { symbol: '\\zeta', text: 'Damping ratio' },
-                { symbol: 'r', text: 'Frequency ratio' }
-            ]
-        ];
+        // =================================================================
+        // 1. SETTINGS MANAGEMENT
+        // =================================================================
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
 
-        function getEquationIndex(key, inputs) {
-            if (key === 'total_stiffness_n_per_m') {
-                if (inputs.mode === 'design') {
-                    return 2;
-                }
-                if (inputs.stiffness_input_mode === 'static_deflection') {
-                    return 1;
-                }
-                return 0;
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                settings = { ...defaultSettings };
+                return;
             }
-            if (key === 'mount_stiffness_n_per_m') return 3;
-            if (key === 'natural_angular_frequency_rad_s') return 4;
-            if (key === 'natural_frequency_hz') return 5;
-            if (key === 'frequency_ratio') return 6;
-            if (key === 'damping_ratio') return 7;
-            if (key === 'damping_coefficient_ns_per_m') return 8;
-            if (key === 'transmissibility') return 9;
-            if (key === 'relative_displacement_amplitude_m') return 10;
-            if (key === 'transmitted_force_amplitude_n') return 11;
-            if (key === 'static_deflection_m') return 12;
-            if (key === 'dynamic_magnification') return 13;
-            return null;
+            try {
+                settings = { ...defaultSettings, ...JSON.parse(stored) };
+            } catch (e) {
+                settings = { ...defaultSettings };
+            }
         }
 
-        function openTab(event, tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
-            document.getElementById(tabName).style.display = 'block';
-            event.currentTarget.classList.add('active');
+        function applySettings() {
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+            applyExpertMode();
+            document.getElementById('setting-show-derivations').checked = settings.showDerivations;
+            document.getElementById('setting-show-gauges').checked = settings.showGauges;
+            setSegmentedActive('[data-theme]', settings.theme, 'theme');
+            setSegmentedActive('[data-density]', settings.density, 'density');
+            setSegmentedActive('[data-precision]', String(settings.precision), 'precision');
+            if (lastResults) {
+                displayResults(lastResults, parseInputs());
+            }
         }
 
-        function typesetMath() {
-            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(`.settings-panel ${selector}`).forEach(btn => {
+                const isActive = btn.dataset[dataAttr] === value;
+                btn.classList.toggle('active', isActive);
+            });
+        }
+
+        function handleSettingChange(key, value) {
+            settings[key] = value;
+            saveSettings();
+            applySettings();
+        }
+
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = open ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+        }
+
+        function bindSettingsControls() {
+            document.getElementById('setting-show-derivations').addEventListener('change', e => handleSettingChange('showDerivations', e.target.checked));
+            document.getElementById('setting-show-gauges').addEventListener('change', e => handleSettingChange('showGauges', e.target.checked));
+            document.querySelectorAll('.settings-panel [data-theme]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('theme', btn.dataset.theme));
+            });
+            document.querySelectorAll('.settings-panel [data-density]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('density', btn.dataset.density));
+            });
+            document.querySelectorAll('.settings-panel [data-precision]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('precision', Number(btn.dataset.precision)));
+            });
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+            });
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') toggleSettingsPanel(false);
+            });
+        }
+
+        // =================================================================
+        // 2. FORMATTING & UTILITIES
+        // =================================================================
+        function formatNumber(value, overridePrecision = null) {
+            if (!Number.isFinite(value)) return 'N/A';
+            const precision = overridePrecision ?? settings.precision;
+            const absVal = Math.abs(value);
+            if (absVal !== 0 && (absVal >= 1e4 || absVal < 1e-3)) {
+                return value.toExponential(precision);
+            }
+            return value.toFixed(precision);
         }
 
         function escapeHtml(value) {
-            return value
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        function formatValue(value) {
-            if (typeof value !== 'number' || Number.isNaN(value)) {
-                return '—';
-            }
-            if (!Number.isFinite(value)) {
-                return value > 0 ? 'infinity' : value < 0 ? '-infinity' : '—';
-            }
-            const absVal = Math.abs(value);
-            if (absVal !== 0 && (absVal >= 1e4 || absVal < 1e-3)) {
-                return value.toExponential(4);
-            }
-            return value.toFixed(4);
-        }
-
-        function formatWithUnit(value, unit) {
-            const formatted = formatValue(value);
-            if (formatted === '—' || !unit) {
-                return formatted;
-            }
-            return `${formatted} ${unit}`;
+            return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         function renderMarkdown(markdown) {
@@ -835,46 +1375,23 @@
             let html = '';
             let inList = false;
             let paragraph = [];
-
             const flushParagraph = () => {
-                if (!paragraph.length) return;
-                const text = escapeHtml(paragraph.join(' '));
-                html += `<p>${text}</p>`;
-                paragraph = [];
-            };
-
-            const closeList = () => {
-                if (inList) {
-                    html += '</ul>';
-                    inList = false;
+                if (paragraph.length) {
+                    html += `<p>${escapeHtml(paragraph.join(' '))}</p>`;
+                    paragraph = [];
                 }
             };
-
+            const closeList = () => {
+                if (inList) { html += '</ul>'; inList = false; }
+            };
             lines.forEach((line) => {
                 const trimmed = line.trim();
-                if (!trimmed) {
-                    flushParagraph();
-                    closeList();
-                    return;
-                }
-                if (trimmed.startsWith('# ')) {
-                    flushParagraph();
-                    closeList();
-                    html += `<h3>${escapeHtml(trimmed.slice(2))}</h3>`;
-                    return;
-                }
-                if (trimmed.startsWith('## ')) {
-                    flushParagraph();
-                    closeList();
-                    html += `<h4>${escapeHtml(trimmed.slice(3))}</h4>`;
-                    return;
-                }
+                if (!trimmed) { flushParagraph(); closeList(); return; }
+                if (trimmed.startsWith('# ')) { flushParagraph(); closeList(); html += `<h3>${escapeHtml(trimmed.slice(2))}</h3>`; return; }
+                if (trimmed.startsWith('## ')) { flushParagraph(); closeList(); html += `<h4>${escapeHtml(trimmed.slice(3))}</h4>`; return; }
                 if (trimmed.startsWith('- ')) {
                     flushParagraph();
-                    if (!inList) {
-                        html += '<ul>';
-                        inList = true;
-                    }
+                    if (!inList) { html += '<ul>'; inList = true; }
                     html += `<li>${escapeHtml(trimmed.slice(2))}</li>`;
                     return;
                 }
@@ -885,6 +1402,204 @@
             return html;
         }
 
+        // =================================================================
+        // 3. TAB INTERFACE
+        // =================================================================
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            typesetMath();
+
+            // Resize Plotly charts when their tab becomes visible
+            const plotIds = {
+                'visualization': 'transmissibility-plot',
+                'phase': 'phase-plot',
+                'sensitivity': 'sensitivity-plot'
+            };
+            if (plotIds[tabName]) {
+                setTimeout(() => {
+                    const plotEl = document.getElementById(plotIds[tabName]);
+                    if (plotEl && plotEl.data) Plotly.Plots.resize(plotEl);
+                }, 100);
+            }
+        }
+
+        function typesetMath() {
+            if (window.MathJax && window.MathJax.typesetPromise) MathJax.typesetPromise();
+        }
+
+        // =================================================================
+        // 4. UI HELPERS
+        // =================================================================
+        function toggleGaugeExplainer(mode) {
+            const explainer = document.getElementById('explainer-' + mode);
+            if (openExplainer && openExplainer !== mode) {
+                document.getElementById('explainer-' + openExplainer).classList.remove('visible');
+            }
+            if (explainer.classList.contains('visible')) {
+                explainer.classList.remove('visible');
+                openExplainer = null;
+            } else {
+                explainer.classList.add('visible');
+                openExplainer = mode;
+                typesetMath();
+            }
+        }
+
+        function toggleAdvanced() {
+            const section = document.getElementById('advanced-inputs');
+            const icon = document.getElementById('toggle-icon');
+            const btn = document.querySelector('.advanced-toggle');
+            if (section.classList.contains('visible')) {
+                section.classList.remove('visible');
+                icon.textContent = '+';
+                btn.innerHTML = '<span class="toggle-icon" id="toggle-icon">+</span> Show advanced options';
+            } else {
+                section.classList.add('visible');
+                icon.textContent = '-';
+                btn.innerHTML = '<span class="toggle-icon" id="toggle-icon">-</span> Hide advanced options';
+            }
+        }
+
+        function toggleExpertMode() {
+            const toggle = document.getElementById('expert-mode-toggle');
+            const status = document.getElementById('expert-mode-status');
+            const isOn = toggle.checked;
+            document.body.classList.toggle('expert-mode', isOn);
+            status.textContent = isOn ? 'On' : 'Off';
+            settings.expertMode = isOn;
+            saveSettings();
+        }
+
+        function applyExpertMode() {
+            const toggle = document.getElementById('expert-mode-toggle');
+            const status = document.getElementById('expert-mode-status');
+            if (settings.expertMode) {
+                toggle.checked = true;
+                status.textContent = 'On';
+                document.body.classList.add('expert-mode');
+            } else {
+                toggle.checked = false;
+                status.textContent = 'Off';
+                document.body.classList.remove('expert-mode');
+            }
+        }
+
+        function toggleDerivation(key) {
+            const panel = document.getElementById('deriv-' + key);
+            const item = document.querySelector(`.result-item[data-key="${key}"]`);
+            if (openDerivation && openDerivation !== key) {
+                document.getElementById('deriv-' + openDerivation).classList.remove('visible');
+                document.querySelector(`.result-item[data-key="${openDerivation}"]`)?.classList.remove('expanded');
+            }
+            if (panel.classList.contains('visible')) {
+                panel.classList.remove('visible');
+                item?.classList.remove('expanded');
+                openDerivation = null;
+            } else {
+                panel.classList.add('visible');
+                item?.classList.add('expanded');
+                openDerivation = key;
+                typesetMath();
+            }
+        }
+
+        function setMode(mode) {
+            document.getElementById('mode').value = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            document.querySelectorAll('.mode-only').forEach(el => {
+                el.style.display = el.dataset.mode === mode ? '' : 'none';
+            });
+            document.getElementById('mode-description').textContent = MODE_DESCRIPTIONS[mode] || '';
+            updateStiffnessInputs();
+        }
+
+        function updateStiffnessInputs() {
+            const mode = document.getElementById('stiffness_input_mode').value;
+            document.querySelector('.stiffness-per-mount').style.display = mode === 'per_mount' ? 'block' : 'none';
+            document.querySelector('.stiffness-static').style.display = mode === 'static_deflection' ? 'block' : 'none';
+        }
+
+        function updateDampingInputs() {
+            const mode = document.getElementById('damping_input_mode').value;
+            document.getElementById('damping-ratio-group').style.display = mode === 'ratio' ? 'block' : 'none';
+            document.getElementById('damping-coefficient-group').style.display = mode === 'coefficient' ? 'block' : 'none';
+        }
+
+        function updateExcitationInputs() {
+            const excitation = document.getElementById('excitation_type').value;
+            document.getElementById('base-displacement-group').style.display = excitation === 'base' ? 'block' : 'none';
+            document.getElementById('force-amplitude-group').style.display = excitation === 'force' ? 'block' : 'none';
+        }
+
+        // =================================================================
+        // 5. PYODIDE INITIALIZATION
+        // =================================================================
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+            loadSettings();
+            applySettings();
+            bindSettingsControls();
+
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                let pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.loadPackage('micropip');
+
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                loadingText.textContent = 'Parsing documentation...';
+                const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+
+                if (docMap.has && docMap.has('error')) {
+                    console.error('Docstring Error:', docMap.get('error'));
+                } else {
+                    toolDocumentation = Object.fromEntries(docMap);
+                    if (toolDocumentation.parameters instanceof Map) {
+                        toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+                    }
+                    if (toolDocumentation.returns instanceof Map) {
+                        toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+                    }
+                    populateTooltips();
+                }
+
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+                loadReadme();
+
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('calculate-btn').textContent = 'Calculate';
+                document.getElementById('calculate-btn').disabled = false;
+
+            } catch (error) {
+                loadingText.textContent = 'Error loading: ' + error.message;
+                console.error(error);
+            }
+        }
+
         async function loadReadme() {
             const container = document.getElementById('readme-content');
             try {
@@ -893,499 +1608,552 @@
                 const markdown = await response.text();
                 container.innerHTML = renderMarkdown(markdown);
             } catch (error) {
-                container.innerHTML = `<p style="color:#c92a2a;">Unable to load README: ${escapeHtml(error.message)}</p>`;
+                container.innerHTML = `<p style="color:var(--danger-color);">Unable to load README: ${escapeHtml(error.message)}</p>`;
             }
         }
 
-        function setMode(mode) {
-            document.getElementById('mode').value = mode;
-            document.querySelectorAll('.mode-btn').forEach((button) => {
-                button.classList.toggle('active', button.dataset.mode === mode);
-            });
-            document.querySelectorAll('.mode-only').forEach((section) => {
-                section.style.display = section.dataset.mode === mode ? '' : 'none';
-            });
-            const description = MODE_DESCRIPTIONS[mode] || '';
-            const descElement = document.getElementById('mode-description');
-            if (descElement) {
-                descElement.textContent = description;
-            }
-            updateStiffnessInputs();
-        }
-
-        function updateStiffnessInputs() {
-            const mode = document.getElementById('stiffness_input_mode').value;
-            const perMount = document.querySelector('.stiffness-per-mount');
-            const staticDeflection = document.querySelector('.stiffness-static');
-            const showPerMount = mode === 'per_mount';
-            perMount.style.display = showPerMount ? 'block' : 'none';
-            staticDeflection.style.display = showPerMount ? 'none' : 'block';
-        }
-
-        function updateDampingInputs() {
-            const mode = document.getElementById('damping_input_mode').value;
-            const ratioGroup = document.getElementById('damping-ratio-group');
-            const coefficientGroup = document.getElementById('damping-coefficient-group');
-            const showRatio = mode === 'ratio';
-            ratioGroup.style.display = showRatio ? 'block' : 'none';
-            coefficientGroup.style.display = showRatio ? 'none' : 'block';
-        }
-
-        function updateExcitationInputs() {
-            const excitation = document.getElementById('excitation_type').value;
-            const baseGroup = document.getElementById('base-displacement-group');
-            const forceGroup = document.getElementById('force-amplitude-group');
-            baseGroup.style.display = excitation === 'base' ? 'block' : 'none';
-            forceGroup.style.display = excitation === 'force' ? 'block' : 'none';
-        }
-
-        function toggleAdvanced() {
-            const advanced = document.getElementById('advanced-inputs');
-            const icon = document.getElementById('toggle-icon');
-            const text = document.getElementById('toggle-text');
-            const isVisible = advanced.classList.contains('visible');
-            if (isVisible) {
-                advanced.classList.remove('visible');
-                icon.textContent = '+';
-                text.textContent = 'Show advanced options';
-                document.getElementById('damping_input_mode').value = 'ratio';
-                updateDampingInputs();
-            } else {
-                advanced.classList.add('visible');
-                icon.textContent = '-';
-                text.textContent = 'Hide advanced options';
-            }
-        }
-
-        async function main() {
-            const button = document.getElementById('calculate-btn');
-            button.textContent = 'Loading Pyodide...';
-            const pyodide = await loadPyodide();
-            await pyodide.loadPackage('micropip');
-
-            button.textContent = 'Loading Python...';
-            await pyodide.runPythonAsync(`
-                import micropip
-                from pyodide.http import pyfetch
-
-                response_utils = await pyfetch('../../pycalcs/utils.py')
-                with open('utils.py', 'w') as f:
-                    f.write(await response_utils.string())
-
-                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
-                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
-                    f.write(await response_tool.string())
-
-                import utils
-                import ${TOOL_MODULE_NAME}
-            `);
-
-            pyUtils = pyodide.globals.get('utils');
-            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
-
-            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
-            const jsDoc = docMap.toJs();
-            if (jsDoc.has('error')) {
-                const message = jsDoc.get('error');
-                console.error('Docstring Error:', message);
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color:red; font-weight:bold;">Initialization Error:</p>
-                    <p style="color:red;">${escapeHtml(message)}</p>
-                `;
-                return;
-            }
-
-            const docEntries = jsDoc instanceof Map ? jsDoc : Object.entries(jsDoc);
-            toolDocumentation = Object.fromEntries(docEntries);
-            if (toolDocumentation.parameters) {
-                const paramEntries = toolDocumentation.parameters instanceof Map
-                    ? toolDocumentation.parameters
-                    : Object.entries(toolDocumentation.parameters);
-                toolDocumentation.parameters = Object.fromEntries(paramEntries);
-            }
-            if (toolDocumentation.returns) {
-                const returnEntries = toolDocumentation.returns instanceof Map
-                    ? toolDocumentation.returns
-                    : Object.entries(toolDocumentation.returns);
-                toolDocumentation.returns = Object.fromEntries(returnEntries);
-            }
-            latexExpressions = toolDocumentation.latex
-                ? toolDocumentation.latex.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
-                : [];
-
-            populateUiFromDocs();
-            button.textContent = 'Calculate';
-            loadReadme();
-        }
-
-        main();
-
-        function populateUiFromDocs() {
-            if (!toolDocumentation || !toolDocumentation.parameters) return;
-
-            const description = toolDocumentation.description || '';
-            document.getElementById('tool-description').textContent = description;
-            document.getElementById('background-overview').innerHTML = escapeHtml(description).replace(/\n/g, '<br>');
-
-            PARAM_ORDER.forEach((param) => {
-                const tooltip = document.getElementById(`tooltip-${param}`);
-                if (tooltip && toolDocumentation.parameters[param]) {
-                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[param]);
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+            PARAM_ORDER.forEach(paramId => {
+                const tooltip = document.getElementById(`tooltip-${paramId}`);
+                if (tooltip && toolDocumentation.parameters[paramId]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramId]);
                 }
             });
-
-            const glossary = document.getElementById('glossary-grid');
-            glossary.innerHTML = '';
-            const glossaryItems = [];
-
-            if (toolDocumentation.parameters) {
-                Object.entries(toolDocumentation.parameters).forEach(([key, value]) => {
-                    glossaryItems.push({
-                        title: key,
-                        description: value
-                    });
-                });
-            }
-            if (toolDocumentation.returns) {
-                Object.entries(toolDocumentation.returns).forEach(([key, value]) => {
-                    glossaryItems.push({
-                        title: key,
-                        description: value
-                    });
-                });
-            }
-
-            glossaryItems.forEach((item) => {
-                const card = document.createElement('div');
-                card.className = 'glossary-card';
-                card.innerHTML = `
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <span>${escapeHtml(item.description)}</span>
-                `;
-                glossary.appendChild(card);
-            });
-
-            const equationContainer = document.getElementById('equation-container');
-            equationContainer.innerHTML = '';
-            latexExpressions.forEach((expression, index) => {
-                const legendItems = (EQUATION_LEGENDS[index] || [])
-                    .map((item) => `<li><span class="math-inline">\\(${item.symbol}\\)</span>: ${escapeHtml(item.text)}</li>`)
-                    .join('');
-                const legendHtml = legendItems || '<li>Variable definitions to be provided.</li>';
-                const summaryText = EQUATION_DESCRIPTIONS[index] || '';
-
-                const card = document.createElement('div');
-                card.className = 'equation-card';
-                card.innerHTML = `
-                    <strong>Equation (${index + 1})</strong>
-                    <span class="equation-expression">\\[ ${expression} \\]</span>
-                    ${summaryText ? `<p style="font-size:0.85rem;color:var(--text-light);margin-bottom:0.35rem;">${escapeHtml(summaryText)}</p>` : ''}
-                    <ul>${legendHtml}</ul>
-                `;
-                equationContainer.appendChild(card);
-            });
-            typesetMath();
         }
 
+        // =================================================================
+        // 6. PARSE INPUTS
+        // =================================================================
         function parseInputs() {
             const form = document.getElementById('calc-form');
             const data = new FormData(form);
             const inputs = {};
-            PARAM_ORDER.forEach((param) => {
-                if (STRING_PARAMS.has(param)) {
-                    inputs[param] = data.get(param) ? String(data.get(param)) : '';
+            PARAM_ORDER.forEach(param => {
+                const value = data.get(param);
+                if (['mode', 'excitation_type', 'stiffness_input_mode', 'damping_input_mode'].includes(param)) {
+                    inputs[param] = String(value || '');
                 } else {
-                    const numeric = Number(data.get(param));
-                    inputs[param] = Number.isFinite(numeric) ? numeric : 0;
+                    inputs[param] = parseFloat(value) || 0;
                 }
             });
             return inputs;
         }
 
-        function buildArgs(inputs) {
-            return PARAM_ORDER.map((param) => inputs[param]);
+        // =================================================================
+        // 7. CALCULATION HANDLER
+        // =================================================================
+        async function handleCalculate(event) {
+            event.preventDefault();
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Calculating...';
+            btn.disabled = true;
+
+            try {
+                const inputs = parseInputs();
+                const args = PARAM_ORDER.map(p => inputs[p]);
+
+                const resultProxy = pyToolModule[TOOL_FUNCTION_NAME](...args);
+                lastResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                resultProxy.destroy();
+
+                // Convert arrays properly
+                if (lastResults.plot_frequency_ratio instanceof Map) {
+                    lastResults.plot_frequency_ratio = Array.from(lastResults.plot_frequency_ratio.values());
+                }
+                if (lastResults.plot_transmissibility instanceof Map) {
+                    lastResults.plot_transmissibility = Array.from(lastResults.plot_transmissibility.values());
+                }
+
+                displayResults(lastResults, inputs);
+
+            } catch (error) {
+                console.error('Calculation error:', error);
+                document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
+                document.getElementById('results-placeholder').style.color = 'var(--danger-color)';
+                document.getElementById('results-placeholder').style.display = 'block';
+            }
+
+            btn.textContent = 'Calculate';
+            btn.disabled = false;
         }
 
-        function getTransmissibilityLabel(excitationType) {
-            if (excitationType === 'force') {
-                return 'Transmissibility (F_T / F_0)';
-            }
-            return 'Transmissibility (X / Y)';
-        }
+        // =================================================================
+        // 8. DISPLAY RESULTS
+        // =================================================================
+        function displayResults(results, inputs) {
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-grid').style.display = 'grid';
+            document.getElementById('safety-section').style.display = 'block';
+            document.getElementById('status-banner').style.display = 'flex';
+            document.getElementById('export-btn').style.display = 'inline-block';
 
-        function isResultRelevant(key, inputs, advancedOpen) {
-            const hasBaseAmplitude = inputs.base_displacement_m > 0;
-            const hasForceAmplitude = inputs.force_amplitude_n > 0;
+            // Update result values
+            document.getElementById('val-transmissibility').textContent = formatNumber(results.transmissibility);
+            document.getElementById('val-natural_frequency_hz').innerHTML = formatNumber(results.natural_frequency_hz) + '<span class="unit">Hz</span>';
+            document.getElementById('val-frequency_ratio').textContent = formatNumber(results.frequency_ratio);
 
-            if (key === 'dynamic_magnification' && inputs.excitation_type !== 'force') {
-                return false;
-            }
-            if (key === 'relative_displacement_amplitude_m' && inputs.excitation_type === 'force' && !hasForceAmplitude) {
-                return false;
-            }
-            if (key === 'absolute_displacement_amplitude_m') {
-                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
-            }
-            if (key === 'relative_displacement_amplitude_m') {
-                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
-            }
-            if (key === 'transmitted_force_amplitude_n') {
-                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
-            }
-            if (key === 'acceleration_amplitude_m_s2') {
-                return inputs.excitation_type === 'base' ? hasBaseAmplitude : hasForceAmplitude;
-            }
-            if (key === 'static_deflection_utilization') {
-                return inputs.max_static_deflection_m > 0;
-            }
-            if (key === 'damping_coefficient_ns_per_m' && !advancedOpen) {
-                return false;
-            }
-            return true;
-        }
+            // Calculate phase angle: φ = atan(2ζr / (1 - r²))
+            const r = results.frequency_ratio;
+            const zeta = results.damping_ratio;
+            let phaseRad = Math.atan2(2 * zeta * r, 1 - r * r);
+            // Ensure phase is in [0, 180] range for physical interpretation
+            if (phaseRad < 0) phaseRad += Math.PI;
+            const phaseDeg = phaseRad * 180 / Math.PI;
+            results.phase_angle_deg = phaseDeg;
+            results.phase_angle_rad = phaseRad;
+            document.getElementById('val-phase_angle_deg').innerHTML = phaseDeg.toFixed(1) + '<span class="unit">&deg;</span>';
 
-        function renderResults(results, inputs) {
-            const resultsDiv = document.getElementById('results-display');
-            resultsDiv.innerHTML = '';
-            document.getElementById('results-placeholder')?.remove();
+            document.getElementById('val-mount_stiffness_n_per_m').innerHTML = formatNumber(results.mount_stiffness_n_per_m) + '<span class="unit">N/m</span>';
+            document.getElementById('val-static_deflection_m').innerHTML = (results.static_deflection_m * 1000).toFixed(2) + '<span class="unit">mm</span>';
+            document.getElementById('val-isolation_frequency_hz').innerHTML = formatNumber(results.isolation_frequency_hz) + '<span class="unit">Hz</span>';
 
-            const advancedOpen = document.getElementById('advanced-inputs').classList.contains('visible');
-            const summaryTitle = inputs.mode === 'design' ? 'Design target' : 'Analysis summary';
+            // Handle show derivations setting
+            if (settings.showDerivations && !openDerivation) {
+                toggleDerivation('transmissibility');
+            }
+            if (settings.showGauges && !openExplainer) {
+                toggleGaugeExplainer('isolation');
+            }
+
+            // Update substituted equations
+            if (results.subst_transmissibility) {
+                document.getElementById('subst-transmissibility').innerHTML = '$$' + results.subst_transmissibility + '$$';
+            }
+            if (results.subst_natural_frequency_hz) {
+                document.getElementById('subst-natural_frequency_hz').innerHTML = '$$' + results.subst_natural_frequency_hz + '$$';
+            }
+            if (results.subst_frequency_ratio) {
+                document.getElementById('subst-frequency_ratio').innerHTML = '$$' + results.subst_frequency_ratio + '$$';
+            }
+
+            // Phase angle substitution
+            const phaseSubst = `\\phi = \\arctan\\left(\\frac{2 \\times ${zeta.toFixed(3)} \\times ${r.toFixed(3)}}{1 - ${r.toFixed(3)}^2}\\right) = ${phaseDeg.toFixed(1)}°`;
+            document.getElementById('subst-phase_angle_deg').innerHTML = '$$' + phaseSubst + '$$';
+
+            // Update isolation gauge
             const isolationMargin = results.isolation_margin;
-            const statusClass = isolationMargin >= 0 ? 'success' : 'warning';
-            const statusText = isolationMargin >= 0
-                ? 'Isolation achieved at the excitation frequency.'
-                : 'Excitation is below the isolation threshold.';
+            const isolating = isolationMargin >= 0;
+            const isolationClass = isolating ? 'success' : (isolationMargin > -0.5 ? 'warning' : 'danger');
+            const isolationWidth = Math.min(100, Math.max(0, (results.frequency_ratio / 3) * 100));
 
-            const summary = document.createElement('div');
-            summary.className = `status-banner ${statusClass}`;
-            summary.innerHTML = `
-                <h4>${summaryTitle}</h4>
-                <p>${statusText}</p>
-                <p>Mode: ${inputs.mode} | Excitation: ${inputs.excitation_type} | r = ${formatValue(results.frequency_ratio)} | T = ${formatValue(results.transmissibility)}</p>
-            `;
-            resultsDiv.appendChild(summary);
+            document.getElementById('gauge-isolation-bar').className = 'gauge-bar ' + isolationClass;
+            document.getElementById('gauge-isolation-bar').style.width = isolationWidth + '%';
+            document.getElementById('gauge-isolation-value').className = 'gauge-value ' + isolationClass;
+            document.getElementById('gauge-isolation-value').textContent = 'r = ' + results.frequency_ratio.toFixed(2);
+            document.getElementById('gauge-isolation-threshold').style.left = (Math.SQRT2 / 3 * 100) + '%';
 
-            RESULT_SECTIONS.forEach((section) => {
-                if (section.advancedOnly && !advancedOpen) {
-                    return;
+            document.getElementById('explainer-isolation-r').textContent = 'r: ' + results.frequency_ratio.toFixed(3);
+            document.getElementById('explainer-isolation-margin').textContent = 'Margin: ' + isolationMargin.toFixed(3);
+
+            const guidanceIsolation = document.getElementById('explainer-isolation-guidance');
+            if (isolating) {
+                guidanceIsolation.className = 'explainer-guidance good';
+                guidanceIsolation.textContent = 'Excellent. The system is in the isolation region. Transmissibility is ' + results.transmissibility.toFixed(3) + ' (less than 1).';
+            } else if (isolationMargin > -0.414) {
+                guidanceIsolation.className = 'explainer-guidance marginal';
+                guidanceIsolation.textContent = 'Marginal. Frequency ratio is above resonance but below isolation threshold. Consider reducing system stiffness.';
+            } else {
+                guidanceIsolation.className = 'explainer-guidance bad';
+                guidanceIsolation.textContent = 'Warning. Frequency ratio is near or at resonance. Vibration is being amplified, not isolated.';
+            }
+
+            // Update deflection gauge
+            const deflectionRow = document.getElementById('deflection-gauge-row');
+            const maxDeflection = inputs.max_static_deflection_m;
+            if (maxDeflection > 0 && Number.isFinite(results.static_deflection_utilization)) {
+                deflectionRow.style.display = 'flex';
+                const util = results.static_deflection_utilization * 100;
+                const deflectionClass = util <= 80 ? 'success' : (util <= 100 ? 'warning' : 'danger');
+
+                document.getElementById('gauge-deflection-bar').className = 'gauge-bar ' + deflectionClass;
+                document.getElementById('gauge-deflection-bar').style.width = Math.min(100, util) + '%';
+                document.getElementById('gauge-deflection-value').className = 'gauge-value ' + deflectionClass;
+                document.getElementById('gauge-deflection-value').textContent = util.toFixed(0) + '%';
+                document.getElementById('gauge-deflection-threshold').style.left = '100%';
+
+                document.getElementById('explainer-deflection-actual').textContent = 'Actual: ' + (results.static_deflection_m * 1000).toFixed(2) + ' mm';
+                document.getElementById('explainer-deflection-allowable').textContent = 'Allowable: ' + (maxDeflection * 1000).toFixed(2) + ' mm';
+                document.getElementById('explainer-deflection-util').textContent = 'Utilization: ' + util.toFixed(1) + '%';
+
+                const guidanceDeflection = document.getElementById('explainer-deflection-guidance');
+                if (util <= 80) {
+                    guidanceDeflection.className = 'explainer-guidance good';
+                    guidanceDeflection.textContent = 'Good. Static deflection is well within the allowable limit.';
+                } else if (util <= 100) {
+                    guidanceDeflection.className = 'explainer-guidance marginal';
+                    guidanceDeflection.textContent = 'Marginal. Static deflection is approaching the allowable limit.';
+                } else {
+                    guidanceDeflection.className = 'explainer-guidance bad';
+                    guidanceDeflection.textContent = 'Exceeds limit. Static deflection exceeds the specified allowable value.';
                 }
+            } else {
+                deflectionRow.style.display = 'none';
+            }
 
-                const sectionEl = document.createElement('div');
-                sectionEl.className = 'results-section';
-                sectionEl.innerHTML = `<h4>${section.title}</h4>`;
+            // Update status banner
+            const banner = document.getElementById('status-banner');
+            let status, statusTitle, statusMessage;
+            const recommendations = [];
 
-                let sectionHasItems = false;
-                section.keys.forEach((key) => {
-                    if (!isResultRelevant(key, inputs, advancedOpen)) {
-                        return;
-                    }
-                    const value = results[key];
-                    if (typeof value === 'number' && !Number.isFinite(value)) {
-                        return;
-                    }
-                    const definition = toolDocumentation.returns?.[key] || '';
-                    const label = key === 'transmissibility'
-                        ? getTransmissibilityLabel(inputs.excitation_type)
-                        : RESULT_LABELS[key] || key;
-                    const unit = RESULT_UNITS[key] || '';
-                    const equationIndex = getEquationIndex(key, inputs);
-                    const equation = equationIndex !== null ? latexExpressions[equationIndex] : '';
-                    const substString = results[`subst_${key}`];
+            if (isolating && (maxDeflection <= 0 || results.static_deflection_utilization <= 1)) {
+                status = 'acceptable';
+                statusTitle = 'Isolation Achieved';
+                statusMessage = 'The system is operating in the isolation region with acceptable parameters.';
+            } else if (!isolating && results.frequency_ratio < 1.2) {
+                status = 'unacceptable';
+                statusTitle = 'Resonance Risk';
+                statusMessage = 'Operating near resonance - vibration will be amplified significantly.';
+                recommendations.push('Reduce mount stiffness to lower the natural frequency');
+                recommendations.push('Consider adding more damping to limit resonance amplification');
+            } else if (!isolating) {
+                status = 'marginal';
+                statusTitle = 'Below Isolation Threshold';
+                statusMessage = 'The frequency ratio is below sqrt(2). Some isolation may occur but transmissibility exceeds 1.';
+                recommendations.push('Reduce mount stiffness to increase frequency ratio');
+            } else {
+                status = 'marginal';
+                statusTitle = 'Deflection Concern';
+                statusMessage = 'Isolation is achieved but static deflection exceeds the specified limit.';
+                recommendations.push('Increase mount stiffness to reduce static deflection');
+                recommendations.push('Accept higher transmissibility as a trade-off');
+            }
 
-                    const detailsHtml = equation
-                        ? `
-                            <details class="inline-details">
-                                <summary></summary>
-                                <div class="equation-details">
-                                    <p><strong>Equation:</strong> $$${equation}$$</p>
-                                    ${substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : ''}
-                                </div>
-                            </details>
-                        `
-                        : '';
+            banner.className = 'status-banner ' + status;
+            document.getElementById('status-icon').innerHTML = status === 'acceptable' ? '&#10003;' : (status === 'marginal' ? '&#9888;' : '&#10007;');
+            document.getElementById('status-title').textContent = statusTitle;
+            document.getElementById('status-message').textContent = statusMessage;
 
-                    sectionEl.innerHTML += `
-                        <div class="result-item">
-                            <div class="result-header">
-                                <p><strong><span class="def" data-def="${escapeHtml(definition)}">${escapeHtml(label)}</span>:</strong> ${formatWithUnit(value, unit)}</p>
-                                ${detailsHtml}
-                            </div>
-                        </div>
-                    `;
-                    sectionHasItems = true;
-                });
-
-                if (sectionHasItems) {
-                    resultsDiv.appendChild(sectionEl);
-                }
+            const recList = document.getElementById('recommendations-list');
+            recList.innerHTML = '';
+            recommendations.forEach(rec => {
+                const li = document.createElement('li');
+                li.textContent = rec;
+                recList.appendChild(li);
             });
+
+            // Plot charts
+            plotTransmissibility(results);
+            plotPhase(results);
+            plotSensitivity(results, inputs);
+
             typesetMath();
         }
 
-        function renderChart(results, inputs) {
-            const canvas = document.getElementById('transmissibility-chart');
-            const message = document.getElementById('plot-message');
-
-            const showMessage = (text) => {
-                message.textContent = text;
-                message.classList.remove('hidden');
-                if (chartInstance) {
-                    chartInstance.destroy();
-                    chartInstance = null;
-                }
+        // =================================================================
+        // 9. PLOTTING
+        // =================================================================
+        function getChartTheme() {
+            const style = getComputedStyle(document.body);
+            return {
+                bgColor: style.getPropertyValue('--bg-card').trim() || '#ffffff',
+                textColor: style.getPropertyValue('--text-color').trim() || '#111827',
+                gridColor: style.getPropertyValue('--border-color').trim() || '#e5e7eb',
+                successColor: style.getPropertyValue('--success-color').trim() || '#0f766e',
+                warningColor: style.getPropertyValue('--warning-color').trim() || '#b45309',
+                dangerColor: style.getPropertyValue('--danger-color').trim() || '#b91c1c'
             };
-            const hideMessage = () => {
-                message.classList.add('hidden');
-            };
-
-            const rValues = results.plot_frequency_ratio;
-            const tValues = results.plot_transmissibility;
-
-            if (!Array.isArray(rValues) || !Array.isArray(tValues) || rValues.length === 0) {
-                showMessage('Plot unavailable due to missing data.');
-                return;
-            }
-
-            const cleaned = rValues.map((r, index) => {
-                const t = tValues[index];
-                if (!Number.isFinite(r) || !Number.isFinite(t)) {
-                    return null;
-                }
-                return { x: r, y: t };
-            }).filter(point => point !== null);
-
-            if (!cleaned.length) {
-                showMessage('Plot unavailable due to non-finite values.');
-                return;
-            }
-
-            const yMax = Math.max(...cleaned.map((point) => point.y), 1.2);
-            const resonanceLine = [
-                { x: 1, y: 0 },
-                { x: 1, y: yMax }
-            ];
-            const isolationLine = [
-                { x: Math.SQRT2, y: 0 },
-                { x: Math.SQRT2, y: yMax }
-            ];
-
-            const operatingPoint = {
-                x: results.frequency_ratio,
-                y: results.transmissibility
-            };
-
-            const label = inputs.excitation_type === 'force'
-                ? 'Transmissibility (F_T / F_0)'
-                : 'Transmissibility (X / Y)';
-            document.getElementById('chart-series').textContent = `Series: ${label}`;
-
-            const datasets = [
-                {
-                    label,
-                    data: cleaned,
-                    borderColor: '#2563eb',
-                    backgroundColor: 'rgba(37, 99, 235, 0.15)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.1
-                },
-                {
-                    label: 'Resonance (r = 1)',
-                    data: resonanceLine,
-                    borderColor: '#ef4444',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    borderDash: [6, 6]
-                },
-                {
-                    label: 'Isolation threshold (r = sqrt(2))',
-                    data: isolationLine,
-                    borderColor: '#10b981',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    borderDash: [6, 6]
-                },
-                {
-                    label: 'Operating point',
-                    data: [operatingPoint],
-                    borderColor: '#f59e0b',
-                    backgroundColor: '#f59e0b',
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    showLine: false
-                }
-            ];
-
-            if (chartInstance) {
-                chartInstance.destroy();
-            }
-
-            chartInstance = new Chart(canvas, {
-                type: 'line',
-                data: { datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom' }
-                    },
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            title: { display: true, text: 'Frequency ratio r = f_exc / f_n' }
-                        },
-                        y: {
-                            title: { display: true, text: 'Transmissibility (dimensionless)' },
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-            hideMessage();
         }
 
-        const form = document.getElementById('calc-form');
-        form.addEventListener('submit', (event) => {
-            event.preventDefault();
-            if (!pyToolModule) {
-                return;
+        function plotTransmissibility(results) {
+            if (!results.plot_frequency_ratio) return;
+
+            const theme = getChartTheme();
+            const rValues = results.plot_frequency_ratio;
+            const useSpecificZeta = document.getElementById('use_specific_zeta').checked;
+
+            // Define zeta values to plot
+            const zetaValues = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5];
+            const zetaColors = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#7c3aed'];
+
+            // Calculate transmissibility for each zeta
+            function calcT(r, zeta) {
+                const denominator = Math.sqrt((1 - r * r) ** 2 + (2 * zeta * r) ** 2);
+                const t = Math.sqrt(1 + (2 * zeta * r) ** 2) / denominator;
+                return (Number.isFinite(t) && t <= 20) ? t : null;
             }
 
-            const inputs = parseInputs();
-            const args = buildArgs(inputs);
+            const traces = [];
 
-            try {
-                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
-                const results = Object.fromEntries(resultMap);
+            // Add a trace for each zeta value
+            zetaValues.forEach((zeta, i) => {
+                const tVals = rValues.map(r => calcT(r, zeta));
+                traces.push({
+                    x: rValues,
+                    y: tVals,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `ζ = ${zeta}`,
+                    line: { color: zetaColors[i], width: 2 },
+                    hovertemplate: `r = %{x:.2f}<br>T = %{y:.3f}<br>ζ = ${zeta}<extra></extra>`
+                });
+            });
 
-                if (results.error) {
-                    throw new Error(results.error);
+            // Add reference lines
+            traces.push({
+                x: [1, 1],
+                y: [0, 10],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Resonance (r=1)',
+                line: { color: theme.dangerColor, width: 1, dash: 'dash' },
+                hoverinfo: 'name'
+            });
+
+            traces.push({
+                x: [Math.SQRT2, Math.SQRT2],
+                y: [0, 10],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Isolation (r=√2)',
+                line: { color: theme.successColor, width: 1, dash: 'dash' },
+                hoverinfo: 'name'
+            });
+
+            traces.push({
+                x: [0, 5],
+                y: [1, 1],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'T = 1',
+                line: { color: theme.gridColor, width: 1, dash: 'dot' },
+                hoverinfo: 'name'
+            });
+
+            // Add operating point if specific zeta is selected
+            if (useSpecificZeta && results.frequency_ratio && results.transmissibility) {
+                traces.push({
+                    x: [results.frequency_ratio],
+                    y: [results.transmissibility],
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: `Operating (ζ=${results.damping_ratio})`,
+                    marker: { color: '#f59e0b', size: 12, symbol: 'diamond', line: { color: '#000', width: 1 } },
+                    hovertemplate: `r = ${results.frequency_ratio.toFixed(2)}<br>T = ${results.transmissibility.toFixed(3)}<br>ζ = ${results.damping_ratio}<extra></extra>`
+                });
+            }
+
+            const layout = {
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { color: theme.textColor, family: 'Helvetica Neue, sans-serif' },
+                xaxis: {
+                    title: 'Frequency Ratio (r = f_exc / f_n)',
+                    gridcolor: theme.gridColor,
+                    range: [0, Math.max(5, (results.frequency_ratio || 3) * 1.5)]
+                },
+                yaxis: {
+                    title: 'Transmissibility',
+                    gridcolor: theme.gridColor,
+                    range: [0, 5],
+                    type: 'linear'
+                },
+                legend: {
+                    x: 1.02,
+                    y: 1,
+                    xanchor: 'left',
+                    bgcolor: 'rgba(255,255,255,0.8)'
+                },
+                margin: { t: 30, r: 120, b: 50, l: 60 }
+            };
+
+            Plotly.newPlot('transmissibility-plot', traces, layout, { responsive: true });
+        }
+
+        function plotPhase(results) {
+            if (!results.plot_frequency_ratio) return;
+
+            const theme = getChartTheme();
+            const rValues = results.plot_frequency_ratio;
+            const useSpecificZeta = document.getElementById('use_specific_zeta').checked;
+
+            // Define zeta values to plot (same as transmissibility plot)
+            const zetaValues = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5];
+            const zetaColors = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#7c3aed'];
+
+            // Calculate phase angle: φ = atan2(2ζr, 1 - r²), result in degrees
+            function calcPhase(r, zeta) {
+                if (r === 0) return 0;
+                let phase = Math.atan2(2 * zeta * r, 1 - r * r);
+                if (phase < 0) phase += Math.PI;  // Keep in [0, 180] range
+                return phase * 180 / Math.PI;
+            }
+
+            const traces = [];
+
+            // Add a trace for each zeta value
+            zetaValues.forEach((zeta, i) => {
+                const phaseVals = rValues.map(r => calcPhase(r, zeta));
+                traces.push({
+                    x: rValues,
+                    y: phaseVals,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `ζ = ${zeta}`,
+                    line: { color: zetaColors[i], width: 2 },
+                    hovertemplate: `r = %{x:.2f}<br>φ = %{y:.1f}°<br>ζ = ${zeta}<extra></extra>`
+                });
+            });
+
+            // Add reference lines
+            traces.push({
+                x: [1, 1],
+                y: [0, 180],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Resonance (r=1)',
+                line: { color: theme.dangerColor, width: 1, dash: 'dash' },
+                hoverinfo: 'name'
+            });
+
+            traces.push({
+                x: [0, Math.max(...rValues)],
+                y: [90, 90],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'φ = 90°',
+                line: { color: theme.gridColor, width: 1, dash: 'dot' },
+                hoverinfo: 'name'
+            });
+
+            // Add operating point if specific zeta is selected
+            if (useSpecificZeta && results.frequency_ratio && results.phase_angle_deg !== undefined) {
+                traces.push({
+                    x: [results.frequency_ratio],
+                    y: [results.phase_angle_deg],
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: `Operating (ζ=${results.damping_ratio})`,
+                    marker: { color: '#f59e0b', size: 12, symbol: 'diamond', line: { color: '#000', width: 1 } },
+                    hovertemplate: `r = ${results.frequency_ratio.toFixed(2)}<br>φ = ${results.phase_angle_deg.toFixed(1)}°<br>ζ = ${results.damping_ratio}<extra></extra>`
+                });
+            }
+
+            const layout = {
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { color: theme.textColor, family: 'Helvetica Neue, sans-serif' },
+                xaxis: {
+                    title: 'Frequency Ratio (r = f_exc / f_n)',
+                    gridcolor: theme.gridColor,
+                    range: [0, Math.max(5, (results.frequency_ratio || 3) * 1.5)]
+                },
+                yaxis: {
+                    title: 'Phase Angle (degrees)',
+                    gridcolor: theme.gridColor,
+                    range: [0, 180],
+                    tickvals: [0, 45, 90, 135, 180],
+                    ticktext: ['0°', '45°', '90°', '135°', '180°']
+                },
+                legend: {
+                    x: 1.02,
+                    y: 1,
+                    xanchor: 'left',
+                    bgcolor: 'rgba(255,255,255,0.8)'
+                },
+                margin: { t: 30, r: 120, b: 50, l: 60 }
+            };
+
+            Plotly.newPlot('phase-plot', traces, layout, { responsive: true });
+        }
+
+        function plotSensitivity(results, inputs) {
+            const theme = getChartTheme();
+            const r = results.frequency_ratio;
+            const useSpecificZeta = document.getElementById('use_specific_zeta').checked;
+            const zetaValues = [];
+            const tValues = [];
+
+            for (let z = 0.01; z <= 0.5; z += 0.01) {
+                zetaValues.push(z);
+                const denominator = Math.sqrt((1 - r * r) ** 2 + (2 * z * r) ** 2);
+                const t = Math.sqrt(1 + (2 * z * r) ** 2) / denominator;
+                tValues.push(Number.isFinite(t) ? t : null);
+            }
+
+            const traces = [
+                {
+                    x: zetaValues,
+                    y: tValues,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `T at r = ${r.toFixed(2)}`,
+                    line: { color: '#2563eb', width: 2 },
+                    hovertemplate: 'ζ = %{x:.2f}<br>T = %{y:.3f}<extra></extra>'
                 }
+            ];
 
-                renderResults(results, inputs);
-                renderChart(results, inputs);
-            } catch (error) {
-                console.error('Python calculation error:', error);
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
-                    <p style="color: red;">${escapeHtml(error.message)}</p>
-                `;
+            // Only show operating point if specific zeta is selected
+            if (useSpecificZeta && results.damping_ratio && results.transmissibility) {
+                traces.push({
+                    x: [results.damping_ratio],
+                    y: [results.transmissibility],
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: 'Selected ζ',
+                    marker: { color: '#f59e0b', size: 12, symbol: 'diamond', line: { color: '#000', width: 1 } },
+                    hovertemplate: `ζ = ${results.damping_ratio}<br>T = ${results.transmissibility.toFixed(3)}<extra></extra>`
+                });
             }
-        });
 
-        document.querySelectorAll('.mode-btn').forEach((button) => {
-            button.addEventListener('click', () => setMode(button.dataset.mode));
-        });
+            const layout = {
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { color: theme.textColor, family: 'Helvetica Neue, sans-serif' },
+                title: {
+                    text: 'Effect of Damping at Current Frequency Ratio',
+                    font: { size: 14 }
+                },
+                xaxis: {
+                    title: 'Damping Ratio (ζ)',
+                    gridcolor: theme.gridColor,
+                    range: [0, 0.5]
+                },
+                yaxis: {
+                    title: 'Transmissibility',
+                    gridcolor: theme.gridColor
+                },
+                legend: { x: 0.7, y: 0.95 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                annotations: useSpecificZeta ? [] : [{
+                    x: 0.25,
+                    y: Math.max(...tValues.filter(v => v !== null)) * 0.9,
+                    text: 'Enable "Use specific damping ratio"<br>in Advanced to mark a point',
+                    showarrow: false,
+                    font: { size: 11, color: theme.textColor },
+                    opacity: 0.6
+                }]
+            };
 
+            Plotly.newPlot('sensitivity-plot', traces, layout, { responsive: true });
+        }
+
+        // =================================================================
+        // 10. EVENT LISTENERS
+        // =================================================================
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => setMode(btn.dataset.mode));
+        });
         document.getElementById('stiffness_input_mode').addEventListener('change', updateStiffnessInputs);
         document.getElementById('damping_input_mode').addEventListener('change', updateDampingInputs);
         document.getElementById('excitation_type').addEventListener('change', updateExcitationInputs);
 
+        // Specific zeta checkbox
+        document.getElementById('use_specific_zeta').addEventListener('change', function() {
+            const specificZetaInputs = document.getElementById('specific-zeta-inputs');
+            specificZetaInputs.style.display = this.checked ? '' : 'none';
+            // Update the damping mode visibility when toggling
+            if (this.checked) {
+                updateDampingInputs();
+            }
+        });
+
+        // Initialize
         setMode('analyze');
         updateStiffnessInputs();
         updateDampingInputs();
         updateExcitationInputs();
+        main();
     </script>
 </body>
 </html>
