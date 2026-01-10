@@ -128,6 +128,7 @@ Use this when a tool-local reference becomes relevant to multiple tools:
 ## Contribution Guidelines
 
 We welcome contributions! To ensure a smooth process, please follow these guidelines.
+For the day-to-day workflow and release process, see `CONTRIBUTING.md` and `docs/RELEASE.md`.
 
 ### Branching Strategy
 

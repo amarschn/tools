@@ -116,7 +116,43 @@ The online engineering calculator market is established with several free, ad-su
 
 ---
 
-### 5. CalcTool / eFunda / MatWeb
+### 5. ElectricianCalc (electriciancalc.com)
+
+**What it is:** Focused electrical load calculators (e.g., whole-house load calculator).
+
+**Strengths (to verify):**
+- Niche focus on electrical load calculations
+- High-intent, task-specific entry point
+
+**Weaknesses (to verify):**
+- Narrow scope versus multi-tool platforms
+- Verification and transparency unknown
+
+**Monetization:** Unknown (needs review)
+
+**Traffic estimate:** Unknown
+
+---
+
+### 6. PlumberCalc (plumbercalc.com)
+
+**What it is:** Plumbing-specific calculators and reference tools.
+
+**Strengths (to verify):**
+- Niche focus on plumbing workflows
+- Likely high-intent trade audience
+
+**Weaknesses (to verify):**
+- Narrow scope versus multi-tool platforms
+- Verification and transparency unknown
+
+**Monetization:** Unknown (needs review)
+
+**Traffic estimate:** Unknown
+
+---
+
+### 7. CalcTool / eFunda / MatWeb
 
 **CalcTool:** General calculators, dated
 **eFunda:** Engineering fundamentals, dated but comprehensive
@@ -126,7 +162,7 @@ All are older sites with dated UIs but strong SEO from age.
 
 ---
 
-### 6. Desmos / GeoGebra
+### 8. Desmos / GeoGebra
 
 **What they are:** Math/graphing calculators, not engineering-specific
 
@@ -253,6 +289,8 @@ Rather than 3,000 shallow calculators (Omni), fewer tools with real depth (like 
 | [Ubersuggest](https://neilpatel.com/ubersuggest/) | Rough | SEO-focused, 3 free searches/day |
 | [HypeStat](https://hypestat.com) | Rough | Often overestimates |
 | [StatShow](https://statshow.com) | Very rough | Often outdated |
+| [ElectricianCalc](https://electriciancalc.com/) | Very good | Very modern
+| [PlumberCalc](https://plumbercalc.com/) | Very good | Very modern
 
 ### Paid Tools
 | Tool | Cost | Accuracy |

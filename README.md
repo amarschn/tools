@@ -39,6 +39,7 @@ We welcome contributions to expand our collection of tools! The development proc
 4. **Submit a Pull Request:** Once your tool is complete and tested, submit a pull request to the `main` branch for review.
 
 For a comprehensive guide on our architecture, coding standards, and a detailed step-by-step contribution workflow, please see our [**AGENTS.md**](AGENTS.md) file.
+For day-to-day workflow and releases, see [**CONTRIBUTING.md**](CONTRIBUTING.md) and [**docs/RELEASE.md**](docs/RELEASE.md).
 
 ## Local Development and Testing
 
