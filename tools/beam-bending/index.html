@@ -234,6 +234,41 @@
 
         .input-helper { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; }
 
+        /* Section diagram */
+        .section-diagram-container {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .section-diagram-container svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .section-diagram-container .dim-line {
+            stroke: var(--accent-color);
+            stroke-width: 1.5;
+            fill: none;
+        }
+        .section-diagram-container .dim-text {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            fill: var(--accent-color);
+            font-weight: 600;
+        }
+        .section-diagram-container .section-shape {
+            fill: var(--bg-card);
+            stroke: var(--text-color);
+            stroke-width: 2;
+        }
+        .section-diagram-container .section-label {
+            font-size: 10px;
+            fill: var(--text-light);
+            text-anchor: middle;
+        }
+
         /* Tooltip */
         .tooltip-trigger {
             display: inline-flex;
@@ -499,29 +534,7 @@
         .chart-tab:hover:not(.active) { border-color: var(--text-color); }
 
         /* =============================================================================
-           11. DERIVATION PANELS
-           ============================================================================= */
-        .derivation-panel {
-            display: none;
-            background: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
-        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .derivation-title { font-weight: 600; font-size: 1rem; }
-        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
-        .derivation-close:hover { color: var(--text-color); }
-        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
-        .derivation-step:last-child { border-bottom: none; }
-        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; }
-        .derivation-step .equation { background: white; padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
-        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
-
-        /* =============================================================================
-           12. EQUATION CARDS
+           11. EQUATION CARDS
            ============================================================================= */
         .equation-container { display: flex; flex-direction: column; gap: 16px; margin-top: 1rem; }
         .equation-card {
@@ -884,6 +897,16 @@
             .results-grid { grid-template-columns: 1fr; }
             .mode-toggle-wrap { flex-direction: column; align-items: stretch; }
         }
+    
+    .support-link {
+      color: inherit;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .support-link:hover {
+      text-decoration: underline;
+    }
     </style>
 </head>
 
@@ -1150,6 +1173,11 @@
                             </select>
                             <span class="tooltip-trigger" data-tooltip="Maximum allowable deflection as fraction of span. L/360 is common for floors with brittle finishes (drywall). More restrictive limits prevent cracking and visible sag.">?</span>
                         </div>
+                        <div class="input-group" id="custom-deflection-group" style="display: none;">
+                            <label for="custom-deflection-ratio">Custom Ratio (L/___)</label>
+                            <input type="number" id="custom-deflection-ratio" value="360" min="1" step="1">
+                            <span class="tooltip-trigger" data-tooltip="Enter the denominator for L/x deflection limit. For example, enter 400 for L/400.">?</span>
+                        </div>
                     </div>
 
                     <button class="advanced-toggle" id="toggle-material-advanced">
@@ -1220,14 +1248,6 @@
                                 <p id="status-message">All safety checks passed.</p>
                                 <ul class="recommendations" id="recommendations-list"></ul>
                             </div>
-                        </div>
-
-                        <div class="derivation-panel" id="derivation-panel">
-                            <div class="derivation-header">
-                                <span class="derivation-title" id="derivation-title">Derivation</span>
-                                <button class="derivation-close" id="close-derivation">×</button>
-                            </div>
-                            <div id="derivation-content"></div>
                         </div>
 
                         <h4 style="margin-top: 24px;">Section Properties</h4>
@@ -1411,7 +1431,7 @@
     </main>
 
     <footer class="footer">
-        <p>Engineering Tools — For educational and preliminary design purposes only.</p>
+        <p>Engineering Tools — For educational and preliminary design purposes only. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
     </footer>
 
     <script>
@@ -1710,6 +1730,136 @@
         }
 
         // =============================================================================
+        // SECTION DIAGRAMS
+        // =============================================================================
+        function generateSectionDiagram(sectionType) {
+            const w = 200, h = 160;
+            const cx = w / 2, cy = h / 2;
+
+            // Helper to create dimension lines with arrows and labels
+            const dimLine = (x1, y1, x2, y2, label, offset = 0, vertical = false) => {
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                const textX = vertical ? midX + offset : midX;
+                const textY = vertical ? midY : midY + offset;
+                return `
+                    <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="dim-line"/>
+                    <line x1="${x1-4}" y1="${y1}" x2="${x1+4}" y2="${y1}" class="dim-line"/>
+                    <line x1="${x2-4}" y1="${y2}" x2="${x2+4}" y2="${y2}" class="dim-line"/>
+                    <text x="${textX}" y="${textY}" class="dim-text" text-anchor="middle">${label}</text>
+                `;
+            };
+
+            let svg = '';
+
+            switch (sectionType) {
+                case 'rectangular': {
+                    const rw = 60, rh = 100;
+                    svg = `
+                        <rect x="${cx-rw/2}" y="${cy-rh/2}" width="${rw}" height="${rh}" class="section-shape"/>
+                        ${dimLine(cx-rw/2-20, cy-rh/2, cx-rw/2-20, cy+rh/2, 'h', -12, true)}
+                        ${dimLine(cx-rw/2, cy+rh/2+20, cx+rw/2, cy+rh/2+20, 'b', 12)}
+                    `;
+                    break;
+                }
+                case 'circular_solid': {
+                    const r = 45;
+                    svg = `
+                        <circle cx="${cx}" cy="${cy}" r="${r}" class="section-shape"/>
+                        ${dimLine(cx-r, cy+r+15, cx+r, cy+r+15, 'd', 12)}
+                        <line x1="${cx}" y1="${cy-r}" x2="${cx}" y2="${cy+r}" stroke="var(--text-light)" stroke-width="1" stroke-dasharray="4"/>
+                    `;
+                    break;
+                }
+                case 'circular_hollow': {
+                    const ro = 45, ri = 30;
+                    svg = `
+                        <circle cx="${cx}" cy="${cy}" r="${ro}" class="section-shape"/>
+                        <circle cx="${cx}" cy="${cy}" r="${ri}" fill="var(--primary-light)" stroke="var(--text-color)" stroke-width="2"/>
+                        ${dimLine(cx-ro, cy+ro+15, cx+ro, cy+ro+15, 'd_o', 12)}
+                        ${dimLine(cx-ri, cy-5, cx+ri, cy-5, 'd_i', -10)}
+                    `;
+                    break;
+                }
+                case 'i_beam': {
+                    const fw = 70, ft = 12, wd = 60, wt = 10;
+                    const totalH = wd + 2*ft;
+                    svg = `
+                        <path d="M${cx-fw/2},${cy-totalH/2} h${fw} v${ft} h${-(fw-wt)/2} v${wd} h${(fw-wt)/2} v${ft} h${-fw} v${-ft} h${(fw-wt)/2} v${-wd} h${-(fw-wt)/2} z" class="section-shape"/>
+                        ${dimLine(cx-fw/2-25, cy-totalH/2, cx-fw/2-25, cy+totalH/2, 'd', -12, true)}
+                        ${dimLine(cx-fw/2, cy+totalH/2+20, cx+fw/2, cy+totalH/2+20, 'b_f', 12)}
+                        <text x="${cx+fw/2+8}" y="${cy-totalH/2+ft/2+4}" class="dim-text" font-size="9">t_f</text>
+                        <text x="${cx+wt/2+8}" y="${cy}" class="dim-text" font-size="9">t_w</text>
+                    `;
+                    break;
+                }
+                case 'box': {
+                    const bw = 70, bh = 90, t = 8;
+                    svg = `
+                        <rect x="${cx-bw/2}" y="${cy-bh/2}" width="${bw}" height="${bh}" class="section-shape"/>
+                        <rect x="${cx-bw/2+t}" y="${cy-bh/2+t}" width="${bw-2*t}" height="${bh-2*t}" fill="var(--primary-light)" stroke="var(--text-color)" stroke-width="1"/>
+                        ${dimLine(cx-bw/2-20, cy-bh/2, cx-bw/2-20, cy+bh/2, 'h', -12, true)}
+                        ${dimLine(cx-bw/2, cy+bh/2+20, cx+bw/2, cy+bh/2+20, 'b', 12)}
+                        <text x="${cx-bw/2+t/2}" y="${cy}" class="dim-text" font-size="9" transform="rotate(-90 ${cx-bw/2+t/2} ${cy})">t</text>
+                    `;
+                    break;
+                }
+                case 'c_channel': {
+                    const cw = 40, ch = 90, ft = 10, wt = 8;
+                    svg = `
+                        <path d="M${cx-cw/2},${cy-ch/2} h${cw} v${ft} h${-(cw-wt)} v${ch-2*ft} h${cw-wt} v${ft} h${-cw} z" class="section-shape"/>
+                        ${dimLine(cx-cw/2-20, cy-ch/2, cx-cw/2-20, cy+ch/2, 'd', -12, true)}
+                        ${dimLine(cx-cw/2, cy+ch/2+20, cx+cw/2, cy+ch/2+20, 'b_f', 12)}
+                        <text x="${cx+cw/2-wt/2}" y="${cy}" class="dim-text" font-size="9">t_w</text>
+                    `;
+                    break;
+                }
+                case 't_section': {
+                    const fw = 80, ft = 12, sd = 55, st = 12;
+                    svg = `
+                        <path d="M${cx-fw/2},${cy-sd/2-ft} h${fw} v${ft} h${-(fw-st)/2} v${sd} h${-st} v${-sd} h${-(fw-st)/2} z" class="section-shape"/>
+                        ${dimLine(cx-fw/2-25, cy-sd/2-ft, cx-fw/2-25, cy+sd/2, 'total', -15, true)}
+                        ${dimLine(cx-fw/2, cy-sd/2-ft-15, cx+fw/2, cy-sd/2-ft-15, 'b_f', -10)}
+                        <text x="${cx+st/2+8}" y="${cy+10}" class="dim-text" font-size="9">t_s</text>
+                        <text x="${cx+fw/2+8}" y="${cy-sd/2-ft+ft/2+3}" class="dim-text" font-size="9">t_f</text>
+                    `;
+                    break;
+                }
+                case 'standard_steel': {
+                    // Show generic I-beam shape
+                    const fw = 70, ft = 12, wd = 60, wt = 10;
+                    const totalH = wd + 2*ft;
+                    svg = `
+                        <path d="M${cx-fw/2},${cy-totalH/2} h${fw} v${ft} h${-(fw-wt)/2} v${wd} h${(fw-wt)/2} v${ft} h${-fw} v${-ft} h${(fw-wt)/2} v${-wd} h${-(fw-wt)/2} z" class="section-shape"/>
+                        <text x="${cx}" y="${cy+5}" class="section-label" font-size="11">AISC</text>
+                        <text x="${cx}" y="${cy+17}" class="section-label" font-size="11">W-Shape</text>
+                    `;
+                    break;
+                }
+                case 'custom': {
+                    // Show generic cross-section with I, c labels
+                    svg = `
+                        <ellipse cx="${cx}" cy="${cy}" rx="50" ry="40" class="section-shape" stroke-dasharray="5"/>
+                        <line x1="${cx-60}" y1="${cy}" x2="${cx+60}" y2="${cy}" stroke="var(--text-light)" stroke-width="1" stroke-dasharray="4"/>
+                        <text x="${cx}" y="${cy-10}" class="section-label">Custom Section</text>
+                        <text x="${cx}" y="${cy+25}" class="section-label">Enter I, c values</text>
+                    `;
+                    break;
+                }
+                default:
+                    return '';
+            }
+
+            return `
+                <div class="section-diagram-container">
+                    <svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+                        ${svg}
+                    </svg>
+                </div>
+            `;
+        }
+
+        // =============================================================================
         // SECTION FIELDS
         // =============================================================================
         function renderSectionFields() {
@@ -1717,7 +1867,8 @@
             const container = document.getElementById('section-dimensions');
             const config = SECTION_CONFIGS[sectionType] || [];
 
-            container.innerHTML = '';
+            // Add section diagram first
+            container.innerHTML = generateSectionDiagram(sectionType);
 
             config.forEach(field => {
                 const group = document.createElement('div');
@@ -1840,6 +1991,9 @@
                 const Fy = parseFloat(document.getElementById('yield-strength').value) * 1e6; // MPa to Pa
                 const safetyFactor = parseFloat(document.getElementById('safety-factor').value) || 1.5;
                 const deflectionLimit = document.getElementById('deflection-limit').value;
+                const customDeflectionRatio = deflectionLimit === 'custom'
+                    ? parseFloat(document.getElementById('custom-deflection-ratio').value)
+                    : null;
 
                 const dims = getSectionDimensions();
                 const loadPosition = loadCase.includes('_any') ?
@@ -1861,7 +2015,7 @@
                     Fy,
                     loadPosition,
                     deflectionLimit,
-                    null, // custom ratio
+                    customDeflectionRatio,
                     101,  // num_points
                     safetyFactor
                 );
@@ -2184,15 +2338,38 @@
             const safetyFactor = parseFloat(document.getElementById('safety-factor').value) || 1.5;
             const Fy = parseFloat(document.getElementById('yield-strength').value) * 1e6; // MPa to Pa
 
-            const html = `
+            // Determine which fiber governs
+            const stressTop = result.stress_top || result.max_stress;
+            const stressBottom = result.stress_bottom || result.max_stress;
+            const isAsymmetric = Math.abs(props.c_top - props.c_bottom) > 0.0001;
+            const topGoverns = stressTop >= stressBottom;
+
+            let stressHtml = `
                 <div class="equation-step">
                     <div class="equation-step-title">Maximum Bending Stress</div>
-                    <div class="equation-formula">\\[ \\sigma_{max} = \\frac{M_{max} \\cdot c}{I_x} = \\frac{M_{max}}{S_x} \\]</div>
+                    <div class="equation-formula">\\[ \\sigma = \\frac{M_{max} \\cdot c}{I_x} = \\frac{M_{max}}{S_x} \\]</div>`;
+
+            if (isAsymmetric) {
+                stressHtml += `
+                    <div class="equation-calculation">
+                        <strong>Top fiber:</strong> σ = ${formatEngineering(result.max_moment, 'N·m')} × ${formatNumber(props.c_top * 1000, 1)} mm / ${formatEngineering(props.Ix, 'm⁴')}<br>
+                        <strong>Bottom fiber:</strong> σ = ${formatEngineering(result.max_moment, 'N·m')} × ${formatNumber(props.c_bottom * 1000, 1)} mm / ${formatEngineering(props.Ix, 'm⁴')}
+                    </div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
+                        <span class="equation-result ${topGoverns ? '' : 'style=\"background: var(--text-light);\"'}">σ_top = ${formatEngineering(stressTop, 'Pa')}${topGoverns ? ' ← governs' : ''}</span>
+                        <span class="equation-result ${!topGoverns ? '' : 'style=\"background: var(--text-light);\"'}">σ_bot = ${formatEngineering(stressBottom, 'Pa')}${!topGoverns ? ' ← governs' : ''}</span>
+                    </div>`;
+            } else {
+                stressHtml += `
                     <div class="equation-calculation">
                         σ = ${formatEngineering(result.max_moment, 'N·m')} / ${formatEngineering(props.Sx_top, 'm³')}
                     </div>
-                    <span class="equation-result">σ_max = ${formatEngineering(result.max_stress, 'Pa')}</span>
-                </div>
+                    <span class="equation-result">σ_max = ${formatEngineering(result.max_stress, 'Pa')}</span>`;
+            }
+
+            stressHtml += `</div>`;
+
+            const html = stressHtml + `
                 <div class="equation-step">
                     <div class="equation-step-title">Allowable Stress (ASD Method)</div>
                     <div class="equation-formula">\\[ \\sigma_{allow} = \\frac{F_y}{SF} \\]</div>
@@ -2449,64 +2626,6 @@
             value.textContent = `${utilization.toFixed(1)}%`;
         }
 
-        function showDerivation(key, result) {
-            const panel = document.getElementById('derivation-panel');
-            const title = document.getElementById('derivation-title');
-            const content = document.getElementById('derivation-content');
-
-            panel.classList.add('visible');
-
-            const info = result.load_case_info;
-
-            if (key === 'deflection') {
-                title.textContent = 'Maximum Deflection Derivation';
-                content.innerHTML = `
-                    <div class="derivation-step">
-                        <div class="step-title">Formula</div>
-                        <div class="equation">\\[ ${info.max_deflection_formula} \\]</div>
-                    </div>
-                    <div class="derivation-step">
-                        <div class="step-title">Result</div>
-                        <div class="result-box">${formatEngineering(result.max_deflection, 'm')} at x = ${formatNumber(result.max_deflection_position)} m</div>
-                    </div>
-                    <div class="derivation-step">
-                        <div class="step-title">Allowable</div>
-                        <p>${result.deflection_limit_code} = ${formatEngineering(result.allowable_deflection, 'm')}</p>
-                    </div>
-                `;
-            } else if (key === 'moment') {
-                title.textContent = 'Maximum Bending Moment Derivation';
-                content.innerHTML = `
-                    <div class="derivation-step">
-                        <div class="step-title">Formula</div>
-                        <div class="equation">\\[ ${info.max_moment_formula} \\]</div>
-                    </div>
-                    <div class="derivation-step">
-                        <div class="step-title">Result</div>
-                        <div class="result-box">${formatEngineering(result.max_moment, 'N·m')}</div>
-                    </div>
-                `;
-            } else if (key === 'stress') {
-                title.textContent = 'Maximum Stress Derivation';
-                content.innerHTML = `
-                    <div class="derivation-step">
-                        <div class="step-title">Formula</div>
-                        <div class="equation">\\[ \\sigma_{max} = \\frac{M_{max} \\cdot c}{I} \\]</div>
-                    </div>
-                    <div class="derivation-step">
-                        <div class="step-title">Result</div>
-                        <div class="result-box ${result.stress_utilization > 100 ? 'bad' : ''}">${formatEngineering(result.max_stress, 'Pa')}</div>
-                    </div>
-                    <div class="derivation-step">
-                        <div class="step-title">Allowable</div>
-                        <p>Fy / SF = ${formatEngineering(result.allowable_stress, 'Pa')}</p>
-                    </div>
-                `;
-            }
-
-            if (window.MathJax) MathJax.typesetPromise();
-        }
-
         // =============================================================================
         // DIAGRAMS
         // =============================================================================
@@ -2585,6 +2704,24 @@
                 html += `<line x1="${margin}" y1="${beamY-50}" x2="${margin+width}" y2="${beamY-50}"
                          stroke="#b91c1c" stroke-width="2"/>`;
                 html += `<text x="${margin+width/2}" y="${beamY-60}" text-anchor="middle" font-size="14" font-weight="600" fill="#b91c1c">w</text>`;
+            } else if (loadType === 'triangular') {
+                // Triangular load - arrows increase in height from left to right
+                const numArrows = 8;
+                const maxHeight = 50;
+                for (let i = 0; i <= numArrows; i++) {
+                    const x = margin + (i / numArrows) * width;
+                    const arrowHeight = (i / numArrows) * maxHeight;
+                    if (arrowHeight > 5) { // Only draw if tall enough
+                        html += `<line x1="${x}" y1="${beamY-arrowHeight}" x2="${x}" y2="${beamY-10}"
+                                 stroke="#b91c1c" stroke-width="2"/>`;
+                        html += `<polygon points="${x},${beamY-10} ${x-5},${beamY-20} ${x+5},${beamY-20}"
+                                 fill="#b91c1c"/>`;
+                    }
+                }
+                // Sloped top line (triangular distribution envelope)
+                html += `<line x1="${margin}" y1="${beamY-10}" x2="${margin+width}" y2="${beamY-maxHeight}"
+                         stroke="#b91c1c" stroke-width="2"/>`;
+                html += `<text x="${margin+width-20}" y="${beamY-maxHeight-10}" text-anchor="middle" font-size="14" font-weight="600" fill="#b91c1c">w</text>`;
             }
 
             // Dimension line
@@ -2798,12 +2935,18 @@
             });
 
             // Auto-calc for other inputs
-            ['load-position', 'elastic-modulus', 'yield-strength', 'safety-factor', 'deflection-limit'].forEach(id => {
+            ['load-position', 'elastic-modulus', 'yield-strength', 'safety-factor', 'deflection-limit', 'custom-deflection-ratio'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('input', scheduleCalculation);
                     el.addEventListener('change', scheduleCalculation);
                 }
+            });
+
+            // Show/hide custom deflection ratio input
+            document.getElementById('deflection-limit').addEventListener('change', function() {
+                const customGroup = document.getElementById('custom-deflection-group');
+                customGroup.style.display = this.value === 'custom' ? 'block' : 'none';
             });
 
             // Advanced toggle
@@ -2813,11 +2956,6 @@
                 section.classList.toggle('visible');
                 btn.innerHTML = section.classList.contains('visible') ?
                     '<span>▲</span> Hide Advanced Options' : '<span>▼</span> Show Advanced Options';
-            });
-
-            // Derivation close
-            document.getElementById('close-derivation').addEventListener('click', () => {
-                document.getElementById('derivation-panel').classList.remove('visible');
             });
 
             // Calculate button

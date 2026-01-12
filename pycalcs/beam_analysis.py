@@ -950,7 +950,12 @@ def beam_analysis(
     max_shear = max(abs(v) for v in shears)
 
     # --- Stress calculation ---
-    max_stress = max_moment * c_max / I
+    # Calculate stress at both extreme fibers for asymmetric sections
+    c_top = section_props["c_top"]
+    c_bottom = section_props["c_bottom"]
+    stress_top = max_moment * c_top / I
+    stress_bottom = max_moment * c_bottom / I
+    max_stress = max(stress_top, stress_bottom)  # Governing stress
     allowable_stress = Fy / safety_factor
 
     # --- Deflection limits ---
@@ -1017,6 +1022,8 @@ def beam_analysis(
         "max_moment": max_moment,
         "max_shear": max_shear,
         "max_stress": max_stress,
+        "stress_top": stress_top,
+        "stress_bottom": stress_bottom,
 
         # Limits and utilization
         "allowable_deflection": allowable_deflection,

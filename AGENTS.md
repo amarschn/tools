@@ -13,6 +13,8 @@ This document outlines the vision, architecture, and contribution guidelines for
 7. [Coding Practices and Standards](#coding-practices-and-standards)
 8. [Python Module Patterns](#python-module-patterns)
 9. [Advanced Tool UI Patterns](#advanced-tool-ui-patterns)
+   - [Settings Panel (Theme, Density, Precision)](#settings-panel-theme-density-precision)
+   - [Dark Mode CSS Variables (CRITICAL)](#dark-mode-css-variables-critical)
 10. [Visualization Standards](#visualization-standards)
 11. [Testing & Verification](#testing--verification)
 12. [Tool Roadmaps](#tool-roadmaps)
@@ -688,6 +690,209 @@ Provide an overall assessment with actionable recommendations.
         </ul>
     </div>
 </div>
+```
+
+### Settings Panel (Theme, Density, Precision)
+
+Tools can include a slide-out settings panel for user preferences. See `tools/example_tool_settings/` for the reference implementation and `tools/bolt-torque_claude/` for a production example.
+
+**Standard settings to include:**
+- **Theme:** Light / Dark / System (auto)
+- **Density:** Comfortable / Compact
+- **Precision:** 2 / 3 / 4 decimal places
+- **Auto-calculate:** Toggle (only for simple tools per guidelines above)
+
+```html
+<!-- Settings button in navbar -->
+<div class="nav-actions">
+    <button class="settings-button" id="settings-button" type="button">Settings</button>
+</div>
+
+<!-- Settings panel (slides in from right) -->
+<aside class="settings-panel" id="settings-panel" aria-hidden="true">
+    <div class="settings-header">
+        <h3>Tool Settings</h3>
+        <button class="settings-close" id="settings-close" type="button">Close</button>
+    </div>
+    <div class="settings-content">
+        <!-- Theme selector with segmented buttons -->
+        <div class="setting-row">
+            <div>
+                <div class="setting-label">Theme</div>
+                <div class="setting-help">Light, dark, or system default.</div>
+            </div>
+            <div class="segmented" role="group" aria-label="Theme">
+                <button type="button" data-theme="light">Light</button>
+                <button type="button" data-theme="dark">Dark</button>
+                <button type="button" data-theme="system">Auto</button>
+            </div>
+        </div>
+    </div>
+</aside>
+```
+
+**JavaScript for settings persistence:**
+```javascript
+const STORAGE_KEY = 'tool-name-settings';
+const defaultSettings = { theme: 'system', density: 'comfortable', precision: 2 };
+let settings = { ...defaultSettings };
+
+function loadSettings() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) settings = { ...defaultSettings, ...JSON.parse(stored) };
+}
+
+function applySettings() {
+    document.body.dataset.theme = settings.theme;
+    document.body.dataset.density = settings.density;
+}
+```
+
+### Dark Mode CSS Variables (CRITICAL)
+
+**⚠️ COMMON MISTAKE: Forgetting to set `color` on form inputs causes illegible text in dark mode.**
+
+The dark mode implementation uses CSS custom properties on the `<body>` element. When `data-theme="dark"` is set (or system preference is dark with `data-theme="system"`), the variables are overridden.
+
+**Light mode (default) variables:**
+```css
+:root {
+    --primary-color: #0b0d12;
+    --primary-light: #f4f5f7;
+    --secondary-color: #4b5563;
+    --accent-color: #111827;
+    --text-color: #111827;
+    --text-light: #6b7280;
+    --border-color: #e5e7eb;
+    --bg-color: #f8f9fb;
+    --bg-card: #ffffff;
+    --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+```
+
+**Dark mode variable overrides:**
+```css
+body[data-theme="dark"] {
+    --primary-color: #f9fafb;
+    --primary-light: #111827;
+    --secondary-color: #9ca3af;
+    --accent-color: #f9fafb;
+    --text-color: #f9fafb;
+    --text-light: #9ca3af;
+    --border-color: #1f2937;
+    --bg-color: #0b0d12;
+    --bg-card: #111827;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+}
+
+/* System preference fallback */
+@media (prefers-color-scheme: dark) {
+    body[data-theme="system"] {
+        /* Same overrides as body[data-theme="dark"] */
+    }
+}
+```
+
+**Understanding the color mappings:**
+
+| Variable | Light Mode | Dark Mode | Usage |
+|----------|-----------|-----------|-------|
+| `--text-color` | `#111827` (near black) | `#f9fafb` (near white) | Primary text, input text |
+| `--text-light` | `#6b7280` (gray) | `#9ca3af` (light gray) | Secondary text, hints |
+| `--bg-color` | `#f8f9fb` (off-white) | `#0b0d12` (near black) | Page background |
+| `--bg-card` | `#ffffff` (white) | `#111827` (dark gray) | Cards, inputs, panels |
+| `--border-color` | `#e5e7eb` (light gray) | `#1f2937` (dark gray) | Borders, dividers |
+| `--primary-light` | `#f4f5f7` (light) | `#111827` (dark) | Subtle backgrounds |
+
+**⚠️ NAVBAR: Two valid approaches (don't mix them!)**
+
+Choose ONE navbar style and be consistent:
+
+**Option A: Dark navbar (fixed colors)** - Stays dark in both modes. Used by GitHub, Slack, VS Code.
+```css
+.navbar {
+    background: #0b0d12;
+    border-bottom: 1px solid #1f2937;
+}
+.nav-brand { color: #fff; }
+.settings-button {
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+}
+```
+
+**Option B: Adaptive navbar (CSS variables)** - Flips with theme. Background and text must BOTH use variables.
+```css
+.navbar {
+    background-color: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+}
+.nav-brand { color: var(--text-color); }
+.settings-button {
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+```
+
+**⚠️ WRONG - Mixing approaches causes invisible text:**
+```css
+.navbar {
+    background: var(--primary-color);  /* Flips to white in dark mode */
+}
+.nav-brand { color: #fff; }  /* Fixed white = invisible on white! */
+```
+
+**⚠️ CRITICAL: Input and Select Styling**
+
+Form inputs do NOT inherit `color` from their parent by default in most browsers. You MUST explicitly set both `background-color` AND `color` on all form controls:
+
+```css
+/* CORRECT - Always set both background AND text color */
+.input-group input[type="number"],
+.input-group input[type="text"],
+.input-group select {
+    background-color: var(--bg-card);
+    color: var(--text-color);          /* ← REQUIRED for dark mode! */
+    border: 1px solid var(--border-color);
+}
+
+/* WRONG - Missing color property causes white text on white background in light mode
+   or dark text on dark background in dark mode */
+.input-group input {
+    background-color: var(--bg-card);
+    /* color not set - will be illegible in one mode or the other */
+}
+```
+
+**Other elements that commonly need explicit color:**
+- `<textarea>` elements
+- `<select>` options
+- Placeholder text (use `::placeholder` pseudo-element)
+- Disabled inputs
+
+```css
+/* Placeholder text in dark mode */
+.input-group input::placeholder {
+    color: var(--text-light);
+    opacity: 0.7;
+}
+
+/* Select dropdown styling */
+.input-group select option {
+    background-color: var(--bg-card);
+    color: var(--text-color);
+}
+```
+
+**Compact density mode:**
+```css
+body[data-density="compact"] .card { padding: 18px; }
+body[data-density="compact"] .input-group { margin-bottom: 0.85rem; }
+body[data-density="compact"] .input-group label { font-size: 0.82rem; }
+body[data-density="compact"] .input-group input,
+body[data-density="compact"] .input-group select { padding: 9px 12px; font-size: 0.9rem; }
 ```
 
 ### Comprehensive Background Tab
