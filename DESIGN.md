@@ -909,4 +909,4 @@ Add this in the `<head>` immediately after the `<meta name="viewport">` tag:
 - Keep all UI enhancements within the existing HTML template structure for consistency.
 - When adopting these patterns, preserve tool logic and docstring-driven tooltips.
 - Reference `tools/example_tool_advanced/` for a complete implementation of all patterns.
-- Reference `tools/bolt-torque_claude/` for a production example of complex tool patterns.
+- Reference `tools/bolt-torque/` for a production example of complex tool patterns.

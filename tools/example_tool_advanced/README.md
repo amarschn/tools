@@ -190,4 +190,4 @@ pycalcs/
 - `AGENTS.md` - Full patterns documentation
 - `DESIGN.md` - CSS specifications for all components
 - `tools/example_tool_settings/` - Simpler settings panel example
-- `tools/bolt-torque_claude/` - Production example of these patterns
+- `tools/bolt-torque/` - Production example of these patterns

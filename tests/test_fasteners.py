@@ -1,5 +1,5 @@
 """
-Unit tests for the fasteners_claude module.
+Unit tests for the fasteners module.
 
 Tests verify:
 - Database integrity (all grades and sizes populated)
@@ -11,16 +11,16 @@ Tests verify:
 
 import pytest
 import math
-from pycalcs.fasteners_claude import (
-    analyze_bolted_joint_claude,
-    calculate_k_factor_claude,
-    calculate_bolt_stiffness_claude,
-    calculate_joint_stiffness_claude,
-    calculate_embedding_loss_claude,
+from pycalcs.fasteners import (
+    analyze_bolted_joint,
+    calculate_k_factor,
+    calculate_bolt_stiffness,
+    calculate_joint_stiffness,
+    calculate_embedding_loss,
     get_bolt_grade_properties,
     get_fastener_geometry,
-    generate_joint_diagram_data_claude,
-    generate_torque_tension_curve_claude,
+    generate_joint_diagram_data,
+    generate_torque_tension_curve,
     ISO_BOLT_GRADES,
     SAE_BOLT_GRADES,
     ISO_FASTENER_GEOMETRY,
@@ -135,7 +135,7 @@ class TestKFactorCalculation:
 
     def test_k_factor_typical_dry_steel(self):
         """K-factor for typical dry steel M10 should be in reasonable range."""
-        k = calculate_k_factor_claude(
+        k = calculate_k_factor(
             pitch=1.5e-3,
             pitch_diameter=9.026e-3,
             nominal_diameter=10e-3,
@@ -149,7 +149,7 @@ class TestKFactorCalculation:
 
     def test_k_factor_lubricated_lower(self):
         """Lubricated conditions should give lower K-factor."""
-        k_dry = calculate_k_factor_claude(
+        k_dry = calculate_k_factor(
             pitch=1.5e-3,
             pitch_diameter=9.026e-3,
             nominal_diameter=10e-3,
@@ -157,7 +157,7 @@ class TestKFactorCalculation:
             friction_bearing=0.15,
             bearing_diameter_mean=14e-3,
         )
-        k_oiled = calculate_k_factor_claude(
+        k_oiled = calculate_k_factor(
             pitch=1.5e-3,
             pitch_diameter=9.026e-3,
             nominal_diameter=10e-3,
@@ -173,7 +173,7 @@ class TestBoltStiffness:
 
     def test_bolt_stiffness_m10_short_grip(self):
         """M10 with short grip should have stiffness ~500-800 MN/m."""
-        kb = calculate_bolt_stiffness_claude(
+        kb = calculate_bolt_stiffness(
             stress_area=58e-6,
             nominal_diameter=10e-3,
             minor_diameter=8.16e-3,
@@ -186,11 +186,11 @@ class TestBoltStiffness:
 
     def test_bolt_stiffness_increases_with_area(self):
         """Larger bolt should have higher stiffness."""
-        kb_m10 = calculate_bolt_stiffness_claude(
+        kb_m10 = calculate_bolt_stiffness(
             stress_area=58e-6, nominal_diameter=10e-3, minor_diameter=8.16e-3,
             grip_length=25e-3, head_height=6.4e-3, elastic_modulus=205e9,
         )
-        kb_m16 = calculate_bolt_stiffness_claude(
+        kb_m16 = calculate_bolt_stiffness(
             stress_area=157e-6, nominal_diameter=16e-3, minor_diameter=13.5e-3,
             grip_length=25e-3, head_height=10e-3, elastic_modulus=205e9,
         )
@@ -199,7 +199,7 @@ class TestBoltStiffness:
     def test_bolt_stiffness_zero_grip_raises(self):
         """Zero grip length should raise ValueError."""
         with pytest.raises(ValueError, match="grip_length"):
-            calculate_bolt_stiffness_claude(
+            calculate_bolt_stiffness(
                 stress_area=58e-6, nominal_diameter=10e-3, minor_diameter=8.16e-3,
                 grip_length=0, head_height=6.4e-3, elastic_modulus=205e9,
             )
@@ -210,7 +210,7 @@ class TestJointStiffness:
 
     def test_joint_stiffness_steel(self):
         """Steel joint stiffness should be in reasonable range."""
-        kj = calculate_joint_stiffness_claude(
+        kj = calculate_joint_stiffness(
             grip_length=25e-3,
             hole_diameter=11e-3,  # 10% clearance for M10
             head_diameter=16e-3,
@@ -223,11 +223,11 @@ class TestJointStiffness:
 
     def test_joint_stiffness_aluminum_lower(self):
         """Aluminum joint should have lower stiffness than steel."""
-        kj_steel = calculate_joint_stiffness_claude(
+        kj_steel = calculate_joint_stiffness(
             grip_length=25e-3, hole_diameter=11e-3, head_diameter=16e-3,
             clamped_modulus=210e9, joint_type="through_bolt",
         )
-        kj_al = calculate_joint_stiffness_claude(
+        kj_al = calculate_joint_stiffness(
             grip_length=25e-3, hole_diameter=11e-3, head_diameter=16e-3,
             clamped_modulus=70e9, joint_type="through_bolt",
         )
@@ -239,7 +239,7 @@ class TestFullAnalysis:
 
     def test_m10_88_nominal_case(self):
         """Verify nominal M10 class 8.8 oiled joint analysis."""
-        result = analyze_bolted_joint_claude(
+        result = analyze_bolted_joint(
             fastener_size="M10x1.5",
             bolt_grade="8.8",
             grip_length=25e-3,
@@ -269,7 +269,7 @@ class TestFullAnalysis:
 
     def test_sae_grade5_half_inch(self):
         """Verify SAE 1/2-13 Grade 5 joint analysis."""
-        result = analyze_bolted_joint_claude(
+        result = analyze_bolted_joint(
             fastener_size="1/2-13 UNC",
             bolt_grade="SAE Grade 5",
             grip_length=38e-3,  # 1.5 inches
@@ -289,7 +289,7 @@ class TestFullAnalysis:
 
     def test_high_load_low_safety_factor(self):
         """High external load on small bolt should give low safety factors."""
-        result = analyze_bolted_joint_claude(
+        result = analyze_bolted_joint(
             fastener_size="M6x1.0",
             bolt_grade="8.8",
             grip_length=15e-3,
@@ -310,7 +310,7 @@ class TestFullAnalysis:
 
     def test_result_has_all_keys(self):
         """Result dictionary should contain all expected keys."""
-        result = analyze_bolted_joint_claude(
+        result = analyze_bolted_joint(
             fastener_size="M10x1.5",
             bolt_grade="8.8",
             grip_length=25e-3,
@@ -345,7 +345,7 @@ class TestGraphDataGeneration:
 
     def test_joint_diagram_data(self):
         """Joint diagram data should have correct structure for triangular diagram."""
-        data = generate_joint_diagram_data_claude(
+        data = generate_joint_diagram_data(
             preload=30000,
             bolt_stiffness=500e6,
             joint_stiffness=1500e6,
@@ -379,7 +379,7 @@ class TestGraphDataGeneration:
 
     def test_torque_tension_data(self):
         """Torque-tension data should have K-factor variants."""
-        data = generate_torque_tension_curve_claude(
+        data = generate_torque_tension_curve(
             fastener_size="M10x1.5",
             bolt_grade="8.8",
             surface_condition="oiled",
@@ -396,7 +396,7 @@ class TestEdgeCases:
     def test_invalid_fastener_size_raises(self):
         """Unknown fastener size should raise ValueError."""
         with pytest.raises(ValueError, match="Unknown fastener"):
-            analyze_bolted_joint_claude(
+            analyze_bolted_joint(
                 fastener_size="M99x99",
                 bolt_grade="8.8",
                 grip_length=25e-3,
@@ -414,7 +414,7 @@ class TestEdgeCases:
     def test_invalid_bolt_grade_raises(self):
         """Unknown bolt grade should raise ValueError."""
         with pytest.raises(ValueError, match="Unknown bolt grade"):
-            analyze_bolted_joint_claude(
+            analyze_bolted_joint(
                 fastener_size="M10x1.5",
                 bolt_grade="99.99",
                 grip_length=25e-3,
@@ -432,7 +432,7 @@ class TestEdgeCases:
     def test_zero_grip_length_raises(self):
         """Zero grip length should raise ValueError."""
         with pytest.raises(ValueError, match="grip_length"):
-            analyze_bolted_joint_claude(
+            analyze_bolted_joint(
                 fastener_size="M10x1.5",
                 bolt_grade="8.8",
                 grip_length=0,
@@ -450,7 +450,7 @@ class TestEdgeCases:
     def test_negative_load_raises(self):
         """Negative external load should raise ValueError."""
         with pytest.raises(ValueError):
-            analyze_bolted_joint_claude(
+            analyze_bolted_joint(
                 fastener_size="M10x1.5",
                 bolt_grade="8.8",
                 grip_length=25e-3,

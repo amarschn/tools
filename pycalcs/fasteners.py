@@ -657,7 +657,7 @@ def get_strength_class(bolt_grade: str) -> str:
         return "high_strength"
 
 
-def calculate_k_factor_claude(
+def calculate_k_factor(
     pitch: float,
     pitch_diameter: float,
     nominal_diameter: float,
@@ -690,7 +690,7 @@ def calculate_k_factor_claude(
     return k_total
 
 
-def calculate_bolt_stiffness_claude(
+def calculate_bolt_stiffness(
     stress_area: float,
     nominal_diameter: float,
     minor_diameter: float,
@@ -745,7 +745,7 @@ def calculate_bolt_stiffness_claude(
     return 1.0 / total_flexibility
 
 
-def calculate_joint_stiffness_claude(
+def calculate_joint_stiffness(
     grip_length: float,
     hole_diameter: float,
     head_diameter: float,
@@ -800,7 +800,7 @@ def calculate_joint_stiffness_claude(
     return stiffness
 
 
-def calculate_embedding_loss_claude(
+def calculate_embedding_loss(
     grip_length: float,
     n_interfaces: int,
     surface_roughness: str,
@@ -838,7 +838,7 @@ def calculate_embedding_loss_claude(
     return preload_loss
 
 
-def generate_joint_diagram_data_claude(
+def generate_joint_diagram_data(
     preload: float,
     bolt_stiffness: float,
     joint_stiffness: float,
@@ -949,7 +949,7 @@ def generate_joint_diagram_data_claude(
     }
 
 
-def generate_torque_tension_curve_claude(
+def generate_torque_tension_curve(
     fastener_size: str,
     bolt_grade: str,
     surface_condition: str,
@@ -988,7 +988,7 @@ def generate_torque_tension_curve_claude(
     }
 
 
-def generate_k_factor_sensitivity_claude(
+def generate_k_factor_sensitivity(
     nominal_diameter: float,
     target_torque: float,
     k_range: Tuple[float, float],
@@ -1014,7 +1014,7 @@ def generate_k_factor_sensitivity_claude(
 # MAIN ANALYSIS FUNCTION
 # =============================================================================
 
-def analyze_bolted_joint_claude(
+def analyze_bolted_joint(
     fastener_size: str,
     bolt_grade: str,
     grip_length: float,
@@ -1177,7 +1177,7 @@ def analyze_bolted_joint_claude(
     k_factor = k_typ
 
     # === BOLT STIFFNESS ===
-    bolt_stiffness = calculate_bolt_stiffness_claude(
+    bolt_stiffness = calculate_bolt_stiffness(
         stress_area=stress_area,
         nominal_diameter=nominal_d,
         minor_diameter=geometry["minor_diameter"],
@@ -1187,7 +1187,7 @@ def analyze_bolted_joint_claude(
     )
 
     # === JOINT STIFFNESS ===
-    joint_stiffness = calculate_joint_stiffness_claude(
+    joint_stiffness = calculate_joint_stiffness(
         grip_length=grip_length,
         hole_diameter=hole_d,
         head_diameter=head_d,
@@ -1213,7 +1213,7 @@ def analyze_bolted_joint_claude(
 
     # === EMBEDDING LOSS ===
     n_interfaces = 2 if joint_type == "through_bolt" else 1
-    embedding_loss = calculate_embedding_loss_claude(
+    embedding_loss = calculate_embedding_loss(
         grip_length=grip_length,
         n_interfaces=n_interfaces,
         surface_roughness=embedding_surface_roughness,
@@ -1305,20 +1305,20 @@ def analyze_bolted_joint_claude(
         recommendations.append("Use controlled lubrication to reduce K-factor scatter.")
 
     # === GRAPH DATA ===
-    joint_diagram_data = generate_joint_diagram_data_claude(
+    joint_diagram_data = generate_joint_diagram_data(
         preload=target_preload,
         bolt_stiffness=bolt_stiffness,
         joint_stiffness=joint_stiffness,
         external_load=external_axial_load,
     )
 
-    torque_tension_data = generate_torque_tension_curve_claude(
+    torque_tension_data = generate_torque_tension_curve(
         fastener_size=fastener_size,
         bolt_grade=bolt_grade,
         surface_condition=surface_condition,
     )
 
-    k_sensitivity_data = generate_k_factor_sensitivity_claude(
+    k_sensitivity_data = generate_k_factor_sensitivity(
         nominal_diameter=nominal_d,
         target_torque=assembly_torque,
         k_range=(k_min, k_max),

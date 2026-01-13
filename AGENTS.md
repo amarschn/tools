@@ -261,7 +261,7 @@ When creating a new tool, generate these files:
 
 **Reference examples:**
 - Simple tool: `/pycalcs/snapfits.py` and `/tools/snap-fit-cantilever/`
-- Complex tool: `/pycalcs/fasteners_claude.py` and `/tools/bolt-torque_claude/`
+- Complex tool: `/pycalcs/fasteners.py` and `/tools/bolt-torque/`
 
 ### Python
 
@@ -319,7 +319,7 @@ def calculate_tool(input_a: float, input_b: float) -> dict[str, float]:
 
 ## Python Module Patterns
 
-This section documents proven patterns for structuring `pycalcs` modules, derived from production tools like `fasteners_claude.py`.
+This section documents proven patterns for structuring `pycalcs` modules, derived from production tools like `fasteners.py`.
 
 ### Pattern 1: Database-Driven Calculations
 
@@ -514,7 +514,7 @@ return {
 
 ## Advanced Tool UI Patterns
 
-This section documents UI patterns for complex tools. See `tools/example_tool_advanced/` for a complete implementation and `tools/bolt-torque_claude/` for a production example.
+This section documents UI patterns for complex tools. See `tools/example_tool_advanced/` for a complete implementation and `tools/bolt-torque/` for a production example.
 
 ### Loading Overlay
 
@@ -696,7 +696,7 @@ Provide an overall assessment with actionable recommendations.
 
 ### Settings Panel (Theme, Density, Precision)
 
-Tools can include a slide-out settings panel for user preferences. See `tools/example_tool_settings/` for the reference implementation and `tools/bolt-torque_claude/` for a production example.
+Tools can include a slide-out settings panel for user preferences. See `tools/example_tool_settings/` for the reference implementation and `tools/bolt-torque/` for a production example.
 
 **Standard settings to include:**
 - **Theme:** Light / Dark / System (auto)
