@@ -3,7 +3,8 @@
 ## Current Reality
 
 - **Traffic:** Zero (site exists but not discoverable)
-- **Domain:** GitHub Pages subdomain (amarschn.github.io/tools)
+- **Domain:** transparent.tools (hosted on Netlify) ✓
+- **Donation link:** Ko-fi set up on all tool pages ✓
 - **Tools:** 39 total, 0 formally verified
 - **Discoverability:** None (no SEO, no marketing, no domain authority)
 
@@ -48,31 +49,26 @@ Before launch, need 5 tools that are:
 - [ ] Peer review if possible
 - [ ] Add "Verified" badge with verification date
 
-### 0.2 Experimental Badge System
+### 0.2 Experimental Badge System ✓ DONE
 
-All non-verified tools need clear "Experimental" status:
-- Visual badge on tool page
-- Disclaimer in results
-- Listed separately in catalog or filtered by default
+The catalog (`index.html`) automatically handles badge display:
+- Tools WITHOUT `human-verified` tag → "Experimental" badge (orange)
+- Tools WITH `human-verified` tag → "Verified" badge (green)
+- Priority tools also get "Up Next" badge
+- Status dropdown filter (All / Verified only / Experimental only)
 
-**UI treatment options:**
-1. Yellow/orange "Experimental" badge
-2. Separate "Experimental" section in catalog
-3. Toggle to show/hide experimental tools
-4. Warning banner on experimental tool pages
+**To mark a tool as verified:** Add `"human-verified"` to its `tags` array in `catalog.json`.
 
 ### 0.3 Domain & Basic Infrastructure
 
-| Task | Priority | Cost |
-|------|----------|------|
-| Register domain (e.g., engcalcs.com, calcs.engineer) | High | $10-50/year |
-| Set up Netlify hosting | High | Free |
-| Configure custom domain | High | Free |
-| Set up basic analytics | Medium | Free |
-| Create robots.txt and sitemap | Medium | Free |
-
-**Domain name**
-The domain is transparent.tools
+| Task | Priority | Status |
+|------|----------|--------|
+| Register domain (transparent.tools) | High | ✓ Done |
+| Set up Netlify hosting | High | ✓ Done |
+| Configure custom domain | High | ✓ Done |
+| Set up Ko-fi donation links | Low | ✓ Done |
+| Set up basic analytics (GA4) | Medium | ✓ Done |
+| Create robots.txt and sitemap | Medium | Not started |
 
 ---
 
@@ -186,9 +182,14 @@ Best-converting categories:
 ## Success Metrics by Phase
 
 ### Pre-Launch (Phase 0)
-- [ ] 5 tools verified
-- [ ] Experimental badges on all others
-- [ ] Domain registered and configured
+- [ ] 5 tools verified (add `human-verified` tag in catalog.json)
+- [x] Experimental badges on all others (automatic via index.html)
+- [x] Domain registered and configured
+- [x] Ko-fi donation links added
+- [x] Basic analytics working (GA4 on all pages)
+- [ ] robots.txt and sitemap created
+- [ ] About page
+- [ ] Terms of Service / Privacy Policy
 
 ### Soft Launch (Phase 1)
 - [ ] 100 unique visitors in first month
@@ -228,12 +229,12 @@ Things we're NOT doing yet:
 
 ## Open Questions
 
-1. What domain name?
-2. Which 5 tools to verify first?
-3. How to display experimental vs. verified in the UI?
+1. ~~What domain name?~~ → **transparent.tools** ✓
+2. ~~Which 5 tools to verify first?~~ → Unit Converter, Reynolds Number, Battery Runtime, Bolt Torque, Beam Bending
+3. ~~How to display experimental vs. verified in the UI?~~ → Automatic badges in catalog + filter dropdown ✓
 4. Who can help verify tools? (peer review)
 5. What's the "about" story? (transparency about AI, personal project, etc.)
 
 ---
 
-*Last updated: 2026-01-11*
+*Last updated: 2026-01-12*

@@ -23,17 +23,15 @@ Key principles:
 
 ## Monetization Options (Ordered by Feasibility)
 
-### Tier 1: Zero-Effort Options (Enable Now)
+### Tier 1: Zero-Effort Options ✅ COMPLETE
 
-These can be set up immediately with no downside:
+| Option | Setup Effort | Expected Revenue | Status |
+|--------|--------------|------------------|--------|
+| Ko-fi donations | 15 min | $0-20/mo | ✅ Done (on all tool pages) |
+| GitHub Sponsors | 30 min | $0-50/mo | Optional (0% fees, but Ko-fi is fine) |
+| Buy Me a Coffee | 15 min | $0-20/mo | Skip (redundant with Ko-fi) |
 
-| Option | Setup Effort | Expected Revenue | When It Makes Sense |
-|--------|--------------|------------------|---------------------|
-| GitHub Sponsors | 30 min | $0-50/mo | Any time (0% fees) |
-| Ko-fi donations | 15 min | $0-20/mo | Any time |
-| Buy Me a Coffee | 15 min | $0-20/mo | Any time |
-
-**Action:** Set up GitHub Sponsors and Ko-fi now. No downside, tiny potential upside, signals project is "real."
+**Status:** Ko-fi is set up. GitHub Sponsors can be added later if desired (0% fees vs Ko-fi's 0-5%), but at zero traffic this is premature optimization.
 
 ---
 
@@ -139,8 +137,8 @@ Subscriptions only make sense after artifact monetization proves demand and trus
 
 ## Recommended Path
 
-### Phase 1: Foundation (Now - Month 2)
-- Set up GitHub Sponsors and Ko-fi (no downside)
+### Phase 1: Foundation ✅ COMPLETE
+- [x] Set up Ko-fi donation links (done on all tools)
 - Focus on launch plan, not monetization
 - Don't add ads yet (keep UX clean as differentiator)
 - No login gates; build trust in accuracy and speed
@@ -231,4 +229,4 @@ Only needed once revenue exceeds ~$400/year:
 
 ---
 
-*Last updated: 2026-01-11*
+*Last updated: 2026-01-12*

@@ -157,6 +157,7 @@ For the day-to-day workflow and release process, see `CONTRIBUTING.md` and `docs
       - `tools/example_tool/` — Basic tools with few inputs
       - `tools/example_tool_advanced/` — Complex tools with many inputs, safety factors, visualizations
     * This template is mandatory for all contributors, including AI agents, to ensure consistency and adherence to project principles.
+    * **Include Google Analytics:** Add the GA4 snippet in the `<head>` after the viewport meta tag. See [Analytics](#analytics) for the required code.
     * Modify the template's placeholder content (inputs, outputs, README section) to fit your specific tool.
     * Update the script constants so the frontend loads the correct Python: set `TOOL_MODULE_NAME` to your `pycalcs/<module>.py` filename (without the `.py`) and `TOOL_FUNCTION_NAME` to the callable you expose. Every form control `id` the template references (`#param1`, `#param2`, etc.) must match the parameter names defined in the docstring so tooltips populate automatically.
     * You will also need to create/update the `README.md` in your tool's folder. The template has a section to display this.
@@ -1009,6 +1010,29 @@ netlify deploy
 - **Build step:** None (pure static HTML/JS site)
 - **Publish directory:** `.` (root)
 - **Config:** `netlify.toml` in repo root
+
+### Analytics
+
+All pages include Google Analytics 4 for traffic tracking.
+
+**Measurement ID:** `G-YG3SBRRZFZ`
+
+**Required snippet** (must be in `<head>` of every tool page):
+
+```html
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YG3SBRRZFZ');
+</script>
+```
+
+**Placement:** Insert immediately after the `<meta name="viewport">` tag.
+
+**Dashboard:** [analytics.google.com](https://analytics.google.com) (requires account access)
 
 ### Support & Monetization
 

@@ -882,6 +882,27 @@ button, .result-item, .input-group input, .input-group select {
 
 ---
 
+## Analytics
+
+All tool pages must include Google Analytics 4 for traffic tracking.
+
+### Required Snippet
+
+Add this in the `<head>` immediately after the `<meta name="viewport">` tag:
+
+```html
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YG3SBRRZFZ');
+</script>
+```
+
+---
+
 ## Implementation Notes
 
 - Maintain tool-local CSS blocks for now; avoid inline styles unless absolutely necessary.
