@@ -68,7 +68,9 @@ The catalog (`index.html`) automatically handles badge display:
 | Configure custom domain | High | ✓ Done |
 | Set up Ko-fi donation links | Low | ✓ Done |
 | Set up basic analytics (GA4) | Medium | ✓ Done |
-| Create robots.txt and sitemap | Medium | Not started |
+| Create robots.txt and sitemap | Medium | ✓ Done |
+| Create About page | Medium | ✓ Done |
+| Create Terms/Privacy page | Medium | ✓ Done |
 
 ---
 
@@ -77,15 +79,15 @@ The catalog (`index.html`) automatically handles badge display:
 ### 1.1 Minimum Viable Launch Checklist
 
 - [ ] 5 verified tools with badges
-- [ ] All other tools marked "Experimental"
-- [ ] Custom domain configured
-- [ ] Analytics installed
-- [ ] Terms of Service page
-- [ ] Privacy Policy page
-- [ ] About page (who made this, why, transparency about AI)
-- [ ] Contact method (email or GitHub issues)
+- [x] All other tools marked "Experimental"
+- [x] Custom domain configured
+- [x] Analytics installed (GA4)
+- [x] Terms of Service page
+- [x] Privacy Policy page
+- [x] About page (who made this, why, transparency about AI)
+- [x] Contact method (Ko-fi linked from About page)
 - [ ] Mobile responsive confirmed
-- [ ] Basic SEO (titles, descriptions, sitemap)
+- [x] Basic SEO (titles, descriptions, sitemap)
 
 ### 1.2 Initial Traffic Sources (Free)
 
@@ -187,9 +189,9 @@ Best-converting categories:
 - [x] Domain registered and configured
 - [x] Ko-fi donation links added
 - [x] Basic analytics working (GA4 on all pages)
-- [ ] robots.txt and sitemap created
-- [ ] About page
-- [ ] Terms of Service / Privacy Policy
+- [x] robots.txt and sitemap created
+- [x] About page
+- [x] Terms of Service / Privacy Policy
 
 ### Soft Launch (Phase 1)
 - [ ] 100 unique visitors in first month
