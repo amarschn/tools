@@ -3,627 +3,1900 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reynolds Number Explorer - Engineering Tools</title>
+    <title>Reynolds Number Explorer - Transparent Tools</title>
 
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 
     <style>
         :root {
-            --primary-color: #212529;
-            --primary-light: #f8f9fa;
-            --secondary-color: #495057;
-            --text-color: #212529;
-            --text-light: #6c757d;
-            --border-color: #dee2e6;
-            --bg-color: #f8f9fa;
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
             --bg-card: #ffffff;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
             --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', monospace;
+            --laminar-color: #3b82f6;
+            --transitional-color: #f59e0b;
+            --turbulent-color: #ef4444;
         }
+
+        /* Dark Theme */
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            }
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; }
         body {
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            font-family: var(--font-sans);
             line-height: 1.6;
             background-color: var(--bg-color);
             color: var(--text-color);
             display: flex;
             flex-direction: column;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
-        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
-        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
-        h1 { font-size: 2.25rem; }
-        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
-        h3 { font-size: 1.25rem; color: var(--secondary-color); }
-        h4 { font-size: 1rem; color: var(--text-color); }
-        p { margin-bottom: 1em; color: var(--text-light); }
-        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
-        a:hover { text-decoration: underline; }
 
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
-        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
-        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
-        .nav-brand:hover { text-decoration: none; }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        /* Settings Panel */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0; right: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border-color); }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close { background: none; border: none; font-size: 0.9rem; font-weight: 600; color: var(--text-light); cursor: pointer; }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
 
         main.container { flex-grow: 1; }
-        .tool-description { font-size: 1.1rem; max-width: 70ch; margin-bottom: 1rem; }
-        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
-        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 1rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; margin-top: 1.5rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
 
-        details > summary { list-style: none; cursor: pointer; }
-        details > summary::-webkit-details-marker { display: none; }
-        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
-        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
-        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
-        .purpose-section[open] > summary::after { content: '[Shrink]'; }
-        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
-        .purpose-content ul { padding-left: 20px; margin-bottom: 1em; }
-
-        .tool-inputs h2 { margin-top: 0; }
-        .input-group { margin-bottom: 1.25rem; position: relative; }
-        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
-        .input-group input[type="number"], .input-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
-        .input-group input:focus, .input-group select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light); }
-        .tooltip-trigger { display: inline-block; width: 18px; height: 18px; background-color: var(--border-color); color: var(--text-light); border-radius: 50%; text-align: center; font-size: 12px; font-weight: bold; line-height: 18px; cursor: help; position: absolute; right: -24px; top: 38px; }
-        .tooltip-trigger::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: var(--text-color); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 400; line-height: 1.4; width: 220px; opacity: 0; visibility: hidden; transition: opacity 0.2s; z-index: 5; }
-        .tooltip-trigger:hover::after, .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
-
-        .btn { display: inline-block; padding: 10px 18px; border-radius: 6px; font-size: 0.95rem; font-weight: 600; border: none; cursor: pointer; transition: background-color 0.2s; }
-        .btn-primary { background-color: var(--primary-color); color: white; }
-        .btn-primary:hover { background-color: #16181a; }
-        .btn-secondary { background-color: var(--primary-light); color: var(--secondary-color); border: 1px solid var(--border-color); }
-        .btn-secondary:hover { background-color: #e9ecef; }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
-        .tab-link { border: none; background: none; padding: 10px 16px; font-weight: 600; cursor: pointer; color: var(--secondary-color); border-bottom: 2px solid transparent; }
-        .tab-link.active { color: var(--primary-color); border-color: var(--primary-color); }
-        .tab-content { display: none; }
-
-        .result-item { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
-        .result-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-        .result-header strong { color: var(--primary-color); }
-        .equation-details { font-size: 0.9rem; color: var(--secondary-color); }
-        .inline-details > summary { cursor: pointer; list-style: none; }
-        .inline-details > summary::after { content: 'Show derivation'; font-size: 0.85rem; color: var(--secondary-color); }
-        .inline-details[open] > summary::after { content: 'Hide derivation'; }
-
-        .definition { border-bottom: 1px dotted var(--secondary-color); cursor: help; }
-
-        .footer { text-align: center; padding: 16px 0; font-size: 0.85rem; color: var(--text-light); }
-
-        .hidden { display: none; }
-
-        @media (max-width: 900px) {
-            .tool-layout { grid-template-columns: 1fr; }
-            .tooltip-trigger { right: 0; }
-            .input-group { padding-right: 24px; }
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(340px, 1fr) minmax(500px, 1.5fr);
+            gap: 28px;
+            align-items: start;
         }
-    
-    .support-link {
-      color: inherit;
-      font-weight: 600;
-      text-decoration: none;
-    }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
 
-    .support-link:hover {
-      text-decoration: underline;
-    }
+        /* Tooltips */
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: help;
+            margin-left: 6px;
+            flex-shrink: 0;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: var(--bg-card);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 280px;
+            max-width: 90vw;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 100;
+            box-shadow: var(--shadow-lg);
+            pointer-events: none;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+        .has-tooltip { position: relative; display: flex; align-items: center; }
+
+        /* Scenario Selector */
+        .scenario-section { margin-bottom: 1.5rem; }
+        .scenario-header { display: flex; align-items: center; margin-bottom: 0.75rem; }
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .scenario-btn {
+            padding: 12px 10px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s ease;
+        }
+        .scenario-btn:hover { border-color: var(--secondary-color); }
+        .scenario-btn.active { border-color: var(--accent-color); background: var(--primary-light); }
+        .scenario-btn .scenario-icon { font-size: 1.5rem; margin-bottom: 4px; }
+        .scenario-btn .scenario-name { font-size: 0.85rem; font-weight: 600; color: var(--text-color); }
+        .scenario-btn .scenario-re { font-size: 0.75rem; color: var(--text-light); }
+
+        /* Fluid & Properties */
+        .properties-section { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+        .properties-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .properties-header h3 { margin-bottom: 0; }
+        .reset-btn {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+        .reset-btn:hover { color: var(--text-color); text-decoration: underline; }
+        .reset-btn.visible { display: inline; }
+
+        .fluid-row { display: flex; gap: 12px; margin-bottom: 12px; }
+        .fluid-select-group { flex: 1; }
+        .fluid-select-group label { display: flex; align-items: center; font-size: 0.85rem; font-weight: 500; margin-bottom: 4px; }
+        .fluid-select-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+        .temp-group { width: 140px; }
+        .temp-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            text-align: center;
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+
+        .property-display {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            background: var(--primary-light);
+            padding: 12px;
+            border-radius: var(--border-radius);
+            font-size: 0.85rem;
+        }
+        .property-item { text-align: center; }
+        .property-item .label { color: var(--text-light); font-size: 0.75rem; }
+        .property-item .value { font-family: var(--font-mono); font-weight: 600; }
+
+        /* Sliders */
+        .slider-section { margin-bottom: 1.5rem; }
+        .slider-group { margin-bottom: 20px; }
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .slider-label { display: flex; align-items: center; font-size: 0.9rem; font-weight: 600; }
+        .slider-value { font-family: var(--font-mono); font-size: 0.95rem; font-weight: 600; }
+        .slider-input-row { display: flex; align-items: center; gap: 12px; }
+        .slider-input-row input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            background: var(--border-color);
+            border-radius: 3px;
+            outline: none;
+        }
+        .slider-input-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .slider-input-row input[type="number"] {
+            width: 100px;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            text-align: right;
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+        .slider-bounds { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-light); margin-top: 4px; }
+
+        /* Reynolds Display */
+        .reynolds-display {
+            background: var(--primary-light);
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .reynolds-display.laminar { border-color: var(--laminar-color); }
+        .reynolds-display.transitional { border-color: var(--transitional-color); }
+        .reynolds-display.turbulent { border-color: var(--turbulent-color); }
+        .reynolds-label { font-size: 0.9rem; color: var(--text-light); margin-bottom: 4px; }
+        .reynolds-value { font-size: 2.5rem; font-family: var(--font-mono); font-weight: 700; }
+        .reynolds-display.laminar .reynolds-value { color: var(--laminar-color); }
+        .reynolds-display.transitional .reynolds-value { color: var(--transitional-color); }
+        .reynolds-display.turbulent .reynolds-value { color: var(--turbulent-color); }
+        .regime-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 8px;
+        }
+        .regime-badge.laminar { background: var(--laminar-color); color: white; }
+        .regime-badge.transitional { background: var(--transitional-color); color: white; }
+        .regime-badge.turbulent { background: var(--turbulent-color); color: white; }
+
+        /* Custom Fluid Section */
+        .custom-section {
+            border-top: 1px dashed var(--border-color);
+            padding-top: 1rem;
+            margin-top: 1rem;
+        }
+        .custom-toggle {
+            background: none;
+            border: none;
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .custom-toggle:hover { color: var(--text-color); }
+        .custom-content { display: none; margin-top: 1rem; }
+        .custom-content.visible { display: block; }
+        .custom-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .custom-input-group { }
+        .custom-input-group label { display: flex; align-items: center; font-size: 0.8rem; font-weight: 500; margin-bottom: 4px; }
+        .custom-input-group input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+
+        /* Output Tabs */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Flow Visualization */
+        .viz-container { position: relative; margin-bottom: 20px; }
+        .flow-canvas {
+            width: 100%;
+            height: 200px;
+            border-radius: var(--border-radius);
+            background: linear-gradient(180deg, #1e3a5f 0%, #0f172a 100%);
+        }
+        .viz-legend {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .legend-dot.laminar { background: var(--laminar-color); }
+        .legend-dot.transitional { background: var(--transitional-color); }
+        .legend-dot.turbulent { background: var(--turbulent-color); }
+
+        /* Regime Scale */
+        .regime-scale { margin-bottom: 24px; }
+        .regime-scale h4 { font-size: 0.9rem; margin-bottom: 12px; margin-top: 0; color: var(--secondary-color); }
+        .scale-bar {
+            height: 24px;
+            border-radius: 12px;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+        .scale-segment { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600; color: white; }
+        .scale-segment.laminar { background: var(--laminar-color); flex: 2300; }
+        .scale-segment.transitional { background: var(--transitional-color); flex: 1700; }
+        .scale-segment.turbulent { background: var(--turbulent-color); flex: 6000; }
+        .scale-marker {
+            position: absolute;
+            top: -8px;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .scale-marker .marker-arrow { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid var(--text-color); }
+        .scale-marker .marker-value { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; background: var(--text-color); color: var(--bg-card); padding: 2px 6px; border-radius: 4px; margin-top: 2px; white-space: nowrap; }
+        .scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.75rem; color: var(--text-light); }
+
+        /* Implications Panel */
+        .implications-panel {
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+            padding: 20px;
+        }
+        .implications-panel h4 { margin-bottom: 12px; margin-top: 0; color: var(--secondary-color); }
+        .implication-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); }
+        .implication-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+        .implication-label { font-size: 0.8rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .implication-text { font-size: 0.95rem; color: var(--text-color); line-height: 1.5; }
+
+        /* Orders of Magnitude */
+        .magnitude-section { margin-top: 24px; }
+        .magnitude-section h4 { margin-bottom: 16px; margin-top: 0; color: var(--secondary-color); }
+        .magnitude-list { display: flex; flex-direction: column; gap: 8px; }
+        .magnitude-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.9rem;
+        }
+        .magnitude-item.current { border-color: var(--accent-color); background: var(--primary-light); }
+        .magnitude-icon { font-size: 1.2rem; width: 30px; text-align: center; }
+        .magnitude-name { flex: 1; font-weight: 500; }
+        .magnitude-re { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-light); }
+
+        /* Background Tab */
+        .equation-card {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin: 16px 0;
+        }
+        .equation-card .equation-label { font-size: 0.85rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 8px; }
+
+        .reference-list { margin-top: 1rem; }
+        .reference-item {
+            padding: 12px 16px;
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+        .reference-item .ref-title { font-weight: 600; color: var(--text-color); }
+        .reference-item .ref-authors { color: var(--text-light); font-size: 0.85rem; }
+        .reference-item .ref-details { color: var(--text-light); font-size: 0.85rem; font-style: italic; }
+
+        .callout {
+            padding: 16px 20px;
+            border-radius: var(--border-radius);
+            margin: 16px 0;
+            border-left: 4px solid;
+        }
+        .callout-info { background: #dbeafe; border-color: #3b82f6; }
+        .callout-info p { color: #1e40af; }
+        .callout-warning { background: #fef3c7; border-color: #f59e0b; }
+        .callout-warning p { color: #92400e; }
+        body[data-theme="dark"] .callout-info { background: #1e3a5f; }
+        body[data-theme="dark"] .callout-info p { color: #93c5fd; }
+        body[data-theme="dark"] .callout-warning { background: #422006; }
+        body[data-theme="dark"] .callout-warning p { color: #fcd34d; }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] .callout-info { background: #1e3a5f; }
+            body[data-theme="system"] .callout-info p { color: #93c5fd; }
+            body[data-theme="system"] .callout-warning { background: #422006; }
+            body[data-theme="system"] .callout-warning p { color: #fcd34d; }
+        }
+
+        /* Footer */
+        .footer { text-align: center; padding: 20px 0; font-size: 0.85rem; color: var(--text-light); border-top: 1px solid var(--border-color); margin-top: 30px; background: var(--bg-card); }
+        .support-link { color: inherit; font-weight: 600; text-decoration: none; }
+        .support-link:hover { text-decoration: underline; }
+
+        /* Compact density */
+        body[data-density="compact"] .container { padding: 16px 0; }
+        body[data-density="compact"] .card { padding: 16px; }
+        body[data-density="compact"] .tool-layout { gap: 16px; }
+        body[data-density="compact"] h1 { font-size: 1.75rem; }
+        body[data-density="compact"] .scenario-btn { padding: 8px 6px; }
+        body[data-density="compact"] .scenario-btn .scenario-icon { font-size: 1.2rem; }
+        body[data-density="compact"] .scenario-btn .scenario-name { font-size: 0.75rem; }
+        body[data-density="compact"] .slider-group { margin-bottom: 14px; }
+
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 600px) {
+            .scenario-grid { grid-template-columns: repeat(2, 1fr); }
+            .fluid-row { flex-direction: column; }
+            .temp-group { width: 100%; }
+            .custom-inputs { grid-template-columns: 1fr; }
+            .settings-panel { width: 100%; }
+        }
     </style>
 </head>
 
-<body>
+<body data-theme="system" data-density="comfortable">
     <header class="navbar">
         <nav class="nav-container">
-            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <a href="../../index.html" class="nav-brand">Transparent Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Settings</button>
+            </div>
         </nav>
     </header>
 
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or match system.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system" class="active">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable" class="active">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-section">
+                <h4>Display</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Significant figures in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2</button>
+                        <button type="button" data-precision="3" class="active">3</button>
+                        <button type="button" data-precision="4">4</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="settings-button" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
     <main class="container">
         <h1>Reynolds Number Explorer</h1>
-        <p class="tool-description" id="tool-description">
-            Estimate the Reynolds number for internal or external flows, explore which transport properties were used, and classify the resulting flow regime.
+        <p class="tool-description">
+            Explore the Reynolds number through real-world scenarios. Adjust parameters interactively to build intuition about flow regimes and their practical implications.
         </p>
-
-        <details class="purpose-section">
-            <summary>Tool Purpose & README</summary>
-            <div class="purpose-content" id="readme-content">
-                <h3>Purpose</h3>
-                <p>This tool supports introductory fluid mechanics design checks by providing a traceable Reynolds number calculation. Users can toggle between kinematic viscosity input or density and dynamic viscosity, making it easy to work with data from handbooks or laboratory measurements.</p>
-                <h3>Workflow</h3>
-                <ul>
-                    <li>Supply bulk flow velocity and a characteristic length scale.</li>
-                    <li>Select the transport property mode (kinematic viscosity or density with dynamic viscosity).</li>
-                    <li>Review the computed Reynolds number, the inferred flow regime, and the algebra behind the calculation.</li>
-                    <li>Export a JSON snapshot of the current results for documentation.</li>
-                </ul>
-                <h3>Scope & Assumptions</h3>
-                <ul>
-                    <li>Assumes steady, Newtonian, incompressible flow.</li>
-                    <li>Uses canonical threshold values (2300 and 4000) for laminar and turbulent regime guidance.</li>
-                    <li>No automatic unit conversion—ensure consistent SI inputs.</li>
-                </ul>
-            </div>
-        </details>
 
         <div class="tool-layout">
             <section class="tool-inputs card">
-                <h2>Inputs</h2>
-                <form id="calc-form">
-                    <div class="input-group" data-param="velocity">
-                        <label for="velocity">Mean Velocity (m/s)</label>
-                        <input type="number" id="velocity" name="velocity" placeholder="e.g., 1.5" step="any" min="0" value="1.5">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                <h2>Configure Flow</h2>
+
+                <!-- Scenario Selector -->
+                <div class="scenario-section">
+                    <div class="scenario-header has-tooltip">
+                        <h3 style="margin-bottom: 0;">Select a Scenario</h3>
+                        <span class="tooltip-trigger" data-tooltip="Choose a real-world flow scenario to auto-populate typical values. Each scenario sets appropriate fluid properties, velocity ranges, and characteristic length scales. Select 'Custom' for manual control of all parameters.">?</span>
                     </div>
-                    <div class="input-group" data-param="characteristic_length">
-                        <label for="characteristic-length">Characteristic Length (m)</label>
-                        <input type="number" id="characteristic-length" name="characteristic-length" placeholder="e.g., 0.05" step="any" min="0" value="0.05">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    <div class="scenario-grid" id="scenario-grid"></div>
+                </div>
+
+                <!-- Fluid Properties -->
+                <div class="properties-section">
+                    <div class="properties-header">
+                        <div class="has-tooltip">
+                            <h3 style="margin-bottom: 0;">Fluid Properties</h3>
+                            <span class="tooltip-trigger" data-tooltip="Physical properties of the working fluid. These values are used to calculate kinematic viscosity (ν = μ/ρ), which appears in the Reynolds number formula. Properties vary with temperature - adjust the temperature to see how viscosity changes.">?</span>
+                        </div>
+                        <button class="reset-btn" id="reset-btn">Reset to defaults</button>
                     </div>
-                    <div class="input-group">
-                        <label for="viscosity-mode">Transport Property Mode</label>
-                        <select id="viscosity-mode" name="viscosity-mode">
-                            <option value="kinematic">Kinematic viscosity</option>
-                            <option value="dynamic">Density and dynamic viscosity</option>
-                        </select>
+                    <div class="fluid-row">
+                        <div class="fluid-select-group">
+                            <label for="fluid-select" class="has-tooltip">
+                                Fluid
+                                <span class="tooltip-trigger" data-tooltip="The working fluid in your system. Each fluid has unique density and viscosity properties that strongly affect the Reynolds number. Water is ~50x more viscous than air at the same temperature, so the same geometry and velocity gives very different Re values.">?</span>
+                            </label>
+                            <select id="fluid-select"></select>
+                        </div>
+                        <div class="fluid-select-group temp-group">
+                            <label for="temp-input" class="has-tooltip">
+                                Temp (°C)
+                                <span class="tooltip-trigger" data-tooltip="Fluid temperature in degrees Celsius. Temperature strongly affects viscosity: water at 20°C has viscosity ~1.0 mPa·s, but at 80°C it drops to ~0.35 mPa·s. This means the same flow becomes more turbulent as temperature increases.">?</span>
+                            </label>
+                            <input type="number" id="temp-input" value="20" step="5">
+                        </div>
                     </div>
-                    <div class="input-group" data-param="kinematic_viscosity" id="kinematic-group">
-                        <label for="kinematic-viscosity">Kinematic Viscosity (m²/s)</label>
-                        <input type="number" id="kinematic-viscosity" name="kinematic-viscosity" placeholder="e.g., 1.5e-5" step="any" min="0" value="1.5e-5">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    <div class="property-display" id="property-display">
+                        <div class="property-item">
+                            <div class="label">Density (ρ)</div>
+                            <div class="value" id="display-density">998 kg/m³</div>
+                        </div>
+                        <div class="property-item">
+                            <div class="label">Dynamic (μ)</div>
+                            <div class="value" id="display-mu">1.00e-3 Pa·s</div>
+                        </div>
+                        <div class="property-item">
+                            <div class="label">Kinematic (ν)</div>
+                            <div class="value" id="display-nu">1.00e-6 m²/s</div>
+                        </div>
                     </div>
-                    <div class="input-group hidden" data-param="density" id="density-group">
-                        <label for="density">Density (kg/m³)</label>
-                        <input type="number" id="density" name="density" placeholder="e.g., 998" step="any" min="0">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                </div>
+
+                <!-- Interactive Sliders -->
+                <div class="slider-section">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span class="slider-label has-tooltip">
+                                Velocity
+                                <span class="tooltip-trigger" data-tooltip="Mean flow velocity (V) in meters per second. For internal flows like pipes, this is the bulk average velocity across the cross-section. For external flows like flow over a body, this is the freestream velocity far from the object. Reynolds number is directly proportional to velocity.">?</span>
+                            </span>
+                            <span class="slider-value" id="velocity-value">1.0 m/s</span>
+                        </div>
+                        <div class="slider-input-row">
+                            <input type="range" id="velocity-slider" min="0.001" max="10" step="0.01" value="1">
+                            <input type="number" id="velocity-input" min="0.0001" step="0.1" value="1">
+                        </div>
+                        <div class="slider-bounds">
+                            <span id="velocity-min">0.001</span>
+                            <span id="velocity-max">10</span>
+                        </div>
                     </div>
-                    <div class="input-group hidden" data-param="dynamic_viscosity" id="dynamic-group">
-                        <label for="dynamic-viscosity">Dynamic Viscosity (Pa·s)</label>
-                        <input type="number" id="dynamic-viscosity" name="dynamic-viscosity" placeholder="e.g., 1.0e-3" step="any" min="0">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span class="slider-label has-tooltip">
+                                <span id="length-label">Characteristic Length</span>
+                                <span class="tooltip-trigger" id="length-tooltip" data-tooltip="The characteristic length (L) depends on geometry. For pipes: use the internal diameter. For non-circular ducts: use hydraulic diameter (4×Area/Perimeter). For flow over plates: use plate length. For spheres: use diameter. Reynolds number is directly proportional to this length.">?</span>
+                            </span>
+                            <span class="slider-value" id="length-value">0.05 m</span>
+                        </div>
+                        <div class="slider-input-row">
+                            <input type="range" id="length-slider" min="0.001" max="1" step="0.001" value="0.05">
+                            <input type="number" id="length-input" min="0.0001" step="0.01" value="0.05">
+                        </div>
+                        <div class="slider-bounds">
+                            <span id="length-min">0.001</span>
+                            <span id="length-max">1</span>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
-                </form>
+                </div>
+
+                <!-- Reynolds Number Result -->
+                <div class="reynolds-display" id="reynolds-display">
+                    <div class="reynolds-label">Reynolds Number</div>
+                    <div class="reynolds-value" id="reynolds-value">50,000</div>
+                    <div class="regime-badge" id="regime-badge">Turbulent</div>
+                </div>
+
+                <!-- Custom Fluid Override -->
+                <div class="custom-section">
+                    <button class="custom-toggle" id="custom-toggle">
+                        <span>+</span> Custom fluid properties
+                    </button>
+                    <div class="custom-content" id="custom-content">
+                        <div class="custom-inputs">
+                            <div class="custom-input-group">
+                                <label for="custom-density" class="has-tooltip">
+                                    Density (kg/m³)
+                                    <span class="tooltip-trigger" data-tooltip="Fluid density (ρ) in kg/m³. Water ≈ 1000, air ≈ 1.2, oils ≈ 800-900, mercury ≈ 13,600. Density affects Re when using dynamic viscosity: Re = ρVL/μ">?</span>
+                                </label>
+                                <input type="number" id="custom-density" placeholder="e.g., 998">
+                            </div>
+                            <div class="custom-input-group">
+                                <label for="custom-viscosity" class="has-tooltip">
+                                    Kinematic Viscosity (m²/s)
+                                    <span class="tooltip-trigger" data-tooltip="Kinematic viscosity (ν = μ/ρ) in m²/s. Water at 20°C ≈ 1×10⁻⁶, air ≈ 1.5×10⁻⁵, honey ≈ 7×10⁻³, motor oil ≈ 1×10⁻⁴. This is what directly appears in Re = VL/ν">?</span>
+                                </label>
+                                <input type="number" id="custom-viscosity" placeholder="e.g., 1e-6" step="any">
+                            </div>
+                        </div>
+                        <p style="font-size: 0.8rem; margin-top: 12px; color: var(--text-light);">
+                            Enter custom values to override the selected fluid. Useful for mixtures, non-standard conditions, or experimental fluids.
+                        </p>
+                    </div>
+                </div>
             </section>
 
             <section class="tool-outputs card">
                 <div class="tabs">
-                    <button class="tab-link active" data-target="results">Results</button>
-                    <button class="tab-link" data-target="plot">Visualization</button>
-                    <button class="tab-link" data-target="background">Background & Principles</button>
+                    <button class="tab-link active" data-target="visualization">Visualization</button>
+                    <button class="tab-link" data-target="implications">Implications</button>
+                    <button class="tab-link" data-target="background">Background</button>
                 </div>
 
-                <div id="results" class="tab-content" style="display: block;">
-                    <h3>Key Results</h3>
-                    <div id="results-display">
-                        <p id="results-placeholder">Provide inputs and click calculate to see results.</p>
+                <div id="visualization" class="tab-content active">
+                    <div class="viz-container">
+                        <canvas class="flow-canvas" id="flow-canvas"></canvas>
+                        <div class="viz-legend">
+                            <div class="legend-item"><span class="legend-dot laminar"></span> Laminar</div>
+                            <div class="legend-item"><span class="legend-dot transitional"></span> Transitional</div>
+                            <div class="legend-item"><span class="legend-dot turbulent"></span> Turbulent</div>
+                        </div>
                     </div>
-                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 20px;">Export Results</button>
+
+                    <div class="regime-scale">
+                        <h4>Flow Regime Scale (pipe flow thresholds)</h4>
+                        <div class="scale-bar" id="scale-bar">
+                            <div class="scale-segment laminar">Laminar</div>
+                            <div class="scale-segment transitional">Trans.</div>
+                            <div class="scale-segment turbulent">Turbulent</div>
+                            <div class="scale-marker" id="scale-marker">
+                                <div class="marker-arrow"></div>
+                                <div class="marker-value">Re = 50,000</div>
+                            </div>
+                        </div>
+                        <div class="scale-labels">
+                            <span>Re = 0</span>
+                            <span>2,300</span>
+                            <span>4,000</span>
+                            <span>10,000</span>
+                        </div>
+                    </div>
+
+                    <div class="magnitude-section">
+                        <h4>Orders of Magnitude in Nature & Engineering</h4>
+                        <div class="magnitude-list" id="magnitude-list"></div>
+                    </div>
                 </div>
 
-                <div id="plot" class="tab-content">
-                    <h3>Visualization</h3>
-                    <div id="plot-container">
-                        <p>Plotting is not required for this calculator yet, but this panel is reserved for future regime diagrams.</p>
+                <div id="implications" class="tab-content">
+                    <div class="implications-panel" id="implications-panel">
+                        <h4>What This Means for <span id="scenario-name-display">Your Flow</span></h4>
+                        <div id="implications-content"></div>
                     </div>
                 </div>
 
                 <div id="background" class="tab-content">
-                    <h3>Underlying Principles</h3>
-                    <p id="background-description">Loading Python documentation...</p>
+                    <h3>The Reynolds Number</h3>
+                    <p>
+                        The Reynolds number (Re) is a dimensionless quantity that predicts flow patterns in different fluid flow situations.
+                        It was introduced by <strong>Osborne Reynolds</strong> in 1883 based on his famous pipe flow experiments at the University of Manchester.
+                    </p>
+
+                    <div class="equation-card">
+                        <div class="equation-label">Definition</div>
+                        <p>$$\mathrm{Re} = \frac{\rho V L}{\mu} = \frac{V L}{\nu}$$</p>
+                        <p style="font-size: 0.9rem; margin-top: 12px; margin-bottom: 0;">
+                            <strong>V</strong> = characteristic velocity (m/s)<br>
+                            <strong>L</strong> = characteristic length (m)<br>
+                            <strong>ρ</strong> = fluid density (kg/m³)<br>
+                            <strong>μ</strong> = dynamic viscosity (Pa·s)<br>
+                            <strong>ν</strong> = kinematic viscosity (m²/s)
+                        </p>
+                    </div>
+
+                    <h4>Physical Interpretation</h4>
+                    <p>
+                        The Reynolds number represents the ratio of <strong>inertial forces</strong> to <strong>viscous forces</strong>:
+                    </p>
+
+                    <div class="equation-card">
+                        <div class="equation-label">Force Ratio</div>
+                        <p>$$\mathrm{Re} = \frac{\text{Inertial forces}}{\text{Viscous forces}} \sim \frac{\rho V^2 L^2}{\mu V L} = \frac{\rho V L}{\mu}$$</p>
+                    </div>
+
+                    <ul style="margin-left: 20px; margin-bottom: 1em; color: var(--text-light);">
+                        <li><strong>Low Re (Re ≪ 1):</strong> Viscous forces dominate. Flow is "creeping" - inertia is negligible. Examples: bacteria swimming, sedimentation of fine particles.</li>
+                        <li><strong>Moderate Re:</strong> Both forces matter. Careful analysis needed.</li>
+                        <li><strong>High Re (Re ≫ 1):</strong> Inertial forces dominate. Viscosity only matters near boundaries (boundary layers). Examples: aircraft, ships, most industrial flows.</li>
+                    </ul>
+
+                    <h4>Flow Regimes in Pipes</h4>
+                    <p>
+                        For flow in circular pipes, Reynolds identified three regimes through his dye injection experiments:
+                    </p>
+                    <ul style="margin-left: 20px; margin-bottom: 1em; color: var(--text-light);">
+                        <li><strong>Laminar (Re &lt; 2,300):</strong> Flow moves in parallel layers. Dye streak remains coherent. Velocity profile is parabolic (Hagen-Poiseuille flow). Friction factor: f = 64/Re.</li>
+                        <li><strong>Transitional (2,300 &lt; Re &lt; 4,000):</strong> Flow intermittently switches between laminar and turbulent. Dye streak shows periodic bursts. Sensitive to disturbances.</li>
+                        <li><strong>Turbulent (Re &gt; 4,000):</strong> Flow is chaotic with eddies at all scales. Dye rapidly mixes. Velocity profile is flatter. Friction factor depends on surface roughness.</li>
+                    </ul>
+
+                    <div class="callout callout-warning">
+                        <p style="margin: 0;"><strong>Note:</strong> The critical Reynolds numbers (2,300 and 4,000) are specific to pipe flow. Other geometries have different thresholds. For example, flow over a flat plate transitions around Re<sub>x</sub> ≈ 500,000, and flow around a sphere has different behavior altogether.</p>
+                    </div>
+
+                    <h4>Characteristic Length Selection</h4>
+                    <p>
+                        The choice of characteristic length (L) depends on the geometry:
+                    </p>
+                    <ul style="margin-left: 20px; margin-bottom: 1em; color: var(--text-light);">
+                        <li><strong>Circular pipe:</strong> L = diameter (D)</li>
+                        <li><strong>Non-circular duct:</strong> L = hydraulic diameter = 4A/P (where A = cross-sectional area, P = wetted perimeter)</li>
+                        <li><strong>Flat plate:</strong> L = distance from leading edge (x)</li>
+                        <li><strong>Sphere or cylinder:</strong> L = diameter</li>
+                        <li><strong>Airfoil:</strong> L = chord length</li>
+                        <li><strong>Open channel:</strong> L = hydraulic radius = A/P</li>
+                    </ul>
+
+                    <h4>Dimensional Analysis & Similarity</h4>
+                    <p>
+                        Reynolds number enables <strong>dynamic similarity</strong> between flows. Two flows with the same Re (and same geometry) will have identical non-dimensional behavior, regardless of absolute scale. This is the foundation of wind tunnel testing and hydraulic modeling.
+                    </p>
+
+                    <div class="equation-card">
+                        <div class="equation-label">Similarity Requirement</div>
+                        <p>$$\mathrm{Re}_{\text{model}} = \mathrm{Re}_{\text{prototype}} \implies \frac{V_m L_m}{\nu_m} = \frac{V_p L_p}{\nu_p}$$</p>
+                    </div>
+
+                    <div class="callout callout-info">
+                        <p style="margin: 0;"><strong>Example:</strong> To test a 1:10 scale model of a ship in a towing tank, you would need the model velocity to be 10× the prototype velocity (if using the same fluid) to match Reynolds number. This is often impractical, which is why ship models are tested at Froude number similarity instead, with Reynolds number effects corrected empirically.</p>
+                    </div>
+
+                    <h4>Related Dimensionless Numbers</h4>
+                    <p>
+                        Reynolds number often appears alongside other dimensionless groups:
+                    </p>
+                    <ul style="margin-left: 20px; margin-bottom: 1em; color: var(--text-light);">
+                        <li><strong>Prandtl number (Pr = ν/α):</strong> Momentum vs thermal diffusivity</li>
+                        <li><strong>Schmidt number (Sc = ν/D):</strong> Momentum vs mass diffusivity</li>
+                        <li><strong>Nusselt number (Nu):</strong> Convective vs conductive heat transfer - correlations typically take the form Nu = f(Re, Pr)</li>
+                        <li><strong>Friction factor (f):</strong> For pipes, f = f(Re, ε/D) where ε is surface roughness</li>
+                        <li><strong>Drag coefficient (C<sub>D</sub>):</strong> For bodies, C<sub>D</sub> = f(Re, geometry)</li>
+                    </ul>
+
+                    <h4>Historical Note</h4>
+                    <p>
+                        Osborne Reynolds (1842-1912) conducted his famous experiments in 1883 using a glass tube with a dye injection system. He systematically varied flow rate and tube diameter, discovering that the transition from laminar to turbulent flow occurred at a consistent value of ρVD/μ ≈ 2,300, regardless of the individual values of velocity, diameter, or fluid properties. This was a landmark discovery in fluid mechanics and demonstrated the power of dimensional analysis.
+                    </p>
+
+                    <h4>References</h4>
+                    <div class="reference-list">
+                        <div class="reference-item">
+                            <div class="ref-title">Introduction to Fluid Mechanics</div>
+                            <div class="ref-authors">Fox, R. W., McDonald, A. T., & Pritchard, P. J.</div>
+                            <div class="ref-details">8th Edition, Wiley, 2015. ISBN: 978-1118912652</div>
+                        </div>
+                        <div class="reference-item">
+                            <div class="ref-title">Fluid Mechanics</div>
+                            <div class="ref-authors">White, F. M.</div>
+                            <div class="ref-details">8th Edition, McGraw-Hill, 2015. ISBN: 978-0073398273</div>
+                        </div>
+                        <div class="reference-item">
+                            <div class="ref-title">An experimental investigation of the circumstances which determine whether the motion of water shall be direct or sinuous, and of the law of resistance in parallel channels</div>
+                            <div class="ref-authors">Reynolds, O.</div>
+                            <div class="ref-details">Philosophical Transactions of the Royal Society of London, 174, 935-982, 1883</div>
+                        </div>
+                        <div class="reference-item">
+                            <div class="ref-title">Boundary-Layer Theory</div>
+                            <div class="ref-authors">Schlichting, H., & Gersten, K.</div>
+                            <div class="ref-details">9th Edition, Springer, 2017. ISBN: 978-3662529171</div>
+                        </div>
+                        <div class="reference-item">
+                            <div class="ref-title">Life at Low Reynolds Number</div>
+                            <div class="ref-authors">Purcell, E. M.</div>
+                            <div class="ref-details">American Journal of Physics, 45(1), 3-11, 1977. Classic paper on microorganism locomotion.</div>
+                        </div>
+                        <div class="reference-item">
+                            <div class="ref-title">Thermophysical Properties of Fluids</div>
+                            <div class="ref-authors">NIST Chemistry WebBook</div>
+                            <div class="ref-details">National Institute of Standards and Technology. https://webbook.nist.gov/chemistry/fluid/</div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
     </main>
 
     <footer class="footer">
-        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+        <p>&copy; 2025 Transparent Tools. Educational use. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
     </footer>
 
     <script>
-        let toolDocumentation = {};
-        let pyToolModule;
-        let latestResults = null;
+        // ============================================================
+        // DATA: Scenarios, Fluids, and Implications
+        // ============================================================
 
-        const TOOL_MODULE_NAME = 'fluids';
-        const TOOL_FUNCTION_NAME = 'reynolds_number_analysis';
-        const DEFAULT_PLOT_MESSAGE = 'Plotting is not required for this calculator yet, but this panel is reserved for future regime diagrams.';
-
-        function openTab(event) {
-            const target = event.currentTarget.dataset.target;
-            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-            document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(target).style.display = 'block';
-            event.currentTarget.classList.add('active');
-        }
-
-        function typesetMath() {
-            if (window.MathJax) {
-                window.MathJax.typesetPromise();
+        const SCENARIOS = [
+            {
+                id: 'pipe-water',
+                name: 'Water in Pipe',
+                icon: '🚿',
+                fluid: 'water',
+                velocity: 1.5,
+                length: 0.025,
+                lengthLabel: 'Pipe Diameter',
+                lengthTooltip: 'Internal diameter of the pipe in meters. For non-circular cross-sections, use the hydraulic diameter: Dh = 4×Area/Perimeter. Common pipe sizes: 1/2" ≈ 0.015m, 1" ≈ 0.025m, 2" ≈ 0.05m.',
+                lengthRange: [0.005, 0.3],
+                velocityRange: [0.1, 5],
+                temp: 20,
+                typicalRe: '10,000 - 100,000',
+                implications: {
+                    laminar: {
+                        pressure: 'Low pressure drop. Friction factor follows Hagen-Poiseuille equation (f = 64/Re). Pressure drop proportional to velocity.',
+                        mixing: 'Poor mixing - relies on molecular diffusion only. Not suitable for chemical reactions requiring homogeneity.',
+                        heat: 'Lower heat transfer coefficient. Adequate for gentle heating/cooling. Nu ≈ 3.66 for constant wall temperature.',
+                        practical: 'Rarely occurs in practical plumbing due to low flow rates required. May occur in very small tubing or highly viscous fluids.'
+                    },
+                    transitional: {
+                        pressure: 'Pressure drop fluctuates unpredictably. Difficult to design for.',
+                        mixing: 'Intermittent mixing - alternates between poor and good.',
+                        heat: 'Variable heat transfer - design margin needed.',
+                        practical: 'Avoid this regime in design. Add flow straighteners or adjust velocity to push clearly into laminar or turbulent.'
+                    },
+                    turbulent: {
+                        pressure: 'Higher pressure drop. Use Moody diagram or Colebrook equation. Pressure drop proportional to velocity squared.',
+                        mixing: 'Excellent mixing from turbulent eddies. Good for chemical dosing and heat distribution.',
+                        heat: 'High heat transfer coefficient. Dittus-Boelter: Nu = 0.023 Re^0.8 Pr^0.4. Efficient for heat exchangers.',
+                        practical: 'Normal operating regime for most piping. Account for pipe roughness. Consider water hammer at valve closures.'
+                    }
+                }
+            },
+            {
+                id: 'blood-artery',
+                name: 'Blood in Artery',
+                icon: '❤️',
+                fluid: 'blood',
+                velocity: 0.4,
+                length: 0.006,
+                lengthLabel: 'Artery Diameter',
+                lengthTooltip: 'Internal diameter of the artery. Aorta ≈ 25mm, femoral artery ≈ 6mm, coronary arteries ≈ 3-4mm, arterioles ≈ 0.01-0.1mm. Blood is non-Newtonian but Re still provides useful estimates.',
+                lengthRange: [0.001, 0.03],
+                velocityRange: [0.01, 1.5],
+                temp: 37,
+                typicalRe: '100 - 2,000',
+                implications: {
+                    laminar: {
+                        pressure: 'Normal physiological state. Heart can efficiently pump blood with minimal energy loss.',
+                        mixing: 'Oxygen exchange occurs via diffusion at vessel walls. Adequate for normal tissue perfusion.',
+                        heat: 'Body temperature regulation works normally through conduction to vessel walls.',
+                        practical: 'Healthy blood flow in most arteries and veins. Parabolic velocity profile with maximum at centerline.'
+                    },
+                    transitional: {
+                        pressure: 'Increased cardiac workload. May occur during exercise or in larger arteries.',
+                        mixing: 'Enhanced oxygen delivery to tissues during high metabolic demand.',
+                        heat: 'Normal variation during physical activity.',
+                        practical: 'Common in aorta during systole. May promote plaque formation at arterial bifurcations and bends.'
+                    },
+                    turbulent: {
+                        pressure: 'Significantly increased cardiac load. Audible as heart murmurs or bruits.',
+                        mixing: 'Can cause hemolysis (red blood cell damage) in extreme cases.',
+                        heat: 'Localized heating at vessel walls from viscous dissipation.',
+                        practical: 'Indicates pathology: stenosis (narrowing), valve defects, or artificial heart valves. Associated with atherosclerosis.'
+                    }
+                }
+            },
+            {
+                id: 'air-hvac',
+                name: 'Air in HVAC Duct',
+                icon: '🌀',
+                fluid: 'air',
+                velocity: 5,
+                length: 0.3,
+                lengthLabel: 'Duct Diameter',
+                lengthTooltip: 'Equivalent diameter of the duct. For rectangular ducts, use hydraulic diameter: Dh = 2ab/(a+b) where a and b are the side lengths. Typical residential: 6-12", commercial: 12-48".',
+                lengthRange: [0.1, 1],
+                velocityRange: [1, 20],
+                temp: 20,
+                typicalRe: '50,000 - 500,000',
+                implications: {
+                    laminar: {
+                        pressure: 'Very low pressure drop but unrealistic velocities required.',
+                        mixing: 'Poor air distribution. Temperature stratification issues.',
+                        heat: 'Inefficient heat/cool delivery to occupied spaces.',
+                        practical: 'Almost never occurs in practice - would require velocities below 0.1 m/s in typical ducts.'
+                    },
+                    transitional: {
+                        pressure: 'Unpredictable fan power requirements.',
+                        mixing: 'Inconsistent room conditions. Occupant comfort problems.',
+                        heat: 'Variable heating/cooling performance.',
+                        practical: 'Avoid through proper duct sizing. Use turning vanes at bends to stabilize flow.'
+                    },
+                    turbulent: {
+                        pressure: 'Design for pressure losses using ASHRAE duct friction charts. Size fans with appropriate static pressure.',
+                        mixing: 'Good mixing ensures uniform temperature distribution in rooms.',
+                        heat: 'Efficient heat transfer in heating/cooling coils. Enhanced by turbulence.',
+                        practical: 'Normal HVAC operation. Maintain velocities 3-8 m/s to balance pressure loss and noise. Higher velocities increase noise significantly.'
+                    }
+                }
+            },
+            {
+                id: 'oil-pipeline',
+                name: 'Oil in Pipeline',
+                icon: '🛢️',
+                fluid: 'crude-oil',
+                velocity: 2,
+                length: 0.5,
+                lengthLabel: 'Pipe Diameter',
+                lengthTooltip: 'Internal diameter of the pipeline. Gathering lines: 2-8", trunk lines: 20-48". Oil viscosity varies greatly with crude type and temperature - heavy crude may be 100× more viscous than light crude.',
+                lengthRange: [0.1, 1.5],
+                velocityRange: [0.5, 5],
+                temp: 25,
+                typicalRe: '1,000 - 50,000',
+                implications: {
+                    laminar: {
+                        pressure: 'Predictable pressure drop following Hagen-Poiseuille. Common with heavy crude oils.',
+                        mixing: 'No mixing - can cause wax settling and deposition on pipe walls.',
+                        heat: 'Oil may cool and become more viscous, increasing pressure drop along the line.',
+                        practical: 'Often encountered with viscous crude. May need heating stations or diluent injection to maintain flow.'
+                    },
+                    transitional: {
+                        pressure: 'Fluctuating pumping power. Causes stress on pump equipment.',
+                        mixing: 'Inconsistent - some settling may occur.',
+                        heat: 'Variable heat loss along pipeline length.',
+                        practical: 'Common in medium-weight crude oils. Design with safety margins. Consider drag-reducing additives (polymers).'
+                    },
+                    turbulent: {
+                        pressure: 'Higher pressure drop. Need larger pumps but behavior is more predictable.',
+                        mixing: 'Keeps particulates and water in suspension. Prevents settling.',
+                        heat: 'Better heat retention from turbulent mixing. More uniform temperature profile.',
+                        practical: 'Preferred for light crude and refined products. Prevents settling. Watch for erosion-corrosion at high velocities (>3 m/s).'
+                    }
+                }
+            },
+            {
+                id: 'car-air',
+                name: 'Air over Car',
+                icon: '🚗',
+                fluid: 'air',
+                velocity: 30,
+                length: 4,
+                lengthLabel: 'Car Length',
+                lengthTooltip: 'Overall vehicle length from front to rear. Compact car ≈ 4m, sedan ≈ 4.5m, SUV ≈ 5m. For drag calculations, frontal area is also important but Re uses length as the characteristic dimension.',
+                lengthRange: [2, 6],
+                velocityRange: [5, 50],
+                temp: 20,
+                typicalRe: '2×10⁶ - 10×10⁶',
+                implications: {
+                    laminar: {
+                        pressure: 'Lowest theoretical drag but impossible to achieve at driving speeds.',
+                        mixing: 'N/A for external vehicle aerodynamics.',
+                        heat: 'N/A',
+                        practical: 'Cannot occur at normal driving speeds. Would require microscopic vehicles or extremely viscous fluid.'
+                    },
+                    transitional: {
+                        pressure: 'Not applicable - Re is far too high for any transitional behavior at road speeds.',
+                        mixing: 'N/A',
+                        heat: 'N/A',
+                        practical: 'Transitional regime is irrelevant for full-size vehicles at any practical speed.'
+                    },
+                    turbulent: {
+                        pressure: 'Drag coefficient primarily determined by vehicle shape, not Re. Turbulent boundary layer over most of body.',
+                        mixing: 'N/A',
+                        heat: 'Convective cooling of engine bay, brakes, and undercarriage.',
+                        practical: 'All road vehicles operate in turbulent flow. Aerodynamic design focuses on shape optimization. Typical Cd: 0.25-0.35 for modern cars, 0.40+ for trucks/SUVs.'
+                    }
+                }
+            },
+            {
+                id: 'swimmer',
+                name: 'Human Swimming',
+                icon: '🏊',
+                fluid: 'water',
+                velocity: 1.5,
+                length: 1.8,
+                lengthLabel: 'Body Length',
+                lengthTooltip: 'Height or body length of the swimmer. Elite swimmers: 1.7-2.0m. Body position significantly affects effective length and frontal area. Streamlined position minimizes drag.',
+                lengthRange: [0.5, 2.2],
+                velocityRange: [0.3, 2.5],
+                temp: 25,
+                typicalRe: '1×10⁶ - 4×10⁶',
+                implications: {
+                    laminar: {
+                        pressure: 'Impossible at human swimming speeds.',
+                        mixing: 'N/A',
+                        heat: 'N/A',
+                        practical: 'Would require swimming in honey or moving impossibly slowly (<0.001 m/s).'
+                    },
+                    transitional: {
+                        pressure: 'N/A at these Re values.',
+                        mixing: 'N/A',
+                        heat: 'N/A',
+                        practical: 'Transitional regime not relevant for human swimming.'
+                    },
+                    turbulent: {
+                        pressure: 'Drag is major component of swimming effort. Form drag (body shape) dominates over skin friction.',
+                        mixing: 'N/A',
+                        heat: 'Water removes body heat efficiently. Hypothermia risk in cold water.',
+                        practical: 'Streamlining body position is critical. Modern swimsuits manage boundary layer. Elite sprint swimmers reach Re ≈ 4×10⁶.'
+                    }
+                }
+            },
+            {
+                id: 'bacteria',
+                name: 'Bacteria Swimming',
+                icon: '🦠',
+                fluid: 'water',
+                velocity: 0.00003,
+                length: 0.000002,
+                lengthLabel: 'Cell Length',
+                lengthTooltip: 'Typical bacterial cell length. E. coli ≈ 2 μm, Bacillus ≈ 3-5 μm. Swimming speeds typically 20-50 μm/s (10-25 body lengths per second). At these scales, viscosity completely dominates.',
+                lengthRange: [0.0000005, 0.00001],
+                velocityRange: [0.00001, 0.0001],
+                temp: 37,
+                typicalRe: '10⁻⁵ - 10⁻⁴',
+                implications: {
+                    laminar: {
+                        pressure: 'Viscous forces completely dominate. Stokes flow regime (creeping flow).',
+                        mixing: 'No inertial mixing possible. Transport relies entirely on molecular diffusion.',
+                        heat: 'Instantaneous temperature equilibration with surroundings.',
+                        practical: '"Life at low Reynolds number" (Purcell, 1977). Reciprocal motion produces zero net displacement. Bacteria must use non-reciprocal flagellar rotation.'
+                    },
+                    transitional: {
+                        pressure: 'N/A - bacteria cannot reach this regime.',
+                        mixing: 'N/A',
+                        heat: 'N/A',
+                        practical: 'Physically impossible for bacteria-sized organisms in water.'
+                    },
+                    turbulent: {
+                        pressure: 'N/A',
+                        mixing: 'N/A',
+                        heat: 'N/A',
+                        practical: 'Physically impossible. Inertia is completely negligible at these scales.'
+                    }
+                }
+            },
+            {
+                id: 'custom',
+                name: 'Custom',
+                icon: '⚙️',
+                fluid: 'water',
+                velocity: 1,
+                length: 0.05,
+                lengthLabel: 'Characteristic Length',
+                lengthTooltip: 'The relevant length scale for your geometry. For pipes: diameter. For plates: length from leading edge. For spheres/cylinders: diameter. For channels: hydraulic diameter. Choose based on the geometry being analyzed.',
+                lengthRange: [0.0001, 10],
+                velocityRange: [0.0001, 100],
+                temp: 20,
+                typicalRe: 'Variable',
+                implications: {
+                    laminar: {
+                        pressure: 'For pipes: f = 64/Re. For flat plates: Cf = 1.328/√Re. Analytical solutions often available.',
+                        mixing: 'Poor mixing. Mass transfer relies on molecular diffusion.',
+                        heat: 'Lower heat transfer coefficients. Use appropriate Nusselt correlations for geometry.',
+                        practical: 'Predictable, steady flow. Easier to model analytically. Sensitive to inlet conditions.'
+                    },
+                    transitional: {
+                        pressure: 'Unpredictable pressure fluctuations. Neither laminar nor turbulent correlations apply.',
+                        mixing: 'Intermittent mixing behavior. Unpredictable.',
+                        heat: 'Variable heat transfer. Apply safety margins.',
+                        practical: 'Avoid in design when possible. Either calm the flow (lower Re) or promote turbulence (higher Re, trip wires, roughness).'
+                    },
+                    turbulent: {
+                        pressure: 'Use Moody diagram for pipes. For other geometries, use appropriate correlations. Friction depends on surface roughness.',
+                        mixing: 'Excellent mixing from turbulent eddies. Turbulent diffusivity >> molecular diffusivity.',
+                        heat: 'High heat transfer coefficients. Many correlations of form Nu = C·Re^m·Pr^n.',
+                        practical: 'Most industrial flows. Good mixing but higher pressure drop. Reynolds-averaged Navier-Stokes (RANS) for CFD.'
+                    }
+                }
             }
+        ];
+
+        const FLUIDS = {
+            'water': {
+                name: 'Water',
+                properties: [
+                    [0, 999.8, 1.792e-3],
+                    [10, 999.7, 1.307e-3],
+                    [20, 998.2, 1.002e-3],
+                    [25, 997.0, 0.890e-3],
+                    [30, 995.7, 0.798e-3],
+                    [40, 992.2, 0.653e-3],
+                    [50, 988.1, 0.547e-3],
+                    [60, 983.2, 0.467e-3],
+                    [80, 971.8, 0.355e-3],
+                    [100, 958.4, 0.282e-3]
+                ]
+            },
+            'air': {
+                name: 'Air (1 atm)',
+                properties: [
+                    [0, 1.293, 1.71e-5],
+                    [10, 1.247, 1.76e-5],
+                    [20, 1.204, 1.81e-5],
+                    [25, 1.184, 1.84e-5],
+                    [30, 1.165, 1.86e-5],
+                    [40, 1.127, 1.91e-5],
+                    [50, 1.093, 1.95e-5],
+                    [100, 0.946, 2.17e-5]
+                ]
+            },
+            'blood': {
+                name: 'Blood',
+                properties: [
+                    [37, 1060, 3.5e-3]
+                ]
+            },
+            'crude-oil': {
+                name: 'Crude Oil (medium)',
+                properties: [
+                    [15, 870, 0.02],
+                    [20, 865, 0.015],
+                    [25, 860, 0.012],
+                    [40, 850, 0.007],
+                    [60, 835, 0.004]
+                ]
+            },
+            'honey': {
+                name: 'Honey',
+                properties: [
+                    [20, 1420, 10],
+                    [30, 1410, 5],
+                    [40, 1400, 2.5]
+                ]
+            },
+            'glycerin': {
+                name: 'Glycerin',
+                properties: [
+                    [20, 1261, 1.5],
+                    [25, 1258, 1.0],
+                    [30, 1255, 0.6]
+                ]
+            },
+            'motor-oil': {
+                name: 'Motor Oil (SAE 30)',
+                properties: [
+                    [20, 880, 0.3],
+                    [40, 870, 0.1],
+                    [100, 840, 0.01]
+                ]
+            },
+            'seawater': {
+                name: 'Seawater (35 ppt)',
+                properties: [
+                    [10, 1027, 1.39e-3],
+                    [20, 1025, 1.08e-3],
+                    [25, 1024, 0.97e-3]
+                ]
+            }
+        };
+
+        const MAGNITUDE_EXAMPLES = [
+            { name: 'Bacteria swimming', re: 1e-5, icon: '🦠' },
+            { name: 'Sperm cell', re: 1e-3, icon: '🔬' },
+            { name: 'Blood in capillary', re: 1e-2, icon: '🩸' },
+            { name: 'Sedimentation of silt', re: 1, icon: '💨' },
+            { name: 'Blood in artery', re: 500, icon: '❤️' },
+            { name: 'Pipe flow (laminar limit)', re: 2300, icon: '📏' },
+            { name: 'Golf ball', re: 1e5, icon: '⛳' },
+            { name: 'Human swimming', re: 2e6, icon: '🏊' },
+            { name: 'Car at highway speed', re: 5e6, icon: '🚗' },
+            { name: 'Blue whale swimming', re: 3e8, icon: '🐋' },
+            { name: 'Large cargo ship', re: 5e9, icon: '🚢' }
+        ];
+
+        // ============================================================
+        // STATE & SETTINGS
+        // ============================================================
+
+        let state = {
+            scenario: SCENARIOS[0],
+            fluid: FLUIDS['water'],
+            fluidKey: 'water',
+            temperature: 20,
+            velocity: 1.5,
+            length: 0.025,
+            density: 998,
+            dynamicViscosity: 1.002e-3,
+            kinematicViscosity: 1.004e-6,
+            reynolds: 0,
+            regime: 'turbulent',
+            modified: false,
+            customFluidActive: false,
+            animationId: null
+        };
+
+        let settings = {
+            theme: 'system',
+            density: 'comfortable',
+            precision: 3
+        };
+
+        // ============================================================
+        // UTILITY FUNCTIONS
+        // ============================================================
+
+        function interpolateProperty(props, temp) {
+            if (props.length === 1) return { density: props[0][1], mu: props[0][2] };
+            let lower = props[0];
+            let upper = props[props.length - 1];
+            for (let i = 0; i < props.length - 1; i++) {
+                if (temp >= props[i][0] && temp <= props[i + 1][0]) {
+                    lower = props[i];
+                    upper = props[i + 1];
+                    break;
+                }
+            }
+            const t = (temp - lower[0]) / (upper[0] - lower[0] || 1);
+            return {
+                density: lower[1] + t * (upper[1] - lower[1]),
+                mu: lower[2] + t * (upper[2] - lower[2])
+            };
         }
 
-        document.querySelectorAll('.tab-link').forEach(btn => {
-            btn.addEventListener('click', openTab);
-        });
+        function formatNumber(num, precision) {
+            precision = precision || settings.precision;
+            if (!Number.isFinite(num)) return '—';
+            if (Math.abs(num) < 0.001 || Math.abs(num) >= 1e6) {
+                return num.toExponential(precision - 1);
+            }
+            return num.toLocaleString(undefined, { maximumSignificantDigits: precision });
+        }
 
-        function updateViscosityMode() {
-            const mode = document.getElementById('viscosity-mode').value;
-            const kinematicGroup = document.getElementById('kinematic-group');
-            const densityGroup = document.getElementById('density-group');
-            const dynamicGroup = document.getElementById('dynamic-group');
+        function classifyRegime(re) {
+            if (re < 2300) return 'laminar';
+            if (re <= 4000) return 'transitional';
+            return 'turbulent';
+        }
 
-            if (mode === 'kinematic') {
-                kinematicGroup.classList.remove('hidden');
-                densityGroup.classList.add('hidden');
-                dynamicGroup.classList.add('hidden');
+        // ============================================================
+        // SETTINGS PANEL
+        // ============================================================
+
+        function initSettings() {
+            const saved = localStorage.getItem('reynolds-explorer-settings');
+            if (saved) {
+                try {
+                    settings = { ...settings, ...JSON.parse(saved) };
+                } catch (e) { }
+            }
+            applySettings();
+        }
+
+        function applySettings() {
+            document.body.setAttribute('data-theme', settings.theme);
+            document.body.setAttribute('data-density', settings.density);
+
+            // Update active buttons
+            document.querySelectorAll('[data-theme]').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-theme') === settings.theme);
+            });
+            document.querySelectorAll('[data-density]').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-density') === settings.density);
+            });
+            document.querySelectorAll('[data-precision]').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-precision') === String(settings.precision));
+            });
+
+            localStorage.setItem('reynolds-explorer-settings', JSON.stringify(settings));
+
+            // Recalculate to update display with new precision
+            if (state.reynolds) calculateReynolds();
+        }
+
+        function setupSettingsPanel() {
+            const btn = document.getElementById('settings-button');
+            const overlay = document.getElementById('settings-overlay');
+            const panel = document.getElementById('settings-panel');
+            const closeBtn = document.getElementById('settings-close');
+            const resetBtn = document.getElementById('settings-reset');
+
+            function openPanel() {
+                overlay.classList.add('open');
+                panel.classList.add('open');
+            }
+            function closePanel() {
+                overlay.classList.remove('open');
+                panel.classList.remove('open');
+            }
+
+            btn.addEventListener('click', openPanel);
+            overlay.addEventListener('click', closePanel);
+            closeBtn.addEventListener('click', closePanel);
+
+            resetBtn.addEventListener('click', () => {
+                settings = { theme: 'system', density: 'comfortable', precision: 3 };
+                applySettings();
+            });
+
+            document.querySelectorAll('[data-theme]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.theme = btn.getAttribute('data-theme');
+                    applySettings();
+                });
+            });
+
+            document.querySelectorAll('[data-density]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.density = btn.getAttribute('data-density');
+                    applySettings();
+                });
+            });
+
+            document.querySelectorAll('[data-precision]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.precision = parseInt(btn.getAttribute('data-precision'));
+                    applySettings();
+                });
+            });
+        }
+
+        // ============================================================
+        // UI UPDATES
+        // ============================================================
+
+        function updateFluidProperties() {
+            if (state.customFluidActive) return;
+            const props = interpolateProperty(state.fluid.properties, state.temperature);
+            state.density = props.density;
+            state.dynamicViscosity = props.mu;
+            state.kinematicViscosity = props.mu / props.density;
+
+            document.getElementById('display-density').textContent = formatNumber(state.density) + ' kg/m³';
+            document.getElementById('display-mu').textContent = formatNumber(state.dynamicViscosity) + ' Pa·s';
+            document.getElementById('display-nu').textContent = formatNumber(state.kinematicViscosity) + ' m²/s';
+        }
+
+        function calculateReynolds() {
+            state.reynolds = (state.velocity * state.length) / state.kinematicViscosity;
+            state.regime = classifyRegime(state.reynolds);
+
+            const display = document.getElementById('reynolds-display');
+            const value = document.getElementById('reynolds-value');
+            const badge = document.getElementById('regime-badge');
+
+            display.className = 'reynolds-display ' + state.regime;
+            value.textContent = formatNumber(state.reynolds, 4);
+            badge.textContent = state.regime.charAt(0).toUpperCase() + state.regime.slice(1);
+            badge.className = 'regime-badge ' + state.regime;
+
+            updateScaleMarker();
+            updateImplications();
+            updateMagnitudeList();
+        }
+
+        function updateScaleMarker() {
+            const marker = document.getElementById('scale-marker');
+            const maxRe = 10000;
+            const re = Math.min(state.reynolds, maxRe);
+            let position;
+            if (re <= 2300) {
+                position = (re / 2300) * 23;
+            } else if (re <= 4000) {
+                position = 23 + ((re - 2300) / 1700) * 17;
             } else {
-                kinematicGroup.classList.add('hidden');
-                densityGroup.classList.remove('hidden');
-                dynamicGroup.classList.remove('hidden');
+                position = 40 + ((re - 4000) / 6000) * 60;
             }
+            position = Math.max(2, Math.min(98, position));
+            marker.style.left = position + '%';
+            marker.querySelector('.marker-value').textContent = 'Re = ' + formatNumber(state.reynolds, 3);
         }
 
-        document.getElementById('viscosity-mode').addEventListener('change', updateViscosityMode);
-        updateViscosityMode();
-        resetVisualization();
-
-        async function main() {
-            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
-            const pyodide = await loadPyodide();
-            await pyodide.loadPackage('micropip');
-
-            document.getElementById('calculate-btn').textContent = 'Loading Python...';
-            await pyodide.runPythonAsync(`
-                import micropip
-                from pyodide.http import pyfetch
-
-                response_utils = await pyfetch('../../pycalcs/utils.py')
-                with open('utils.py', 'w') as f:
-                    f.write(await response_utils.string())
-
-                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
-                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
-                    f.write(await response_tool.string())
-
-                import utils
-                import ${TOOL_MODULE_NAME}
-            `);
-
-            const pyUtils = pyodide.globals.get('utils');
-            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
-
-            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
-            if (docMap.has('error')) {
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight: bold;">Initialization Error:</p>
-                    <p style="color: red;">${docMap.get('error')}</p>
-                `;
-                resetVisualization('Visualization unavailable due to initialization error.');
-                return;
-            }
-
-            toolDocumentation = Object.fromEntries(docMap);
-            if (toolDocumentation.parameters) {
-                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
-            }
-            if (toolDocumentation.returns) {
-                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
-            }
-
-            populateUiFromDocs();
-            document.getElementById('calculate-btn').textContent = 'Calculate';
-        }
-
-        function populateUiFromDocs() {
-            if (!toolDocumentation) return;
-            document.getElementById('tool-description').textContent = toolDocumentation.description;
-
-            document.querySelectorAll('.input-group[data-param]').forEach(group => {
-                const paramName = group.dataset.param;
-                const tooltip = group.querySelector('.tooltip-trigger');
-                if (paramName && tooltip && toolDocumentation.parameters?.[paramName]) {
-                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramName]);
-                }
-            });
-
-            const latexContent = toolDocumentation.latex
-                ? toolDocumentation.latex.replace(/\n/g, '<br>')
-                : 'No LaTeX provided.';
-            document.getElementById('background').innerHTML = `
-                <h3>Underlying Principles</h3>
-                <p>${toolDocumentation.description}</p>
-                <h4>Equations</h4>
-                <p>$$${latexContent}$$</p>
+        function updateImplications() {
+            const content = document.getElementById('implications-content');
+            const nameDisplay = document.getElementById('scenario-name-display');
+            const impl = state.scenario.implications[state.regime];
+            nameDisplay.textContent = state.scenario.name;
+            content.innerHTML = `
+                <div class="implication-item">
+                    <div class="implication-label">Pressure Drop / Drag</div>
+                    <div class="implication-text">${impl.pressure}</div>
+                </div>
+                <div class="implication-item">
+                    <div class="implication-label">Mixing Behavior</div>
+                    <div class="implication-text">${impl.mixing}</div>
+                </div>
+                <div class="implication-item">
+                    <div class="implication-label">Heat Transfer</div>
+                    <div class="implication-text">${impl.heat}</div>
+                </div>
+                <div class="implication-item">
+                    <div class="implication-label">Practical Notes</div>
+                    <div class="implication-text">${impl.practical}</div>
+                </div>
             `;
-            typesetMath();
         }
 
-        function coerceNumber(value) {
-            if (value === '' || value === null || value === undefined) {
-                return null;
-            }
-            const parsed = Number(value);
-            return Number.isFinite(parsed) ? parsed : NaN;
-        }
-
-        document.getElementById('calc-form').addEventListener('submit', (event) => {
-            event.preventDefault();
-
-            const velocity = coerceNumber(document.getElementById('velocity').value);
-            const length = coerceNumber(document.getElementById('characteristic-length').value);
-            const mode = document.getElementById('viscosity-mode').value;
-            const kinVisc = coerceNumber(document.getElementById('kinematic-viscosity').value);
-            const density = coerceNumber(document.getElementById('density').value);
-            const dynVisc = coerceNumber(document.getElementById('dynamic-viscosity').value);
-
-            try {
-                if (!Number.isFinite(velocity) || velocity === null) {
-                    throw new Error('Velocity must be a numeric value.');
+        function updateMagnitudeList() {
+            const list = document.getElementById('magnitude-list');
+            const currentRe = state.reynolds;
+            let closestIdx = 0;
+            let closestDist = Infinity;
+            MAGNITUDE_EXAMPLES.forEach((ex, i) => {
+                const dist = Math.abs(Math.log10(ex.re) - Math.log10(currentRe));
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestIdx = i;
                 }
-                if (!Number.isFinite(length) || length === null) {
-                    throw new Error('Characteristic length must be a numeric value.');
-                }
-
-                let args = [velocity, length, null, null, null];
-                if (mode === 'kinematic') {
-                    if (!Number.isFinite(kinVisc) || kinVisc === null) {
-                        throw new Error('Kinematic viscosity must be provided for this mode.');
-                    }
-                    args[2] = kinVisc;
-                } else {
-                    if (!Number.isFinite(density) || density === null) {
-                        throw new Error('Density must be provided when using dynamic viscosity.');
-                    }
-                    if (!Number.isFinite(dynVisc) || dynVisc === null) {
-                        throw new Error('Dynamic viscosity must be provided when using density.');
-                    }
-                    args[3] = density;
-                    args[4] = dynVisc;
-                }
-
-                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
-                const results = Object.fromEntries(resultMap);
-
-                if (results.error) {
-                    throw new Error(results.error);
-                }
-
-                latestResults = results;
-                renderResults(results);
-            } catch (error) {
-                latestResults = null;
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight: bold;">Calculation Error:</p>
-                    <p style="color: red;">${error.message}</p>
-                `;
-                resetVisualization('Visualization unavailable due to calculation error.');
-            }
-        });
-
-        function renderResults(results) {
-            const resultsDiv = document.getElementById('results-display');
-            resultsDiv.innerHTML = '';
-
-            if (document.getElementById('results-placeholder')) {
-                document.getElementById('results-placeholder').remove();
-            }
-
-            Object.entries(toolDocumentation.returns || {}).forEach(([key, definition]) => {
-                if (!(key in results)) return;
-                const value = results[key];
-                const substitution = results[`subst_${key}`];
-                const displayName = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-
-                let formattedValue = value;
-                if (typeof value === 'number' && Number.isFinite(value)) {
-                    formattedValue = value.toExponential(4);
-                }
-
-                const equationBlock = substitution
-                    ? `<p><strong>Substituted:</strong> $$${substitution}$$</p>`
-                    : '';
-
-                const detailsBlock = equationBlock
-                    ? `<details class="inline-details">
-                            <summary></summary>
-                            <div class="equation-details">
-                                ${equationBlock}
-                            </div>
-                        </details>`
-                    : '';
-
-                const html = `
-                    <div class="result-item">
-                        <div class="result-header">
-                            <p><strong><span class="definition" title="${definition}">${displayName}</span>:</strong> ${formattedValue}</p>
-                            ${detailsBlock}
-                        </div>
+            });
+            const startIdx = Math.max(0, closestIdx - 2);
+            const endIdx = Math.min(MAGNITUDE_EXAMPLES.length, closestIdx + 3);
+            const visibleExamples = MAGNITUDE_EXAMPLES.slice(startIdx, endIdx);
+            list.innerHTML = visibleExamples.map((ex, i) => {
+                const isCurrent = (i + startIdx) === closestIdx;
+                return `
+                    <div class="magnitude-item ${isCurrent ? 'current' : ''}">
+                        <span class="magnitude-icon">${ex.icon}</span>
+                        <span class="magnitude-name">${ex.name}</span>
+                        <span class="magnitude-re">Re ~ ${formatNumber(ex.re, 2)}</span>
                     </div>
                 `;
-                resultsDiv.insertAdjacentHTML('beforeend', html);
+            }).join('');
+        }
+
+        function updateSliderDisplay() {
+            document.getElementById('velocity-value').textContent = formatNumber(state.velocity, 3) + ' m/s';
+            document.getElementById('length-value').textContent = formatNumber(state.length, 3) + ' m';
+            document.getElementById('velocity-slider').value = state.velocity;
+            document.getElementById('velocity-input').value = state.velocity;
+            document.getElementById('length-slider').value = state.length;
+            document.getElementById('length-input').value = state.length;
+        }
+
+        function checkModified() {
+            const scenario = state.scenario;
+            state.modified = (
+                Math.abs(state.velocity - scenario.velocity) > 0.0001 ||
+                Math.abs(state.length - scenario.length) > 0.0001 ||
+                state.fluidKey !== scenario.fluid ||
+                Math.abs(state.temperature - scenario.temp) > 0.1 ||
+                state.customFluidActive
+            );
+            const resetBtn = document.getElementById('reset-btn');
+            resetBtn.classList.toggle('visible', state.modified);
+        }
+
+        // ============================================================
+        // SCENARIO SELECTION
+        // ============================================================
+
+        function selectScenario(scenario) {
+            state.scenario = scenario;
+            state.fluidKey = scenario.fluid;
+            state.fluid = FLUIDS[scenario.fluid];
+            state.velocity = scenario.velocity;
+            state.length = scenario.length;
+            state.temperature = scenario.temp;
+            state.customFluidActive = false;
+
+            document.getElementById('fluid-select').value = scenario.fluid;
+            document.getElementById('temp-input').value = scenario.temp;
+
+            const vSlider = document.getElementById('velocity-slider');
+            const lSlider = document.getElementById('length-slider');
+            vSlider.min = scenario.velocityRange[0];
+            vSlider.max = scenario.velocityRange[1];
+            document.getElementById('velocity-min').textContent = scenario.velocityRange[0];
+            document.getElementById('velocity-max').textContent = scenario.velocityRange[1];
+            lSlider.min = scenario.lengthRange[0];
+            lSlider.max = scenario.lengthRange[1];
+            document.getElementById('length-min').textContent = scenario.lengthRange[0];
+            document.getElementById('length-max').textContent = scenario.lengthRange[1];
+
+            document.getElementById('length-label').textContent = scenario.lengthLabel;
+            document.getElementById('length-tooltip').setAttribute('data-tooltip', scenario.lengthTooltip);
+
+            document.querySelectorAll('.scenario-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.id === scenario.id);
             });
 
-            if (results.viscosity_path) {
-                const pathHtml = `
-                    <div class="result-item">
-                        <div class="result-header">
-                            <p><strong>Property Source:</strong> ${results.viscosity_path === 'kinematic' ? 'Direct kinematic viscosity input' : 'Density and dynamic viscosity input'}</p>
-                        </div>
-                    </div>
-                `;
-                resultsDiv.insertAdjacentHTML('beforeend', pathHtml);
-            }
+            document.getElementById('custom-content').classList.remove('visible');
+            document.getElementById('custom-toggle').querySelector('span').textContent = '+';
 
-            typesetMath();
-            renderVisualization(results.reynolds_number);
+            updateFluidProperties();
+            updateSliderDisplay();
+            calculateReynolds();
+            checkModified();
         }
 
-        function exportValue(id) {
-            const value = coerceNumber(document.getElementById(id).value);
-            if (value === null || Number.isNaN(value)) {
-                return null;
-            }
-            return value;
+        function renderScenarios() {
+            const grid = document.getElementById('scenario-grid');
+            grid.innerHTML = SCENARIOS.map(s => `
+                <button class="scenario-btn" data-id="${s.id}">
+                    <div class="scenario-icon">${s.icon}</div>
+                    <div class="scenario-name">${s.name}</div>
+                    <div class="scenario-re">Re ~ ${s.typicalRe}</div>
+                </button>
+            `).join('');
+            grid.querySelectorAll('.scenario-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const scenario = SCENARIOS.find(s => s.id === btn.dataset.id);
+                    if (scenario) selectScenario(scenario);
+                });
+            });
         }
 
-        document.getElementById('export-btn').addEventListener('click', () => {
-            if (!latestResults) {
-                alert('Run a calculation before exporting results.');
-                return;
-            }
-            const timestamp = new Date().toISOString();
-            const payload = {
-                timestamp,
-                inputs: {
-                    velocity: exportValue('velocity'),
-                    characteristic_length: exportValue('characteristic-length'),
-                    mode: document.getElementById('viscosity-mode').value,
-                    kinematic_viscosity: exportValue('kinematic-viscosity'),
-                    density: exportValue('density'),
-                    dynamic_viscosity: exportValue('dynamic-viscosity'),
-                },
-                results: latestResults,
-                documentation: {
-                    reference: toolDocumentation.references || 'Fox et al. (2015) Introduction to Fluid Mechanics.',
-                },
-            };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `reynolds-number-${timestamp}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        });
-
-        function resetVisualization(message = DEFAULT_PLOT_MESSAGE) {
-            const container = document.getElementById('plot-container');
-            container.innerHTML = `<p>${message}</p>`;
+        function renderFluidOptions() {
+            const select = document.getElementById('fluid-select');
+            select.innerHTML = Object.entries(FLUIDS).map(([key, fluid]) =>
+                `<option value="${key}">${fluid.name}</option>`
+            ).join('');
         }
 
-        function renderVisualization(reynoldsNumber) {
-            const container = document.getElementById('plot-container');
-            if (!window.Plotly) {
-                resetVisualization('Plotly failed to load. Refresh to retry the visualization.');
-                return;
+        // ============================================================
+        // FLOW VISUALIZATION
+        // ============================================================
+
+        class FlowVisualization {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
             }
 
-            const re = Number(reynoldsNumber);
-            if (!Number.isFinite(re) || re <= 0) {
-                resetVisualization('Visualization requires a positive Reynolds number.');
-                return;
+            resize() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width * window.devicePixelRatio;
+                this.canvas.height = rect.height * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                this.width = rect.width;
+                this.height = rect.height;
+                this.initParticles();
             }
 
-            const minRe = 1;
-            const maxRe = 1e6;
-            const clampedRe = Math.min(Math.max(re, minRe), maxRe);
-            const outsideRange = re < minRe || re > maxRe;
-
-            const shapes = [
-                {
-                    type: 'rect',
-                    xref: 'x',
-                    yref: 'paper',
-                    x0: minRe,
-                    x1: 2300,
-                    y0: 0,
-                    y1: 1,
-                    fillcolor: 'rgba(56, 142, 240, 0.18)',
-                    layer: 'below',
-                    line: { width: 0 }
-                },
-                {
-                    type: 'rect',
-                    xref: 'x',
-                    yref: 'paper',
-                    x0: 2300,
-                    x1: 4000,
-                    y0: 0,
-                    y1: 1,
-                    fillcolor: 'rgba(255, 193, 7, 0.18)',
-                    layer: 'below',
-                    line: { width: 0 }
-                },
-                {
-                    type: 'rect',
-                    xref: 'x',
-                    yref: 'paper',
-                    x0: 4000,
-                    x1: maxRe,
-                    y0: 0,
-                    y1: 1,
-                    fillcolor: 'rgba(220, 53, 69, 0.18)',
-                    layer: 'below',
-                    line: { width: 0 }
+            initParticles() {
+                this.particles = [];
+                const count = 80;
+                for (let i = 0; i < count; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.width,
+                        y: Math.random() * this.height,
+                        baseY: 0,
+                        size: 2 + Math.random() * 2,
+                        speed: 0.5 + Math.random() * 0.5
+                    });
+                    this.particles[i].baseY = this.particles[i].y;
                 }
-            ];
+            }
 
-            const annotations = [
-                {
-                    x: clampedRe,
-                    y: 0.75,
-                    xref: 'x',
-                    yref: 'paper',
-                    text: outsideRange
-                        ? `Re = ${re.toExponential(3)} (shown at boundary)`
-                        : `Re = ${re.toExponential(3)}`,
-                    showarrow: true,
-                    arrowhead: 6,
-                    arrowcolor: '#d9480f',
-                    ax: 0,
-                    ay: -35,
-                    bgcolor: 'rgba(255,255,255,0.85)'
+            update(regime) {
+                const turbulence = regime === 'turbulent' ? 1 : (regime === 'transitional' ? 0.4 : 0);
+                const baseSpeed = 1 + (turbulence * 2);
+                this.particles.forEach(p => {
+                    p.x += p.speed * baseSpeed;
+                    if (turbulence > 0) {
+                        p.y = p.baseY + Math.sin(p.x * 0.02 + p.baseY) * (20 * turbulence)
+                            + (Math.random() - 0.5) * (10 * turbulence);
+                    } else {
+                        const centerDist = Math.abs(p.baseY - this.height / 2) / (this.height / 2);
+                        p.y = p.baseY;
+                        p.x += (1 - centerDist * 0.5) * p.speed;
+                    }
+                    if (p.x > this.width + 10) {
+                        p.x = -10;
+                        p.y = Math.random() * this.height;
+                        p.baseY = p.y;
+                    }
+                    p.y = Math.max(5, Math.min(this.height - 5, p.y));
+                });
+            }
+
+            draw(regime) {
+                const ctx = this.ctx;
+                ctx.clearRect(0, 0, this.width, this.height);
+                const gradient = ctx.createLinearGradient(0, 0, 0, this.height);
+                gradient.addColorStop(0, '#1e3a5f');
+                gradient.addColorStop(1, '#0f172a');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, this.width, this.height);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 10);
+                ctx.lineTo(this.width, 10);
+                ctx.moveTo(0, this.height - 10);
+                ctx.lineTo(this.width, this.height - 10);
+                ctx.stroke();
+                const colors = {
+                    laminar: '#3b82f6',
+                    transitional: '#f59e0b',
+                    turbulent: '#ef4444'
+                };
+                this.particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fillStyle = colors[regime];
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
+                    ctx.fillStyle = colors[regime] + '40';
+                    ctx.fill();
+                });
+                if (regime === 'laminar') {
+                    ctx.strokeStyle = 'rgba(59, 130, 246, 0.2)';
+                    ctx.lineWidth = 1;
+                    for (let y = 30; y < this.height - 20; y += 25) {
+                        ctx.beginPath();
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(this.width, y);
+                        ctx.stroke();
+                    }
                 }
-            ];
+            }
 
-            const trace = {
-                x: [clampedRe],
-                y: [0.5],
-                mode: 'markers',
-                marker: {
-                    size: 16,
-                    color: '#d9480f',
-                    line: { color: '#ffffff', width: 1.5 }
-                },
-                name: 'Computed Re',
-                hovertemplate: '<b>Re</b>: %{x:.3e}<extra></extra>'
-            };
+            animate() {
+                this.update(state.regime);
+                this.draw(state.regime);
+                state.animationId = requestAnimationFrame(() => this.animate());
+            }
 
-            const layout = {
-                margin: { l: 40, r: 20, t: 40, b: 60 },
-                xaxis: {
-                    type: 'log',
-                    title: 'Reynolds number (log scale)',
-                    range: [Math.log10(minRe), Math.log10(maxRe)],
-                    tickvals: [1e1, 1e2, 1e3, 1e4, 1e5, 1e6],
-                    ticktext: ['1e1', '1e2', '1e3', '1e4', '1e5', '1e6']
-                },
-                yaxis: {
-                    visible: false,
-                    range: [0, 1]
-                },
-                shapes,
-                annotations,
-                showlegend: false,
-                hovermode: 'closest',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)'
-            };
-
-            const config = {
-                responsive: true,
-                displayModeBar: false
-            };
-
-            container.innerHTML = '';
-            window.Plotly.newPlot(container, [trace], layout, config);
+            start() {
+                if (!state.animationId) this.animate();
+            }
         }
 
-        main();
+        // ============================================================
+        // EVENT HANDLERS
+        // ============================================================
+
+        function setupEventListeners() {
+            document.getElementById('fluid-select').addEventListener('change', (e) => {
+                state.fluidKey = e.target.value;
+                state.fluid = FLUIDS[e.target.value];
+                state.customFluidActive = false;
+                updateFluidProperties();
+                calculateReynolds();
+                checkModified();
+            });
+
+            document.getElementById('temp-input').addEventListener('input', (e) => {
+                state.temperature = parseFloat(e.target.value) || 20;
+                updateFluidProperties();
+                calculateReynolds();
+                checkModified();
+            });
+
+            const vSlider = document.getElementById('velocity-slider');
+            const vInput = document.getElementById('velocity-input');
+            vSlider.addEventListener('input', (e) => {
+                state.velocity = parseFloat(e.target.value);
+                vInput.value = state.velocity;
+                document.getElementById('velocity-value').textContent = formatNumber(state.velocity, 3) + ' m/s';
+                calculateReynolds();
+                checkModified();
+            });
+            vInput.addEventListener('change', (e) => {
+                state.velocity = Math.max(0.0001, parseFloat(e.target.value) || 1);
+                vSlider.value = Math.min(Math.max(state.velocity, parseFloat(vSlider.min)), parseFloat(vSlider.max));
+                document.getElementById('velocity-value').textContent = formatNumber(state.velocity, 3) + ' m/s';
+                calculateReynolds();
+                checkModified();
+            });
+
+            const lSlider = document.getElementById('length-slider');
+            const lInput = document.getElementById('length-input');
+            lSlider.addEventListener('input', (e) => {
+                state.length = parseFloat(e.target.value);
+                lInput.value = state.length;
+                document.getElementById('length-value').textContent = formatNumber(state.length, 3) + ' m';
+                calculateReynolds();
+                checkModified();
+            });
+            lInput.addEventListener('change', (e) => {
+                state.length = Math.max(0.0001, parseFloat(e.target.value) || 0.05);
+                lSlider.value = Math.min(Math.max(state.length, parseFloat(lSlider.min)), parseFloat(lSlider.max));
+                document.getElementById('length-value').textContent = formatNumber(state.length, 3) + ' m';
+                calculateReynolds();
+                checkModified();
+            });
+
+            document.getElementById('reset-btn').addEventListener('click', () => {
+                selectScenario(state.scenario);
+            });
+
+            document.getElementById('custom-toggle').addEventListener('click', () => {
+                const content = document.getElementById('custom-content');
+                const toggle = document.getElementById('custom-toggle').querySelector('span');
+                const isVisible = content.classList.toggle('visible');
+                toggle.textContent = isVisible ? '−' : '+';
+            });
+
+            document.getElementById('custom-density').addEventListener('change', (e) => {
+                const val = parseFloat(e.target.value);
+                if (val > 0) {
+                    state.density = val;
+                    state.kinematicViscosity = state.dynamicViscosity / state.density;
+                    state.customFluidActive = true;
+                    document.getElementById('display-density').textContent = formatNumber(state.density) + ' kg/m³';
+                    document.getElementById('display-nu').textContent = formatNumber(state.kinematicViscosity) + ' m²/s';
+                    calculateReynolds();
+                    checkModified();
+                }
+            });
+
+            document.getElementById('custom-viscosity').addEventListener('change', (e) => {
+                const val = parseFloat(e.target.value);
+                if (val > 0) {
+                    state.kinematicViscosity = val;
+                    state.dynamicViscosity = val * state.density;
+                    state.customFluidActive = true;
+                    document.getElementById('display-nu').textContent = formatNumber(state.kinematicViscosity) + ' m²/s';
+                    document.getElementById('display-mu').textContent = formatNumber(state.dynamicViscosity) + ' Pa·s';
+                    calculateReynolds();
+                    checkModified();
+                }
+            });
+
+            document.querySelectorAll('.tab-link').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    const target = e.currentTarget.dataset.target;
+                    document.querySelectorAll('.tab-link').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    document.getElementById(target).classList.add('active');
+                    if (target === 'background' && window.MathJax) {
+                        MathJax.typesetPromise();
+                    }
+                });
+            });
+        }
+
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
+
+        function init() {
+            initSettings();
+            setupSettingsPanel();
+            renderScenarios();
+            renderFluidOptions();
+            setupEventListeners();
+            selectScenario(SCENARIOS[0]);
+            const canvas = document.getElementById('flow-canvas');
+            const viz = new FlowVisualization(canvas);
+            viz.start();
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>

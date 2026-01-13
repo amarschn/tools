@@ -26,13 +26,20 @@ Before launch, need 5 tools that are:
 
 | Tool | Category | Verification Effort | Notes |
 |------|----------|--------------------| ------|
-| Bolt Torque Calculator | Mechanical | Medium | VDI 2230, well-documented |
+| Bolt Torque Calculator (VDI 2230) | Mechanical | Medium | VDI 2230 standard, well-documented, high value |
 | Beam Bending Calculator | Mechanical | Medium | Standard formulas |
 | Unit Converter | Reference | Low | Straightforward validation |
 | Battery Runtime Estimator | Electrical | Low | Simple math |
 | Wire Sizing Calculator | Electrical | Low | NEC tables exist |
 | Heat Transfer Calculator | Thermal | Medium | Standard correlations |
 | Reynolds Number Explorer | Fluids | Low | Simple formula |
+
+**Priority order for first 5 verified tools:**
+1. Unit Converter (low effort, high utility)
+2. Reynolds Number Explorer (low effort, simple formula)
+3. Battery Runtime Estimator (low effort)
+4. Bolt Torque Calculator (VDI 2230) (medium effort, high value for engineers)
+5. Beam Bending Calculator (medium effort, common use case)
 
 **Verification process for each tool:**
 - [ ] Document expected outputs for 5+ test cases
@@ -64,13 +71,8 @@ All non-verified tools need clear "Experimental" status:
 | Set up basic analytics | Medium | Free |
 | Create robots.txt and sitemap | Medium | Free |
 
-**Domain name options to check:**
-- engcalcs.com
-- engineeringcalcs.com
-- calcs.engineer
-- calctools.io
-- opensourcecalcs.com
-- Something memorable and short
+**Domain name**
+The domain is transparent.tools
 
 ---
 
@@ -129,6 +131,38 @@ All non-verified tools need clear "Experimental" status:
 - Background/theory section helps SEO
 - Worked examples target specific searches
 - Blog posts for broader topics
+
+#### SEO-First Tools That Convert
+
+People pay when the tool answers a decision-blocking question: "Is this safe?" "Is this allowed?" "Can I send this to a client?"
+
+Best-converting categories:
+- **Acceptable/pass-fail checks:** deflection limits, bolt safety factor, breaker sizing, noise exposure, vibration limits, thermal rise vs insulation class
+- **Sizing tools:** wire gauge, motor sizing, heat sink size, fan CFM, pipe diameter, battery capacity
+- **Diagnostics/inverse tools:** "why did this fail" explainers, trip curve visualizers, spectrum/OASPL explainers
+- **Comparison tools:** AC vs DC, aluminum vs steel, series vs parallel, single-phase vs three-phase
+- **Utilities as on-ramps:** unit conversion, dB/log helpers, Hz/RPM/EO, percent/ppm (ads acceptable here, link to higher-value tools)
+
+#### Design for SEO Conversion
+
+- Answer the query above the fold: tool + result + one-line explanation
+- Show full results before any gate; pay only to export/save/share/batch
+- Use engineer-centric copy: "verify", "check", "estimate", "compare", "validate"
+- Make assumptions explicit; add sensitivity and scenario comparisons
+- Make paid artifacts inevitable: compliance reports, audit trails, presentation-ready exports
+
+#### Low-Conversion Tool Types (Avoid Early)
+
+- Random generators, timers, basic math widgets, novelty visualizers
+- Education-only tools with no exportable artifact or decision outcome
+
+#### Initial SEO-First Tool Ideas
+
+1. Deflection + stress checker with pass/fail
+2. Motor current vs breaker + wire size
+3. Noise exposure + regulatory check
+4. Thermal rise vs insulation class
+5. EO frequency explainer with spectrum input
 
 ### 2.2 Backlink Opportunities
 
@@ -202,4 +236,4 @@ Things we're NOT doing yet:
 
 ---
 
-*Last updated: 2024-12-28*
+*Last updated: 2026-01-11*

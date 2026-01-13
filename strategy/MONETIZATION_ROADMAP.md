@@ -10,6 +10,17 @@ See also: [Competitive Analysis](COMPETITIVE_ANALYSIS.md)
 
 ---
 
+## Conversion Reality: Monetize Moments, Not Users
+
+Most visitors will never pay. That is expected. Focus on the 2-5% moments where the output matters, gets shared, or carries decision risk.
+
+Key principles:
+- Show full results first, then gate artifact actions (export, download, save, batch)
+- Avoid signup before value; keep payment transactional, not SaaS
+- Prefer one-time purchases early; subscriptions only after trust and repeat use
+- Ads are acceptable only when quarantined (sidebar/footer, non-engineering pages)
+- Engineers pay to avoid re-doing work: saved configs, history, reproducibility
+
 ## Monetization Options (Ordered by Feasibility)
 
 ### Tier 1: Zero-Effort Options (Enable Now)
@@ -29,6 +40,23 @@ These can be set up immediately with no downside:
 ### Tier 2: Traffic-Dependent Options
 
 Only viable after consistent traffic exists.
+
+#### Artifact Monetization (Pay After Result)
+
+**Flow that converts:**
+1. User runs tool
+2. Sees full result
+3. Clicks export/save/share/batch
+4. Soft gate: "One-time $3 export or sign in"
+
+**Why it works:** No trust required upfront, feels transactional, and matches the engineer's need for a verifiable artifact.
+
+**Pricing ideas (early):**
+- $2-5 per export (PDF/CSV/XLSX)
+- $9 lifetime access to one tool
+- $19 category pack
+
+**Access model:** Stripe checkout, no account required. Email receipt can unlock a temporary access link.
 
 #### Display Ads
 
@@ -57,7 +85,7 @@ Only viable after consistent traffic exists.
 
 ### Tier 3: Premium/Freemium
 
-Based on Mechanicalc's model ($15/mo or $99/year).
+Subscriptions only make sense after artifact monetization proves demand and trust. Mechanicalc's model ($15/mo or $99/year) is a useful benchmark, but defer until repeat usage is clear.
 
 **Free tier:**
 - All tools, ad-free
@@ -77,6 +105,7 @@ Based on Mechanicalc's model ($15/mo or $99/year).
 - 5,000+ monthly visitors
 - Evidence users want premium features
 - Clear feature set that's worth paying for
+- Artifact monetization shows repeat purchase behavior
 
 **Payment platform:** Lemon Squeezy (handles global taxes) or Stripe
 
@@ -114,16 +143,19 @@ Based on Mechanicalc's model ($15/mo or $99/year).
 - Set up GitHub Sponsors and Ko-fi (no downside)
 - Focus on launch plan, not monetization
 - Don't add ads yet (keep UX clean as differentiator)
+- No login gates; build trust in accuracy and speed
 
 ### Phase 2: Validate (Month 2-4)
 - Track which tools get traffic
 - Survey users on what they'd pay for
 - Monitor competitor premium features
 - Build email list for future premium launch
+- Identify the specific paid actions (export/save/share/batch) and instrument demand
 
 ### Phase 3: Experiment (Month 4-6, if 5K+ visitors)
-- Test non-intrusive ads (or decide to stay ad-free)
-- Soft-launch premium waitlist
+- Launch pay-after-result exports with one-time payments, no account required
+- Test quarantined ads on non-critical pages (or stay ad-free)
+- Soft-launch premium waitlist only if repeat usage is clear
 - Explore sponsorship conversations
 
 ### Phase 4: Scale (Month 6+, if 10K+ visitors)
@@ -183,8 +215,8 @@ Only needed once revenue exceeds ~$400/year:
 ## Key Decisions to Make
 
 1. **Ads or ad-free?** Being ad-free is a differentiator but leaves money on the table.
-2. **Freemium features?** What would users pay for? Need user research.
-3. **Pricing?** Mechanicalc charges $99/year. Is that the right benchmark?
+2. **Paid moments?** Which artifacts are worth paying for (export/save/share/batch)?
+3. **One-time vs subscription?** Start transactional, add recurring only after trust.
 4. **Open source vs. proprietary premium?** Keep core open, premium closed?
 
 ---
@@ -195,7 +227,8 @@ Only needed once revenue exceeds ~$400/year:
 - Don't add ads until UX/trust is established
 - Don't build premium features without user demand signals
 - Don't form LLC until revenue justifies it
+- Don't require signup before showing results
 
 ---
 
-*Last updated: 2024-12-28*
+*Last updated: 2026-01-11*

@@ -17,8 +17,9 @@ This document outlines the vision, architecture, and contribution guidelines for
    - [Dark Mode CSS Variables (CRITICAL)](#dark-mode-css-variables-critical)
 10. [Visualization Standards](#visualization-standards)
 11. [Testing & Verification](#testing--verification)
-12. [Tool Roadmaps](#tool-roadmaps)
-13. [Roadmap](#roadmap)
+12. [Deployment & Hosting](#deployment--hosting)
+13. [Tool Roadmaps](#tool-roadmaps)
+14. [Roadmap](#roadmap)
 
 ## Project Vision & Philosophy
 
@@ -967,6 +968,51 @@ This provides `pytest` (and any future lint/test utilities) while leaving the Py
 * **Frontend sanity:** Open the tool in a local static server (e.g., `python -m http.server`) and verify tooltips, tab switching, and error handling. Capture at least one screenshot or screen recording when submitting a PR if the UI meaningfully changes.
 * **Graph verification (required):** Any tool that renders a graph, plot, or diagram must include a quick visual check. Capture at least one screenshot after running nominal inputs and review it against this checklist: axis labels and units present, scale type correct (linear/log), legend matches series, data values are finite (no NaN/inf gaps), ranges look physically plausible, and any annotations or highlights map to the right values.
 * **Export/visual checks:** When the tool supports exports or plots, download the artifact and ensure units, labels, and legends align with the on-screen values.
+
+---
+
+## Deployment & Hosting
+
+The project is deployed to two hosts simultaneously:
+
+| Host | URL | Config File | Notes |
+|------|-----|-------------|-------|
+| **Netlify (primary)** | https://transparent.tools | `netlify.toml` | Production domain |
+| **GitHub Pages (legacy)** | https://amarschn.github.io | `config.yml` | Still active |
+
+Both deployments are automatic on push to `main`.
+
+### Netlify CLI Commands
+
+```bash
+# Install (one-time)
+npm install -g netlify-cli
+
+# Authenticate (one-time)
+netlify login
+
+# Link repo to Netlify site (one-time, from repo root)
+netlify link
+
+# Open admin dashboard
+netlify open:admin
+
+# Manual production deploy
+netlify deploy --prod
+
+# Preview deploy (generates preview URL for testing)
+netlify deploy
+```
+
+### Build Configuration
+
+- **Build step:** None (pure static HTML/JS site)
+- **Publish directory:** `.` (root)
+- **Config:** `netlify.toml` in repo root
+
+### Support & Monetization
+
+- **Ko-fi:** https://ko-fi.com/transparent_tools (link in site footer)
 
 ---
 

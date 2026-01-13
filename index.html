@@ -3,7 +3,36 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Engineering Tools Catalog</title>
+    <title>Transparent Tools - Free Engineering Calculators</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Free browser-based engineering calculators and tools. Beam bending, bolt torque, vibration analysis, and more. No signup required, runs entirely in your browser." />
+    <meta name="keywords" content="engineering calculator, beam bending, bolt torque, vibration analysis, mechanical engineering, electrical engineering, free tools" />
+    <link rel="canonical" href="https://transparent.tools/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://transparent.tools/" />
+    <meta property="og:title" content="Transparent Tools - Free Engineering Calculators" />
+    <meta property="og:description" content="Free browser-based engineering calculators. Beam bending, bolt torque, vibration analysis, and more. No signup, runs in your browser." />
+    <meta property="og:image" content="https://transparent.tools/og-image.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://transparent.tools/" />
+    <meta name="twitter:title" content="Transparent Tools - Free Engineering Calculators" />
+    <meta name="twitter:description" content="Free browser-based engineering calculators. Beam bending, bolt torque, vibration analysis, and more." />
+    <meta name="twitter:image" content="https://transparent.tools/og-image.png" />
+
+    <!-- Google Analytics - Replace GA_MEASUREMENT_ID with your actual ID -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_MEASUREMENT_ID');
+    </script>
+
     <style>
       :root {
         --bg: #f8f9fa;
@@ -178,6 +207,66 @@
         color: #fff;
       }
 
+      .tag--experimental {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fcd34d;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      .tag--experimental::before {
+        content: "!";
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        width: 1.1rem;
+        height: 1.1rem;
+        border-radius: 999px;
+        background: #92400e;
+        color: #fff;
+      }
+
+      .section-header {
+        grid-column: 1 / -1;
+        margin: 1.5rem 0 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--border);
+      }
+
+      .section-header:first-child {
+        margin-top: 0;
+      }
+
+      .section-header h2 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--muted);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .section-header .count {
+        font-weight: 400;
+        font-size: 0.9rem;
+      }
+
+      .card--priority {
+        border-left: 3px solid #f59e0b;
+      }
+
+      .tag--priority {
+        background: #fef3c7;
+        color: #92400e;
+        font-weight: 600;
+      }
+
       .card a {
         margin-top: auto;
         align-self: flex-start;
@@ -223,11 +312,10 @@
   </head>
   <body>
     <header>
-      <h1>Engineering Tools Catalog</h1>
+      <h1>Transparent Tools</h1>
       <p>
-        Browse calculators, visualizers, and reference utilities powered by
-        Pyodide. Use the filters below to quickly surface the discipline or
-        topic you need.
+        Free engineering calculators that run entirely in your browser.
+        Browse calculators, visualizers, and reference utilities. No signup, no tracking, no nonsense.
       </p>
     </header>
 
@@ -248,6 +336,14 @@
             <option value="all">All categories</option>
           </select>
         </div>
+        <div class="control">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="all">All tools</option>
+            <option value="verified">Verified only</option>
+            <option value="experimental">Experimental only</option>
+          </select>
+        </div>
       </section>
 
       <section id="tool-grid" class="grid" aria-live="polite"></section>
@@ -266,6 +362,7 @@
     <script>
       const searchInput = document.getElementById("search");
       const categorySelect = document.getElementById("category");
+      const statusSelect = document.getElementById("status");
       const grid = document.getElementById("tool-grid");
       const emptyState = document.getElementById("empty-state");
       const year = document.getElementById("year");
@@ -278,11 +375,28 @@
         "human-reviewed",
         "human reviewed",
       ]);
-      const HUMAN_VERIFIED_LABEL = "Human Verified";
+      const HUMAN_VERIFIED_LABEL = "Verified";
+      const EXPERIMENTAL_LABEL = "Experimental";
+
+      // Priority tools to verify - show these first in experimental section
+      const PRIORITY_TOOLS = [
+        "Unit Converter",
+        "Reynolds Number Explorer",
+        "Battery Runtime Estimator",
+        "Bolt Torque Calculator (VDI 2230)_claude",
+        "Beam Bending Calculator",
+        "Wire Sizing Calculator"
+      ];
 
       let tools = [];
 
       year.textContent = new Date().getFullYear();
+
+      function isVerified(tool) {
+        return (tool.tags || []).some(tag =>
+          HUMAN_VERIFIED_TAGS.has(String(tag).trim().toLowerCase())
+        );
+      }
 
       async function loadTools() {
         try {
@@ -315,6 +429,81 @@
         });
       }
 
+      function createToolCard(tool) {
+        const card = document.createElement("article");
+        const verified = isVerified(tool);
+        const isPriority = !verified && PRIORITY_TOOLS.includes(tool.title);
+        card.className = isPriority ? "card card--priority" : "card";
+
+        const title = document.createElement("h2");
+        title.textContent = tool.title;
+        card.appendChild(title);
+
+        const description = document.createElement("p");
+        description.textContent = tool.description;
+        card.appendChild(description);
+
+        if (tool.category?.length) {
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          tool.category.forEach((cat) => {
+            const badge = document.createElement("span");
+            badge.className = "badge";
+            badge.textContent = cat;
+            meta.appendChild(badge);
+          });
+          card.appendChild(meta);
+        }
+
+        // Tags container - always show status badge first
+        const tagsContainer = document.createElement("div");
+        tagsContainer.className = "tags";
+
+        // Add verified or experimental badge first
+        const statusTag = document.createElement("span");
+        if (verified) {
+          statusTag.className = "tag tag--human-verified";
+          statusTag.textContent = HUMAN_VERIFIED_LABEL;
+          statusTag.title = "This tool has been reviewed and verified by a human maintainer.";
+        } else {
+          statusTag.className = "tag tag--experimental";
+          statusTag.textContent = EXPERIMENTAL_LABEL;
+          statusTag.title = "This tool is experimental and has not been fully verified. Use with caution.";
+        }
+        tagsContainer.appendChild(statusTag);
+
+        // Add "Up Next" tag for priority tools
+        if (isPriority) {
+          const priorityTag = document.createElement("span");
+          priorityTag.className = "tag tag--priority";
+          priorityTag.textContent = "Up Next";
+          priorityTag.title = "This tool is queued for verification";
+          tagsContainer.appendChild(priorityTag);
+        }
+
+        // Add other tags (excluding human-verified variants)
+        if (tool.tags?.length) {
+          tool.tags.forEach((tag) => {
+            const normalizedTag = String(tag).trim().toLowerCase();
+            if (!HUMAN_VERIFIED_TAGS.has(normalizedTag)) {
+              const tagEl = document.createElement("span");
+              tagEl.className = "tag";
+              tagEl.textContent = tag;
+              tagsContainer.appendChild(tagEl);
+            }
+          });
+        }
+        card.appendChild(tagsContainer);
+
+        const link = document.createElement("a");
+        link.href = tool.path;
+        link.textContent = "Open Tool";
+        link.setAttribute("aria-label", `Open ${tool.title}`);
+        card.appendChild(link);
+
+        return card;
+      }
+
       function renderTools(toolList) {
         grid.innerHTML = "";
 
@@ -327,72 +516,54 @@
         grid.style.display = "grid";
         emptyState.style.display = "none";
 
-        toolList.forEach((tool) => {
-          const card = document.createElement("article");
-          card.className = "card";
+        // Separate verified and experimental tools
+        const verifiedTools = toolList.filter(isVerified);
+        const experimentalTools = toolList.filter(tool => !isVerified(tool));
 
-          const title = document.createElement("h2");
-          title.textContent = tool.title;
-          card.appendChild(title);
+        // Sort experimental tools: priority tools first, then alphabetically
+        experimentalTools.sort((a, b) => {
+          const aIsPriority = PRIORITY_TOOLS.includes(a.title);
+          const bIsPriority = PRIORITY_TOOLS.includes(b.title);
 
-          const description = document.createElement("p");
-          description.textContent = tool.description;
-          card.appendChild(description);
-
-          if (tool.category?.length) {
-            const meta = document.createElement("div");
-            meta.className = "meta";
-            tool.category.forEach((cat) => {
-              const badge = document.createElement("span");
-              badge.className = "badge";
-              badge.textContent = cat;
-              meta.appendChild(badge);
-            });
-            card.appendChild(meta);
+          if (aIsPriority && !bIsPriority) return -1;
+          if (!aIsPriority && bIsPriority) return 1;
+          if (aIsPriority && bIsPriority) {
+            // Both priority: sort by priority order
+            return PRIORITY_TOOLS.indexOf(a.title) - PRIORITY_TOOLS.indexOf(b.title);
           }
-
-          if (tool.tags?.length) {
-            const tagsContainer = document.createElement("div");
-            tagsContainer.className = "tags";
-            let humanTagRendered = false;
-            tool.tags.forEach((tag) => {
-              const tagEl = document.createElement("span");
-              const normalizedTag = String(tag).trim().toLowerCase();
-
-              if (
-                HUMAN_VERIFIED_TAGS.has(normalizedTag) &&
-                !humanTagRendered
-              ) {
-                tagEl.className = "tag tag--human-verified";
-                tagEl.textContent = HUMAN_VERIFIED_LABEL;
-                tagEl.title =
-                  "This tool has been reviewed and confirmed by a human maintainer.";
-                humanTagRendered = true;
-              } else if (HUMAN_VERIFIED_TAGS.has(normalizedTag)) {
-                return;
-              } else {
-                tagEl.className = "tag";
-                tagEl.textContent = tag;
-              }
-
-              tagsContainer.appendChild(tagEl);
-            });
-            card.appendChild(tagsContainer);
-          }
-
-          const link = document.createElement("a");
-          link.href = tool.path;
-          link.textContent = "Open Tool";
-          link.setAttribute("aria-label", `Open ${tool.title}`);
-          card.appendChild(link);
-
-          grid.appendChild(card);
+          // Neither priority: alphabetical
+          return a.title.localeCompare(b.title);
         });
+
+        // Render verified section if there are verified tools
+        if (verifiedTools.length > 0) {
+          const verifiedHeader = document.createElement("div");
+          verifiedHeader.className = "section-header";
+          verifiedHeader.innerHTML = `<h2>Verified Tools <span class="count">(${verifiedTools.length})</span></h2>`;
+          grid.appendChild(verifiedHeader);
+
+          verifiedTools.forEach((tool) => {
+            grid.appendChild(createToolCard(tool));
+          });
+        }
+
+        // Render experimental section if there are experimental tools
+        if (experimentalTools.length > 0) {
+          const expHeader = document.createElement("div");
+          expHeader.className = "section-header";
+          expHeader.innerHTML = `<h2>Experimental Tools <span class="count">(${experimentalTools.length})</span></h2>`;
+          grid.appendChild(expHeader);
+
+          experimentalTools.forEach((tool) => {
+            grid.appendChild(createToolCard(tool));
+          });
+        }
       }
 
       function applyFilters() {
         const query = searchInput.value.trim().toLowerCase();
         const category = categorySelect.value;
+        const status = statusSelect.value;
 
         const filtered = tools.filter((tool) => {
           const matchesCategory =
@@ -400,6 +571,12 @@
             (tool.category || []).some(
               (cat) => cat.toLowerCase() === category.toLowerCase()
             );
+
+          const verified = isVerified(tool);
+          const matchesStatus =
+            status === "all" ||
+            (status === "verified" && verified) ||
+            (status === "experimental" && !verified);
 
           const haystack = [
             tool.title,
@@ -411,7 +588,7 @@
             .toLowerCase();
 
           const matchesQuery = !query || haystack.includes(query);
-          return matchesCategory && matchesQuery;
+          return matchesCategory && matchesStatus && matchesQuery;
         });
 
         renderTools(filtered);
@@ -419,6 +596,7 @@
 
       searchInput.addEventListener("input", applyFilters);
       categorySelect.addEventListener("change", applyFilters);
+      statusSelect.addEventListener("change", applyFilters);
 
       loadTools();
     </script>
