@@ -12,7 +12,7 @@
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
 
-    <title>Battery Runtime Estimator - Engineering Tools</title>
+    <title>Battery Runtime Estimator - Transparent Tools</title>
 
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
@@ -38,6 +38,37 @@
             --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
             --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
         }
+
+        /* Dark Theme */
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            }
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; }
         body {
@@ -48,6 +79,7 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
         .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
         h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 700; }
@@ -67,8 +99,80 @@
             padding: 0 5%;
         }
         .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
-        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); letter-spacing: -0.01em; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); letter-spacing: -0.01em; text-decoration: none; }
         .nav-brand:hover { text-decoration: none; color: var(--text-color); }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        /* Settings Panel */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0; right: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border-color); }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close { background: none; border: none; font-size: 0.9rem; font-weight: 600; color: var(--text-light); cursor: pointer; }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
 
         /* --- 3. Main Tool Layout --- */
         main.container { flex-grow: 1; }
@@ -573,7 +677,7 @@
     </style>
 </head>
 
-<body>
+<body data-theme="system" data-density="comfortable">
     <div class="loading-overlay" id="loading-overlay">
         <div class="spinner"></div>
         <div class="loading-text" id="loading-text">Loading Pyodide...</div>
@@ -581,9 +685,64 @@
 
     <header class="navbar">
         <nav class="nav-container">
-            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <a href="../../index.html" class="nav-brand">Transparent Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Settings</button>
+            </div>
         </nav>
     </header>
+
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or match system.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system" class="active">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable" class="active">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-section">
+                <h4>Display</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2</button>
+                        <button type="button" data-precision="3" class="active">3</button>
+                        <button type="button" data-precision="4">4</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="settings-button" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
 
     <main class="container">
         <div class="tool-header">
@@ -1531,7 +1690,7 @@
     </main>
 
     <footer class="footer">
-        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+        <p>&copy; 2025 Transparent Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
     </footer>
 
     <script>
@@ -1539,6 +1698,92 @@
         let toolDocumentation = {};
         let latexExpressions = [];
         let pyUtils, pyToolModule;
+
+        // --- Settings ---
+        let settings = {
+            theme: 'system',
+            density: 'comfortable',
+            precision: 3
+        };
+
+        function initSettings() {
+            const saved = localStorage.getItem('battery-runtime-settings');
+            if (saved) {
+                try {
+                    settings = { ...settings, ...JSON.parse(saved) };
+                } catch (e) { }
+            }
+            applySettings();
+        }
+
+        function applySettings() {
+            document.body.setAttribute('data-theme', settings.theme);
+            document.body.setAttribute('data-density', settings.density);
+
+            // Update active buttons
+            document.querySelectorAll('[data-theme]').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-theme') === settings.theme);
+            });
+            document.querySelectorAll('[data-density]').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-density') === settings.density);
+            });
+            document.querySelectorAll('[data-precision]').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.getAttribute('data-precision')) === settings.precision);
+            });
+
+            localStorage.setItem('battery-runtime-settings', JSON.stringify(settings));
+        }
+
+        function setupSettingsPanel() {
+            const btn = document.getElementById('settings-button');
+            const overlay = document.getElementById('settings-overlay');
+            const panel = document.getElementById('settings-panel');
+            const closeBtn = document.getElementById('settings-close');
+            const resetBtn = document.getElementById('settings-reset');
+
+            function openPanel() {
+                overlay.classList.add('open');
+                panel.classList.add('open');
+            }
+            function closePanel() {
+                overlay.classList.remove('open');
+                panel.classList.remove('open');
+            }
+
+            btn.addEventListener('click', openPanel);
+            overlay.addEventListener('click', closePanel);
+            closeBtn.addEventListener('click', closePanel);
+
+            resetBtn.addEventListener('click', () => {
+                settings = { theme: 'system', density: 'comfortable', precision: 3 };
+                applySettings();
+            });
+
+            document.querySelectorAll('[data-theme]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.theme = btn.getAttribute('data-theme');
+                    applySettings();
+                });
+            });
+
+            document.querySelectorAll('[data-density]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.density = btn.getAttribute('data-density');
+                    applySettings();
+                });
+            });
+
+            document.querySelectorAll('[data-precision]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.precision = parseInt(btn.getAttribute('data-precision'));
+                    applySettings();
+                });
+            });
+        }
+
+        // Initialize settings immediately
+        initSettings();
+        setupSettingsPanel();
 
         // --- CONFIG: Set these for each tool ---
         const TOOL_MODULE_NAME = 'batteries';

@@ -14,9 +14,9 @@ This plan addresses what needs to happen before any monetization makes sense.
 
 ## Phase 0: Pre-Launch Requirements
 
-### 0.1 Establish Core Verified Tools (5 minimum)
+### 0.1 Establish Core Verified Tools (6 minimum)
 
-Before launch, need 5 tools that are:
+Before launch, need 6 tools that are:
 - Fully tested against known solutions
 - Equations verified against standards/textbooks
 - Edge cases handled gracefully
@@ -31,16 +31,17 @@ Before launch, need 5 tools that are:
 | Beam Bending Calculator | Mechanical | Medium | Standard formulas |
 | Unit Converter | Reference | Low | Straightforward validation |
 | Battery Runtime Estimator | Electrical | Low | Simple math |
-| Wire Sizing Calculator | Electrical | Low | NEC tables exist |
+| Engineering Fits Assistant | Mechanical | Low | ISO 286 standard |
 | Heat Transfer Calculator | Thermal | Medium | Standard correlations |
 | Reynolds Number Explorer | Fluids | Low | Simple formula |
 
-**Priority order for first 5 verified tools:**
+**Priority order for first 6 verified tools:**
 1. Unit Converter (low effort, high utility)
 2. Reynolds Number Explorer (low effort, simple formula)
 3. Battery Runtime Estimator (low effort)
-4. Bolt Torque Calculator (VDI 2230) (medium effort, high value for engineers)
-5. Beam Bending Calculator (medium effort, common use case)
+4. Engineering Fits Assistant (low effort, ISO 286 standard)
+5. Bolt Torque Calculator (VDI 2230) (medium effort, high value for engineers)
+6. Beam Bending Calculator (medium effort, common use case)
 
 **Verification process for each tool:**
 - [ ] Document expected outputs for 5+ test cases
@@ -78,7 +79,7 @@ The catalog (`index.html`) automatically handles badge display:
 
 ### 1.1 Minimum Viable Launch Checklist
 
-- [ ] 5 verified tools with badges
+- [x] 6 verified tools with badges
 - [x] All other tools marked "Experimental"
 - [x] Custom domain configured
 - [x] Analytics installed (GA4)
@@ -86,7 +87,7 @@ The catalog (`index.html`) automatically handles badge display:
 - [x] Privacy Policy page
 - [x] About page (who made this, why, transparency about AI)
 - [x] Contact method (Ko-fi linked from About page)
-- [ ] Mobile responsive confirmed
+- [x] Mobile responsive confirmed (tools use responsive templates)
 - [x] Basic SEO (titles, descriptions, sitemap)
 
 ### 1.2 Initial Traffic Sources (Free)
@@ -184,7 +185,7 @@ Best-converting categories:
 ## Success Metrics by Phase
 
 ### Pre-Launch (Phase 0)
-- [ ] 5 tools verified (add `human-verified` tag in catalog.json)
+- [x] 6 tools verified (add `human-verified` tag in catalog.json)
 - [x] Experimental badges on all others (automatic via index.html)
 - [x] Domain registered and configured
 - [x] Ko-fi donation links added
@@ -210,7 +211,7 @@ Best-converting categories:
 
 | Milestone | Target |
 |-----------|--------|
-| 5 verified tools complete | Week 2-3 |
+| 6 verified tools complete | Week 2-3 |
 | Domain + Netlify configured | Week 1 |
 | Soft launch (share on Reddit/HN) | Week 3-4 |
 | First 100 visitors | Week 4-6 |
@@ -232,11 +233,11 @@ Things we're NOT doing yet:
 ## Open Questions
 
 1. ~~What domain name?~~ → **transparent.tools** ✓
-2. ~~Which 5 tools to verify first?~~ → Unit Converter, Reynolds Number, Battery Runtime, Bolt Torque, Beam Bending
+2. ~~Which 6 tools to verify first?~~ → Unit Converter, Reynolds Number, Battery Runtime, Engineering Fits, Bolt Torque, Beam Bending
 3. ~~How to display experimental vs. verified in the UI?~~ → Automatic badges in catalog + filter dropdown ✓
 4. Who can help verify tools? (peer review)
 5. What's the "about" story? (transparency about AI, personal project, etc.)
 
 ---
 
-*Last updated: 2026-01-12*
+*Last updated: 2026-01-13*

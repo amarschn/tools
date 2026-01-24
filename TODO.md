@@ -13,6 +13,35 @@ This backlog consolidates platform work, template upgrades, and future tool idea
 - [x] Deploy Reynolds Number Explorer (fluid mechanics sanity-check tool).
 - [x] Add Composite Wall Heat Loss calculator with interface temperature visualization.
 
+### Export Functionality (Future)
+
+- [ ] **PDF Export** - Generate professional PDF reports for design reviews with:
+  - Tool name, version, and timestamp
+  - All inputs with labels and units
+  - All outputs with derivation steps
+  - Equations used (rendered LaTeX)
+  - Charts/visualizations embedded
+- [ ] **Excel Export** - Generate calculation spreadsheets with:
+  - Input cells (editable for verification)
+  - Formula cells showing calculation logic
+  - Output summary
+  - Version and tool metadata
+- [ ] Shared export module to standardize format across all tools
+
+### Versioning System (Future)
+
+- [ ] **Define versioning scheme** for tools:
+  - `0.x` = Prototype/Experimental (unverified)
+  - `1.x` = Verified (human-tested, equations validated)
+  - Semantic versioning for updates (e.g., `1.2.3`)
+- [ ] **User-visible version display** - Show version in tool UI (header or footer)
+- [ ] **Version in exports** - All PDF/Excel exports must include:
+  - Tool version number
+  - Verification status (Experimental/Verified)
+  - Export timestamp
+- [ ] **Version tracking in catalog.json** - Add `version` field to each tool entry
+- [ ] **Changelog per tool** - Track what changed between versions
+
 ## Aerospace Engineering Tools
 
 - [ ] Airfoil lift and drag estimator with NACA parser and Cp plots.
