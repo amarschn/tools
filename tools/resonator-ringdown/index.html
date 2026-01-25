@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Resonator Ring-Down Simulator - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            /* Light mode specific colors */
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #111827;
+            --tooltip-text: #ffffff;
+            --callout-info-bg: #dbeafe;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #fef3c7;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #fef2f2;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #d1fae5;
+            --callout-success-border: #22c55e;
+        }
+        /* Dark theme */
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            /* Dark mode specific colors */
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #1f2937;
+            --tooltip-text: #f9fafb;
+            --callout-info-bg: #1e3a5f;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #422006;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #450a0a;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #052e16;
+            --callout-success-border: #22c55e;
+        }
+        /* System theme - follows OS preference */
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+                /* Dark mode specific colors */
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+                --tooltip-bg: #1f2937;
+                --tooltip-text: #f9fafb;
+                --callout-info-bg: #1e3a5f;
+                --callout-info-border: #3b82f6;
+                --callout-warning-bg: #422006;
+                --callout-warning-border: #f59e0b;
+                --callout-danger-bg: #450a0a;
+                --callout-danger-border: #ef4444;
+                --callout-success-bg: #052e16;
+                --callout-success-border: #22c55e;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* =================================================================
+           2. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            transition: background-color 0.2s ease;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* =================================================================
+           3. LAYOUT & CONTAINERS
+           ================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-brand:hover { text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        main.container { flex-grow: 1; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        /* =================================================================
+           4. PURPOSE/README SECTION
+           ================================================================= */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .purpose-content code { background-color: var(--primary-light); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
+
+        /* =================================================================
+           5. INPUT SECTION
+           ================================================================= */
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            color: var(--text-color);
+            transition: border-color 0.15s ease;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-group select:disabled,
+        .input-group input:disabled {
+            background: var(--primary-light);
+            color: var(--text-light);
+            cursor: not-allowed;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* Checkbox styling */
+        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-bottom: 1.1rem; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-group label { margin-bottom: 0; cursor: pointer; }
+
+        /* Tooltip */
+        .tooltip-trigger {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px; font-weight: bold;
+            cursor: help;
+            position: absolute; right: 10px; top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--tooltip-bg); color: var(--tooltip-text);
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5;
+            white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* Slider tooltip override - inline positioning */
+        .tooltip-trigger.slider-tooltip {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        /* Expert Mode Toggle - Prominent placement */
+        .expert-mode-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 16px;
+        }
+        .expert-mode-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .expert-mode-hint {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin-left: 8px;
+            font-weight: 400;
+        }
+        .expert-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .expert-toggle input {
+            width: 40px;
+            height: 22px;
+            appearance: none;
+            -webkit-appearance: none;
+            background: var(--border-color);
+            border-radius: 999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .expert-toggle input::before {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: var(--bg-card);
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.2s ease;
+            box-shadow: var(--shadow);
+        }
+        .expert-toggle input:checked {
+            background: var(--success-color);
+        }
+        .expert-toggle input:checked::before {
+            transform: translateX(18px);
+        }
+        .expert-toggle-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* Advanced Section Toggle */
+        .advanced-section {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border-color);
+        }
+        .advanced-section.visible { display: block; }
+        .advanced-section h4 { margin-bottom: 12px; color: var(--secondary-color); font-size: 0.9rem; }
+        .advanced-toggle {
+            background: none; border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 0.9rem; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 12px; padding: 8px 0;
+        }
+        .advanced-toggle:hover { text-decoration: underline; }
+        .toggle-icon { font-family: var(--font-mono); font-weight: 600; }
+
+        /* Hide old toggle when expert mode is on */
+        body.expert-mode .advanced-toggle { display: none; }
+        body.expert-mode .advanced-section { display: block; }
+
+        /* Slider */
+        .slider-group {
+            margin: 0 0 1.5rem 0;
+            padding: 16px;
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+        }
+        .slider-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500; font-size: 0.875rem; }
+        .slider-value { font-family: var(--font-mono); font-weight: 600; color: var(--accent-color); }
+        .slider-group input[type="range"] {
+            width: 100%; height: 6px; -webkit-appearance: none;
+            background: var(--border-color); border-radius: 3px; outline: none;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            background: var(--accent-color); border-radius: 50%; cursor: pointer;
+        }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-light); margin-top: 4px; }
+
+        /* Buttons */
+        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s, opacity 0.15s; }
+        .btn-primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); width: 100%; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* =================================================================
+           6. TABS
+           ================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px; cursor: pointer;
+            background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* =================================================================
+           7. RESULTS SECTION
+           ================================================================= */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            text-align: center;
+        }
+        .summary-item .label { font-size: 0.75rem; color: var(--text-light); margin-bottom: 4px; }
+        .summary-item .value { font-size: 1rem; font-weight: 600; font-family: var(--font-mono); }
+        .summary-item .unit { font-size: 0.75rem; color: var(--text-light); margin-left: 2px; }
+        .result-item {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .result-item:hover { border-color: var(--border-color); }
+        .result-item.expanded { border-color: var(--accent-color); background: var(--primary-light); }
+        .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
+        .result-item .icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.4; }
+
+        /* Derivation Panel */
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-close:hover { color: var(--text-color); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); font-size: 0.9rem; }
+        .derivation-step .equation { background: var(--bg-card); padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+        .derivation-step .inputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .derivation-step .input-tag { background: var(--bg-card); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-color); }
+        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
+        .derivation-step .result-box.good { background: var(--success-color); }
+        .derivation-step .result-box.warning { background: var(--warning-color); color: var(--text-color); }
+        .derivation-step .result-box.bad { background: var(--danger-color); }
+
+        /* =================================================================
+           8. SAFETY GAUGES
+           ================================================================= */
+        .safety-section { margin-top: 24px; }
+        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
+        .safety-gauge {
+            display: flex; align-items: center; gap: 14px;
+            margin-bottom: 12px; padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+        .gauge-label { min-width: 120px; font-weight: 600; font-size: 0.85rem; }
+        .gauge-bar-container { flex: 1; height: 8px; background: var(--border-color); border-radius: 4px; position: relative; overflow: visible; }
+        .gauge-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .gauge-bar.success { background: var(--success-color); }
+        .gauge-bar.warning { background: var(--warning-color); }
+        .gauge-bar.danger { background: var(--danger-color); }
+        .gauge-value { min-width: 70px; text-align: right; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
+        .gauge-value.success { color: var(--success-color); }
+        .gauge-value.warning { color: var(--warning-color); }
+        .gauge-value.danger { color: var(--danger-color); }
+        .gauge-threshold { position: absolute; width: 2px; height: 16px; background: var(--text-color); top: -4px; }
+
+        /* Gauge Explainer Panels */
+        .gauge-explainer {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        .gauge-explainer.visible { display: block; }
+        .gauge-explainer .explainer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .gauge-explainer p { font-size: 0.9rem; margin-bottom: 10px; }
+        .gauge-explainer .explainer-equation {
+            background: var(--bg-card);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+        .gauge-explainer .explainer-values {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .gauge-explainer .value-tag {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: var(--text-color);
+        }
+        .gauge-explainer .explainer-guidance {
+            font-size: 0.85rem;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 0;
+        }
+        .gauge-explainer .explainer-guidance.good {
+            background: var(--callout-success-bg);
+            color: var(--success-color);
+        }
+        .gauge-explainer .explainer-guidance.marginal {
+            background: var(--callout-warning-bg);
+            color: var(--warning-color);
+        }
+        .gauge-explainer .explainer-guidance.bad {
+            background: var(--callout-danger-bg);
+            color: var(--danger-color);
+        }
+
+        /* =================================================================
+           9. STATUS BANNER
+           ================================================================= */
+        .status-banner { padding: 18px 24px; border-radius: var(--border-radius); margin-top: 24px; display: flex; align-items: flex-start; gap: 14px; }
+        .status-banner .icon { font-size: 1.25rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
+        .status-banner.acceptable { background: #ecfdf5; border: 1px solid var(--success-color); }
+        .status-banner.acceptable h4 { color: var(--success-color); }
+        .status-banner.marginal { background: #fffbeb; border: 1px solid var(--warning-color); }
+        .status-banner.marginal h4 { color: var(--warning-color); }
+        .status-banner.unacceptable { background: #fef2f2; border: 1px solid var(--danger-color); }
+        .status-banner.unacceptable h4 { color: var(--danger-color); }
+        .recommendations { margin-top: 8px; padding-left: 20px; }
+        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; color: var(--text-color); }
+
+        /* =================================================================
+           10. CHARTS
+           ================================================================= */
+        .chart-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 18px; margin-bottom: 20px; }
+        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+        .chart-plot { width: 100%; min-height: 350px; height: 350px; }
+        .chart-explanation { margin-top: 12px; font-size: 0.85rem; color: var(--text-light); line-height: 1.5; padding: 10px; background: var(--primary-light); border-radius: 6px; }
+        .chart-explanation strong { color: var(--text-color); }
+        .charts-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+
+        /* =================================================================
+           11. BACKGROUND TAB
+           ================================================================= */
+        .toc-card { background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px; }
+        .toc-card strong { color: var(--primary-color); }
+        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
+        .toc-card a { color: var(--accent-color); }
+
+        .bg-section { margin-bottom: 32px; }
+        .bg-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-bottom: 16px; }
+        .bg-section h4 { margin-top: 20px; color: var(--secondary-color); }
+
+        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin: 16px 0; }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+
+        /* Callout boxes */
+        .callout-info { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-info strong { color: var(--callout-info-border); }
+        .callout-warning { background: var(--callout-warning-bg); border-left: 4px solid var(--callout-warning-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-warning strong { color: var(--callout-warning-border); }
+        .callout-danger { background: var(--callout-danger-bg); border-left: 4px solid var(--callout-danger-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-danger strong { color: var(--callout-danger-border); }
+        .callout-success { background: var(--callout-success-bg); border-left: 4px solid var(--callout-success-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-success strong { color: var(--callout-success-border); }
+
+        /* =================================================================
+           12. SETTINGS PANEL
+           ================================================================= */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close {
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.2s;
+            border-radius: 999px;
+        }
+        .switch .slider-toggle::before {
+            position: absolute;
+            content: '';
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: var(--bg-card);
+            transition: 0.2s;
+            border-radius: 50%;
+            box-shadow: var(--shadow);
+        }
+        .switch input:checked + .slider-toggle { background-color: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(20px); }
+
+        /* Segmented Control */
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        /* =================================================================
+           13. COMPACT DENSITY MODE
+           ================================================================= */
+        /* Layout & Cards */
+        body[data-density="compact"] .container { padding: 16px 0; }
+        body[data-density="compact"] .card { padding: 12px; }
+        body[data-density="compact"] .tool-layout { gap: 16px; }
+
+        /* Typography */
+        body[data-density="compact"] h1 { font-size: 1.7rem; margin-bottom: 0.25rem; }
+        body[data-density="compact"] h2 { font-size: 1.1rem; padding-bottom: 8px; margin-bottom: 10px; }
+        body[data-density="compact"] .tool-description { font-size: 0.9rem; margin-bottom: 1rem; }
+
+        /* Inputs */
+        body[data-density="compact"] .input-group { margin-bottom: 10px; }
+        body[data-density="compact"] .input-group label { font-size: 0.78rem; margin-bottom: 3px; }
+        body[data-density="compact"] .input-group input,
+        body[data-density="compact"] .input-group select { padding: 6px 10px; font-size: 0.85rem; }
+        body[data-density="compact"] .input-group .tooltip-trigger { top: 28px; }
+        body[data-density="compact"] .input-row { gap: 10px; }
+        body[data-density="compact"] .slider-group { padding: 8px 12px; margin-bottom: 10px; }
+        body[data-density="compact"] .slider-header { margin-bottom: 6px; font-size: 0.8rem; }
+        body[data-density="compact"] .slider-labels { font-size: 0.7rem; }
+        body[data-density="compact"] .expert-mode-bar { padding: 8px 12px; margin-bottom: 10px; }
+        body[data-density="compact"] .expert-mode-label { font-size: 0.82rem; }
+        body[data-density="compact"] .expert-mode-hint { font-size: 0.75rem; }
+        body[data-density="compact"] .advanced-section { margin-top: 10px; padding-top: 10px; }
+        body[data-density="compact"] .btn-primary { padding: 10px 20px; font-size: 0.9rem; }
+
+        /* Results */
+        body[data-density="compact"] .tabs { margin-bottom: 12px; }
+        body[data-density="compact"] .tab-btn { padding: 8px 14px; font-size: 0.85rem; }
+        body[data-density="compact"] .result-item { padding: 8px 12px; margin-bottom: 8px; }
+        body[data-density="compact"] .result-item .label { font-size: 0.78rem; }
+        body[data-density="compact"] .result-item .value { font-size: 1rem; }
+        body[data-density="compact"] .result-item .unit { font-size: 0.8rem; }
+        body[data-density="compact"] .derivation-panel { padding: 10px 12px; }
+
+        /* Safety Gauges */
+        body[data-density="compact"] .safety-gauge { padding: 8px 12px; margin-bottom: 8px; }
+        body[data-density="compact"] .gauge-label { font-size: 0.78rem; }
+        body[data-density="compact"] .gauge-value { font-size: 0.85rem; }
+        body[data-density="compact"] .gauge-explainer { padding: 10px 12px; }
+
+        /* Status Banner */
+        body[data-density="compact"] .status-banner { padding: 12px 14px; margin-bottom: 12px; }
+        body[data-density="compact"] .status-title { font-size: 0.95rem; }
+        body[data-density="compact"] .status-message { font-size: 0.82rem; }
+        body[data-density="compact"] .recommendations { font-size: 0.78rem; }
+        body[data-density="compact"] .recommendations li { margin-bottom: 2px; }
+
+        /* Callouts & Background */
+        body[data-density="compact"] .callout { padding: 10px 12px; margin-bottom: 12px; }
+        body[data-density="compact"] .callout-title { font-size: 0.82rem; }
+        body[data-density="compact"] .callout p { font-size: 0.82rem; }
+        body[data-density="compact"] .equation-card { padding: 12px; margin-bottom: 12px; }
+        body[data-density="compact"] .toc { padding: 12px; }
+
+        /* =================================================================
+           14. FOOTER
+           ================================================================= */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* =================================================================
+           15. RESPONSIVE
+           ================================================================= */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .settings-panel { width: 100%; }
+            .settings-button { padding: 8px 12px; font-size: 0.8rem; }
+        }
+        @media (max-width: 600px) {
+            .input-row { grid-template-columns: 1fr; }
+            .results-grid { grid-template-columns: 1fr; }
+            .safety-gauge { flex-direction: column; align-items: flex-start; }
+            .gauge-bar-container { width: 100%; }
+            .tabs { flex-direction: column; }
+            .segmented { flex-wrap: wrap; }
+        }
+    
+    .support-link {
+      color: inherit;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .support-link:hover {
+      text-decoration: underline;
+    }
+    </style>
+</head>
+
+<body data-theme="system" data-density="comfortable">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show derivations by default</div>
+                        <div class="setting-help">Auto-expand derivation panels.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-derivations">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2 dp</button>
+                        <button type="button" data-precision="3">3 dp</button>
+                        <button type="button" data-precision="4">4 dp</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Resonator Ring-Down Simulator</h1>
+        <p class="tool-description" id="tool-description">
+            Simulate the ring-down of tuning forks and beam resonators using geometry-based frequency estimates,
+            damping ratios, and time-domain decay plots.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>About This Tool</h3>
+                <p>This tool models a struck resonator as a damped, single-mode oscillator. It estimates the
+                fundamental frequency from beam geometry and material properties, then simulates the decay response.</p>
+                <ul>
+                    <li><strong>Geometry-driven frequency</strong> using Euler-Bernoulli beam theory</li>
+                    <li><strong>Damping and decay metrics</strong> including Q, zeta, and t60</li>
+                    <li><strong>Time-domain waveform</strong> with an exponential envelope</li>
+                    <li><strong>Decay plot</strong> showing amplitude in dB over time</li>
+                </ul>
+                <p>Use the Advanced options to enter custom material properties and simulation settings.</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <!-- ============== INPUTS ============== -->
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+
+                <form id="calc-form">
+                    <h3>Resonator</h3>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="resonator_type">Resonator Type</label>
+                            <select id="resonator_type" name="resonator_type" onchange="updateResonatorType()">
+                                <option value="tuning_fork">Tuning fork (two tines)</option>
+                                <option value="beam">Single beam or rod</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="support_condition">Support Condition</label>
+                            <select id="support_condition" name="support_condition">
+                                <option value="cantilever">Cantilever (clamped-free)</option>
+                                <option value="simply_supported">Simply supported</option>
+                                <option value="clamped_clamped">Clamped-clamped</option>
+                                <option value="free_free">Free-free (suspended)</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="material">Material</label>
+                            <select id="material" name="material" onchange="updateMaterialFields()">
+                                <option value="steel">Steel (AISI 1020)</option>
+                                <option value="aluminum">Aluminum 6061-T6</option>
+                                <option value="brass">Brass (C360)</option>
+                                <option value="titanium">Titanium (Grade 5)</option>
+                                <option value="custom">Custom material</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="quality_factor">Quality Factor Q</label>
+                            <input type="number" id="quality_factor" name="quality_factor" value="500" step="any" min="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="initial_displacement_mm">Initial Displacement (mm)</label>
+                        <input type="number" id="initial_displacement_mm" name="initial_displacement_mm" value="0.5" step="any" min="0.01">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <h3>Geometry</h3>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="cross_section">Cross-Section</label>
+                            <select id="cross_section" name="cross_section" onchange="updateCrossSection()">
+                                <option value="rectangular">Rectangular</option>
+                                <option value="circular">Circular</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="length_mm">Active Length (mm)</label>
+                            <input type="number" id="length_mm" name="length_mm" value="80" step="0.5" min="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row" id="rectangular-fields">
+                        <div class="input-group">
+                            <label for="width_mm">Width (mm)</label>
+                            <input type="number" id="width_mm" name="width_mm" value="6" step="0.1" min="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="thickness_mm">Thickness (mm)</label>
+                            <input type="number" id="thickness_mm" name="thickness_mm" value="4" step="0.1" min="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row" id="circular-fields" style="display: none;">
+                        <div class="input-group">
+                            <label for="diameter_mm">Diameter (mm)</label>
+                            <input type="number" id="diameter_mm" name="diameter_mm" value="6" step="0.1" min="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="advanced-section" id="advanced-inputs">
+                        <h4>Custom Material</h4>
+                        <div class="input-row" id="custom-material-fields" style="display: none;">
+                            <div class="input-group">
+                                <label for="elastic_modulus_gpa">Elastic Modulus (GPa)</label>
+                                <input type="number" id="elastic_modulus_gpa" name="elastic_modulus_gpa" value="200" step="1" min="1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="density_kg_m3">Density (kg/m^3)</label>
+                                <input type="number" id="density_kg_m3" name="density_kg_m3" value="7850" step="10" min="100">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 16px;">Simulation</h4>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="simulation_duration_s">Duration (s)</label>
+                                <input type="number" id="simulation_duration_s" name="simulation_duration_s" value="2.0" step="0.1" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="sample_rate_hz">Sample Rate (Hz)</label>
+                                <input type="number" id="sample_rate_hz" name="sample_rate_hz" value="2000" step="100" min="200" max="100000">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="noise_rms_mm">Noise RMS (mm)</label>
+                            <input type="number" id="noise_rms_mm" name="noise_rms_mm" value="0" step="0.01" min="0">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <button type="button" class="advanced-toggle" onclick="toggleAdvanced()">
+                        <span class="toggle-icon" id="toggle-icon">+</span> Show advanced options
+                    </button>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" style="margin-top: 16px;">Calculate</button>
+                </form>
+            </section>
+
+            <!-- ============== OUTPUTS ============== -->
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'ringdown')">Ring-Down</button>
+                    <button class="tab-link" onclick="openTab(event, 'decay')">Decay</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background</button>
+                </div>
+
+                <!-- Results Tab -->
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Key Results</h3>
+                    <p id="results-placeholder" style="color: var(--text-light);">Enter inputs and press Calculate to see results.</p>
+
+                    <div class="results-grid" id="results-grid" style="display: none;">
+                        <div class="result-item highlight" data-key="fundamental_frequency_hz" onclick="toggleDerivation('fundamental_frequency_hz')">
+                            <div class="label">Fundamental Frequency</div>
+                            <div class="value" id="val-fundamental_frequency_hz">-- <span class="unit">Hz</span></div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="damped_frequency_hz" onclick="toggleDerivation('damped_frequency_hz')">
+                            <div class="label">Damped Frequency</div>
+                            <div class="value" id="val-damped_frequency_hz">-- <span class="unit">Hz</span></div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="damping_ratio" onclick="toggleDerivation('damping_ratio')">
+                            <div class="label">Damping Ratio</div>
+                            <div class="value" id="val-damping_ratio">--</div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="decay_time_constant_s" onclick="toggleDerivation('decay_time_constant_s')">
+                            <div class="label">Decay Time Constant</div>
+                            <div class="value" id="val-decay_time_constant_s">-- <span class="unit">s</span></div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="t20_time_s" onclick="toggleDerivation('t20_time_s')">
+                            <div class="label">Time to -20 dB</div>
+                            <div class="value" id="val-t20_time_s">-- <span class="unit">s</span></div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                        <div class="result-item" data-key="t60_time_s" onclick="toggleDerivation('t60_time_s')">
+                            <div class="label">Time to -60 dB</div>
+                            <div class="value" id="val-t60_time_s">-- <span class="unit">s</span></div>
+                            <span class="icon">&#9660;</span>
+                        </div>
+                    </div>
+
+                    <div class="summary-grid" id="summary-grid" style="display: none;">
+                        <div class="summary-item">
+                            <div class="label">Section Area</div>
+                            <div class="value" id="val-section_area_mm2">-- <span class="unit">mm^2</span></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Second Moment</div>
+                            <div class="value" id="val-second_moment_mm4">-- <span class="unit">mm^4</span></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Moving Mass</div>
+                            <div class="value" id="val-total_moving_mass_kg">-- <span class="unit">kg</span></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Sample Count</div>
+                            <div class="value" id="val-sample_count">-- <span class="unit">pts</span></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Effective Sample Rate</div>
+                            <div class="value" id="val-effective_sample_rate_hz">-- <span class="unit">Hz</span></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">Samples per Cycle</div>
+                            <div class="value" id="val-samples_per_cycle">--</div>
+                        </div>
+                    </div>
+
+                    <div class="callout-warning" id="sampling-warning" style="display: none;"></div>
+
+                    <!-- Derivation Panels -->
+                    <div class="derivation-panel" id="deriv-fundamental_frequency_hz">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Fundamental Frequency</span>
+                            <button class="derivation-close" onclick="toggleDerivation('fundamental_frequency_hz')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Beam Frequency Equation</div>
+                            <div class="equation">$$ f_n = \frac{\beta_1^2}{2\pi} \sqrt{\frac{E I}{\rho A L^4}} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-fundamental_frequency_hz">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-damped_frequency_hz">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Damped Frequency</span>
+                            <button class="derivation-close" onclick="toggleDerivation('damped_frequency_hz')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Damped Frequency</div>
+                            <div class="equation">$$ f_d = f_n \sqrt{1 - \zeta^2} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-damped_frequency_hz">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-damping_ratio">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Damping Ratio</span>
+                            <button class="derivation-close" onclick="toggleDerivation('damping_ratio')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Q to Damping Ratio</div>
+                            <div class="equation">$$ \zeta = \frac{1}{2Q} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-damping_ratio">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-decay_time_constant_s">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Decay Time Constant</span>
+                            <button class="derivation-close" onclick="toggleDerivation('decay_time_constant_s')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Time Constant</div>
+                            <div class="equation">$$ \tau = \frac{1}{\zeta \omega_n} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-decay_time_constant_s">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-t20_time_s">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Time to -20 dB</span>
+                            <button class="derivation-close" onclick="toggleDerivation('t20_time_s')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Amplitude Decay</div>
+                            <div class="equation">$$ t_{20} = \frac{\ln(10)}{\zeta \omega_n} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-t20_time_s">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-t60_time_s">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Time to -60 dB</span>
+                            <button class="derivation-close" onclick="toggleDerivation('t60_time_s')">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">1. Amplitude Decay</div>
+                            <div class="equation">$$ t_{60} = \frac{\ln(1000)}{\zeta \omega_n} $$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="step-title">2. Substituted Values</div>
+                            <div class="equation" id="subst-t60_time_s">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ring-Down Tab -->
+                <div id="ringdown" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Ring-Down Waveform</h4>
+                        <div id="ringdown-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> Tip displacement versus time with an exponential envelope.
+                            <strong>Key insight:</strong> Higher Q values reduce damping and extend the ring-down.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decay Tab -->
+                <div id="decay" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Decay Envelope (dB)</h4>
+                        <div id="decay-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> Envelope amplitude in dB relative to the initial displacement.
+                            <strong>Key insight:</strong> t20 and t60 are derived from the slope of this line.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Background Tab -->
+                <div id="background" class="tab-content">
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-overview">Overview</a></li>
+                            <li><a href="#bg-geometry">Geometry and Section Properties</a></li>
+                            <li><a href="#bg-frequency">Mode Shape and Natural Frequency</a></li>
+                            <li><a href="#bg-damping">Damping and Ring-Down Response</a></li>
+                            <li><a href="#bg-decay">Decay Metrics</a></li>
+                            <li><a href="#bg-sampling">Sampling and Aliasing</a></li>
+                            <li><a href="#bg-interpretation">Interpreting Results</a></li>
+                            <li><a href="#bg-limitations">Limitations</a></li>
+                            <li><a href="#bg-references">References</a></li>
+                        </ol>
+                    </div>
+
+                    <div id="bg-overview" class="bg-section">
+                        <h3>1. Overview</h3>
+                        <p>
+                            This simulator models the ring-down of a struck resonator using a single dominant bending mode.
+                            Geometry and material properties set the natural frequency. The quality factor Q controls
+                            damping and therefore how quickly the amplitude decays.
+                        </p>
+                        <p>
+                            The workflow is: compute section properties (area and second moment), select the mode constant
+                            for the support condition, calculate the natural frequency, then apply damping to simulate
+                            the time response and decay metrics.
+                        </p>
+                        <div class="callout-info">
+                            <strong>Tuning fork vs rod:</strong> A tuning fork keeps energy in the tines by canceling motion at
+                            the handle, reducing losses to your hand or a table. A rod can ring too, but support conditions
+                            and mounting losses usually shorten the decay unless carefully suspended.
+                        </div>
+                    </div>
+
+                    <div id="bg-geometry" class="bg-section">
+                        <h3>2. Geometry and Section Properties</h3>
+                        <p>
+                            Section properties define bending stiffness and mass per length. The bending axis is assumed
+                            to align with the thickness dimension for rectangular sections.
+                        </p>
+
+                        <div class="equation-card">
+                            <strong>Equation (1): Rectangular area</strong>
+                            <span class="equation-expression">$$ A = b h $$</span>
+                            <ul>
+                                <li>A: cross-section area</li>
+                                <li>b: width</li>
+                                <li>h: thickness (bending direction)</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Equation (2): Rectangular second moment</strong>
+                            <span class="equation-expression">$$ I = \frac{b h^3}{12} $$</span>
+                            <ul>
+                                <li>I: second moment of area</li>
+                                <li>b: width</li>
+                                <li>h: thickness (bending direction)</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Equation (3): Circular area</strong>
+                            <span class="equation-expression">$$ A = \frac{\pi d^2}{4} $$</span>
+                            <ul>
+                                <li>A: cross-section area</li>
+                                <li>d: diameter</li>
+                                <li>pi: 3.14159...</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Equation (4): Circular second moment</strong>
+                            <span class="equation-expression">$$ I = \frac{\pi d^4}{64} $$</span>
+                            <ul>
+                                <li>I: second moment of area</li>
+                                <li>d: diameter</li>
+                                <li>pi: 3.14159...</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-frequency" class="bg-section">
+                        <h3>3. Mode Shape and Natural Frequency</h3>
+                        <p>
+                            The first bending mode constant beta_1 depends on boundary conditions. The tool uses the
+                            standard values: cantilever 1.8751, simply supported pi, clamped-clamped 4.7300, free-free 4.7300.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Equation (5): Beam natural frequency</strong>
+                            <span class="equation-expression">$$ f_n = \frac{\beta_1^2}{2\pi} \sqrt{\frac{E I}{\rho A L^4}} $$</span>
+                            <ul>
+                                <li>f_n: natural frequency (Hz)</li>
+                                <li>beta_1: mode constant</li>
+                                <li>E: elastic modulus</li>
+                                <li>I: second moment of area</li>
+                                <li>rho: density</li>
+                                <li>A: area</li>
+                                <li>L: active length</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (6): Angular frequency</strong>
+                            <span class="equation-expression">$$ \omega_n = 2\pi f_n $$</span>
+                            <ul>
+                                <li>omega_n: undamped angular frequency (rad/s)</li>
+                                <li>f_n: natural frequency (Hz)</li>
+                                <li>pi: 3.14159...</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-damping" class="bg-section">
+                        <h3>4. Damping and Ring-Down Response</h3>
+                        <p>
+                            Damping is represented with a single viscous damping ratio zeta derived from Q. The response
+                            is underdamped when zeta is less than 1.0.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Equation (7): Damping ratio from Q</strong>
+                            <span class="equation-expression">$$ \zeta = \frac{1}{2Q} $$</span>
+                            <ul>
+                                <li>zeta: damping ratio</li>
+                                <li>Q: quality factor</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (8): Damped angular frequency</strong>
+                            <span class="equation-expression">$$ \omega_d = \omega_n \sqrt{1 - \zeta^2} $$</span>
+                            <ul>
+                                <li>omega_d: damped angular frequency (rad/s)</li>
+                                <li>omega_n: undamped angular frequency (rad/s)</li>
+                                <li>zeta: damping ratio</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (9): Ring-down response</strong>
+                            <span class="equation-expression">$$ x(t) = x_0 e^{-\zeta \omega_n t} \cos(\omega_d t) $$</span>
+                            <ul>
+                                <li>x(t): displacement at time t</li>
+                                <li>x_0: initial displacement</li>
+                                <li>omega_n: undamped angular frequency (rad/s)</li>
+                                <li>omega_d: damped angular frequency (rad/s)</li>
+                                <li>zeta: damping ratio</li>
+                                <li>t: time (s)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-decay" class="bg-section">
+                        <h3>5. Decay Metrics</h3>
+                        <p>
+                            The exponential envelope defines decay time constants and dB drop times. These are derived
+                            directly from the damping ratio and natural frequency.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Equation (10): Time constant</strong>
+                            <span class="equation-expression">$$ \tau = \frac{1}{\zeta \omega_n} $$</span>
+                            <ul>
+                                <li>tau: amplitude time constant (s)</li>
+                                <li>zeta: damping ratio</li>
+                                <li>omega_n: undamped angular frequency (rad/s)</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (11): Time to -20 dB</strong>
+                            <span class="equation-expression">$$ t_{20} = \frac{\ln(10)}{\zeta \omega_n} $$</span>
+                            <ul>
+                                <li>t_20: time for 20 dB amplitude drop (s)</li>
+                                <li>zeta: damping ratio</li>
+                                <li>omega_n: undamped angular frequency (rad/s)</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (12): Time to -60 dB</strong>
+                            <span class="equation-expression">$$ t_{60} = \frac{\ln(1000)}{\zeta \omega_n} $$</span>
+                            <ul>
+                                <li>t_60: time for 60 dB amplitude drop (s)</li>
+                                <li>zeta: damping ratio</li>
+                                <li>omega_n: undamped angular frequency (rad/s)</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Equation (13): Logarithmic decrement</strong>
+                            <span class="equation-expression">$$ \delta = \frac{2\pi \zeta}{\sqrt{1-\zeta^2}} $$</span>
+                            <ul>
+                                <li>delta: log decrement per cycle</li>
+                                <li>zeta: damping ratio</li>
+                                <li>pi: 3.14159...</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-sampling" class="bg-section">
+                        <h3>6. Sampling and Aliasing</h3>
+                        <p>
+                            The waveform is sampled for plotting. If the sample rate is too low relative to the damped
+                            frequency, the plotted waveform can appear to change frequency due to aliasing. This tool
+                            uses a minimum samples-per-cycle rule to keep the plot stable.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Equation (14): Samples per cycle</strong>
+                            <span class="equation-expression">$$ N_{spc} = \frac{f_s}{f_d} $$</span>
+                            <ul>
+                                <li>N_spc: samples per cycle</li>
+                                <li>f_s: sample rate (Hz)</li>
+                                <li>f_d: damped frequency (Hz)</li>
+                            </ul>
+                        </div>
+                        <div class="callout-warning">
+                            <strong>Rule of thumb:</strong> Keep N_spc above 2.5 to avoid aliasing in the time plot.
+                            The simulator will raise the effective sample rate if needed.
+                        </div>
+                    </div>
+
+                    <div id="bg-interpretation" class="bg-section">
+                        <h3>7. Interpreting Results</h3>
+                        <p>
+                            A larger quality factor means lower damping, a longer decay time, and a narrower resonance peak.
+                            The decay time constant and the t20/t60 values show how quickly the amplitude drops.
+                        </p>
+                        <div class="callout-success">
+                            <strong>Higher Q:</strong> Longer ringing, smaller damping ratio, slower decay.
+                        </div>
+                        <div class="callout-warning">
+                            <strong>Support condition:</strong> Changing from cantilever to free-free or clamped-clamped
+                            can shift frequency by a factor of 2 to 6 due to different mode constants.
+                        </div>
+                        <p>
+                            Geometry trends are strong: frequency increases with thickness and decreases sharply with length.
+                            For a tuning fork, the two tines are treated as identical cantilevers, so the frequency follows
+                            the same beam relation while the moving mass accounts for both tines.
+                        </p>
+                    </div>
+
+                    <div id="bg-limitations" class="bg-section">
+                        <h3>8. Limitations</h3>
+                        <ul>
+                            <li>Single-mode Euler-Bernoulli beam model (no shear or rotary inertia effects)</li>
+                            <li>Linear viscous damping with a constant Q factor</li>
+                            <li>Tuning fork modeled as two identical cantilever tines without base compliance</li>
+                            <li>No acoustic radiation or mounting loss model beyond Q</li>
+                        </ul>
+                    </div>
+
+                    <div id="bg-references" class="bg-section">
+                        <h3>9. References</h3>
+                        <ul>
+                            <li>Inman, D. J., Engineering Vibration, 4th ed.</li>
+                            <li>Blevins, R. D., Formulas for Natural Frequency and Mode Shape</li>
+                            <li>Thomson, W. T., Theory of Vibration with Applications</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        // =================================================================
+        // 0. GLOBAL STORE & CONFIG
+        // =================================================================
+        let toolDocumentation = {};
+        let pyUtils, pyToolModule;
+        let lastResults = null;
+        let openDerivation = null;
+
+        const TOOL_MODULE_NAME = 'resonators';
+        const TOOL_FUNCTION_NAME = 'simulate_ringdown_resonator';
+        const PARAM_ORDER = [
+            'resonator_type',
+            'support_condition',
+            'cross_section',
+            'length_mm',
+            'width_mm',
+            'thickness_mm',
+            'diameter_mm',
+            'material',
+            'elastic_modulus_gpa',
+            'density_kg_m3',
+            'quality_factor',
+            'initial_displacement_mm',
+            'simulation_duration_s',
+            'sample_rate_hz',
+            'noise_rms_mm'
+        ];
+        const STORAGE_KEY = 'resonator-ringdown-settings';
+
+        // Default settings
+        const defaultSettings = {
+            showDerivations: false,
+            theme: 'system',
+            density: 'comfortable',
+            precision: 3
+        };
+        let settings = { ...defaultSettings };
+
+        // =================================================================
+        // SETTINGS MANAGEMENT
+        // =================================================================
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                settings = { ...defaultSettings };
+                return;
+            }
+            try {
+                settings = { ...defaultSettings, ...JSON.parse(stored) };
+            } catch (e) {
+                settings = { ...defaultSettings };
+            }
+        }
+
+        function applySettings() {
+            // Apply theme and density to body
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+
+            // Update toggle switches
+            document.getElementById('setting-show-derivations').checked = settings.showDerivations;
+
+            // Update segmented controls
+            setSegmentedActive('[data-theme]', settings.theme, 'theme');
+            setSegmentedActive('[data-density]', settings.density, 'density');
+            setSegmentedActive('[data-precision]', String(settings.precision), 'precision');
+
+            // Re-render results if we have them (for precision changes)
+            if (lastResults) {
+                displayResults(lastResults);
+            }
+        }
+
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(`.settings-panel ${selector}`).forEach(btn => {
+                const isActive = btn.dataset[dataAttr] === value;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        function handleSettingChange(key, value) {
+            settings[key] = value;
+            saveSettings();
+            applySettings();
+        }
+
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = open ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+            panel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        }
+
+        function bindSettingsControls() {
+            // Toggle switches
+            document.getElementById('setting-show-derivations').addEventListener('change', e => handleSettingChange('showDerivations', e.target.checked));
+
+            // Segmented controls
+            document.querySelectorAll('.settings-panel [data-theme]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('theme', btn.dataset.theme));
+            });
+            document.querySelectorAll('.settings-panel [data-density]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('density', btn.dataset.density));
+            });
+            document.querySelectorAll('.settings-panel [data-precision]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('precision', Number(btn.dataset.precision)));
+            });
+
+            // Reset button
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+            });
+
+            // Panel open/close
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+
+            // Escape key to close
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') toggleSettingsPanel(false);
+            });
+        }
+
+        // =================================================================
+        // PRECISION FORMATTING
+        // =================================================================
+        function formatNumber(value, overridePrecision = null) {
+            if (!Number.isFinite(value)) return 'N/A';
+            const precision = overridePrecision ?? settings.precision;
+            return value.toFixed(precision);
+        }
+
+        // =================================================================
+        // 1. TAB INTERFACE
+        // =================================================================
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            typesetMath();
+
+            // Trigger Plotly resize when switching to chart tabs
+            if (tabName === 'ringdown' || tabName === 'decay') {
+                setTimeout(() => {
+                    const plotId = tabName === 'ringdown' ? 'ringdown-plot' : 'decay-plot';
+                    const plotEl = document.getElementById(plotId);
+                    if (plotEl && plotEl.data) {
+                        Plotly.Plots.resize(plotEl);
+                    }
+                }, 100);
+            }
+        }
+
+        function typesetMath() {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        // =================================================================
+        // 2. UI HELPERS
+        // =================================================================
+        function updateResonatorType() {
+            const type = document.getElementById('resonator_type').value;
+            const supportSelect = document.getElementById('support_condition');
+            if (type === 'tuning_fork') {
+                supportSelect.value = 'cantilever';
+                supportSelect.disabled = true;
+            } else {
+                supportSelect.disabled = false;
+            }
+        }
+
+        function updateCrossSection() {
+            const section = document.getElementById('cross_section').value;
+            const rectangular = document.getElementById('rectangular-fields');
+            const circular = document.getElementById('circular-fields');
+            if (section === 'rectangular') {
+                rectangular.style.display = 'grid';
+                circular.style.display = 'none';
+            } else {
+                rectangular.style.display = 'none';
+                circular.style.display = 'grid';
+            }
+        }
+
+        function updateMaterialFields() {
+            const material = document.getElementById('material').value;
+            const customFields = document.getElementById('custom-material-fields');
+            customFields.style.display = material === 'custom' ? 'grid' : 'none';
+        }
+
+        function toggleAdvanced() {
+            const section = document.getElementById('advanced-inputs');
+            const icon = document.getElementById('toggle-icon');
+            const btn = document.querySelector('.advanced-toggle');
+
+            if (section.classList.contains('visible')) {
+                section.classList.remove('visible');
+                icon.textContent = '+';
+                btn.innerHTML = '<span class="toggle-icon" id="toggle-icon">+</span> Show advanced options';
+            } else {
+                section.classList.add('visible');
+                icon.textContent = '-';
+                btn.innerHTML = '<span class="toggle-icon" id="toggle-icon">-</span> Hide advanced options';
+            }
+        }
+
+        function toggleDerivation(key) {
+            const panel = document.getElementById('deriv-' + key);
+            const item = document.querySelector(`.result-item[data-key="${key}"]`);
+
+            // Close currently open panel if different
+            if (openDerivation && openDerivation !== key) {
+                document.getElementById('deriv-' + openDerivation).classList.remove('visible');
+                document.querySelector(`.result-item[data-key="${openDerivation}"]`)?.classList.remove('expanded');
+            }
+
+            if (panel.classList.contains('visible')) {
+                panel.classList.remove('visible');
+                item?.classList.remove('expanded');
+                openDerivation = null;
+            } else {
+                panel.classList.add('visible');
+                item?.classList.add('expanded');
+                openDerivation = key;
+                typesetMath();
+            }
+        }
+
+        // =================================================================
+        // 3. PYODIDE INITIALIZATION
+        // =================================================================
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+
+            // Load and apply settings immediately
+            loadSettings();
+            applySettings();
+            bindSettingsControls();
+            updateResonatorType();
+            updateCrossSection();
+            updateMaterialFields();
+
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                let pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.loadPackage('micropip');
+
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    from pyodide.http import pyfetch
+
+                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                // Parse documentation
+                loadingText.textContent = 'Parsing documentation...';
+                const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+
+                if (docMap.has('error')) {
+                    console.error('Docstring Error:', docMap.get('error'));
+                } else {
+                    toolDocumentation = Object.fromEntries(docMap);
+                    if (toolDocumentation.parameters) {
+                        toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+                    }
+                    if (toolDocumentation.returns) {
+                        toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+                    }
+                    populateTooltips();
+                }
+
+                // Setup form handler
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+
+                // Hide loading overlay
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('calculate-btn').textContent = 'Calculate';
+                document.getElementById('calculate-btn').disabled = false;
+
+            } catch (error) {
+                loadingText.textContent = 'Error loading: ' + error.message;
+                console.error(error);
+            }
+        }
+        main();
+
+        // =================================================================
+        // 4. POPULATE TOOLTIPS FROM DOCSTRING
+        // =================================================================
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+
+            PARAM_ORDER.forEach(paramId => {
+                const tooltip = document.querySelector(`#${paramId} + .tooltip-trigger, .input-group:has(#${paramId}) .tooltip-trigger`);
+                if (tooltip && toolDocumentation.parameters[paramId]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramId]);
+                }
+            });
+        }
+
+        // =================================================================
+        // 5. CALCULATION HANDLER
+        // =================================================================
+        async function handleCalculate(event) {
+            event.preventDefault();
+
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Calculating...';
+            btn.disabled = true;
+
+            try {
+                // Gather inputs
+                const resonator_type = document.getElementById('resonator_type').value;
+                const support_condition = document.getElementById('support_condition').value;
+                const cross_section = document.getElementById('cross_section').value;
+                const length_mm = parseFloat(document.getElementById('length_mm').value);
+                const width_mm = parseFloat(document.getElementById('width_mm').value);
+                const thickness_mm = parseFloat(document.getElementById('thickness_mm').value);
+                const diameter_mm = parseFloat(document.getElementById('diameter_mm').value);
+                const material = document.getElementById('material').value;
+                const elastic_modulus_gpa = parseFloat(document.getElementById('elastic_modulus_gpa').value);
+                const density_kg_m3 = parseFloat(document.getElementById('density_kg_m3').value);
+                const quality_factor = parseFloat(document.getElementById('quality_factor').value);
+                const initial_displacement_mm = parseFloat(document.getElementById('initial_displacement_mm').value);
+                const simulation_duration_s = parseFloat(document.getElementById('simulation_duration_s').value);
+                const sample_rate_hz = parseFloat(document.getElementById('sample_rate_hz').value);
+                const noise_rms_mm = parseFloat(document.getElementById('noise_rms_mm').value);
+
+                // Call Python function
+                const resultProxy = pyToolModule.simulate_ringdown_resonator(
+                    resonator_type,
+                    support_condition,
+                    cross_section,
+                    length_mm,
+                    width_mm,
+                    thickness_mm,
+                    diameter_mm,
+                    material,
+                    elastic_modulus_gpa,
+                    density_kg_m3,
+                    quality_factor,
+                    initial_displacement_mm,
+                    simulation_duration_s,
+                    sample_rate_hz,
+                    noise_rms_mm
+                );
+
+                // Convert to JS object with proper nested dict handling
+                lastResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                resultProxy.destroy();
+
+                // Ensure nested objects are properly converted (arrays should be arrays, not Maps)
+                if (lastResults.ringdown_curve) {
+                    lastResults.ringdown_curve = Object.fromEntries(
+                        Object.entries(lastResults.ringdown_curve).map(([k, v]) =>
+                            [k, Array.isArray(v) ? v : (v instanceof Map ? Array.from(v.values()) : v)]
+                        )
+                    );
+                }
+                if (lastResults.decay_curve) {
+                    lastResults.decay_curve = Object.fromEntries(
+                        Object.entries(lastResults.decay_curve).map(([k, v]) =>
+                            [k, Array.isArray(v) ? v : (v instanceof Map ? Array.from(v.values()) : v)]
+                        )
+                    );
+                }
+
+                displayResults(lastResults);
+
+            } catch (error) {
+                console.error('Calculation error:', error);
+                document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
+                document.getElementById('results-placeholder').style.color = 'var(--danger-color)';
+            }
+
+            btn.textContent = 'Calculate';
+            btn.disabled = false;
+        }
+
+        // =================================================================
+        // 6. DISPLAY RESULTS
+        // =================================================================
+        function displayResults(results) {
+            // Hide placeholder, show results
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-grid').style.display = 'grid';
+            document.getElementById('summary-grid').style.display = 'grid';
+
+            // Update result values using precision setting
+            document.getElementById('val-fundamental_frequency_hz').innerHTML = formatNumber(results.fundamental_frequency_hz) + ' <span class="unit">Hz</span>';
+            document.getElementById('val-damped_frequency_hz').innerHTML = formatNumber(results.damped_frequency_hz) + ' <span class="unit">Hz</span>';
+            document.getElementById('val-damping_ratio').textContent = formatNumber(results.damping_ratio, 5);
+            document.getElementById('val-decay_time_constant_s').innerHTML = formatNumber(results.decay_time_constant_s) + ' <span class="unit">s</span>';
+            document.getElementById('val-t20_time_s').innerHTML = formatNumber(results.t20_time_s) + ' <span class="unit">s</span>';
+            document.getElementById('val-t60_time_s').innerHTML = formatNumber(results.t60_time_s) + ' <span class="unit">s</span>';
+
+            document.getElementById('val-section_area_mm2').innerHTML = formatNumber(results.section_area_mm2, 2) + ' <span class="unit">mm^2</span>';
+            document.getElementById('val-second_moment_mm4').innerHTML = formatNumber(results.second_moment_mm4, 2) + ' <span class="unit">mm^4</span>';
+            document.getElementById('val-total_moving_mass_kg').innerHTML = formatNumber(results.total_moving_mass_kg, 4) + ' <span class="unit">kg</span>';
+            document.getElementById('val-sample_count').textContent = results.sample_count;
+            document.getElementById('val-effective_sample_rate_hz').innerHTML = formatNumber(results.effective_sample_rate_hz, 0) + ' <span class="unit">Hz</span>';
+            document.getElementById('val-samples_per_cycle').textContent = formatNumber(results.samples_per_cycle, 2);
+
+            const requestedSampleRate = parseFloat(document.getElementById('sample_rate_hz').value);
+            const samplingWarning = document.getElementById('sampling-warning');
+            if (results.effective_sample_rate_hz > requestedSampleRate + 0.5) {
+                samplingWarning.innerHTML = `<strong>Sample rate increased:</strong> Raised to ${formatNumber(results.effective_sample_rate_hz, 0)} Hz to maintain at least ${formatNumber(results.samples_per_cycle, 1)} samples per cycle and avoid aliasing.`;
+                samplingWarning.style.display = 'block';
+            } else {
+                samplingWarning.style.display = 'none';
+            }
+
+            // Handle show derivations setting
+            if (settings.showDerivations && !openDerivation) {
+                toggleDerivation('fundamental_frequency_hz');
+            }
+
+            // Update substituted equations
+            if (results.subst_fundamental_frequency_hz) {
+                document.getElementById('subst-fundamental_frequency_hz').innerHTML = '$$' + results.subst_fundamental_frequency_hz + '$$';
+            }
+            if (results.subst_damped_frequency_hz) {
+                document.getElementById('subst-damped_frequency_hz').innerHTML = '$$' + results.subst_damped_frequency_hz + '$$';
+            }
+            if (results.subst_damping_ratio) {
+                document.getElementById('subst-damping_ratio').innerHTML = '$$' + results.subst_damping_ratio + '$$';
+            }
+            if (results.subst_decay_time_constant_s) {
+                document.getElementById('subst-decay_time_constant_s').innerHTML = '$$' + results.subst_decay_time_constant_s + '$$';
+            }
+            if (results.subst_t20_time_s) {
+                document.getElementById('subst-t20_time_s').innerHTML = '$$' + results.subst_t20_time_s + '$$';
+            }
+            if (results.subst_t60_time_s) {
+                document.getElementById('subst-t60_time_s').innerHTML = '$$' + results.subst_t60_time_s + '$$';
+            }
+
+            // Plot responses
+            plotRingdownCurve(results.ringdown_curve);
+            plotDecayCurve(results.decay_curve);
+
+            // Typeset math
+            typesetMath();
+        }
+
+        // =================================================================
+        // 7. PLOTTING (Theme-aware)
+        // =================================================================
+        function getChartTheme() {
+            // Check if dark mode is active
+            const computedStyle = getComputedStyle(document.body);
+            const bgColor = computedStyle.getPropertyValue('--bg-card').trim();
+            const textColor = computedStyle.getPropertyValue('--text-color').trim();
+            const gridColor = computedStyle.getPropertyValue('--border-color').trim();
+            const successColor = computedStyle.getPropertyValue('--success-color').trim();
+            const accentColor = computedStyle.getPropertyValue('--accent-color').trim();
+
+            return {
+                bgColor: bgColor || '#ffffff',
+                textColor: textColor || '#111827',
+                gridColor: gridColor || '#e5e7eb',
+                successColor: successColor || '#0f766e',
+                accentColor: accentColor || '#111827'
+            };
+        }
+
+        function plotRingdownCurve(data) {
+            if (!data) {
+                console.warn('plotRingdownCurve: no data provided');
+                return;
+            }
+
+            if (!data.time_s || !data.displacement_mm || data.time_s.length === 0) {
+                console.warn('plotRingdownCurve: missing or empty data', data);
+                return;
+            }
+
+            const theme = getChartTheme();
+            const traces = [
+                {
+                    x: data.time_s,
+                    y: data.displacement_mm,
+                    name: 'Displacement',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.successColor, width: 2 }
+                }
+            ];
+
+            if (data.envelope_mm) {
+                traces.push({
+                    x: data.time_s,
+                    y: data.envelope_mm,
+                    name: 'Envelope',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.accentColor, width: 1, dash: 'dash' }
+                });
+            }
+            if (data.envelope_neg_mm) {
+                traces.push({
+                    x: data.time_s,
+                    y: data.envelope_neg_mm,
+                    name: '-Envelope',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.accentColor, width: 1, dash: 'dash' }
+                });
+            }
+
+            const layout = {
+                xaxis: { title: 'Time (s)', gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Displacement (mm)', gridcolor: theme.gridColor, color: theme.textColor },
+                legend: { x: 0.7, y: 0.95, font: { color: theme.textColor } },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('ringdown-plot', traces, layout, { responsive: true });
+        }
+
+        function plotDecayCurve(data) {
+            if (!data) {
+                console.warn('plotDecayCurve: no data provided');
+                return;
+            }
+
+            if (!data.time_s || !data.decay_db || data.time_s.length === 0) {
+                console.warn('plotDecayCurve: missing or empty data', data);
+                return;
+            }
+
+            const theme = getChartTheme();
+            const lastIndex = data.time_s.length - 1;
+            const traces = [
+                {
+                    x: data.time_s,
+                    y: data.decay_db,
+                    name: 'Decay',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.accentColor, width: 2 }
+                },
+                {
+                    x: [data.time_s[0], data.time_s[lastIndex]],
+                    y: [-60, -60],
+                    name: '-60 dB',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.successColor, width: 1, dash: 'dash' }
+                }
+            ];
+
+            const layout = {
+                xaxis: { title: 'Time (s)', gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Amplitude (dB)', gridcolor: theme.gridColor, color: theme.textColor },
+                legend: { x: 0.7, y: 0.95, font: { color: theme.textColor } },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('decay-plot', traces, layout, { responsive: true });
+        }
+    </script>
+</body>
+</html>

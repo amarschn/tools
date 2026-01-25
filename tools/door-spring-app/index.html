@@ -1,606 +1,1388 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trap Door Gas Spring Calculator</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
 
-  <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-YG3SBRRZFZ');
-  </script>
+    <title>Gas Spring Calculator - Engineering Tools</title>
 
-  <!-- Load Chart.js from a CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Load Pyodide from a CDN -->
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0; 
-      padding: 0;
-      background: #f8f9fa;
-      color: #212529;
-    }
-    header, footer {
-      background: #343a40;
-      color: #fff;
-      padding: 1rem;
-      text-align: center;
-    }
-    h1 {
-      margin: 0;
-      font-size: 1.75rem;
-    }
-    main {
-      max-width: 1000px;
-      margin: 1rem auto;
-      background: #fff;
-      border-radius: 5px;
-      padding: 1rem 2rem;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --spring-color: #2563eb;
+            --door-color: #6b7280;
+            --moment-door: #ef4444;
+            --moment-spring: #22c55e;
+            /* Force zone colors */
+            --zone-good: #22c55e;
+            --zone-acceptable: #eab308;
+            --zone-high: #f97316;
+            --zone-excessive: #ef4444;
+            --zone-over-extended: #7c3aed;
+            --zone-over-compressed: #0891b2;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 700; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
+        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); font-weight: 600; }
+        h4 { font-size: 1rem; color: var(--secondary-color); font-weight: 600; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
 
-    /* details element styling for collapsible sections */
-    details {
-      margin-bottom: 1rem;
-      padding: 0.5rem 0;
-      border-bottom: 1px solid #dee2e6;
-    }
-    details summary {
-      cursor: pointer;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: #495057;
-      outline: none;
-      margin-bottom: 0.5rem;
-    }
+        /* --- 2. Navigation --- */
+        .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); letter-spacing: -0.01em; }
+        .nav-brand:hover { text-decoration: none; color: var(--text-color); }
 
-    label {
-      display: inline-block;
-      width: 220px;
-      margin-right: 0.5rem;
-      vertical-align: top;
-    }
-    input[type="number"] {
-      width: 80px;
-      margin-bottom: 0.5rem;
-    }
-    button {
-      display: inline-block;
-      margin-top: 1rem;
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
-      background: #007bff;
-      color: #fff;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-    #visualCanvas {
-      border: 1px solid #ccc;
-      background: #f0f0f0;
-      display: block;
-      margin: 0 auto;
-      width: 600px;
-      height: 450px;
-    }
-    .results p {
-      margin: 0.3rem 0;
-    }
-    .charts-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 2rem;
-      justify-content: space-around;
-    }
-    .chart-box {
-      flex: 1 1 450px;
-      min-width: 300px;
-      max-width: 500px;
-    }
-    .chart-box canvas {
-      width: 100%;
-      height: 400px;
-    }
-  
-  .support-link {
-    color: inherit;
-    font-weight: 600;
-    text-decoration: none;
-  }
+        /* --- 3. Loading Overlay --- */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; transition: opacity 0.3s ease;
+        }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .spinner { width: 48px; height: 48px; border: 4px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-size: 1rem; color: var(--text-light); }
 
-  .support-link:hover {
-    text-decoration: underline;
-  }
-  </style>
+        /* --- 4. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-header { text-align: center; margin-bottom: 2rem; }
+        .tool-header h1 { margin-bottom: 0.5rem; }
+        .tool-description { font-size: 1.15rem; max-width: 70ch; margin: 0 auto 1.5rem; color: var(--text-light); }
+        .tool-layout { display: grid; grid-template-columns: minmax(380px, 0.9fr) minmax(500px, 1.1fr); gap: 28px; align-items: start; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 28px; }
+
+        /* --- 5. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 1rem; }
+        .inputs-intro { font-size: 0.95rem; color: var(--text-light); margin-bottom: 1rem; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+        .input-group { margin-bottom: 1rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; color: var(--text-color); }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+            width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 6px;
+            font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; background: #fff; color: var(--text-color);
+        }
+        .input-group input:focus, .input-group select:focus { outline: none; border-color: var(--text-color); box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08); }
+        .input-group select { cursor: pointer; appearance: none; }
+        .input-hint { font-size: 0.8rem; color: var(--text-light); margin-top: 4px; }
+        .input-section { margin-bottom: 1.5rem; }
+        .input-section-title { font-size: 0.9rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        /* Tooltip */
+        .tooltip-trigger {
+            display: inline-flex; justify-content: center; align-items: center;
+            width: 18px; height: 18px; background-color: #f1f5f9; border: 1px solid var(--border-color);
+            color: var(--text-light); border-radius: 50%; font-size: 11px; font-weight: bold;
+            cursor: help; position: absolute; right: 10px; top: 40px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--text-color); color: white; padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5; white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 6. Spring Selection Mode --- */
+        .mode-selector { display: flex; gap: 8px; margin-bottom: 1rem; }
+        .mode-btn {
+            flex: 1; padding: 10px 12px; border: 2px solid var(--border-color); border-radius: 6px;
+            background: var(--bg-card); color: var(--text-light); cursor: pointer;
+            font-size: 0.85rem; font-weight: 600; text-align: center; transition: all 0.2s;
+        }
+        .mode-btn:hover { border-color: var(--text-color); color: var(--text-color); }
+        .mode-btn.active { border-color: var(--text-color); background: var(--text-color); color: white; }
+        .mode-content { display: none; }
+        .mode-content.active { display: block; }
+
+        /* Catalog selection */
+        .catalog-grid { max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; }
+        .catalog-item {
+            padding: 10px 14px; border-bottom: 1px solid var(--border-color); cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;
+        }
+        .catalog-item:last-child { border-bottom: none; }
+        .catalog-item:hover { background: var(--primary-light); }
+        .catalog-item.selected { background: rgba(37, 99, 235, 0.1); border-left: 3px solid var(--spring-color); }
+        .catalog-item .spec { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 600; }
+        .catalog-item .detail { font-size: 0.8rem; color: var(--text-light); }
+        .catalog-filter { display: flex; gap: 8px; margin-bottom: 8px; }
+        .catalog-filter select { flex: 1; padding: 8px; font-size: 0.85rem; }
+
+        /* --- 7. Buttons --- */
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.05rem; padding: 12px; }
+        .btn-primary:hover { background-color: #050608; }
+
+        /* --- 8. Output Section --- */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 16px; cursor: pointer; background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-light); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Results */
+        #results-display { min-height: 160px; }
+        .results-placeholder { text-align: center; color: var(--text-light); padding: 40px 0; }
+        .result-summary { padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--primary-light); color: var(--secondary-color); font-size: 0.9rem; margin-bottom: 18px; }
+        .results-section { margin-bottom: 22px; }
+        .results-section h4 { margin-bottom: 12px; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .result-card { background: #fff; border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; }
+        .result-card .label { font-size: 0.85rem; color: var(--text-light); font-weight: 600; margin-bottom: 4px; }
+        .result-card .value { font-size: 1.5rem; font-weight: 700; color: var(--text-color); font-family: var(--font-mono); }
+        .result-card .unit { font-size: 0.85rem; color: var(--text-light); margin-left: 4px; font-weight: 500; }
+        .result-card.highlight { border-color: var(--spring-color); background: rgba(37, 99, 235, 0.05); }
+        .result-card.good { border-color: var(--zone-good); background: rgba(34, 197, 94, 0.08); }
+        .result-card.acceptable { border-color: var(--zone-acceptable); background: rgba(234, 179, 8, 0.08); }
+        .result-card.high { border-color: var(--zone-high); background: rgba(249, 115, 22, 0.08); }
+        .result-card.excessive { border-color: var(--zone-excessive); background: rgba(239, 68, 68, 0.08); }
+
+        /* --- 9. Visualization --- */
+        .visualization-container { background: var(--primary-light); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px; margin-bottom: 20px; }
+        .visualization-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 12px; }
+        .visualization-header h4 { margin: 0; }
+        .angle-control { display: flex; align-items: center; gap: 12px; }
+        .angle-control label { font-size: 0.9rem; color: var(--secondary-color); font-weight: 500; }
+        .angle-slider { width: 180px; cursor: pointer; }
+        .angle-value { font-family: var(--font-mono); font-weight: 600; min-width: 40px; text-align: right; }
+        #mechanism-svg { width: 100%; height: 380px; border-radius: 6px; background: #fff; }
+        .visualization-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 0.85rem; color: var(--text-light); }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-swatch { width: 16px; height: 16px; border-radius: 3px; }
+        .drag-hint { font-size: 0.8rem; color: var(--text-light); font-style: italic; margin-top: 8px; }
+
+        /* Force zone indicator */
+        .force-indicator {
+            padding: 12px 16px; border-radius: var(--border-radius); margin-bottom: 16px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+        }
+        .force-indicator.good { background: rgba(34, 197, 94, 0.15); border: 1px solid var(--zone-good); }
+        .force-indicator.acceptable { background: rgba(234, 179, 8, 0.15); border: 1px solid var(--zone-acceptable); }
+        .force-indicator.high { background: rgba(249, 115, 22, 0.15); border: 1px solid var(--zone-high); }
+        .force-indicator.excessive { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--zone-excessive); }
+        .force-indicator.over_extended { background: rgba(124, 58, 237, 0.15); border: 1px solid var(--zone-over-extended); }
+        .force-indicator.over_compressed { background: rgba(8, 145, 178, 0.15); border: 1px solid var(--zone-over-compressed); }
+        .force-indicator .zone-label { font-weight: 700; font-size: 1rem; }
+        .force-indicator .zone-value { font-family: var(--font-mono); font-size: 1.1rem; }
+        .force-indicator.good .zone-label { color: var(--zone-good); }
+        .force-indicator.acceptable .zone-label { color: var(--zone-acceptable); }
+        .force-indicator.high .zone-label { color: var(--zone-high); }
+        .force-indicator.excessive .zone-label { color: var(--zone-excessive); }
+        .force-indicator.over_extended .zone-label { color: var(--zone-over-extended); }
+        .force-indicator.over_compressed .zone-label { color: var(--zone-over-compressed); }
+
+        /* --- 10. Charts --- */
+        .chart-container { background: #fff; border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin-bottom: 20px; }
+        .chart-container h4 { margin-bottom: 12px; font-size: 1rem; }
+        .chart-canvas-wrapper { width: 100%; height: 280px; position: relative; }
+        .chart-note { margin-top: 8px; font-size: 0.85rem; color: var(--text-light); }
+
+        /* --- 11. Background Content --- */
+        .background-section { margin-bottom: 2rem; }
+        .background-section h3 { margin-top: 0; margin-bottom: 1rem; font-size: 1.15rem; color: var(--text-color); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .background-section h4 { margin-top: 1.25rem; margin-bottom: 0.75rem; font-size: 1rem; color: var(--secondary-color); }
+        .background-section p { font-size: 0.95rem; line-height: 1.7; margin-bottom: 1rem; }
+        .background-section ul, .background-section ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+        .background-section li { font-size: 0.95rem; line-height: 1.6; margin-bottom: 0.5rem; }
+        .background-tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+        .background-tab { padding: 8px 16px; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-light); cursor: pointer; font-weight: 500; font-size: 0.85rem; transition: all 0.2s ease; }
+        .background-tab:hover { border-color: var(--text-color); color: var(--text-color); }
+        .background-tab.active { background: var(--text-color); color: #fff; border-color: var(--text-color); }
+        .background-panel { display: none; animation: fadeIn 0.3s ease; }
+        .background-panel.active { display: block; }
+        .equation-card { background: rgba(248, 250, 252, 0.75); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); }
+        .callout { padding: 16px 20px; border-radius: var(--border-radius); border-left: 4px solid; margin-bottom: 16px; }
+        .callout-info { border-color: var(--spring-color); background: rgba(37, 99, 235, 0.05); }
+        .callout-warning { border-color: var(--warning-color); background: rgba(180, 83, 9, 0.05); }
+        .callout-success { border-color: var(--success-color); background: rgba(15, 118, 110, 0.05); }
+        .callout strong { display: block; margin-bottom: 4px; }
+        .callout p { margin: 0; font-size: 0.9rem; }
+
+        /* --- 12. Footer --- */
+        .footer { text-align: center; padding: 24px 0; background: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: auto; }
+        .support-link { color: inherit; font-weight: 600; text-decoration: none; }
+        .support-link:hover { text-decoration: underline; }
+
+        /* --- 13. Responsive --- */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .mode-selector { flex-wrap: wrap; }
+            .mode-btn { flex: 1 1 calc(50% - 4px); }
+        }
+    </style>
 </head>
+
 <body>
-<header>
-  <h1>Trap Door Gas Spring Calculator</h1>
-</header>
-
-<main>
-  <!-- 1) INPUT PARAMETERS -->
-  <details open>
-    <summary>1) Input Parameters</summary>
-    <label for="massDoor">Door Mass (kg):</label>
-    <input type="number" id="massDoor" value="15" step="0.1"><br>
-
-    <label for="lengthDoor">Door Length (m):</label>
-    <input type="number" id="lengthDoor" value="0.8" step="0.01"><br>
-
-    <label for="openAngle">Open Angle (deg):</label>
-    <input type="number" id="openAngle" value="90" step="1"><br>
-
-    <label for="doorMountFrac">Door Mount Fraction:</label>
-    <input type="number" id="doorMountFrac" value="0.7" step="0.01">
-    <small>(0 = hinge, 1 = free edge)</small><br>
-
-    <label for="cabMountX">Cab Mount X (m):</label>
-    <input type="number" id="cabMountX" value="0.4" step="0.01"><br>
-
-    <label for="cabMountY">Cab Mount Y (m):</label>
-    <input type="number" id="cabMountY" value="0.1" step="0.01"><br>
-
-    <label for="numSprings">Number of Springs:</label>
-    <input type="number" id="numSprings" value="1" step="1" min="1"><br>
-
-    <label for="springNominal">Spring Nominal Force (N):</label>
-    <input type="number" id="springNominal" value="200" step="10">
-    <small>(e.g. 100, 200, 300...)</small><br>
-
-    <label for="springVariation">Spring Variation ±(%):</label>
-    <input type="number" id="springVariation" value="10" step="1">
-    <small>(e.g. 10 means ±10% of nominal)</small><br>
-
-    <label for="handleFrac">Handle Fraction (0..1):</label>
-    <input type="number" id="handleFrac" value="0.9" step="0.01">
-    <small>(where 0=hinge, 1=free edge)</small><br>
-
-    <button id="computeBtn">Compute & Update</button>
-  </details>
-
-  <!-- 2) VISUALIZATION -->
-  <details>
-    <summary>2) Visualization</summary>
-    <p>
-      Shows the door in down (<strong>solid</strong>) and up (<strong>semi-transparent</strong>) positions.
-      Gravity is indicated by a downward arrow. The hinge is black, the handle is green, 
-      and the spring is blue. The drawing auto-scales and centers to fit large or small doors.
-    </p>
-    <canvas id="visualCanvas" width="600" height="450"></canvas>
-  </details>
-
-  <!-- 3) RESULTS + CHARTS -->
-  <details>
-    <summary>3) Results</summary>
-    <div class="results">
-      <p id="springLengthsText"></p>
-      <p id="strokeText"></p>
-      <p id="forceText"></p>
-      <p id="handleForceText"></p>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading calculator...</div>
     </div>
 
-    <div class="charts-container">
-      <div class="chart-box">
-        <h4>Total Spring Force vs. Angle</h4>
-        <canvas id="springForceChart"></canvas>
-      </div>
-      <div class="chart-box">
-        <h4>Handle Force vs. Angle</h4>
-        <canvas id="handleForceChart"></canvas>
-      </div>
-    </div>
-  </details>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
 
-  <!-- 4) ADDITIONAL INFO -->
-  <details>
-    <summary>4) Additional Info</summary>
-    <p>
-      This calculator handles trap-door-style panels that rotate from horizontal 
-      (<em>down</em>) at <code>0&deg;</code> to a user-specified <code>openAngle</code>.
-      Key steps:
-    </p>
-    <ol>
-      <li><strong>Door Torque:</strong> 
-        <code>\( \tau_{door}(\theta) = W \times \frac{L}{2} \cos(\theta)\)</code>,
-        assuming uniform mass distribution.
-      </li>
-      <li><strong>Spring Length:</strong> 
-        We find the distance between the <em>door mount</em> (on the door at <code>doorMountFrac</code>)
-        and the <em>cabinet mount</em> (<code>cabMountX, cabMountY</code>) 
-        using basic geometry for each angle.
-      </li>
-      <li><strong>Min/Max Length & Stroke:</strong> 
-        We track the <em>shortest</em> and <em>longest</em> spring length from 
-        <code>0&deg;</code> to <code>openAngle</code>. The difference is the <em>stroke</em>. 
-      </li>
-      <li><strong>Spring Force Variation:</strong> 
-        Each spring is assumed to vary <code>±springVariation%</code> from its nominal. 
-        This is modeled linearly between <code>minLen</code> (fully compressed) and 
-        <code>maxLen</code> (fully extended).
-      </li>
-      <li><strong>Number of Springs:</strong> 
-        The total spring force is 
-        <code>SpringForceSingle &times; numSprings</code>.
-      </li>
-      <li><strong>Handle Force:</strong> 
-        The net torque (<code>doorTorque - springTorque</code>) 
-        is divided by the door radius at the handle, 
-        <code>handleFrac &times; L</code>.
-      </li>
-    </ol>
-    <p>
-      Real gas springs can have more complex, non-linear force curves, 
-      friction, or breakaway force. This tool is for approximate sizing & 
-      conceptual understanding.
-    </p>
-  </details>
-</main>
+    <main class="container">
+        <div class="tool-header">
+            <h1>Gas Spring Calculator</h1>
+            <p class="tool-description">
+                Size and select gas springs for hinged panels. Choose from standard catalog springs,
+                let the calculator find the optimal force, or manually specify any configuration.
+            </p>
+        </div>
 
-<footer>
-  <p>&copy; 2025 - Trap Door Calculator with Auto-Scaling View <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
-</footer>
+        <div class="tool-layout">
+            <!-- Input Section -->
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
 
-<script>
-  ///////////////////////////////////////////////////////////////////////////
-  // 1) Load Pyodide & calc.py
-  ///////////////////////////////////////////////////////////////////////////
+                <form id="calc-form">
+                    <div class="input-section">
+                        <div class="input-section-title">Door Properties</div>
+                        <div class="input-grid">
+                            <div class="input-group">
+                                <label for="door_mass">Door Mass (kg)</label>
+                                <input type="number" id="door_mass" value="15" step="0.1" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Total mass of the door or panel in kilograms">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="door_length">Door Length (m)</label>
+                                <input type="number" id="door_length" value="0.8" step="0.01" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Distance from hinge to the free edge of the door">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="open_angle">Open Angle (°)</label>
+                                <input type="number" id="open_angle" value="90" step="1" min="10" max="180">
+                                <span class="tooltip-trigger" data-tooltip="Maximum opening angle from horizontal">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="num_springs">Number of Springs</label>
+                                <select id="num_springs">
+                                    <option value="1">1 spring</option>
+                                    <option value="2" selected>2 springs</option>
+                                    <option value="4">4 springs</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
 
-  let pyodide; // we'll store the Pyodide instance here
+                    <div class="input-section">
+                        <div class="input-section-title">Mounting Points</div>
+                        <div class="input-grid">
+                            <div class="input-group">
+                                <label for="door_mount_fraction">Door Mount</label>
+                                <input type="number" id="door_mount_fraction" value="0.7" step="0.05" min="0.1" max="0.95">
+                                <span class="tooltip-trigger" data-tooltip="Spring attachment on door as fraction of length (0.7 = 70% from hinge)">?</span>
+                                <div class="input-hint" id="door_mount_mm"></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="frame_mount_x">Frame X (m)</label>
+                                <input type="number" id="frame_mount_x" value="0.3" step="0.01">
+                                <span class="tooltip-trigger" data-tooltip="Horizontal distance from hinge (positive = forward when closed)">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="frame_mount_y">Frame Y (m)</label>
+                                <input type="number" id="frame_mount_y" value="-0.15" step="0.01">
+                                <span class="tooltip-trigger" data-tooltip="Vertical distance from hinge (negative = below)">?</span>
+                            </div>
+                        </div>
+                    </div>
 
-  async function initPyodideAndPython() {
-    // 1. Load Pyodide
-    pyodide = await loadPyodide({
-      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/"
-    });
-    console.log("Pyodide loaded!");
+                    <div class="input-section">
+                        <div class="input-section-title">Spring Selection</div>
+                        <div class="mode-selector">
+                            <button type="button" class="mode-btn active" data-mode="catalog">From Catalog</button>
+                            <button type="button" class="mode-btn" data-mode="auto">Auto Optimize</button>
+                            <button type="button" class="mode-btn" data-mode="manual">Manual Entry</button>
+                        </div>
 
-    // 2. Fetch calc.py and run it in Pyodide.
-    //    Make sure calc.py is in the same folder as this index.html.
-    const resp = await fetch("calc.py");
-    const calcSource = await resp.text();
-    await pyodide.runPythonAsync(calcSource); 
-    console.log("calc.py loaded into Pyodide!");
-  }
+                        <!-- Catalog Mode -->
+                        <div class="mode-content active" id="mode-catalog">
+                            <div class="catalog-filter">
+                                <select id="catalog-series-filter">
+                                    <option value="">All Series</option>
+                                    <option value="6/15">6/15 (Light)</option>
+                                    <option value="8/18">8/18 (Medium)</option>
+                                    <option value="10/22">10/22 (Heavy)</option>
+                                    <option value="14/28">14/28 (X-Heavy)</option>
+                                </select>
+                                <select id="catalog-stroke-filter">
+                                    <option value="">All Strokes</option>
+                                </select>
+                            </div>
+                            <div class="catalog-grid" id="catalog-list">
+                                <div class="catalog-item">Loading catalog...</div>
+                            </div>
+                            <div class="input-hint" style="margin-top: 8px;">
+                                <span id="catalog-count">0</span> springs shown. Click to select.
+                            </div>
+                        </div>
 
-  ///////////////////////////////////////////////////////////////////////////
-  // 2) Canvas Drawing (unchanged from your original code)
-  ///////////////////////////////////////////////////////////////////////////
+                        <!-- Auto Mode -->
+                        <div class="mode-content" id="mode-auto">
+                            <p class="input-hint">
+                                The calculator will determine the optimal spring force to minimize hand effort,
+                                then find the closest matching standard spring from the catalog.
+                            </p>
+                        </div>
 
-  function drawArrow(ctx, x1, y1, x2, y2, arrowSize=8) {
-    ctx.beginPath();
-    ctx.moveTo(x1,y1);
-    ctx.lineTo(x2,y2);
-    ctx.stroke();
-    const angle = Math.atan2(y2-y1, x2-x1);
-    ctx.beginPath();
-    ctx.moveTo(x2,y2);
-    ctx.lineTo(x2 - arrowSize*Math.cos(angle - Math.PI/6), y2 - arrowSize*Math.sin(angle - Math.PI/6));
-    ctx.lineTo(x2 - arrowSize*Math.cos(angle + Math.PI/6), y2 - arrowSize*Math.sin(angle + Math.PI/6));
-    ctx.lineTo(x2,y2);
-    ctx.fill();
-  }
+                        <!-- Manual Mode -->
+                        <div class="mode-content" id="mode-manual">
+                            <div class="input-grid">
+                                <div class="input-group">
+                                    <label for="manual_force">Force per Spring (N)</label>
+                                    <input type="number" id="manual_force" value="200" step="10" min="10">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-  function boundingBoxForAngle(lengthDoor, thetaDeg, doorMountFrac, cabMountX, cabMountY, handleFrac) {
-    const thetaRad = thetaDeg*Math.PI/180;
-    const doorEndX = lengthDoor*Math.cos(thetaRad);
-    const doorEndY = lengthDoor*Math.sin(thetaRad);
-    const doorMountX = doorMountFrac*lengthDoor*Math.cos(thetaRad);
-    const doorMountY = doorMountFrac*lengthDoor*Math.sin(thetaRad);
-    const handleX = handleFrac*lengthDoor*Math.cos(thetaRad);
-    const handleY = handleFrac*lengthDoor*Math.sin(thetaRad);
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
 
-    let points = [
-      {x:0, y:0}, 
-      {x:doorEndX, y:doorEndY},
-      {x:doorMountX, y:doorMountY},
-      {x:cabMountX, y:cabMountY},
-      {x:handleX,   y:handleY}
-    ];
+            <!-- Output Section -->
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" data-target="results">Results</button>
+                    <button class="tab-link" data-target="visualization">Visualization</button>
+                    <button class="tab-link" data-target="charts">Moment Graph</button>
+                    <button class="tab-link" data-target="background">Background</button>
+                </div>
 
-    let minX = Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
-    for (const pt of points) {
-      if(pt.x<minX) minX=pt.x;
-      if(pt.x>maxX) maxX=pt.x;
-      if(pt.y<minY) minY=pt.y;
-      if(pt.y>maxY) maxY=pt.y;
-    }
-    return {minX, maxX, minY, maxY};
-  }
+                <!-- Results Tab -->
+                <div id="results" class="tab-content" style="display: block;">
+                    <div id="results-display">
+                        <p class="results-placeholder">
+                            Configure your door and click <strong>Calculate</strong> to get spring recommendations.
+                        </p>
+                    </div>
+                </div>
 
-  function combinedBoundingBox(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac) {
-    const bbDown = boundingBoxForAngle(lengthDoor, 0, doorMountFrac, cabMountX, cabMountY, handleFrac);
-    const bbUp   = boundingBoxForAngle(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac);
+                <!-- Visualization Tab -->
+                <div id="visualization" class="tab-content">
+                    <div id="force-indicator" class="force-indicator good">
+                        <div>
+                            <span class="zone-label">GOOD ZONE</span>
+                            <span style="color: var(--text-light); font-size: 0.85rem; margin-left: 8px;">Easy to operate</span>
+                        </div>
+                        <div class="zone-value">Peak: <span id="peak-force-display">--</span> N</div>
+                    </div>
 
-    const minX = Math.min(bbDown.minX, bbUp.minX);
-    const maxX = Math.max(bbDown.maxX, bbUp.maxX);
-    const minY = Math.min(bbDown.minY, bbUp.minY);
-    const maxY = Math.max(bbDown.maxY, bbUp.maxY);
+                    <div class="visualization-container">
+                        <div class="visualization-header">
+                            <h4>Mechanism & Force Zones</h4>
+                            <div class="angle-control">
+                                <label>Angle:</label>
+                                <input type="range" id="viz-angle-slider" class="angle-slider" min="0" max="90" value="0">
+                                <span id="viz-angle-value" class="angle-value">0°</span>
+                            </div>
+                        </div>
+                        <svg id="mechanism-svg" viewBox="-150 -250 500 450"></svg>
+                        <div class="visualization-legend" id="viz-legend">
+                            <div class="legend-item">
+                                <div class="legend-swatch" style="background: var(--zone-good);"></div>
+                                <span>Good (&lt;20N)</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-swatch" style="background: var(--zone-acceptable);"></div>
+                                <span>OK (20-40N)</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-swatch" style="background: var(--zone-high);"></div>
+                                <span>High (40-60N)</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-swatch" style="background: var(--zone-excessive);"></div>
+                                <span>Excessive (&gt;60N)</span>
+                            </div>
+                            <div class="legend-item legend-constraint" style="display: none;">
+                                <div class="legend-swatch" style="background: var(--zone-over-extended);"></div>
+                                <span>Too far (over-extended)</span>
+                            </div>
+                            <div class="legend-item legend-constraint" style="display: none;">
+                                <div class="legend-swatch" style="background: var(--zone-over-compressed);"></div>
+                                <span>Too close (over-compressed)</span>
+                            </div>
+                        </div>
+                        <p class="drag-hint" id="drag-hint">Drag the frame mount point to see how position affects hand force</p>
+                    </div>
 
-    return {minX, maxX, minY, maxY};
-  }
+                    <div id="viz-info" class="result-summary">
+                        Spring dimensions and forces will update as you adjust parameters
+                    </div>
+                </div>
 
-  function drawDoorState(ctx, angleDeg, lengthDoor,
-    doorMountFrac, cabMountX, cabMountY, handleFrac,
-    scale, offsetX, offsetY,
-    colorDoor, colorSpring, colorHandle, alpha=1.0
-  ) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
+                <!-- Charts Tab -->
+                <div id="charts" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Moment Equilibrium</h4>
+                        <div class="chart-canvas-wrapper">
+                            <canvas id="moment-chart"></canvas>
+                        </div>
+                        <p class="chart-note">
+                            <strong style="color: var(--moment-door);">Red</strong> = Door moment (gravity).
+                            <strong style="color: var(--moment-spring);">Green</strong> = Spring moment.
+                            Where they cross, the door is balanced.
+                        </p>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Hand Force Required</h4>
+                        <div class="chart-canvas-wrapper">
+                            <canvas id="hand-force-chart"></canvas>
+                        </div>
+                        <p class="chart-note">
+                            Positive = push up needed. Negative = hold down. Zero = balanced.
+                        </p>
+                    </div>
+                </div>
 
-    const thetaRad = angleDeg*Math.PI/180;
-    const hinge = {x:0, y:0};
-    const doorEnd = {
-      x: lengthDoor*Math.cos(thetaRad),
-      y: lengthDoor*Math.sin(thetaRad)
-    };
-    const doorMount = {
-      x: doorMountFrac*lengthDoor*Math.cos(thetaRad),
-      y: doorMountFrac*lengthDoor*Math.sin(thetaRad)
-    };
-    const handlePt = {
-      x: handleFrac*lengthDoor*Math.cos(thetaRad),
-      y: handleFrac*lengthDoor*Math.sin(thetaRad)
-    };
-    const cab = {x: cabMountX, y: cabMountY};
+                <!-- Background Tab -->
+                <div id="background" class="tab-content">
+                    <div class="background-tabs">
+                        <button class="background-tab active" data-bg-target="bg-overview">Overview</button>
+                        <button class="background-tab" data-bg-target="bg-zones">Force Zones</button>
+                        <button class="background-tab" data-bg-target="bg-catalog">Catalog Info</button>
+                        <button class="background-tab" data-bg-target="bg-physics">Physics</button>
+                    </div>
 
-    function tx(p){
-      return {
-        x: offsetX + p.x*scale,
-        y: offsetY - p.y*scale
-      };
-    }
-    const hingeC   = tx(hinge);
-    const doorEndC = tx(doorEnd);
-    const doorMountC = tx(doorMount);
-    const cabC     = tx(cab);
-    const handleC  = tx(handlePt);
+                    <div id="bg-overview" class="background-panel active">
+                        <div class="background-section">
+                            <h3>How to Use This Calculator</h3>
+                            <ol>
+                                <li><strong>Enter door specifications:</strong> Mass, length, and opening angle</li>
+                                <li><strong>Choose selection mode:</strong>
+                                    <ul>
+                                        <li><strong>From Catalog:</strong> Pick a specific standard spring</li>
+                                        <li><strong>Auto Optimize:</strong> Let the calculator find the best spring</li>
+                                        <li><strong>Manual Entry:</strong> Specify any force value</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Adjust mounting points:</strong> Either type values or drag in the visualization</li>
+                                <li><strong>Review the force zones:</strong> Green = easy, Yellow = OK, Orange = hard, Red = excessive</li>
+                            </ol>
+                            <div class="callout callout-info">
+                                <strong>Pro Tip</strong>
+                                <p>Use the visualization tab to drag the frame mount point around and watch the force zone change in real-time. Find a green zone position that works for your installation.</p>
+                            </div>
+                        </div>
+                    </div>
 
-    // door line
-    ctx.strokeStyle = colorDoor;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(hingeC.x, hingeC.y);
-    ctx.lineTo(doorEndC.x, doorEndC.y);
-    ctx.stroke();
+                    <div id="bg-zones" class="background-panel">
+                        <div class="background-section">
+                            <h3>Force Zone Guide</h3>
+                            <p>The colored zones indicate how much effort is needed to operate the door at its heaviest position:</p>
+                            <div class="callout callout-success" style="border-color: var(--zone-good);">
+                                <strong style="color: var(--zone-good);">GREEN: Good (&lt;20N)</strong>
+                                <p>Easy one-handed operation. The door feels light and well-balanced. Ideal for frequent use.</p>
+                            </div>
+                            <div class="callout" style="border-color: var(--zone-acceptable); background: rgba(234, 179, 8, 0.05);">
+                                <strong style="color: var(--zone-acceptable);">YELLOW: Acceptable (20-40N)</strong>
+                                <p>Moderate effort required. Still comfortable for most users but may tire with repeated use.</p>
+                            </div>
+                            <div class="callout" style="border-color: var(--zone-high); background: rgba(249, 115, 22, 0.05);">
+                                <strong style="color: var(--zone-high);">ORANGE: High (40-60N)</strong>
+                                <p>Noticeable effort required. May need two hands. Consider increasing spring force or adjusting mount positions.</p>
+                            </div>
+                            <div class="callout callout-warning" style="border-color: var(--zone-excessive);">
+                                <strong style="color: var(--zone-excessive);">RED: Excessive (&gt;60N)</strong>
+                                <p>Difficult to operate. Risk of injury or dropping the door. Springs are undersized or poorly positioned.</p>
+                            </div>
+                        </div>
+                    </div>
 
-    // spring line
-    ctx.strokeStyle = colorSpring;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(doorMountC.x, doorMountC.y);
-    ctx.lineTo(cabC.x, cabC.y);
-    ctx.stroke();
+                    <div id="bg-catalog" class="background-panel">
+                        <div class="background-section">
+                            <h3>Standard Gas Spring Catalog</h3>
+                            <p>The catalog contains over 100 standard gas springs organized by series:</p>
+                            <h4>6/15 Series (Light Duty)</h4>
+                            <p>6mm rod, 15mm tube. Force range 50-400N. For cabinet doors, small hatches.</p>
+                            <h4>8/18 Series (Medium Duty)</h4>
+                            <p>8mm rod, 18mm tube. Force range 80-750N. For toolbox lids, equipment covers.</p>
+                            <h4>10/22 Series (Heavy Duty)</h4>
+                            <p>10mm rod, 22mm tube. Force range 100-1200N. For trap doors, heavy hatches.</p>
+                            <h4>14/28 Series (Extra Heavy)</h4>
+                            <p>14mm rod, 28mm tube. Force range 200-2500N. For large industrial doors.</p>
+                            <div class="callout callout-info">
+                                <strong>Stroke Rule</strong>
+                                <p>Always choose a spring with stroke ≥ your required stroke + 10mm margin. The compressed length must fit your installation.</p>
+                            </div>
+                        </div>
+                    </div>
 
-    // door mount
-    ctx.fillStyle = colorSpring;
-    ctx.beginPath();
-    ctx.arc(doorMountC.x, doorMountC.y, 4, 0, 2*Math.PI);
-    ctx.fill();
+                    <div id="bg-physics" class="background-panel">
+                        <div class="background-section">
+                            <h3>Physics of Gas Spring Selection</h3>
+                            <div class="equation-card">
+                                <strong>Door Moment (Gravitational)</strong>
+                                $$M_{door}(\theta) = m \cdot g \cdot L_{cg} \cdot \cos(\theta)$$
+                            </div>
+                            <div class="equation-card">
+                                <strong>Spring Moment</strong>
+                                $$M_{spring}(\theta) = n \cdot F \cdot r_{\perp}(\theta)$$
+                            </div>
+                            <div class="equation-card">
+                                <strong>Required Hand Force</strong>
+                                $$F_{hand} = \frac{M_{door} - M_{spring}}{L_{hand}}$$
+                            </div>
+                            <p>The key insight is that both the door moment and spring moment vary with angle, but differently. No single spring force achieves perfect balance at all positions. The "optimal" force minimizes the peak hand effort across the full range of motion.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
 
-    // cabinet mount
-    ctx.beginPath();
-    ctx.arc(cabC.x, cabC.y, 4, 0, 2*Math.PI);
-    ctx.fill();
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
 
-    // handle
-    ctx.fillStyle = colorHandle;
-    ctx.beginPath();
-    ctx.arc(handleC.x, handleC.y, 5, 0, 2*Math.PI);
-    ctx.fill();
+    <script>
+        // =====================================================================
+        // Global State
+        // =====================================================================
+        let pyodide = null;
+        let pyModule = null;
+        let currentResults = null;
+        let momentChart = null;
+        let handForceChart = null;
+        let catalog = [];
+        let selectedSpring = null;
+        let currentMode = 'catalog';
+        let forceZoneGrid = null;
 
-    ctx.restore();
-  }
+        // Drag state
+        let isDragging = false;
+        let dragTarget = null;
 
-  function drawDiagram(ctx, w, h,
-    lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
-  ) {
-    ctx.clearRect(0,0,w,h);
-    const {minX, maxX, minY, maxY} = combinedBoundingBox(
-      lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
-    );
+        // =====================================================================
+        // Initialization
+        // =====================================================================
+        async function init() {
+            const loadingText = document.getElementById('loading-text');
+            const overlay = document.getElementById('loading-overlay');
 
-    const bbWidth  = maxX - minX;
-    const bbHeight = maxY - minY;
+            try {
+                loadingText.textContent = 'Loading Python runtime...';
+                pyodide = await loadPyodide();
 
-    const margin = 20;
-    let scaleX = (w - 2*margin) / bbWidth;
-    let scaleY = (h - 2*margin) / bbHeight;
-    let scale = Math.min(scaleX, scaleY);
-    if(!Number.isFinite(scale)) scale=50; 
+                loadingText.textContent = 'Loading calculation module...';
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+                    response = await pyfetch('../../pycalcs/gas_springs.py')
+                    with open('gas_springs.py', 'w') as f:
+                        f.write(await response.string())
+                    import gas_springs
+                `);
 
-    const bbCenterX = (minX + maxX)/2;
-    const bbCenterY = (minY + maxY)/2;
-    const canvasCenterX = w/2;
-    const canvasCenterY = h/2;
+                pyModule = pyodide.globals.get('gas_springs');
 
-    const offsetX = canvasCenterX - bbCenterX*scale;
-    const offsetY = canvasCenterY + bbCenterY*scale;
+                // Load catalog
+                loadingText.textContent = 'Loading spring catalog...';
+                const pyCatalog = pyModule.get_catalog();
+                catalog = pyCatalog.toJs().map(item => Object.fromEntries(item));
+                populateCatalog();
 
-    // Gravity arrow
-    ctx.strokeStyle = "#444";
-    ctx.fillStyle = "#444";
-    ctx.lineWidth = 2;
-    drawArrow(ctx, 50, 20, 50, 60, 8);
-    ctx.font="14px Arial";
-    ctx.fillText("Gravity", 55, 60);
+                loadingText.textContent = 'Ready!';
+                setTimeout(() => overlay.classList.add('hidden'), 300);
 
-    // Door down
-    drawDoorState(ctx, 0, lengthDoor,
-      doorMountFrac, cabMountX, cabMountY, handleFrac,
-      scale, offsetX, offsetY,
-      "#444","blue","green",1.0
-    );
+                // Initial calculation
+                calculateAndDisplay();
+                updateVisualization();
 
-    // Door up
-    drawDoorState(ctx, openAngle, lengthDoor,
-      doorMountFrac, cabMountX, cabMountY, handleFrac,
-      scale, offsetX, offsetY,
-      "#999","blue","green",0.5
-    );
-
-    // Angle arc near hinge
-    ctx.save();
-    ctx.strokeStyle="#666";
-    ctx.beginPath();
-    const hingeC = {x: offsetX, y: offsetY};
-    // arc from PI to PI+openAngle
-    ctx.arc(hingeC.x, hingeC.y, 40, Math.PI, Math.PI+(openAngle*Math.PI/180), false);
-    ctx.stroke();
-    ctx.fillStyle="#000";
-    ctx.font="14px Arial";
-    ctx.fillText(`${openAngle}°`, hingeC.x+45, hingeC.y+5);
-    ctx.restore();
-  }
-
-  ///////////////////////////////////////////////////////////////////////////
-  // 3) Charts
-  ///////////////////////////////////////////////////////////////////////////
-
-  let springForceChart = null;
-  let handleForceChart = null;
-
-  function updateCharts(springData, handleData, angles) {
-    const ctx1 = document.getElementById("springForceChart").getContext("2d");
-    if(springForceChart) springForceChart.destroy();
-    springForceChart = new Chart(ctx1, {
-      type:'line',
-      data:{
-        labels: angles,
-        datasets:[{
-          label:'Spring Force (N)',
-          data: springData
-        }]
-      },
-      options:{
-        responsive:true,
-        scales:{
-          x:{title:{display:true, text:'Door Angle (°)'}},
-          y:{title:{display:true, text:'Spring Force (N)'}}
+            } catch (error) {
+                loadingText.textContent = 'Error: ' + error.message;
+                console.error('Init error:', error);
+            }
         }
-      }
-    });
 
-    const ctx2 = document.getElementById("handleForceChart").getContext("2d");
-    if(handleForceChart) handleForceChart.destroy();
-    handleForceChart = new Chart(ctx2, {
-      type:'line',
-      data:{
-        labels: angles,
-        datasets:[{
-          label:'Handle Force (N) (+ Up / - Down)',
-          data: handleData
-        }]
-      },
-      options:{
-        responsive:true,
-        scales:{
-          x:{title:{display:true, text:'Door Angle (°)'}},
-          y:{title:{display:true, text:'Handle Force (N)'}}
+        // =====================================================================
+        // Catalog Management
+        // =====================================================================
+        function populateCatalog() {
+            const seriesFilter = document.getElementById('catalog-series-filter').value;
+            const strokeFilter = document.getElementById('catalog-stroke-filter').value;
+            const listEl = document.getElementById('catalog-list');
+
+            // Get required stroke from current geometry
+            const inputs = getInputs();
+            let requiredStroke = 100; // default
+            try {
+                const geomResult = pyModule.analyze_mechanism(
+                    inputs.doorMass, inputs.doorLength, 0.5,
+                    inputs.doorMountFraction, inputs.frameMountX, inputs.frameMountY,
+                    0, inputs.openAngle, 0, 0.9, inputs.numSprings, 5.0
+                );
+                const geom = pyResultToJS(geomResult);
+                requiredStroke = geom.spring_stroke * 1000 + 10;
+            } catch(e) {}
+
+            // Filter catalog
+            let filtered = catalog.filter(s => {
+                if (seriesFilter && s.series !== seriesFilter) return false;
+                if (strokeFilter && s.stroke_mm !== parseInt(strokeFilter)) return false;
+                if (s.stroke_mm < requiredStroke) return false;
+                return true;
+            });
+
+            // Sort by series then force
+            filtered.sort((a, b) => {
+                if (a.series !== b.series) return a.series.localeCompare(b.series);
+                if (a.stroke_mm !== b.stroke_mm) return a.stroke_mm - b.stroke_mm;
+                return a.force_n - b.force_n;
+            });
+
+            // Update stroke filter options
+            const strokes = [...new Set(catalog.filter(s => !seriesFilter || s.series === seriesFilter).map(s => s.stroke_mm))].sort((a,b) => a-b);
+            const strokeSelect = document.getElementById('catalog-stroke-filter');
+            const currentStroke = strokeSelect.value;
+            strokeSelect.innerHTML = '<option value="">All Strokes</option>' +
+                strokes.map(s => `<option value="${s}">${s}mm</option>`).join('');
+            strokeSelect.value = currentStroke;
+
+            // Render list
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<div class="catalog-item"><span class="detail">No springs match requirements (need ' + requiredStroke.toFixed(0) + 'mm stroke)</span></div>';
+            } else {
+                listEl.innerHTML = filtered.slice(0, 50).map((s, i) => `
+                    <div class="catalog-item ${selectedSpring && selectedSpring.force_n === s.force_n && selectedSpring.stroke_mm === s.stroke_mm ? 'selected' : ''}"
+                         data-index="${catalog.indexOf(s)}">
+                        <div>
+                            <span class="spec">${s.force_n}N × ${s.stroke_mm}mm</span>
+                            <span class="detail" style="margin-left: 8px;">${s.series}</span>
+                        </div>
+                        <span class="detail">${s.extended_mm}mm ext</span>
+                    </div>
+                `).join('');
+            }
+
+            document.getElementById('catalog-count').textContent = filtered.length;
+
+            // Add click handlers
+            listEl.querySelectorAll('.catalog-item[data-index]').forEach(el => {
+                el.addEventListener('click', () => {
+                    const idx = parseInt(el.dataset.index);
+                    selectedSpring = catalog[idx];
+                    populateCatalog();
+                    calculateAndDisplay();
+                });
+            });
         }
-      }
-    });
-  }
 
-  ///////////////////////////////////////////////////////////////////////////
-  // 4) Main compute function (calls Python)
-  ///////////////////////////////////////////////////////////////////////////
+        document.getElementById('catalog-series-filter').addEventListener('change', populateCatalog);
+        document.getElementById('catalog-stroke-filter').addEventListener('change', populateCatalog);
 
-  async function computeEverything() {
-    const massDoor   = parseFloat(document.getElementById("massDoor").value);
-    const lengthDoor = parseFloat(document.getElementById("lengthDoor").value);
-    const openAngle  = parseFloat(document.getElementById("openAngle").value);
-    const doorMountFrac = parseFloat(document.getElementById("doorMountFrac").value);
-    const cabMountX  = parseFloat(document.getElementById("cabMountX").value);
-    const cabMountY  = parseFloat(document.getElementById("cabMountY").value);
-    const numSprings = parseFloat(document.getElementById("numSprings").value);
-    const springNominal = parseFloat(document.getElementById("springNominal").value);
-    const springVariation = parseFloat(document.getElementById("springVariation").value);
-    const handleFrac = parseFloat(document.getElementById("handleFrac").value);
+        // =====================================================================
+        // Mode Switching
+        // =====================================================================
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('mode-' + btn.dataset.mode).classList.add('active');
+                currentMode = btn.dataset.mode;
+            });
+        });
 
-    // Pass these to Python
-    pyodide.globals.set("mass_door", massDoor);
-    pyodide.globals.set("length_door", lengthDoor);
-    pyodide.globals.set("open_angle", openAngle);
-    pyodide.globals.set("door_mount_frac", doorMountFrac);
-    pyodide.globals.set("cab_mount_x", cabMountX);
-    pyodide.globals.set("cab_mount_y", cabMountY);
-    pyodide.globals.set("num_springs", numSprings);
-    pyodide.globals.set("spring_nominal", springNominal);
-    pyodide.globals.set("spring_variation", springVariation);
-    pyodide.globals.set("handle_frac", handleFrac);
+        // =====================================================================
+        // Tab Navigation
+        // =====================================================================
+        document.querySelectorAll('.tab-link').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab-link').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.target).style.display = 'block';
+                if (tab.dataset.target === 'charts' && currentResults) updateCharts(currentResults);
+                if (tab.dataset.target === 'background') typesetMath();
+                if (tab.dataset.target === 'visualization') {
+                    updateVisualization();
+                    updateForceZoneGrid();
+                }
+            });
+        });
 
-    // Call the Python function trapdoor_calculate() that we defined in calc.py
-    const pyResult = pyodide.runPython(`
-import json
-res = trapdoor_calculate(
-    mass_door,
-    length_door,
-    open_angle,
-    door_mount_frac,
-    cab_mount_x,
-    cab_mount_y,
-    num_springs,
-    spring_nominal,
-    spring_variation,
-    handle_frac
-)
-json.dumps(res)
-`);
-    const resultObj = JSON.parse(pyResult);
+        document.querySelectorAll('.background-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.background-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.background-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.bgTarget).classList.add('active');
+                typesetMath();
+            });
+        });
 
-    // Extract data for UI
-    const minLen = resultObj.minLen;
-    const maxLen = resultObj.maxLen;
-    const stroke = resultObj.stroke;
-    const maxForce = resultObj.maxForce;
-    const maxHandleForce = resultObj.maxHandleForce;
-    const angles = resultObj.angles;
-    const springForces = resultObj.springForces;
-    const handleForces = resultObj.handleForces;
+        function typesetMath() { if (window.MathJax) MathJax.typesetPromise(); }
 
-    // Update text
-    document.getElementById("springLengthsText").textContent =
-      `Spring Lengths: min = ${minLen.toFixed(3)} m, max = ${maxLen.toFixed(3)} m`;
-    document.getElementById("strokeText").textContent =
-      `Required Spring Stroke (max-min): ${stroke.toFixed(3)} m`;
-    document.getElementById("forceText").textContent =
-      `Max Total Spring Force (over motion): ${maxForce.toFixed(2)} N`;
-    document.getElementById("handleForceText").textContent =
-      `Max Handle Force (push/pull): ±${maxHandleForce.toFixed(2)} N`;
+        // =====================================================================
+        // Input Handling
+        // =====================================================================
+        function getInputs() {
+            return {
+                doorMass: parseFloat(document.getElementById('door_mass').value) || 15,
+                doorLength: parseFloat(document.getElementById('door_length').value) || 0.8,
+                openAngle: parseFloat(document.getElementById('open_angle').value) || 90,
+                doorMountFraction: parseFloat(document.getElementById('door_mount_fraction').value) || 0.7,
+                frameMountX: parseFloat(document.getElementById('frame_mount_x').value) || 0.3,
+                frameMountY: parseFloat(document.getElementById('frame_mount_y').value) || -0.15,
+                numSprings: parseInt(document.getElementById('num_springs').value) || 2,
+                manualForce: parseFloat(document.getElementById('manual_force').value) || 200
+            };
+        }
 
-    // Update charts
-    updateCharts(springForces, handleForces, angles);
+        function updateDoorMountHint() {
+            const length = parseFloat(document.getElementById('door_length').value) || 0;
+            const frac = parseFloat(document.getElementById('door_mount_fraction').value) || 0;
+            document.getElementById('door_mount_mm').textContent = `= ${(length * frac * 1000).toFixed(0)} mm`;
+        }
+        document.getElementById('door_length').addEventListener('input', () => { updateDoorMountHint(); populateCatalog(); });
+        document.getElementById('door_mount_fraction').addEventListener('input', updateDoorMountHint);
+        document.getElementById('open_angle').addEventListener('change', () => {
+            document.getElementById('viz-angle-slider').max = document.getElementById('open_angle').value;
+            populateCatalog();
+        });
 
-    // Draw diagram
-    const canvas = document.getElementById("visualCanvas");
-    const ctx = canvas.getContext("2d");
-    drawDiagram(ctx, canvas.width, canvas.height,
-      lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
-    );
-  }
+        // =====================================================================
+        // Main Calculation
+        // =====================================================================
+        async function calculateAndDisplay() {
+            if (!pyModule) return;
 
-  ///////////////////////////////////////////////////////////////////////////
-  // 5) On Page Load
-  ///////////////////////////////////////////////////////////////////////////
-  window.addEventListener("DOMContentLoaded", async () => {
-    // 1. Initialize Pyodide
-    await initPyodideAndPython();
-    // 2. Hook the compute button
-    document.getElementById("computeBtn").addEventListener("click", computeEverything);
-    // 3. Do an initial compute so the page is populated
-    await computeEverything();
-  });
-</script>
+            const inputs = getInputs();
+            const resultsDiv = document.getElementById('results-display');
+
+            try {
+                let result, springForce;
+
+                if (currentMode === 'catalog' && selectedSpring) {
+                    springForce = selectedSpring.force_n;
+                    const pyResult = pyModule.analyze_mechanism(
+                        inputs.doorMass, inputs.doorLength, 0.5,
+                        inputs.doorMountFraction, inputs.frameMountX, inputs.frameMountY,
+                        springForce, inputs.openAngle, 0, 0.9, inputs.numSprings, 1.0
+                    );
+                    const analysis = pyResultToJS(pyResult);
+                    result = {
+                        recommended_spring: selectedSpring,
+                        analysis: analysis,
+                        mode: 'catalog'
+                    };
+                } else if (currentMode === 'auto') {
+                    const pyResult = pyModule.select_spring_from_catalog(
+                        inputs.doorMass, inputs.doorLength, 0.5,
+                        inputs.doorMountFraction, inputs.frameMountX, inputs.frameMountY,
+                        inputs.openAngle, inputs.numSprings, 20.0
+                    );
+                    result = pyResultToJS(pyResult);
+                    result.mode = 'auto';
+                    springForce = result.recommended_spring?.force_n || result.optimal_force;
+                } else {
+                    springForce = inputs.manualForce;
+                    const pyResult = pyModule.analyze_mechanism(
+                        inputs.doorMass, inputs.doorLength, 0.5,
+                        inputs.doorMountFraction, inputs.frameMountX, inputs.frameMountY,
+                        springForce, inputs.openAngle, 0, 0.9, inputs.numSprings, 1.0
+                    );
+                    const analysis = pyResultToJS(pyResult);
+                    result = { analysis: analysis, mode: 'manual', spring_force: springForce };
+                }
+
+                currentResults = result;
+                renderResults(result, inputs);
+                updateVisualization();
+                updateForceZoneGrid();
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="callout callout-warning"><strong>Error</strong><p>${error.message}</p></div>`;
+                console.error('Calc error:', error);
+            }
+        }
+
+        function pyResultToJS(pyResult) {
+            const jsResult = pyResult.toJs();
+            const result = {};
+            for (const [key, value] of jsResult) {
+                if (value instanceof Map) {
+                    result[key] = {};
+                    for (const [k, v] of value) {
+                        result[key][k] = Array.isArray(v) ? [...v] : v;
+                    }
+                } else if (Array.isArray(value)) {
+                    result[key] = [...value];
+                } else {
+                    result[key] = value;
+                }
+            }
+            return result;
+        }
+
+        function renderResults(result, inputs) {
+            const analysis = result.analysis || result;
+            const spring = result.recommended_spring;
+            const maxHand = Math.max(Math.abs(analysis?.max_hand_force || 0), Math.abs(analysis?.min_hand_force || 0));
+            const zone = getZoneClass(maxHand);
+
+            let springInfo = '';
+            if (spring) {
+                springInfo = `
+                    <div class="results-section">
+                        <h4>${result.mode === 'auto' ? 'Recommended' : 'Selected'} Spring</h4>
+                        <div class="results-grid">
+                            <div class="result-card highlight">
+                                <div class="label">Force</div>
+                                <div class="value">${spring.force_n}<span class="unit">N</span></div>
+                            </div>
+                            <div class="result-card highlight">
+                                <div class="label">Stroke</div>
+                                <div class="value">${spring.stroke_mm}<span class="unit">mm</span></div>
+                            </div>
+                            <div class="result-card">
+                                <div class="label">Series</div>
+                                <div class="value" style="font-size: 1.2rem;">${spring.series}</div>
+                            </div>
+                            <div class="result-card">
+                                <div class="label">Extended</div>
+                                <div class="value">${spring.extended_mm}<span class="unit">mm</span></div>
+                            </div>
+                            <div class="result-card">
+                                <div class="label">Compressed</div>
+                                <div class="value">${spring.compressed_mm}<span class="unit">mm</span></div>
+                            </div>
+                            <div class="result-card">
+                                <div class="label">Total Force</div>
+                                <div class="value">${spring.force_n * inputs.numSprings}<span class="unit">N</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (result.mode === 'manual') {
+                springInfo = `
+                    <div class="results-section">
+                        <h4>Manual Spring Configuration</h4>
+                        <div class="results-grid">
+                            <div class="result-card highlight">
+                                <div class="label">Force per Spring</div>
+                                <div class="value">${result.spring_force}<span class="unit">N</span></div>
+                            </div>
+                            <div class="result-card">
+                                <div class="label">Total Force</div>
+                                <div class="value">${result.spring_force * inputs.numSprings}<span class="unit">N</span></div>
+                            </div>
+                            <div class="result-card">
+                                <div class="label">Min Stroke Needed</div>
+                                <div class="value">${((analysis?.spring_stroke || 0) * 1000 + 10).toFixed(0)}<span class="unit">mm</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (result.mode === 'auto' && !spring) {
+                springInfo = `
+                    <div class="callout callout-warning">
+                        <strong>No Standard Spring Found</strong>
+                        <p>${result.message || 'Consider a custom spring.'}</p>
+                    </div>
+                `;
+            }
+
+            const html = `
+                <div class="result-summary">
+                    Door: <strong>${inputs.doorMass}kg</strong> × <strong>${inputs.doorLength}m</strong> |
+                    Angle: <strong>${inputs.openAngle}°</strong> |
+                    Springs: <strong>${inputs.numSprings}</strong>
+                </div>
+
+                ${springInfo}
+
+                <div class="results-section">
+                    <h4>Hand Force Analysis</h4>
+                    <div class="results-grid">
+                        <div class="result-card ${zone}">
+                            <div class="label">Peak Hand Force</div>
+                            <div class="value">${maxHand.toFixed(1)}<span class="unit">N</span></div>
+                        </div>
+                        <div class="result-card">
+                            <div class="label">At Closed (0°)</div>
+                            <div class="value">${(analysis?.hand_forces?.[0] || 0).toFixed(1)}<span class="unit">N</span></div>
+                        </div>
+                        <div class="result-card">
+                            <div class="label">At Open (${inputs.openAngle}°)</div>
+                            <div class="value">${(analysis?.hand_forces?.[analysis?.hand_forces?.length - 1] || 0).toFixed(1)}<span class="unit">N</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                ${getZoneCallout(zone, maxHand)}
+
+                ${result.alternatives?.length > 0 ? `
+                    <div class="results-section">
+                        <h4>Alternative Springs</h4>
+                        <div style="font-size: 0.9rem; color: var(--text-light);">
+                            ${result.alternatives.map(s => `${s.force_n}N × ${s.stroke_mm}mm (${s.series}) - ${s.max_hand_force?.toFixed(1)}N hand force`).join('<br>')}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            document.getElementById('results-display').innerHTML = html;
+        }
+
+        function getZoneClass(force) {
+            if (force <= 20) return 'good';
+            if (force <= 40) return 'acceptable';
+            if (force <= 60) return 'high';
+            return 'excessive';
+        }
+
+        function getZoneCallout(zone, force) {
+            const msgs = {
+                good: ['Good Balance', 'Peak force under 20N. Easy one-handed operation.'],
+                acceptable: ['Acceptable Balance', 'Peak force 20-40N. Moderate effort required.'],
+                high: ['High Force Required', 'Peak force 40-60N. Consider increasing spring force or adjusting mounting.'],
+                excessive: ['Excessive Force', 'Peak force over 60N. Configuration needs improvement for safe operation.']
+            };
+            const [title, desc] = msgs[zone];
+            const colorMap = { good: 'var(--zone-good)', acceptable: 'var(--zone-acceptable)', high: 'var(--zone-high)', excessive: 'var(--zone-excessive)' };
+            return `<div class="callout" style="border-color: ${colorMap[zone]}; background: ${colorMap[zone]}15;"><strong style="color: ${colorMap[zone]};">${title}</strong><p>${desc}</p></div>`;
+        }
+
+        // =====================================================================
+        // Force Zone Grid Calculation
+        // =====================================================================
+        async function updateForceZoneGrid() {
+            if (!pyModule) return;
+
+            const inputs = getInputs();
+            let springForce = 200;
+            let springCompressed = null;
+            let springExtended = null;
+
+            if (currentMode === 'catalog' && selectedSpring) {
+                springForce = selectedSpring.force_n;
+                springCompressed = selectedSpring.compressed_mm;
+                springExtended = selectedSpring.extended_mm;
+            } else if (currentMode === 'auto' && currentResults?.recommended_spring) {
+                springForce = currentResults.recommended_spring.force_n;
+                springCompressed = currentResults.recommended_spring.compressed_mm;
+                springExtended = currentResults.recommended_spring.extended_mm;
+            } else if (currentMode === 'manual') {
+                springForce = inputs.manualForce;
+                // Manual mode: no dimension constraints
+            } else if (currentResults?.optimal_force) {
+                springForce = currentResults.optimal_force;
+            }
+
+            // Update legend - show constraint legend items only when spring is constrained
+            const hasConstraints = springCompressed !== null && springExtended !== null;
+            document.querySelectorAll('.legend-constraint').forEach(el => {
+                el.style.display = hasConstraints ? 'flex' : 'none';
+            });
+            document.getElementById('drag-hint').textContent = hasConstraints
+                ? `Drag the frame mount point. Spring must fit: ${springCompressed}-${springExtended}mm`
+                : 'Drag the frame mount point to see how position affects hand force';
+
+            try {
+                let pyResult;
+                if (hasConstraints) {
+                    pyResult = pyModule.calculate_force_zone_grid(
+                        inputs.doorMass, inputs.doorLength, 0.5,
+                        inputs.doorMountFraction, springForce, inputs.openAngle, inputs.numSprings,
+                        [-0.3, inputs.doorLength * 0.8],  // x range
+                        [-0.4, 0.3],  // y range
+                        15,  // resolution
+                        springCompressed,
+                        springExtended
+                    );
+                } else {
+                    pyResult = pyModule.calculate_force_zone_grid(
+                        inputs.doorMass, inputs.doorLength, 0.5,
+                        inputs.doorMountFraction, springForce, inputs.openAngle, inputs.numSprings,
+                        [-0.3, inputs.doorLength * 0.8],  // x range
+                        [-0.4, 0.3],  // y range
+                        15  // resolution
+                    );
+                }
+                forceZoneGrid = pyResultToJS(pyResult);
+            } catch (e) {
+                console.error('Zone grid error:', e);
+                forceZoneGrid = null;
+            }
+        }
+
+        // =====================================================================
+        // Visualization
+        // =====================================================================
+        function updateVisualization(angleOverride = null) {
+            const inputs = getInputs();
+            const angle = angleOverride !== null ? angleOverride : 0;
+            const angleRad = angle * Math.PI / 180;
+            const svg = document.getElementById('mechanism-svg');
+            const scale = 200;
+            const hingeX = 50, hingeY = 50;
+
+            // Door geometry
+            const doorLength = inputs.doorLength * scale;
+            const doorEndX = hingeX + doorLength * Math.cos(angleRad);
+            const doorEndY = hingeY - doorLength * Math.sin(angleRad);
+            const doorMountDist = inputs.doorMountFraction * inputs.doorLength * scale;
+            const doorMountX = hingeX + doorMountDist * Math.cos(angleRad);
+            const doorMountY = hingeY - doorMountDist * Math.sin(angleRad);
+            const frameMountX = hingeX + inputs.frameMountX * scale;
+            const frameMountY = hingeY - inputs.frameMountY * scale;
+
+            // Spring length
+            const dx = doorMountX - frameMountX;
+            const dy = doorMountY - frameMountY;
+            const springLengthPx = Math.sqrt(dx * dx + dy * dy);
+
+            // Get spring constraints if catalog spring selected
+            let springCompressed = null;
+            let springExtended = null;
+            if (currentMode === 'catalog' && selectedSpring) {
+                springCompressed = selectedSpring.compressed_mm;
+                springExtended = selectedSpring.extended_mm;
+            } else if (currentMode === 'auto' && currentResults?.recommended_spring) {
+                springCompressed = currentResults.recommended_spring.compressed_mm;
+                springExtended = currentResults.recommended_spring.extended_mm;
+            }
+
+            // Calculate current force zone
+            let currentZone = 'good';
+            let peakForce = 0;
+            let requiredCompressed = 0;
+            let requiredExtended = 0;
+            if (pyModule) {
+                try {
+                    let forceResult;
+                    if (springCompressed !== null && springExtended !== null) {
+                        forceResult = pyModule.calculate_force_at_position(
+                            inputs.doorMass, inputs.doorLength, 0.5,
+                            inputs.doorMountFraction, inputs.frameMountX, inputs.frameMountY,
+                            getSpringForce(), inputs.openAngle, inputs.numSprings,
+                            springCompressed, springExtended
+                        );
+                    } else {
+                        forceResult = pyModule.calculate_force_at_position(
+                            inputs.doorMass, inputs.doorLength, 0.5,
+                            inputs.doorMountFraction, inputs.frameMountX, inputs.frameMountY,
+                            getSpringForce(), inputs.openAngle, inputs.numSprings
+                        );
+                    }
+                    const fr = pyResultToJS(forceResult);
+                    currentZone = fr.zone || 'good';
+                    peakForce = fr.max_hand_force || 0;
+                    requiredCompressed = fr.required_compressed_mm || 0;
+                    requiredExtended = fr.required_extended_mm || 0;
+                } catch(e) { console.error(e); }
+            }
+
+            // Update force indicator
+            const indicator = document.getElementById('force-indicator');
+            indicator.className = 'force-indicator ' + currentZone;
+            const zoneLabels = {
+                good: 'GOOD ZONE', acceptable: 'OK ZONE', high: 'HIGH FORCE', excessive: 'EXCESSIVE',
+                over_extended: 'SPRING TOO SHORT', over_compressed: 'SPRING TOO LONG'
+            };
+            const zoneDescs = {
+                good: 'Easy to operate', acceptable: 'Moderate effort', high: 'Hard to operate', excessive: 'Too difficult',
+                over_extended: `Need ${requiredExtended.toFixed(0)}mm extended, have ${springExtended || '?'}mm`,
+                over_compressed: `Need ${requiredCompressed.toFixed(0)}mm compressed, have ${springCompressed || '?'}mm`
+            };
+            const isConstraintViolation = currentZone === 'over_extended' || currentZone === 'over_compressed';
+            indicator.innerHTML = `
+                <div>
+                    <span class="zone-label">${zoneLabels[currentZone] || currentZone}</span>
+                    <span style="color: var(--text-light); font-size: 0.85rem; margin-left: 8px;">${zoneDescs[currentZone] || ''}</span>
+                </div>
+                <div class="zone-value">${isConstraintViolation ? 'Move closer' : `Peak: <span>${peakForce.toFixed(1)}</span> N`}</div>
+            `;
+
+            // Build SVG
+            let svgContent = `
+                <defs>
+                    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                        <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e5e7eb" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect x="-150" y="-250" width="500" height="450" fill="url(#grid)"/>
+            `;
+
+            // Force zone heatmap
+            if (forceZoneGrid && forceZoneGrid.zones) {
+                const xs = forceZoneGrid.x_positions;
+                const ys = forceZoneGrid.y_positions;
+                const zones = forceZoneGrid.zones;
+                const cellW = (xs[1] - xs[0]) * scale;
+                const cellH = (ys[1] - ys[0]) * scale;
+
+                const zoneColors = {
+                    good: 'rgba(34, 197, 94, 0.35)',
+                    acceptable: 'rgba(234, 179, 8, 0.35)',
+                    high: 'rgba(249, 115, 22, 0.35)',
+                    excessive: 'rgba(239, 68, 68, 0.35)',
+                    over_extended: 'rgba(124, 58, 237, 0.25)',
+                    over_compressed: 'rgba(8, 145, 178, 0.25)',
+                    invalid: 'rgba(156, 163, 175, 0.15)'
+                };
+
+                for (let yi = 0; yi < ys.length; yi++) {
+                    for (let xi = 0; xi < xs.length; xi++) {
+                        const zone = zones[yi][xi];
+                        const px = hingeX + xs[xi] * scale - cellW/2;
+                        const py = hingeY - ys[yi] * scale - cellH/2;
+                        svgContent += `<rect x="${px}" y="${py}" width="${cellW}" height="${cellH}" fill="${zoneColors[zone] || zoneColors.invalid}" />`;
+                    }
+                }
+            }
+
+            // Reference line
+            svgContent += `<line x1="-100" y1="${hingeY}" x2="350" y2="${hingeY}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="5,5"/>`;
+
+            // Door ghost positions
+            if (angle > 5) {
+                svgContent += `<line x1="${hingeX}" y1="${hingeY}" x2="${hingeX + doorLength}" y2="${hingeY}" stroke="var(--door-color)" stroke-width="4" stroke-linecap="round" opacity="0.2"/>`;
+            }
+            if (angle < inputs.openAngle - 5) {
+                const openRad = inputs.openAngle * Math.PI / 180;
+                svgContent += `<line x1="${hingeX}" y1="${hingeY}" x2="${hingeX + doorLength * Math.cos(openRad)}" y2="${hingeY - doorLength * Math.sin(openRad)}" stroke="var(--door-color)" stroke-width="4" stroke-linecap="round" opacity="0.2"/>`;
+            }
+
+            // Door
+            svgContent += `<line x1="${hingeX}" y1="${hingeY}" x2="${doorEndX}" y2="${doorEndY}" stroke="var(--door-color)" stroke-width="8" stroke-linecap="round"/>`;
+
+            // Gas spring
+            svgContent += `<line x1="${frameMountX}" y1="${frameMountY}" x2="${doorMountX}" y2="${doorMountY}" stroke="var(--spring-color)" stroke-width="4" stroke-linecap="round"/>`;
+
+            // CG indicator
+            const cgX = hingeX + 0.5 * doorLength * Math.cos(angleRad);
+            const cgY = hingeY - 0.5 * doorLength * Math.sin(angleRad);
+            svgContent += `<circle cx="${cgX}" cy="${cgY}" r="5" fill="none" stroke="#666" stroke-width="2"/>`;
+            svgContent += `<circle cx="${cgX}" cy="${cgY}" r="2" fill="#666"/>`;
+
+            // Hinge
+            svgContent += `<circle cx="${hingeX}" cy="${hingeY}" r="8" fill="#1f2937"/>`;
+
+            // Frame mount (draggable) with zone color
+            const mountColor = {
+                good: 'var(--zone-good)', acceptable: 'var(--zone-acceptable)',
+                high: 'var(--zone-high)', excessive: 'var(--zone-excessive)',
+                over_extended: 'var(--zone-over-extended)', over_compressed: 'var(--zone-over-compressed)'
+            };
+            svgContent += `<circle cx="${frameMountX}" cy="${frameMountY}" r="12" fill="${mountColor[currentZone] || '#f97316'}" stroke="white" stroke-width="2" class="draggable-point" data-point="frame" style="cursor: move;"/>`;
+
+            // Door mount
+            svgContent += `<circle cx="${doorMountX}" cy="${doorMountY}" r="6" fill="var(--spring-color)"/>`;
+
+            // Labels
+            svgContent += `<text x="${hingeX}" y="${hingeY + 25}" text-anchor="middle" font-size="11" fill="#666">Hinge</text>`;
+
+            // Angle arc
+            if (angle > 5) {
+                svgContent += `<path d="M ${hingeX + 35} ${hingeY} A 35 35 0 0 0 ${hingeX + 35 * Math.cos(angleRad)} ${hingeY - 35 * Math.sin(angleRad)}" fill="none" stroke="#666" stroke-width="1"/>`;
+                svgContent += `<text x="${hingeX + 45 * Math.cos(angleRad/2)}" y="${hingeY - 45 * Math.sin(angleRad/2)}" font-size="11" fill="#666">${angle}°</text>`;
+            }
+
+            // Spring length label
+            svgContent += `<text x="${(frameMountX + doorMountX) / 2 + 15}" y="${(frameMountY + doorMountY) / 2}" font-size="11" fill="var(--spring-color)">${(springLengthPx / scale * 1000).toFixed(0)}mm</text>`;
+
+            svg.innerHTML = svgContent;
+
+            // Update info
+            if (currentResults) {
+                const analysis = currentResults.analysis || currentResults;
+                const idx = Math.min(angle, (analysis.angles?.length || 1) - 1);
+                document.getElementById('viz-info').innerHTML = `
+                    At <strong>${angle}°</strong>:
+                    Spring = <strong>${(springLengthPx / scale * 1000).toFixed(0)}mm</strong> |
+                    Door moment = <strong>${(analysis.door_moments?.[idx] || 0).toFixed(1)} N·m</strong> |
+                    Spring moment = <strong>${(analysis.spring_moments?.[idx] || 0).toFixed(1)} N·m</strong>
+                `;
+            }
+
+            setupDragHandlers();
+        }
+
+        function getSpringForce() {
+            if (currentMode === 'catalog' && selectedSpring) return selectedSpring.force_n;
+            if (currentMode === 'manual') return parseFloat(document.getElementById('manual_force').value) || 200;
+            if (currentResults?.recommended_spring) return currentResults.recommended_spring.force_n;
+            if (currentResults?.optimal_force) return currentResults.optimal_force;
+            return 200;
+        }
+
+        function setupDragHandlers() {
+            const svg = document.getElementById('mechanism-svg');
+            svg.querySelectorAll('.draggable-point').forEach(el => {
+                el.addEventListener('mousedown', startDrag);
+                el.addEventListener('touchstart', startDrag, { passive: false });
+            });
+            svg.addEventListener('mousemove', drag);
+            svg.addEventListener('touchmove', drag, { passive: false });
+            svg.addEventListener('mouseup', endDrag);
+            svg.addEventListener('mouseleave', endDrag);
+            svg.addEventListener('touchend', endDrag);
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            dragTarget = e.target.dataset.point;
+        }
+
+        function drag(e) {
+            if (!isDragging || !dragTarget) return;
+            e.preventDefault();
+
+            const svg = document.getElementById('mechanism-svg');
+            const pt = svg.createSVGPoint();
+            pt.x = e.touches ? e.touches[0].clientX : e.clientX;
+            pt.y = e.touches ? e.touches[0].clientY : e.clientY;
+            const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+            const scale = 200, hingeX = 50, hingeY = 50;
+            if (dragTarget === 'frame') {
+                const newX = (svgP.x - hingeX) / scale;
+                const newY = -(svgP.y - hingeY) / scale;
+                document.getElementById('frame_mount_x').value = newX.toFixed(2);
+                document.getElementById('frame_mount_y').value = newY.toFixed(2);
+                const angle = parseInt(document.getElementById('viz-angle-slider').value);
+                updateVisualization(angle);
+            }
+        }
+
+        function endDrag() {
+            if (isDragging && dragTarget) {
+                calculateAndDisplay();
+            }
+            isDragging = false;
+            dragTarget = null;
+        }
+
+        // Angle slider
+        document.getElementById('viz-angle-slider').addEventListener('input', function() {
+            document.getElementById('viz-angle-value').textContent = this.value + '°';
+            updateVisualization(parseInt(this.value));
+        });
+
+        // =====================================================================
+        // Charts
+        // =====================================================================
+        function updateCharts(result) {
+            const analysis = result.analysis || result;
+            if (!analysis.angles) return;
+
+            const ctx1 = document.getElementById('moment-chart').getContext('2d');
+            const ctx2 = document.getElementById('hand-force-chart').getContext('2d');
+
+            if (momentChart) momentChart.destroy();
+            if (handForceChart) handForceChart.destroy();
+
+            momentChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: analysis.angles,
+                    datasets: [
+                        { label: 'Door Moment', data: analysis.door_moments, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, tension: 0.3 },
+                        { label: 'Spring Moment', data: analysis.spring_moments, borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        x: { title: { display: true, text: 'Angle (°)' } },
+                        y: { title: { display: true, text: 'Moment (N·m)' } }
+                    }
+                }
+            });
+
+            handForceChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: analysis.angles,
+                    datasets: [{ label: 'Hand Force', data: analysis.hand_forces, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { title: { display: true, text: 'Angle (°)' } },
+                        y: { title: { display: true, text: 'Force (N)' } }
+                    }
+                }
+            });
+        }
+
+        // =====================================================================
+        // Form Submission
+        // =====================================================================
+        document.getElementById('calc-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            calculateAndDisplay();
+        });
+
+        // =====================================================================
+        // Initialize
+        // =====================================================================
+        window.addEventListener('DOMContentLoaded', () => {
+            updateDoorMountHint();
+            init();
+        });
+    </script>
 </body>
 </html>

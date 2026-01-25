@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Motor Thermal Estimator - Engineering Tools</title>
+    <meta name="description" content="Estimate BLDC motor temperature rise and time-to-overheat. Features preset motor library and detailed thermal mass estimation.">
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* CSS Reset & Variables */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+        }
+
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-sans); line-height: 1.6; background: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; min-height: 100vh; }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .settings-button { border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-color); padding: 8px 14px; border-radius: 999px; cursor: pointer; }
+        
+        /* Layout */
+        .tool-layout { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr); gap: 28px; align-items: start; }
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        
+        h1, h2, h3, h4 { margin-top: 0; color: var(--text-color); }
+        h1 { margin-bottom: 0.5rem; color: var(--primary-color); }
+        h2 { border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 1rem; font-size: 1.25rem; }
+        
+        .input-group { margin-bottom: 1.1rem; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; }
+        .input-group input, .input-group select { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-color); font-size: 0.95rem; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        
+        .section-divider { border-top: 1px solid var(--border-color); margin: 20px 0; position: relative; }
+        .section-divider span { position: absolute; top: -12px; left: 10px; background: var(--bg-card); padding: 0 10px; color: var(--secondary-color); font-size: 0.85rem; font-weight: 600; }
+        
+        .btn-primary { width: 100%; padding: 12px; background: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+        .btn-primary:hover { opacity: 0.9; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; }
+        .tab-link { padding: 10px 16px; border: none; background: none; cursor: pointer; color: var(--text-light); border-bottom: 2px solid transparent; font-weight: 600; }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; }
+
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .result-item { background: var(--primary-light); padding: 12px; border-radius: 6px; text-align: center; }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); }
+        .result-item .value { font-size: 1.2rem; font-weight: 600; }
+        
+        .status-banner { padding: 16px; border-radius: 6px; margin-bottom: 20px; display: none; }
+        .status-banner.acceptable { background: #ecfdf5; border: 1px solid #059669; color: #064e3b; }
+        .status-banner.marginal { background: #fffbeb; border: 1px solid #d97706; color: #78350f; }
+        .status-banner.unacceptable { background: #fef2f2; border: 1px solid #dc2626; color: #7f1d1d; }
+        
+        .loading-overlay { position: fixed; inset: 0; background: var(--bg-card); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .loading-overlay.hidden { display: none; }
+
+        /* Advanced Toggle */
+        .advanced-section { display: none; padding-top: 16px; border-top: 1px dashed var(--border-color); margin-top: 16px; }
+        .advanced-section.visible { display: block; }
+        .toggle-adv { background: none; border: none; color: var(--secondary-color); cursor: pointer; font-size: 0.85rem; text-decoration: underline; padding: 0; }
+
+    </style>
+</head>
+<body data-theme="system">
+
+    <div class="loading-overlay" id="loading-overlay">
+        <div>Loading Python Engine...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <button class="settings-button" onclick="alert('Settings not implemented in this demo')">Settings</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Motor Thermal Estimator</h1>
+        <p>Estimate BLDC temperature rise and safe runtimes.</p>
+
+        <div class="tool-layout">
+            <section class="card">
+                <h2>Parameters</h2>
+                <form id="calc-form">
+                    
+                    <!-- PRESET SELECTION -->
+                    <div class="input-group">
+                        <label>Motor Preset</label>
+                        <select id="motor-preset" onchange="applyPreset()">
+                            <option value="custom">Custom / Manual Entry</option>
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="section-divider"><span>Electrical</span></div>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label>Current (A)</label>
+                            <input type="number" id="current" value="20" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label>Resistance (Ω)</label>
+                            <input type="number" id="resistance" value="0.050" step="0.0001">
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><span>Geometry & Mass</span></div>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label>Diameter (mm)</label>
+                            <input type="number" id="diameter" value="35" onchange="updateMassEstimation()">
+                        </div>
+                        <div class="input-group">
+                            <label>Length (mm)</label>
+                            <input type="number" id="length" value="40" onchange="updateMassEstimation()">
+                        </div>
+                    </div>
+
+                    <!-- Hidden by default, auto-filled -->
+                    <div class="input-group">
+                        <button type="button" class="toggle-adv" onclick="toggleMassDetails()">Edit Internal Mass Breakdown ▼</button>
+                    </div>
+                    
+                    <div id="mass-details" class="advanced-section">
+                        <p style="font-size: 0.8rem; color: var(--text-light);">Masses auto-estimated from geometry. Edit to refine.</p>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label>Copper (g)</label>
+                                <input type="number" id="mass_copper" value="40">
+                            </div>
+                            <div class="input-group">
+                                <label>Iron (g)</label>
+                                <input type="number" id="mass_iron" value="80">
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label>Aluminum (g)</label>
+                                <input type="number" id="mass_housing" value="30">
+                            </div>
+                            <div class="input-group">
+                                <label>Fill Factor (0-1)</label>
+                                <input type="number" id="fill_factor" value="0.4" step="0.05" onchange="updateMassEstimation()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-divider"><span>Environment</span></div>
+                    <div class="input-group">
+                        <label>Cooling <span id="h-display" style="float:right; font-weight:normal; font-size:0.8rem;"></span></label>
+                        <select id="airflow" onchange="updateHDisplay()">
+                            <option value="static_bench">Static Bench</option>
+                            <option value="enclosed_fuselage">Enclosed</option>
+                            <option value="low_airflow">Low Airflow</option>
+                            <option value="prop_wash_moderate">Prop Wash (Med)</option>
+                            <option value="prop_wash_high">Prop Wash (High)</option>
+                        </select>
+                    </div>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label>Ambient (°C)</label>
+                            <input type="number" id="ambient" value="25">
+                        </div>
+                        <div class="input-group">
+                            <label>Limit (°C)</label>
+                            <input type="number" id="limit" value="80">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary">Calculate</button>
+                </form>
+            </section>
+
+            <section class="card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab('results')">Results</button>
+                    <button class="tab-link" onclick="openTab('charts')">Charts</button>
+                    <button class="tab-link" onclick="openTab('background')">Theory</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display:block;">
+                    <div id="status-banner" class="status-banner">
+                        <h4 id="status-title">Status</h4>
+                        <p id="status-msg"></p>
+                    </div>
+
+                    <div class="results-grid">
+                        <div class="result-item">
+                            <div class="label">Steady State</div>
+                            <div class="value" id="res-steady">--</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Time to Limit</div>
+                            <div class="value" id="res-time">--</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Initial Power</div>
+                            <div class="value" id="res-power">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="charts" class="tab-content">
+                    <div id="chart-div" style="width:100%; height:350px;"></div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Lumped Parameter Model</h3>
+                    <p>The motor is treated as a single thermal node with averaged heat capacity.</p>
+                    <p>$$ C_{th} \frac{dT}{dt} = P_{in} - \frac{T - T_{amb}}{R_{th}} $$</p>
+                    <ul>
+                        <li><strong>Heat In:</strong> Joule heating ($I^2R$). Resistance rises with temp.</li>
+                        <li><strong>Heat Out:</strong> Convection to air. Depends on surface area and airflow.</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        let pyModule = null;
+        let presets = {};
+        let convectionPresets = {};
+
+        async function init() {
+            let pyodide = await loadPyodide();
+            await pyodide.loadPackage("micropip");
+            const resp = await fetch('../../pycalcs/motor_thermal.py');
+            const code = await resp.text();
+            
+            await pyodide.runPythonAsync(`
+                with open("motor_thermal.py", "w") as f: f.write(${JSON.stringify(code)})
+                import motor_thermal
+            `);
+            pyModule = pyodide.globals.get('motor_thermal');
+            
+            // Load Presets
+            const pProxy = pyModule.get_motor_presets();
+            presets = pProxy.toJs({dict_converter: Object.fromEntries});
+            pProxy.destroy();
+
+            const cProxy = pyModule.get_convection_presets();
+            convectionPresets = cProxy.toJs({dict_converter: Object.fromEntries});
+            cProxy.destroy();
+
+            populatePresets();
+            updateHDisplay();
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        function populatePresets() {
+            const sel = document.getElementById('motor-preset');
+            for (const [key, val] of Object.entries(presets)) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = val.name;
+                sel.appendChild(opt);
+            }
+        }
+
+        function applyPreset() {
+            const key = document.getElementById('motor-preset').value;
+            if (key === 'custom') return;
+            
+            const p = presets[key];
+            document.getElementById('diameter').value = p.d;
+            document.getElementById('length').value = p.l;
+            document.getElementById('current').value = p.current_typ;
+            document.getElementById('resistance').value = p.r_phase;
+            
+            // Set masses directly from preset
+            document.getElementById('mass_copper').value = p.m_cu;
+            document.getElementById('mass_iron').value = p.m_fe;
+            document.getElementById('mass_housing').value = p.m_al;
+        }
+
+        function updateMassEstimation() {
+            // If user changes geometry manually, we can auto-estimate mass
+            // Only if NOT on a preset? Or just always update if they touch geom?
+            // Let's allow manual override.
+            const d = parseFloat(document.getElementById('diameter').value);
+            const l = parseFloat(document.getElementById('length').value);
+            const ff = parseFloat(document.getElementById('fill_factor').value);
+            
+            if (!pyModule) return;
+            
+            const masses = pyModule.estimate_mass_breakdown(d, l, "outrunner", ff).toJs({dict_converter: Object.fromEntries});
+            
+            document.getElementById('mass_copper').value = masses.m_cu;
+            document.getElementById('mass_iron').value = masses.m_fe;
+            document.getElementById('mass_housing').value = masses.m_al;
+            
+            // Switch dropdown to custom if geometry changed
+            document.getElementById('motor-preset').value = 'custom';
+        }
+
+        function updateHDisplay() {
+            const airflow = document.getElementById('airflow').value;
+            if(convectionPresets[airflow]) {
+                document.getElementById('h-display').textContent = `h ≈ ${convectionPresets[airflow].h}`;
+            }
+        }
+
+        function toggleMassDetails() {
+            const el = document.getElementById('mass-details');
+            el.classList.toggle('visible');
+        }
+
+        function openTab(id) {
+            document.querySelectorAll('.tab-content').forEach(e => e.style.display='none');
+            document.querySelectorAll('.tab-link').forEach(e => e.classList.remove('active'));
+            document.getElementById(id).style.display = 'block';
+            
+            // Resize chart
+            if(id === 'charts') {
+                const el = document.getElementById('chart-div');
+                if(el && el.data) Plotly.Plots.resize(el);
+            }
+        }
+
+        async function calculate(e) {
+            e.preventDefault();
+            // Gather inputs
+            const I = parseFloat(document.getElementById('current').value);
+            const R = parseFloat(document.getElementById('resistance').value);
+            const D = parseFloat(document.getElementById('diameter').value);
+            const L = parseFloat(document.getElementById('length').value);
+            const m_cu = parseFloat(document.getElementById('mass_copper').value);
+            const m_fe = parseFloat(document.getElementById('mass_iron').value);
+            const m_al = parseFloat(document.getElementById('mass_housing').value);
+            const amb = parseFloat(document.getElementById('ambient').value);
+            const lim = parseFloat(document.getElementById('limit').value);
+            const air = document.getElementById('airflow').value;
+
+            const resProxy = pyModule.analyze_motor_thermal(I, R, D, L, m_cu, m_fe, m_al, amb, lim, air, null);
+            const res = resProxy.toJs({dict_converter: Object.fromEntries});
+            resProxy.destroy();
+
+            // Render
+            document.getElementById('res-steady').textContent = res.steady_state_temp.toFixed(1) + " °C";
+            document.getElementById('res-time').textContent = res.time_to_limit ? res.time_to_limit + " s" : "Safe";
+            document.getElementById('res-power').textContent = res.initial_power_loss.toFixed(1) + " W";
+
+            // Status
+            const ban = document.getElementById('status-banner');
+            const tit = document.getElementById('status-title');
+            const msg = document.getElementById('status-msg');
+            ban.style.display = 'block';
+            ban.className = 'status-banner ' + (res.status === 'stable' ? 'acceptable' : 'unacceptable');
+            tit.textContent = res.status.toUpperCase();
+            msg.textContent = res.status === 'stable' ? 'Temperature stabilizes safely.' : 'Overheating predicted.';
+
+            // Chart
+            const trace = {
+                x: res.curve_data.map(d=>d.time),
+                y: res.curve_data.map(d=>d.temp),
+                mode: 'lines', name: 'Temp'
+            };
+            const limitTrace = {
+                x: [0, res.curve_data[res.curve_data.length-1].time],
+                y: [lim, lim], mode: 'lines', name: 'Limit', line: {dash:'dash', color:'red'}
+            };
+            
+            // Check theme
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const layout = {
+                title: 'Thermal Response',
+                margin: {t:30, l:50, r:20, b:40},
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { color: isDark ? '#fff' : '#000' },
+                xaxis: { title: 'Time (s)', gridcolor: isDark ? '#444' : '#eee' },
+                yaxis: { title: 'Temp (°C)', gridcolor: isDark ? '#444' : '#eee' }
+            };
+            
+            Plotly.newPlot('chart-div', [trace, limitTrace], layout);
+            openTab('charts'); // Auto switch
+        }
+
+        document.getElementById('calc-form').addEventListener('submit', calculate);
+        init();
+    </script>
+</body>
+</html>
