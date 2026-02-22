@@ -17,9 +17,12 @@
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="../../shared/units.js"></script>
 
     <style>
-        /* CSS Reset & Variables */
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
         :root {
             --primary-color: #0b0d12;
             --primary-light: #f4f5f7;
@@ -33,6 +36,8 @@
             --border-color: #e5e7eb;
             --bg-color: #f8f9fb;
             --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
             --border-radius: 8px;
             --font-sans: 'Helvetica Neue', 'Avenir Next', system-ui, sans-serif;
             --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
@@ -53,6 +58,7 @@
             --border-color: #374151;
             --bg-color: #0b0d12;
             --bg-card: #111827;
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
             --btn-primary-bg: #3b82f6;
             --btn-primary-text: #ffffff;
         }
@@ -71,102 +77,345 @@
                 --border-color: #374151;
                 --bg-color: #0b0d12;
                 --bg-card: #111827;
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
                 --btn-primary-bg: #3b82f6;
                 --btn-primary-text: #ffffff;
             }
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: var(--font-sans); line-height: 1.6; background: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; min-height: 100vh; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* =================================================================
+           2. LAYOUT
+           ================================================================= */
         .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
         .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
         .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
         .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
-        .settings-button { border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-color); padding: 8px 14px; border-radius: 999px; cursor: pointer; }
-        
-        /* Layout */
-        .tool-layout { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr); gap: 28px; align-items: start; }
-        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        
+        .nav-actions { display: flex; gap: 12px; align-items: center; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        .tool-layout { display: grid; grid-template-columns: minmax(340px, 0.9fr) minmax(480px, 1.1fr); gap: 28px; align-items: start; }
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 24px; box-shadow: var(--shadow); }
+
         h1, h2, h3, h4 { margin-top: 0; color: var(--text-color); }
         h1 { margin-bottom: 0.5rem; color: var(--primary-color); }
         h2 { border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 1rem; font-size: 1.25rem; }
-        
+        p { margin-bottom: 1em; color: var(--text-light); }
+
+        /* =================================================================
+           3. FORM INPUTS
+           ================================================================= */
         .input-group { margin-bottom: 1.1rem; }
         .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; }
-        .input-group input, .input-group select { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-color); font-size: 0.95rem; }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-size: 0.95rem;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
         .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        
+        .unit-label { color: var(--text-light); font-weight: normal; }
+
         .section-divider { border-top: 1px solid var(--border-color); margin: 20px 0; position: relative; }
         .section-divider span { position: absolute; top: -12px; left: 10px; background: var(--bg-card); padding: 0 10px; color: var(--secondary-color); font-size: 0.85rem; font-weight: 600; }
-        
-        .btn-primary { width: 100%; padding: 12px; background: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 1rem; }
-        .btn-primary:hover { opacity: 0.9; }
 
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            background: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+            font-size: 1rem;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* =================================================================
+           4. TABS & RESULTS
+           ================================================================= */
         .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; }
-        .tab-link { padding: 10px 16px; border: none; background: none; cursor: pointer; color: var(--text-light); border-bottom: 2px solid transparent; font-weight: 600; }
+        .tab-link {
+            padding: 10px 16px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .tab-link:hover { color: var(--text-color); }
         .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
         .tab-content { display: none; }
 
         .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-        .result-item { background: var(--primary-light); padding: 12px; border-radius: 6px; text-align: center; }
-        .result-item .label { font-size: 0.8rem; color: var(--text-light); }
-        .result-item .value { font-size: 1.2rem; font-weight: 600; }
-        
+        .result-item { background: var(--primary-light); padding: 14px; border-radius: 6px; text-align: center; }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; }
+        .result-item .unit { font-size: 0.85rem; color: var(--text-light); font-weight: normal; }
+
         .status-banner { padding: 16px; border-radius: 6px; margin-bottom: 20px; display: none; }
+        .status-banner h4 { margin-bottom: 4px; }
+        .status-banner p { margin: 0; }
         .status-banner.acceptable { background: #ecfdf5; border: 1px solid #059669; color: #064e3b; }
         .status-banner.marginal { background: #fffbeb; border: 1px solid #d97706; color: #78350f; }
         .status-banner.unacceptable { background: #fef2f2; border: 1px solid #dc2626; color: #7f1d1d; }
-        
-        .loading-overlay { position: fixed; inset: 0; background: var(--bg-card); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .loading-overlay.hidden { display: none; }
 
-        /* Advanced Toggle */
+        /* =================================================================
+           5. SETTINGS PANEL
+           ================================================================= */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 340px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close {
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .settings-close:hover { color: var(--text-color); }
+
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); border: none; padding: 0; }
+
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+
+        /* Segmented Control */
+        .segmented {
+            display: flex;
+            background: var(--primary-light);
+            border-radius: 6px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .segmented button {
+            flex: 1;
+            padding: 6px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 500;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active {
+            background: var(--bg-card);
+            color: var(--text-color);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* =================================================================
+           6. ADVANCED SECTION
+           ================================================================= */
         .advanced-section { display: none; padding-top: 16px; border-top: 1px dashed var(--border-color); margin-top: 16px; }
         .advanced-section.visible { display: block; }
         .toggle-adv { background: none; border: none; color: var(--secondary-color); cursor: pointer; font-size: 0.85rem; text-decoration: underline; padding: 0; }
 
+        /* =================================================================
+           7. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* =================================================================
+           8. FOOTER & RESPONSIVE
+           ================================================================= */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            margin-top: auto;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        .footer a { color: inherit; font-weight: 600; }
+
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .settings-panel { width: 100%; }
+        }
     </style>
 </head>
 <body data-theme="system">
 
     <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
         <div>Loading Python Engine...</div>
     </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <aside class="settings-panel" id="settings-panel">
+        <div class="settings-header">
+            <h3>Settings</h3>
+            <button class="settings-close" id="settings-close">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Units</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Unit System</div>
+                        <div class="setting-help">Convert all inputs and outputs.</div>
+                    </div>
+                    <div class="segmented" id="unit-system-selector">
+                        <button type="button" data-system="MKS">MKS</button>
+                        <button type="button" data-system="MMGS" class="active">MMGS</button>
+                        <button type="button" data-system="IPS">IPS</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system.</div>
+                    </div>
+                    <div class="segmented" id="theme-selector">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system" class="active">System</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn-primary" id="settings-reset" style="margin-top: 0;">Reset to Defaults</button>
+        </div>
+    </aside>
 
     <header class="navbar">
         <nav class="nav-container">
             <a href="../../index.html" class="nav-brand">Engineering Tools</a>
-            <button class="settings-button" onclick="alert('Settings not implemented in this demo')">Settings</button>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button">Settings</button>
+            </div>
         </nav>
     </header>
 
     <main class="container">
         <h1>Motor Thermal Estimator</h1>
-        <p>Estimate BLDC temperature rise and safe runtimes.</p>
+        <p>Estimate BLDC motor temperature rise and safe operating time.</p>
 
         <div class="tool-layout">
             <section class="card">
                 <h2>Parameters</h2>
                 <form id="calc-form">
-                    
+
                     <!-- PRESET SELECTION -->
                     <div class="input-group">
                         <label>Motor Preset</label>
-                        <select id="motor-preset" onchange="applyPreset()">
+                        <select id="motor-preset">
                             <option value="custom">Custom / Manual Entry</option>
-                            <!-- Populated by JS -->
                         </select>
                     </div>
 
                     <div class="section-divider"><span>Electrical</span></div>
                     <div class="input-row">
                         <div class="input-group">
-                            <label>Current (A)</label>
-                            <input type="number" id="current" value="20" step="0.1">
+                            <label>Current (<span class="unit-label" data-quantity="current">A</span>)</label>
+                            <input type="number" id="current" data-quantity="current" value="20" step="0.1">
                         </div>
                         <div class="input-group">
-                            <label>Resistance (Ω)</label>
+                            <label>Resistance (&#8486;)</label>
                             <input type="number" id="resistance" value="0.050" step="0.0001">
                         </div>
                     </div>
@@ -174,40 +423,39 @@
                     <div class="section-divider"><span>Geometry & Mass</span></div>
                     <div class="input-row">
                         <div class="input-group">
-                            <label>Diameter (mm)</label>
-                            <input type="number" id="diameter" value="35" onchange="updateMassEstimation()">
+                            <label>Diameter (<span class="unit-label" data-quantity="length">mm</span>)</label>
+                            <input type="number" id="diameter" data-quantity="length" value="35">
                         </div>
                         <div class="input-group">
-                            <label>Length (mm)</label>
-                            <input type="number" id="length" value="40" onchange="updateMassEstimation()">
+                            <label>Length (<span class="unit-label" data-quantity="length">mm</span>)</label>
+                            <input type="number" id="length" data-quantity="length" value="40">
                         </div>
                     </div>
 
-                    <!-- Hidden by default, auto-filled -->
                     <div class="input-group">
-                        <button type="button" class="toggle-adv" onclick="toggleMassDetails()">Edit Internal Mass Breakdown ▼</button>
+                        <button type="button" class="toggle-adv" id="toggle-mass-btn">Edit Mass Breakdown &#9660;</button>
                     </div>
-                    
+
                     <div id="mass-details" class="advanced-section">
-                        <p style="font-size: 0.8rem; color: var(--text-light);">Masses auto-estimated from geometry. Edit to refine.</p>
+                        <p style="font-size: 0.8rem; color: var(--text-light); margin-bottom: 12px;">Masses auto-estimated from geometry. Edit to refine.</p>
                         <div class="input-row">
                             <div class="input-group">
-                                <label>Copper (g)</label>
-                                <input type="number" id="mass_copper" value="40">
+                                <label>Copper (<span class="unit-label" data-quantity="mass">g</span>)</label>
+                                <input type="number" id="mass_copper" data-quantity="mass" value="40">
                             </div>
                             <div class="input-group">
-                                <label>Iron (g)</label>
-                                <input type="number" id="mass_iron" value="80">
+                                <label>Iron (<span class="unit-label" data-quantity="mass">g</span>)</label>
+                                <input type="number" id="mass_iron" data-quantity="mass" value="80">
                             </div>
                         </div>
                         <div class="input-row">
                             <div class="input-group">
-                                <label>Aluminum (g)</label>
-                                <input type="number" id="mass_housing" value="30">
+                                <label>Aluminum (<span class="unit-label" data-quantity="mass">g</span>)</label>
+                                <input type="number" id="mass_housing" data-quantity="mass" value="30">
                             </div>
                             <div class="input-group">
                                 <label>Fill Factor (0-1)</label>
-                                <input type="number" id="fill_factor" value="0.4" step="0.05" onchange="updateMassEstimation()">
+                                <input type="number" id="fill_factor" value="0.4" step="0.05">
                             </div>
                         </div>
                     </div>
@@ -215,7 +463,7 @@
                     <div class="section-divider"><span>Environment</span></div>
                     <div class="input-group">
                         <label>Cooling <span id="h-display" style="float:right; font-weight:normal; font-size:0.8rem;"></span></label>
-                        <select id="airflow" onchange="updateHDisplay()">
+                        <select id="airflow">
                             <option value="static_bench">Static Bench</option>
                             <option value="enclosed_fuselage">Enclosed</option>
                             <option value="low_airflow">Low Airflow</option>
@@ -225,24 +473,24 @@
                     </div>
                     <div class="input-row">
                         <div class="input-group">
-                            <label>Ambient (°C)</label>
-                            <input type="number" id="ambient" value="25">
+                            <label>Ambient (<span class="unit-label" data-quantity="temperature">&#176;C</span>)</label>
+                            <input type="number" id="ambient" data-quantity="temperature" value="25">
                         </div>
                         <div class="input-group">
-                            <label>Limit (°C)</label>
-                            <input type="number" id="limit" value="80">
+                            <label>Limit (<span class="unit-label" data-quantity="temperature">&#176;C</span>)</label>
+                            <input type="number" id="limit" data-quantity="temperature" value="80">
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-primary">Calculate</button>
+                    <button type="submit" class="btn-primary" id="calculate-btn">Calculate</button>
                 </form>
             </section>
 
             <section class="card">
                 <div class="tabs">
-                    <button class="tab-link active" onclick="openTab('results')">Results</button>
-                    <button class="tab-link" onclick="openTab('charts')">Charts</button>
-                    <button class="tab-link" onclick="openTab('background')">Theory</button>
+                    <button class="tab-link active" data-tab="results">Results</button>
+                    <button class="tab-link" data-tab="charts">Charts</button>
+                    <button class="tab-link" data-tab="background">Theory</button>
                 </div>
 
                 <div id="results" class="tab-content" style="display:block;">
@@ -254,54 +502,97 @@
                     <div class="results-grid">
                         <div class="result-item">
                             <div class="label">Steady State</div>
-                            <div class="value" id="res-steady">--</div>
+                            <div class="value"><span id="res-steady">--</span> <span class="unit" data-quantity="temperature">&#176;C</span></div>
                         </div>
                         <div class="result-item">
                             <div class="label">Time to Limit</div>
-                            <div class="value" id="res-time">--</div>
+                            <div class="value"><span id="res-time">--</span> <span class="unit" data-quantity="time">s</span></div>
                         </div>
                         <div class="result-item">
                             <div class="label">Initial Power</div>
-                            <div class="value" id="res-power">--</div>
+                            <div class="value"><span id="res-power">--</span> <span class="unit" data-quantity="power">W</span></div>
                         </div>
                     </div>
+
+                    <p style="font-size: 0.85rem; margin-top: 16px;">
+                        <strong>Note:</strong> Results shown in SI units internally. Temperature rise calculations performed in Kelvin.
+                    </p>
                 </div>
 
                 <div id="charts" class="tab-content">
-                    <div id="chart-div" style="width:100%; height:350px;"></div>
+                    <div id="chart-div" style="width:100%; height:350px; background: var(--primary-light); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                        <p style="color: var(--text-light);">Chart appears after calculation.</p>
+                    </div>
                 </div>
 
                 <div id="background" class="tab-content">
                     <h3>Lumped Parameter Model</h3>
                     <p>The motor is treated as a single thermal node with averaged heat capacity.</p>
                     <p>$$ C_{th} \frac{dT}{dt} = P_{in} - \frac{T - T_{amb}}{R_{th}} $$</p>
-                    <ul>
-                        <li><strong>Heat In:</strong> Joule heating ($I^2R$). Resistance rises with temp.</li>
+                    <ul style="margin-left: 20px; color: var(--text-light);">
+                        <li><strong>Heat In:</strong> Joule heating ($I^2R$). Resistance rises with temperature.</li>
                         <li><strong>Heat Out:</strong> Convection to air. Depends on surface area and airflow.</li>
+                        <li><strong>Thermal Mass:</strong> Sum of (mass &times; specific heat) for copper, iron, aluminum.</li>
                     </ul>
+                    <h4 style="margin-top: 20px;">Steady State</h4>
+                    <p>At equilibrium, heat in equals heat out. Including resistance temperature coefficient:</p>
+                    <p>$$ \Delta T_{ss} = \frac{I^2 R_0}{\frac{1}{R_{th}} - I^2 R_0 \alpha} $$</p>
+                    <p>If the denominator goes negative, thermal runaway occurs.</p>
                 </div>
             </section>
         </div>
     </main>
 
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. <a href="https://ko-fi.com/transparent_tools" target="_blank">Support on Ko-fi</a></p>
+    </footer>
+
     <script>
+        // =================================================================
+        // GLOBALS
+        // =================================================================
+        let pyodide = null;
         let pyModule = null;
         let presets = {};
         let convectionPresets = {};
 
+        const STORAGE_KEY = 'motor-thermal-settings';
+        const defaultSettings = {
+            theme: 'system',
+            unitSystem: 'MMGS'
+        };
+        let settings = { ...defaultSettings };
+
+        // =================================================================
+        // INITIALIZATION
+        // =================================================================
         async function init() {
-            let pyodide = await loadPyodide();
+            // Load Pyodide
+            pyodide = await loadPyodide();
             await pyodide.loadPackage("micropip");
+
+            // Load motor_thermal module
             const resp = await fetch('../../pycalcs/motor_thermal.py');
             const code = await resp.text();
-            
             await pyodide.runPythonAsync(`
-                with open("motor_thermal.py", "w") as f: f.write(${JSON.stringify(code)})
-                import motor_thermal
+with open("motor_thermal.py", "w") as f:
+    f.write(${JSON.stringify(code)})
+import motor_thermal
             `);
             pyModule = pyodide.globals.get('motor_thermal');
-            
-            // Load Presets
+
+            // Load units module for UnitSystems
+            const unitsResp = await fetch('../../pycalcs/units.py');
+            const unitsCode = await unitsResp.text();
+            await pyodide.runPythonAsync(`
+with open("units.py", "w") as f:
+    f.write(${JSON.stringify(unitsCode)})
+            `);
+
+            // Initialize UnitSystems
+            await UnitSystems.init(pyodide);
+
+            // Load presets
             const pProxy = pyModule.get_motor_presets();
             presets = pProxy.toJs({dict_converter: Object.fromEntries});
             pProxy.destroy();
@@ -310,11 +601,194 @@
             convectionPresets = cProxy.toJs({dict_converter: Object.fromEntries});
             cProxy.destroy();
 
+            // Setup UI
+            loadSettings();
+            applySettings();
             populatePresets();
             updateHDisplay();
+            initEventListeners();
+
             document.getElementById('loading-overlay').classList.add('hidden');
         }
 
+        // =================================================================
+        // SETTINGS
+        // =================================================================
+        function loadSettings() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    settings = { ...defaultSettings, ...JSON.parse(stored) };
+                }
+            } catch (e) {
+                settings = { ...defaultSettings };
+            }
+        }
+
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function applySettings() {
+            // Theme
+            document.body.dataset.theme = settings.theme;
+            document.querySelectorAll('#theme-selector button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === settings.theme);
+            });
+
+            // Unit System
+            if (UnitSystems.isInitialized()) {
+                UnitSystems.setSystem(settings.unitSystem, false);
+                updateAllUnitLabels();
+            }
+            document.querySelectorAll('#unit-system-selector button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.system === settings.unitSystem);
+            });
+        }
+
+        function updateAllUnitLabels() {
+            document.querySelectorAll('.unit-label, .unit').forEach(el => {
+                const quantity = el.dataset.quantity;
+                if (quantity) {
+                    const label = UnitSystems.getUnitLabel(quantity);
+                    if (label) {
+                        // Handle special characters
+                        if (quantity === 'temperature') {
+                            el.innerHTML = label;
+                        } else {
+                            el.textContent = label;
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            panel.classList.toggle('open', open);
+            overlay.classList.toggle('open', open);
+        }
+
+        // =================================================================
+        // EVENT LISTENERS
+        // =================================================================
+        function initEventListeners() {
+            // Settings panel
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+
+            // Theme selector
+            document.querySelectorAll('#theme-selector button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.theme = btn.dataset.theme;
+                    saveSettings();
+                    applySettings();
+                });
+            });
+
+            // Unit system selector
+            document.querySelectorAll('#unit-system-selector button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const oldSystem = settings.unitSystem;
+                    const newSystem = btn.dataset.system;
+                    if (oldSystem === newSystem) return;
+
+                    // Convert all input values
+                    convertInputValues(oldSystem, newSystem);
+
+                    settings.unitSystem = newSystem;
+                    saveSettings();
+                    applySettings();
+                });
+            });
+
+            // Reset settings
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                const oldSystem = settings.unitSystem;
+                settings = { ...defaultSettings };
+                saveSettings();
+                convertInputValues(oldSystem, defaultSettings.unitSystem);
+                applySettings();
+            });
+
+            // Tabs
+            document.querySelectorAll('.tab-link').forEach(btn => {
+                btn.addEventListener('click', () => openTab(btn.dataset.tab));
+            });
+
+            // Motor preset
+            document.getElementById('motor-preset').addEventListener('change', applyPreset);
+
+            // Geometry changes trigger mass estimation
+            document.getElementById('diameter').addEventListener('change', updateMassEstimation);
+            document.getElementById('length').addEventListener('change', updateMassEstimation);
+            document.getElementById('fill_factor').addEventListener('change', updateMassEstimation);
+
+            // Airflow display
+            document.getElementById('airflow').addEventListener('change', updateHDisplay);
+
+            // Mass details toggle
+            document.getElementById('toggle-mass-btn').addEventListener('click', toggleMassDetails);
+
+            // Form submit
+            document.getElementById('calc-form').addEventListener('submit', calculate);
+
+            // Escape key
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') toggleSettingsPanel(false);
+            });
+        }
+
+        // =================================================================
+        // UNIT CONVERSION
+        // =================================================================
+        function convertInputValues(fromSystem, toSystem) {
+            if (!UnitSystems.isInitialized()) return;
+
+            const systems = UnitSystems.getRawSystems();
+            if (!systems || !systems[fromSystem] || !systems[toSystem]) return;
+
+            document.querySelectorAll('input[data-quantity]').forEach(input => {
+                const quantity = input.dataset.quantity;
+                const value = parseFloat(input.value);
+                if (isNaN(value)) return;
+
+                const fromQ = systems[fromSystem][quantity];
+                const toQ = systems[toSystem][quantity];
+                if (!fromQ || !toQ) return;
+
+                // Convert: value -> SI -> new system
+                let siValue;
+                if (fromQ.type === 'affine') {
+                    const slope = fromQ.toSI.one - fromQ.toSI.zero;
+                    siValue = fromQ.toSI.zero + value * slope;
+                } else {
+                    siValue = value * fromQ.toSI;
+                }
+
+                let newValue;
+                if (toQ.type === 'affine') {
+                    const slope = toQ.fromSI.one - toQ.fromSI.zero;
+                    newValue = toQ.fromSI.zero + siValue * slope;
+                } else {
+                    newValue = siValue * toQ.fromSI;
+                }
+
+                // Update with reasonable precision
+                input.value = Number(newValue.toPrecision(4));
+            });
+        }
+
+        function getInputInSI(inputId, quantity) {
+            const value = parseFloat(document.getElementById(inputId).value) || 0;
+            return UnitSystems.toSI(value, quantity);
+        }
+
+        // =================================================================
+        // MOTOR PRESETS
+        // =================================================================
         function populatePresets() {
             const sel = document.getElementById('motor-preset');
             for (const [key, val] of Object.entries(presets)) {
@@ -328,123 +802,220 @@
         function applyPreset() {
             const key = document.getElementById('motor-preset').value;
             if (key === 'custom') return;
-            
+
             const p = presets[key];
-            document.getElementById('diameter').value = p.d;
-            document.getElementById('length').value = p.l;
-            document.getElementById('current').value = p.current_typ;
+
+            // Preset values are in MMGS (mm, g)
+            // If current system is different, convert
+            const presetSystem = 'MMGS';
+            const currentSystem = settings.unitSystem;
+            const systems = UnitSystems.getRawSystems();
+
+            function convertValue(value, quantity) {
+                if (presetSystem === currentSystem) return value;
+                if (!systems) return value;
+
+                const fromQ = systems[presetSystem][quantity];
+                const toQ = systems[currentSystem][quantity];
+                if (!fromQ || !toQ) return value;
+
+                // preset -> SI -> current
+                const siValue = value * fromQ.toSI;
+                return siValue * toQ.fromSI;
+            }
+
+            document.getElementById('diameter').value = Number(convertValue(p.d, 'length').toPrecision(4));
+            document.getElementById('length').value = Number(convertValue(p.l, 'length').toPrecision(4));
+            document.getElementById('current').value = p.current_typ; // Amps - same in all systems
             document.getElementById('resistance').value = p.r_phase;
-            
-            // Set masses directly from preset
-            document.getElementById('mass_copper').value = p.m_cu;
-            document.getElementById('mass_iron').value = p.m_fe;
-            document.getElementById('mass_housing').value = p.m_al;
+            document.getElementById('mass_copper').value = Number(convertValue(p.m_cu, 'mass').toPrecision(4));
+            document.getElementById('mass_iron').value = Number(convertValue(p.m_fe, 'mass').toPrecision(4));
+            document.getElementById('mass_housing').value = Number(convertValue(p.m_al, 'mass').toPrecision(4));
         }
 
         function updateMassEstimation() {
-            // If user changes geometry manually, we can auto-estimate mass
-            // Only if NOT on a preset? Or just always update if they touch geom?
-            // Let's allow manual override.
-            const d = parseFloat(document.getElementById('diameter').value);
-            const l = parseFloat(document.getElementById('length').value);
-            const ff = parseFloat(document.getElementById('fill_factor').value);
-            
             if (!pyModule) return;
-            
-            const masses = pyModule.estimate_mass_breakdown(d, l, "outrunner", ff).toJs({dict_converter: Object.fromEntries});
-            
-            document.getElementById('mass_copper').value = masses.m_cu;
-            document.getElementById('mass_iron').value = masses.m_fe;
-            document.getElementById('mass_housing').value = masses.m_al;
-            
-            // Switch dropdown to custom if geometry changed
+
+            // Convert diameter and length to mm for the Python function
+            const d_mm = getInputInSI('diameter', 'length') * 1000; // SI (m) -> mm
+            const l_mm = getInputInSI('length', 'length') * 1000;
+            const ff = parseFloat(document.getElementById('fill_factor').value) || 0.4;
+
+            const massProxy = pyModule.estimate_mass_breakdown(d_mm, l_mm, "outrunner", ff);
+            const masses = massProxy.toJs({dict_converter: Object.fromEntries});
+            massProxy.destroy();
+
+            // masses are in grams - convert from MMGS to current system
+            const systems = UnitSystems.getRawSystems();
+            function convertMass(g) {
+                if (settings.unitSystem === 'MMGS') return g;
+                if (!systems) return g;
+
+                const fromQ = systems['MMGS']['mass'];
+                const toQ = systems[settings.unitSystem]['mass'];
+                if (!fromQ || !toQ) return g;
+
+                const siValue = g * fromQ.toSI;
+                return siValue * toQ.fromSI;
+            }
+
+            document.getElementById('mass_copper').value = Number(convertMass(masses.m_cu).toPrecision(3));
+            document.getElementById('mass_iron').value = Number(convertMass(masses.m_fe).toPrecision(3));
+            document.getElementById('mass_housing').value = Number(convertMass(masses.m_al).toPrecision(3));
+
             document.getElementById('motor-preset').value = 'custom';
         }
 
         function updateHDisplay() {
             const airflow = document.getElementById('airflow').value;
-            if(convectionPresets[airflow]) {
-                document.getElementById('h-display').textContent = `h ≈ ${convectionPresets[airflow].h}`;
+            if (convectionPresets[airflow]) {
+                document.getElementById('h-display').textContent = `h = ${convectionPresets[airflow].h} W/m²K`;
             }
         }
 
         function toggleMassDetails() {
             const el = document.getElementById('mass-details');
             el.classList.toggle('visible');
+            const btn = document.getElementById('toggle-mass-btn');
+            btn.innerHTML = el.classList.contains('visible') ? 'Hide Mass Breakdown &#9650;' : 'Edit Mass Breakdown &#9660;';
         }
 
+        // =================================================================
+        // TABS
+        // =================================================================
         function openTab(id) {
-            document.querySelectorAll('.tab-content').forEach(e => e.style.display='none');
+            document.querySelectorAll('.tab-content').forEach(e => e.style.display = 'none');
             document.querySelectorAll('.tab-link').forEach(e => e.classList.remove('active'));
             document.getElementById(id).style.display = 'block';
-            
-            // Resize chart
-            if(id === 'charts') {
+            document.querySelector(`.tab-link[data-tab="${id}"]`).classList.add('active');
+
+            if (id === 'charts') {
                 const el = document.getElementById('chart-div');
-                if(el && el.data) Plotly.Plots.resize(el);
+                if (el && el.data) Plotly.Plots.resize(el);
             }
         }
 
+        // =================================================================
+        // CALCULATION
+        // =================================================================
         async function calculate(e) {
             e.preventDefault();
-            // Gather inputs
-            const I = parseFloat(document.getElementById('current').value);
-            const R = parseFloat(document.getElementById('resistance').value);
-            const D = parseFloat(document.getElementById('diameter').value);
-            const L = parseFloat(document.getElementById('length').value);
-            const m_cu = parseFloat(document.getElementById('mass_copper').value);
-            const m_fe = parseFloat(document.getElementById('mass_iron').value);
-            const m_al = parseFloat(document.getElementById('mass_housing').value);
-            const amb = parseFloat(document.getElementById('ambient').value);
-            const lim = parseFloat(document.getElementById('limit').value);
-            const air = document.getElementById('airflow').value;
 
-            const resProxy = pyModule.analyze_motor_thermal(I, R, D, L, m_cu, m_fe, m_al, amb, lim, air, null);
+            // Get values - Python expects: mm for geometry, grams for mass, Celsius for temp
+            // Convert from current unit system to what Python expects (MMGS-style)
+
+            const I = parseFloat(document.getElementById('current').value) || 0;
+            const R = parseFloat(document.getElementById('resistance').value) || 0;
+
+            // Length inputs -> convert to mm
+            const D_si = getInputInSI('diameter', 'length'); // meters
+            const L_si = getInputInSI('length', 'length'); // meters
+            const D_mm = D_si * 1000;
+            const L_mm = L_si * 1000;
+
+            // Mass inputs -> convert to grams
+            const m_cu_si = getInputInSI('mass_copper', 'mass'); // kg
+            const m_fe_si = getInputInSI('mass_iron', 'mass'); // kg
+            const m_al_si = getInputInSI('mass_housing', 'mass'); // kg
+            const m_cu_g = m_cu_si * 1000;
+            const m_fe_g = m_fe_si * 1000;
+            const m_al_g = m_al_si * 1000;
+
+            // Temperature -> convert to Celsius
+            const amb_si = getInputInSI('ambient', 'temperature'); // Kelvin
+            const lim_si = getInputInSI('limit', 'temperature'); // Kelvin
+            const amb_c = amb_si - 273.15;
+            const lim_c = lim_si - 273.15;
+
+            const airflow = document.getElementById('airflow').value;
+
+            const resProxy = pyModule.analyze_motor_thermal(I, R, D_mm, L_mm, m_cu_g, m_fe_g, m_al_g, amb_c, lim_c, airflow, null);
             const res = resProxy.toJs({dict_converter: Object.fromEntries});
             resProxy.destroy();
 
-            // Render
-            document.getElementById('res-steady').textContent = res.steady_state_temp.toFixed(1) + " °C";
-            document.getElementById('res-time').textContent = res.time_to_limit ? res.time_to_limit + " s" : "Safe";
-            document.getElementById('res-power').textContent = res.initial_power_loss.toFixed(1) + " W";
+            // Display results - convert from Python output (Celsius, Watts, seconds) to display units
+            const steadyC = res.steady_state_temp;
+            const steadyK = steadyC + 273.15;
+            const steadyDisplay = UnitSystems.fromSI(steadyK, 'temperature');
 
-            // Status
+            document.getElementById('res-steady').textContent = steadyDisplay.toFixed(1);
+            document.getElementById('res-time').textContent = res.time_to_limit ? res.time_to_limit.toFixed(0) : 'Safe';
+            document.getElementById('res-power').textContent = res.initial_power_loss.toFixed(1);
+
+            // Status banner
             const ban = document.getElementById('status-banner');
             const tit = document.getElementById('status-title');
             const msg = document.getElementById('status-msg');
             ban.style.display = 'block';
-            ban.className = 'status-banner ' + (res.status === 'stable' ? 'acceptable' : 'unacceptable');
-            tit.textContent = res.status.toUpperCase();
-            msg.textContent = res.status === 'stable' ? 'Temperature stabilizes safely.' : 'Overheating predicted.';
+
+            if (res.status === 'stable') {
+                ban.className = 'status-banner acceptable';
+                tit.textContent = 'STABLE';
+                msg.textContent = 'Temperature stabilizes within safe limits.';
+            } else if (res.status === 'runaway') {
+                ban.className = 'status-banner unacceptable';
+                tit.textContent = 'THERMAL RUNAWAY';
+                msg.textContent = 'Cooling is insufficient - temperature will rise indefinitely!';
+            } else {
+                ban.className = 'status-banner unacceptable';
+                tit.textContent = 'OVERHEATING';
+                msg.textContent = 'Motor will exceed temperature limit.';
+            }
 
             // Chart
+            const tempUnit = UnitSystems.getUnitLabel('temperature');
+            const curveData = res.curve_data;
+
+            // Convert temperatures for chart
+            const chartTemps = curveData.map(d => {
+                const tempK = d.temp + 273.15;
+                return UnitSystems.fromSI(tempK, 'temperature');
+            });
+            const limitDisplay = UnitSystems.fromSI(lim_si, 'temperature');
+
             const trace = {
-                x: res.curve_data.map(d=>d.time),
-                y: res.curve_data.map(d=>d.temp),
-                mode: 'lines', name: 'Temp'
+                x: curveData.map(d => d.time),
+                y: chartTemps,
+                mode: 'lines',
+                name: 'Temperature',
+                line: { color: '#3b82f6', width: 2 }
             };
             const limitTrace = {
-                x: [0, res.curve_data[res.curve_data.length-1].time],
-                y: [lim, lim], mode: 'lines', name: 'Limit', line: {dash:'dash', color:'red'}
+                x: [0, curveData[curveData.length - 1].time],
+                y: [limitDisplay, limitDisplay],
+                mode: 'lines',
+                name: 'Limit',
+                line: { dash: 'dash', color: '#dc2626', width: 2 }
             };
-            
-            // Check theme
-            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches &&
+                           (settings.theme === 'system' || settings.theme === 'dark');
+
             const layout = {
-                title: 'Thermal Response',
-                margin: {t:30, l:50, r:20, b:40},
+                title: { text: 'Thermal Response', font: { size: 14 } },
+                margin: { t: 40, l: 60, r: 20, b: 50 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
-                font: { color: isDark ? '#fff' : '#000' },
-                xaxis: { title: 'Time (s)', gridcolor: isDark ? '#444' : '#eee' },
-                yaxis: { title: 'Temp (°C)', gridcolor: isDark ? '#444' : '#eee' }
+                font: { color: isDark ? '#f9fafb' : '#111827', family: 'Helvetica Neue, sans-serif' },
+                xaxis: {
+                    title: 'Time (s)',
+                    gridcolor: isDark ? '#374151' : '#e5e7eb',
+                    zerolinecolor: isDark ? '#374151' : '#e5e7eb'
+                },
+                yaxis: {
+                    title: `Temperature (${tempUnit})`,
+                    gridcolor: isDark ? '#374151' : '#e5e7eb',
+                    zerolinecolor: isDark ? '#374151' : '#e5e7eb'
+                },
+                legend: { orientation: 'h', y: -0.2 },
+                showlegend: true
             };
-            
-            Plotly.newPlot('chart-div', [trace, limitTrace], layout);
-            openTab('charts'); // Auto switch
+
+            Plotly.newPlot('chart-div', [trace, limitTrace], layout, { responsive: true });
+            openTab('charts');
         }
 
-        document.getElementById('calc-form').addEventListener('submit', calculate);
+        // Start
         init();
     </script>
 </body>

@@ -269,6 +269,80 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
 }
 
 
+# =============================================================================
+# UNIT SYSTEMS
+# =============================================================================
+# Each system maps quantity types to the preferred unit symbol for that system.
+# The conversion factor is looked up from QUANTITY_DEFINITIONS at runtime.
+# These systems mirror SolidWorks-style unit system selection.
+
+UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
+    "MKS": {
+        # SI base units - metre, kilogram, second
+        "length": "m",
+        "area": "m^2",
+        "volume": "m^3",
+        "mass": "kg",
+        "force": "N",
+        "torque": "N·m",
+        "pressure": "Pa",
+        "energy": "J",
+        "power": "W",
+        "velocity": "m/s",
+        "density": "kg/m^3",
+        "temperature": "K",
+        "angle": "rad",
+        "time": "s",
+        "current": "A",
+        "voltage": "V",
+        "linear_stiffness": "N/m",
+        "rotational_stiffness": "N·m/rad",
+    },
+    "MMGS": {
+        # Millimetre-gram-second (common in mechanical CAD)
+        "length": "mm",
+        "area": "mm^2",
+        "volume": "mm^3",
+        "mass": "g",
+        "force": "N",
+        "torque": "N·m",
+        "pressure": "MPa",
+        "energy": "J",
+        "power": "W",
+        "velocity": "m/s",
+        "density": "kg/m^3",
+        "temperature": "°C",
+        "angle": "deg",
+        "time": "s",
+        "current": "A",
+        "voltage": "V",
+        "linear_stiffness": "N/m",
+        "rotational_stiffness": "N·m/rad",
+    },
+    "IPS": {
+        # Inch-pound-second (US customary)
+        "length": "in",
+        "area": "in^2",
+        "volume": "in^3",
+        "mass": "lb",
+        "force": "lbf",
+        "torque": "lbf·in",
+        "pressure": "psi",
+        "energy": "ft·lbf",
+        "power": "hp_mech",
+        "velocity": "ft/s",
+        "density": "lb/in^3",
+        "temperature": "°F",
+        "angle": "deg",
+        "time": "s",
+        "current": "A",
+        "voltage": "V",
+        "linear_stiffness": "lbf/in",
+        "rotational_stiffness": "lbf·ft/deg",
+    },
+}
+
+
 def list_supported_quantities() -> list[str]:
     """
     Return the canonical list of unit quantity categories.
@@ -476,3 +550,84 @@ def get_unit_catalog() -> dict[str, dict[str, dict[str, str]]]:
             for symbol, definition in units.items()
         }
     return catalog
+
+
+def get_unit_systems() -> dict[str, dict[str, str]]:
+    """
+    Return the available unit systems and their quantity-to-unit mappings.
+
+    ---Returns---
+    systems : dict[str, dict[str, str]]
+        Mapping of system names to their quantity-unit mappings.
+
+    ---LaTeX---
+    S = \\{(\\text{system}, \\{q \\to u\\}) \\mid \\text{system} \\in \\{\\text{MKS}, \\text{MMGS}, \\text{IPS}\\}\\}
+    """
+    return UNIT_SYSTEMS
+
+
+def get_unit_systems_for_js() -> dict:
+    """
+    Return unit systems with conversion factors for JavaScript consumption.
+
+    This function builds a structure that JavaScript can use for runtime
+    conversions without additional Pyodide calls. Each quantity in each
+    system includes the unit symbol and conversion factor to SI base units.
+
+    ---Returns---
+    systems : dict
+        Structure: ``{system: {quantity: {unit: str, toSI: float|dict, fromSI: float|dict}}}``
+        For linear conversions, toSI/fromSI are floats (multiply/divide).
+        For affine conversions (temperature), toSI/fromSI are dicts with 'type': 'affine'.
+
+    ---LaTeX---
+    \\text{toSI}(x) = x \\cdot f, \\quad \\text{fromSI}(x) = x / f
+    """
+    result: dict = {}
+
+    for system_name, quantities in UNIT_SYSTEMS.items():
+        result[system_name] = {}
+
+        for quantity, unit_symbol in quantities.items():
+            if quantity not in QUANTITY_DEFINITIONS:
+                continue
+
+            unit_def = QUANTITY_DEFINITIONS[quantity].get(unit_symbol)
+            if unit_def is None:
+                continue
+
+            # Detect if this is a linear or affine conversion
+            # by checking if to_base(0) == 0
+            try:
+                zero_base = unit_def.to_base(0.0)
+                one_base = unit_def.to_base(1.0)
+
+                if abs(zero_base) < 1e-12:
+                    # Linear conversion: factor = to_base(1)
+                    factor = one_base
+                    result[system_name][quantity] = {
+                        "unit": unit_symbol,
+                        "toSI": factor,
+                        "fromSI": 1.0 / factor if factor != 0 else 0,
+                    }
+                else:
+                    # Affine conversion (e.g., temperature)
+                    # Provide special marker for JS to handle
+                    result[system_name][quantity] = {
+                        "unit": unit_symbol,
+                        "type": "affine",
+                        "toSI": {"zero": zero_base, "one": one_base},
+                        "fromSI": {
+                            "zero": unit_def.from_base(0.0),
+                            "one": unit_def.from_base(1.0),
+                        },
+                    }
+            except Exception:
+                # Fallback for any edge cases
+                result[system_name][quantity] = {
+                    "unit": unit_symbol,
+                    "toSI": 1.0,
+                    "fromSI": 1.0,
+                }
+
+    return result

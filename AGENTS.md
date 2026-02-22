@@ -539,28 +539,42 @@ await pyodide.runPythonAsync(`...`);
 document.getElementById('loading-overlay').classList.add('hidden');
 ```
 
-### Advanced Inputs Toggle
+### Expert Mode Toggle
 
-Hide infrequently-used parameters behind a toggle to keep the default view simple.
+Hide infrequently-used parameters behind an expert mode toggle to keep the default view simple.
 
 ```html
+<!-- Expert Mode Toggle -->
+<div class="expert-mode-bar">
+    <div>
+        <span class="expert-mode-label">Expert Mode</span>
+        <span class="expert-mode-hint">Show all parameters</span>
+    </div>
+    <label class="expert-toggle">
+        <input type="checkbox" id="expert-mode-toggle" onchange="toggleExpertMode()">
+        <span class="expert-toggle-label" id="expert-mode-status">Off</span>
+    </label>
+</div>
+
 <!-- Core inputs (always visible) -->
 <div class="input-group">
     <label for="main_param">Main Parameter</label>
     <input type="number" id="main_param" value="10">
 </div>
 
-<!-- Advanced section (hidden by default) -->
+<!-- Advanced section (hidden by default, shown when expert mode is on) -->
 <div class="advanced-section" id="advanced-inputs">
     <div class="input-group">
         <label for="advanced_param">Advanced Parameter</label>
         <input type="number" id="advanced_param" value="0.5">
     </div>
 </div>
+```
 
-<button type="button" class="advanced-toggle" onclick="toggleAdvanced()">
-    <span id="toggle-icon">+</span> Show advanced options
-</button>
+CSS for expert mode:
+```css
+.advanced-section { display: none; }
+body.expert-mode .advanced-section { display: block; }
 ```
 
 ### Auto-Calculate: When to Use (and When Not To)

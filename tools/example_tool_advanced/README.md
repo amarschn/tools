@@ -50,8 +50,8 @@ Complete dark theme with CSS variables. Three modes:
 ### 4. Material Database Dropdown
 Pre-populated dropdown from Python database. No raw value entry needed.
 
-### 5. Advanced Inputs Toggle
-Hides infrequently-used parameters by default. Click to reveal.
+### 5. Expert Mode Toggle
+Hides infrequently-used parameters by default. Toggle expert mode to reveal advanced inputs.
 
 ### 6. Slider with Live Display
 Visual parameter adjustment with real-time value feedback and inline tooltips.

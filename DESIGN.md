@@ -227,9 +227,9 @@ document.getElementById('loading-overlay').classList.add('hidden');
 }
 ```
 
-### Advanced Section Toggle
+### Expert Mode Toggle
 
-For progressive simplicity, hide infrequently-used inputs by default.
+For progressive simplicity, hide infrequently-used inputs by default and show them via an expert mode toggle.
 
 ```css
 .advanced-section {
@@ -239,23 +239,8 @@ For progressive simplicity, hide infrequently-used inputs by default.
     border-top: 1px dashed var(--border-color);
 }
 
-.advanced-section.visible { display: block; }
-
-.advanced-toggle {
-    background: none;
-    border: none;
-    color: var(--accent-color);
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 12px;
-    padding: 8px 0;
-}
-
-.advanced-toggle:hover { text-decoration: underline; }
+/* Show advanced section when expert mode is on */
+body.expert-mode .advanced-section { display: block; }
 ```
 
 ### Slider with Live Value Display
