@@ -219,11 +219,12 @@ def analyze_pressure_vessel(
         f"{fmt(von_mises_stress_mpa)}\\,\\text{{MPa}}"
     )
 
+    geom_factor = '' if geometry_key == 'cylinder' else ' \\times 2'
     subst_required_thickness_mm = (
         f"{thickness_equation} = "
         f"\\frac{{{fmt(pressure_mpa)} \\times {fmt(radius_mm)}}}"
         f"{{{fmt(effective_allowable_mpa)}"
-        f"{'' if geometry_key == 'cylinder' else ' \\times 2'}}}"
+        f"{geom_factor}}}"
         f" + {fmt(corrosion_allowance_mm)}"
         f" = {fmt(required_thickness_mm)}\\,\\text{{mm}}"
     )

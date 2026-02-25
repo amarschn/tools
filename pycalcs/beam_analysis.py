@@ -405,9 +405,9 @@ def compute_section_properties(
         if 2 * tf >= d:
             raise ValueError("Flange thicknesses exceed total depth")
         hw = d - 2 * tf
-        # Approximate - centroid on web centerline for symmetric loading
         area = 2 * bf * tf + hw * tw
-        Ix = (tw * d**3 + 2 * bf * tf**3) / 12 + 2 * bf * tf * ((d - tf) / 2)**2
+        # Same formula as I-beam: subtract hollow rectangle from outer rectangle
+        Ix = (bf * d**3 - (bf - tw) * hw**3) / 12
         c_top = c_bottom = d / 2
 
     elif section_key == "t_section":
@@ -485,7 +485,7 @@ def _compute_simply_supported_point_center(
     P: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Simply supported beam with point load at center."""
     deflections, moments, shears = [], [], []
     R = P / 2
@@ -502,7 +502,8 @@ def _compute_simply_supported_point_center(
             xi = L - x
             deflections.append(P * xi * (3 * L**2 - 4 * xi**2) / (48 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": R, "R_right": R, "M_left": 0.0, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_simply_supported_point_any(
@@ -512,7 +513,7 @@ def _compute_simply_supported_point_any(
     E: float,
     I: float,
     a: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Simply supported beam with point load at position 'a' from left."""
     deflections, moments, shears = [], [], []
     b = L - a
@@ -529,7 +530,8 @@ def _compute_simply_supported_point_any(
             moments.append(Rb * (L - x))
             deflections.append(P * a * (L - x) * (L**2 - a**2 - (L - x)**2) / (6 * E * I * L))
 
-    return deflections, moments, shears
+    reactions = {"R_left": Ra, "R_right": Rb, "M_left": 0.0, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_simply_supported_udl(
@@ -538,7 +540,7 @@ def _compute_simply_supported_udl(
     w: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Simply supported beam with uniform distributed load."""
     deflections, moments, shears = [], [], []
     R = w * L / 2
@@ -548,7 +550,8 @@ def _compute_simply_supported_udl(
         moments.append(w * x * (L - x) / 2)
         deflections.append(w * x * (L**3 - 2 * L * x**2 + x**3) / (24 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": R, "R_right": R, "M_left": 0.0, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_simply_supported_triangular(
@@ -557,12 +560,13 @@ def _compute_simply_supported_triangular(
     w_max: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Simply supported beam with triangular load (0 at left, w_max at right)."""
     deflections, moments, shears = [], [], []
     # Total load = w_max * L / 2
     # Reactions: Ra = w_max * L / 6, Rb = w_max * L / 3
     Ra = w_max * L / 6
+    Rb = w_max * L / 3
 
     for x in x_vals:
         # Load at position x: w(x) = w_max * x / L
@@ -578,7 +582,8 @@ def _compute_simply_supported_triangular(
         delta = w_max * x * (3 * x**4 - 10 * L**2 * x**2 + 7 * L**4) / (180 * E * I * L)
         deflections.append(delta)
 
-    return deflections, moments, shears
+    reactions = {"R_left": Ra, "R_right": Rb, "M_left": 0.0, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_cantilever_point_end(
@@ -587,7 +592,7 @@ def _compute_cantilever_point_end(
     P: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Cantilever with point load at free end. x=0 is at fixed end."""
     deflections, moments, shears = [], [], []
 
@@ -596,7 +601,8 @@ def _compute_cantilever_point_end(
         moments.append(P * (L - x))
         deflections.append(P * x**2 * (3 * L - x) / (6 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": P, "R_right": 0.0, "M_left": P * L, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_cantilever_point_any(
@@ -606,7 +612,7 @@ def _compute_cantilever_point_any(
     E: float,
     I: float,
     a: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Cantilever with point load at distance 'a' from fixed end."""
     deflections, moments, shears = [], [], []
 
@@ -620,7 +626,8 @@ def _compute_cantilever_point_any(
             moments.append(0)
             deflections.append(P * a**2 * (3 * x - a) / (6 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": P, "R_right": 0.0, "M_left": P * a, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_cantilever_udl(
@@ -629,7 +636,7 @@ def _compute_cantilever_udl(
     w: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Cantilever with uniform distributed load."""
     deflections, moments, shears = [], [], []
 
@@ -638,7 +645,8 @@ def _compute_cantilever_udl(
         moments.append(w * (L - x)**2 / 2)
         deflections.append(w * x**2 * (6 * L**2 - 4 * L * x + x**2) / (24 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": w * L, "R_right": 0.0, "M_left": w * L**2 / 2, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 def _compute_fixed_fixed_point_center(
@@ -647,7 +655,7 @@ def _compute_fixed_fixed_point_center(
     P: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Fixed-fixed beam with point load at center."""
     deflections, moments, shears = [], [], []
     R = P / 2
@@ -665,7 +673,8 @@ def _compute_fixed_fixed_point_center(
             moments.append(-M_fixed + R * xi)
             deflections.append(P * xi**2 * (3 * L - 4 * xi) / (48 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": R, "R_right": R, "M_left": M_fixed, "M_right": M_fixed}
+    return deflections, moments, shears, reactions
 
 
 def _compute_fixed_fixed_udl(
@@ -674,7 +683,7 @@ def _compute_fixed_fixed_udl(
     w: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Fixed-fixed beam with uniform distributed load."""
     deflections, moments, shears = [], [], []
     R = w * L / 2
@@ -685,7 +694,8 @@ def _compute_fixed_fixed_udl(
         moments.append(-M_fixed + R * x - w * x**2 / 2)
         deflections.append(w * x**2 * (L - x)**2 / (24 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": R, "R_right": R, "M_left": M_fixed, "M_right": M_fixed}
+    return deflections, moments, shears, reactions
 
 
 def _compute_propped_cantilever_udl(
@@ -694,20 +704,22 @@ def _compute_propped_cantilever_udl(
     w: float,
     E: float,
     I: float,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], Dict[str, float]]:
     """Propped cantilever (fixed at left, pinned at right) with UDL."""
     deflections, moments, shears = [], [], []
     # Reactions: Ra = 5wL/8, Rb = 3wL/8, Ma = wL²/8
     Ra = 5 * w * L / 8
+    Rb = 3 * w * L / 8
     Ma = w * L**2 / 8
 
     for x in x_vals:
         shears.append(Ra - w * x)
         moments.append(-Ma + Ra * x - w * x**2 / 2)
         # Deflection formula for propped cantilever
-        deflections.append(w * x**2 * (L - x) * (2 * L - x) / (48 * E * I))
+        deflections.append(w * x**2 * (L - x) * (3 * L - 2 * x) / (48 * E * I))
 
-    return deflections, moments, shears
+    reactions = {"R_left": Ra, "R_right": Rb, "M_left": Ma, "M_right": 0.0}
+    return deflections, moments, shears, reactions
 
 
 # =============================================================================
@@ -900,43 +912,43 @@ def beam_analysis(
 
     # --- Compute response curves ---
     if case_key == "simply_supported_point_center":
-        deflections, moments, shears = _compute_simply_supported_point_center(
+        deflections, moments, shears, reactions = _compute_simply_supported_point_center(
             x_vals, span, load_value, E, I
         )
     elif case_key == "simply_supported_point_any":
-        deflections, moments, shears = _compute_simply_supported_point_any(
+        deflections, moments, shears, reactions = _compute_simply_supported_point_any(
             x_vals, span, load_value, E, I, a
         )
     elif case_key == "simply_supported_udl":
-        deflections, moments, shears = _compute_simply_supported_udl(
+        deflections, moments, shears, reactions = _compute_simply_supported_udl(
             x_vals, span, load_value, E, I
         )
     elif case_key == "simply_supported_triangular":
-        deflections, moments, shears = _compute_simply_supported_triangular(
+        deflections, moments, shears, reactions = _compute_simply_supported_triangular(
             x_vals, span, load_value, E, I
         )
     elif case_key == "cantilever_point_end":
-        deflections, moments, shears = _compute_cantilever_point_end(
+        deflections, moments, shears, reactions = _compute_cantilever_point_end(
             x_vals, span, load_value, E, I
         )
     elif case_key == "cantilever_point_any":
-        deflections, moments, shears = _compute_cantilever_point_any(
+        deflections, moments, shears, reactions = _compute_cantilever_point_any(
             x_vals, span, load_value, E, I, a
         )
     elif case_key == "cantilever_udl":
-        deflections, moments, shears = _compute_cantilever_udl(
+        deflections, moments, shears, reactions = _compute_cantilever_udl(
             x_vals, span, load_value, E, I
         )
     elif case_key == "fixed_fixed_point_center":
-        deflections, moments, shears = _compute_fixed_fixed_point_center(
+        deflections, moments, shears, reactions = _compute_fixed_fixed_point_center(
             x_vals, span, load_value, E, I
         )
     elif case_key == "fixed_fixed_udl":
-        deflections, moments, shears = _compute_fixed_fixed_udl(
+        deflections, moments, shears, reactions = _compute_fixed_fixed_udl(
             x_vals, span, load_value, E, I
         )
     elif case_key == "propped_cantilever_udl":
-        deflections, moments, shears = _compute_propped_cantilever_udl(
+        deflections, moments, shears, reactions = _compute_propped_cantilever_udl(
             x_vals, span, load_value, E, I
         )
     else:
@@ -1061,6 +1073,9 @@ def beam_analysis(
             "max_shear_formula": case_info.max_shear_formula,
         },
 
+        # Reaction forces
+        "reactions": reactions,
+
         # Input summary
         "inputs": {
             "span": span,
@@ -1071,6 +1086,292 @@ def beam_analysis(
     })
 
     return results
+
+
+# =============================================================================
+# COMBINED / SUPERIMPOSED LOAD ANALYSIS
+# =============================================================================
+
+# Mapping of (support_type, load_type) to compute function and load_case key
+_SUPPORT_LOAD_MAP: Dict[tuple, str] = {
+    ("simply_supported", "point_center"): "simply_supported_point_center",
+    ("simply_supported", "point_any"): "simply_supported_point_any",
+    ("simply_supported", "distributed"): "simply_supported_udl",
+    ("simply_supported", "triangular"): "simply_supported_triangular",
+    ("cantilever", "point_end"): "cantilever_point_end",
+    ("cantilever", "point_any"): "cantilever_point_any",
+    ("cantilever", "distributed"): "cantilever_udl",
+    ("fixed_fixed", "point_center"): "fixed_fixed_point_center",
+    ("fixed_fixed", "distributed"): "fixed_fixed_udl",
+    ("propped", "distributed"): "propped_cantilever_udl",
+}
+
+
+def analyze_beam_combined(
+    support_type: str,
+    loads: List[Dict[str, Any]],
+    section_type: str,
+    section_dimensions: Dict[str, Any],
+    span: float,
+    material: str = "steel_structural",
+    elastic_modulus: Optional[float] = None,
+    yield_strength: Optional[float] = None,
+    deflection_limit: str = "L/360",
+    custom_deflection_ratio: Optional[float] = None,
+    num_points: int = 101,
+    safety_factor: float = 1.5,
+) -> Dict[str, Any]:
+    """
+    Beam analysis with multiple superimposed loads.
+
+    Uses the principle of superposition: computes individual responses for
+    each load, then sums deflections, moments, shears, and reactions.
+
+    ---Parameters---
+    support_type : str
+        Support configuration: ``"simply_supported"``, ``"cantilever"``,
+        ``"fixed_fixed"``, or ``"propped"``.
+
+    loads : list of dict
+        Each load dict must contain:
+        - ``"type"`` (str): ``"point_center"``, ``"point_any"``,
+          ``"point_end"``, ``"distributed"``, or ``"triangular"``
+        - ``"magnitude"`` (float): Force in N (point) or N/m (distributed)
+        - ``"position"`` (float or None): For ``"point_any"`` loads only
+
+    section_type : str
+        Cross-section type (see ``compute_section_properties``).
+
+    section_dimensions : dict
+        Dimensional parameters for the section (metres).
+
+    span : float
+        Beam span (m).
+
+    material : str, optional
+        Material identifier.
+
+    elastic_modulus : float, optional
+        Override elastic modulus (Pa).
+
+    yield_strength : float, optional
+        Override yield strength (Pa).
+
+    deflection_limit : str, optional
+        Deflection limit code.
+
+    custom_deflection_ratio : float, optional
+        Custom deflection ratio.
+
+    num_points : int, optional
+        Number of discretization points.
+
+    safety_factor : float, optional
+        Factor of safety.
+
+    ---Returns---
+    Same structure as ``beam_analysis()``, plus:
+    individual_loads : list
+        Per-load breakdown with curve, reactions, max values.
+    """
+    # --- Input validation ---
+    try:
+        span = float(span)
+        num_points = int(num_points)
+        safety_factor = float(safety_factor)
+    except (TypeError, ValueError) as e:
+        return {"error": f"Invalid input type: {e}"}
+
+    if span <= 0:
+        return {"error": "Span must be greater than zero"}
+    if not loads:
+        return {"error": "At least one load is required"}
+    if safety_factor < 1:
+        return {"error": "Safety factor must be at least 1.0"}
+
+    support_key = support_type.lower().strip()
+
+    # --- Material properties ---
+    mat_key = material.lower().strip()
+    if mat_key not in MATERIALS:
+        return {"error": f"Unknown material '{material}'"}
+    mat = MATERIALS[mat_key]
+    E = elastic_modulus if elastic_modulus is not None else mat["E"]
+    Fy = yield_strength if yield_strength is not None else mat["yield_strength"]
+
+    # --- Section properties ---
+    try:
+        section_props = compute_section_properties(section_type, section_dimensions)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    I = section_props["Ix"]
+    x_vals = [span * i / (num_points - 1) for i in range(num_points)]
+
+    # --- Compute individual load responses ---
+    combined_deflections = [0.0] * num_points
+    combined_moments = [0.0] * num_points
+    combined_shears = [0.0] * num_points
+    combined_reactions = {"R_left": 0.0, "R_right": 0.0, "M_left": 0.0, "M_right": 0.0}
+    individual_results = []
+
+    for load_idx, load in enumerate(loads):
+        load_type = load.get("type", "").lower().strip()
+        magnitude = load.get("magnitude", 0)
+        position = load.get("position")
+
+        try:
+            magnitude = float(magnitude)
+        except (TypeError, ValueError):
+            return {"error": f"Invalid magnitude for load {load_idx + 1}"}
+
+        if magnitude <= 0:
+            return {"error": f"Load {load_idx + 1} magnitude must be positive"}
+
+        # Map support + load type to the correct compute function
+        map_key = (support_key, load_type)
+        if map_key not in _SUPPORT_LOAD_MAP:
+            return {"error": f"Unsupported combination: {support_key} + {load_type}"}
+
+        case_key = _SUPPORT_LOAD_MAP[map_key]
+
+        # Validate position for 'any' load types
+        a = None
+        if "any" in load_type:
+            if position is None:
+                return {"error": f"Position required for load {load_idx + 1} (type '{load_type}')"}
+            a = float(position)
+            if a <= 0 or a >= span:
+                return {"error": f"Load {load_idx + 1} position must be between 0 and {span} m"}
+
+        # Call the appropriate compute function
+        compute_fns = {
+            "simply_supported_point_center": lambda: _compute_simply_supported_point_center(x_vals, span, magnitude, E, I),
+            "simply_supported_point_any": lambda: _compute_simply_supported_point_any(x_vals, span, magnitude, E, I, a),
+            "simply_supported_udl": lambda: _compute_simply_supported_udl(x_vals, span, magnitude, E, I),
+            "simply_supported_triangular": lambda: _compute_simply_supported_triangular(x_vals, span, magnitude, E, I),
+            "cantilever_point_end": lambda: _compute_cantilever_point_end(x_vals, span, magnitude, E, I),
+            "cantilever_point_any": lambda: _compute_cantilever_point_any(x_vals, span, magnitude, E, I, a),
+            "cantilever_udl": lambda: _compute_cantilever_udl(x_vals, span, magnitude, E, I),
+            "fixed_fixed_point_center": lambda: _compute_fixed_fixed_point_center(x_vals, span, magnitude, E, I),
+            "fixed_fixed_udl": lambda: _compute_fixed_fixed_udl(x_vals, span, magnitude, E, I),
+            "propped_cantilever_udl": lambda: _compute_propped_cantilever_udl(x_vals, span, magnitude, E, I),
+        }
+
+        deflections, moments, shears, reactions = compute_fns[case_key]()
+
+        # Superimpose
+        for i in range(num_points):
+            combined_deflections[i] += deflections[i]
+            combined_moments[i] += moments[i]
+            combined_shears[i] += shears[i]
+
+        for key in combined_reactions:
+            combined_reactions[key] += reactions[key]
+
+        # Store individual result
+        max_defl_idx = max(range(len(deflections)), key=lambda i: abs(deflections[i]))
+        individual_results.append({
+            "load_index": load_idx,
+            "type": load_type,
+            "magnitude": magnitude,
+            "position": a,
+            "max_deflection": abs(deflections[max_defl_idx]),
+            "max_moment": max(abs(m) for m in moments),
+            "max_shear": max(abs(v) for v in shears),
+            "reactions": dict(reactions),
+            "curve": [
+                {"x": x, "deflection": d, "moment": m, "shear": v}
+                for x, d, m, v in zip(x_vals, deflections, moments, shears)
+            ],
+        })
+
+    # --- Extract combined maxima ---
+    max_defl_idx = max(range(num_points), key=lambda i: abs(combined_deflections[i]))
+    max_deflection = abs(combined_deflections[max_defl_idx])
+    max_deflection_position = x_vals[max_defl_idx]
+    max_moment = max(abs(m) for m in combined_moments)
+    max_shear = max(abs(v) for v in combined_shears)
+
+    # --- Stress ---
+    c_max = max(section_props["c_top"], section_props["c_bottom"])
+    stress_top = max_moment * section_props["c_top"] / I
+    stress_bottom = max_moment * section_props["c_bottom"] / I
+    max_stress = max(stress_top, stress_bottom)
+    allowable_stress = Fy / safety_factor
+
+    # --- Deflection limits ---
+    if deflection_limit == "custom":
+        if custom_deflection_ratio is None:
+            return {"error": "custom_deflection_ratio required when using 'custom' limit"}
+        limit_ratio = custom_deflection_ratio
+    else:
+        if deflection_limit not in DEFLECTION_LIMITS:
+            return {"error": f"Unknown deflection limit: {deflection_limit}"}
+        limit_ratio = DEFLECTION_LIMITS[deflection_limit]["ratio"]
+
+    allowable_deflection = span / limit_ratio
+    deflection_utilization = (max_deflection / allowable_deflection) * 100
+    stress_utilization = (max_stress / allowable_stress) * 100
+
+    # --- Status ---
+    warnings = []
+    recommendations = []
+    if stress_utilization > 100:
+        status = "unacceptable"
+        warnings.append(f"Stress exceeds allowable: {stress_utilization:.1f}% utilization")
+        recommendations.append("Increase section size or reduce load")
+    elif deflection_utilization > 100:
+        status = "unacceptable"
+        warnings.append(f"Deflection exceeds limit: {deflection_utilization:.1f}% utilization")
+        recommendations.append("Increase section stiffness (larger I)")
+    elif stress_utilization > 85 or deflection_utilization > 85:
+        status = "marginal"
+        if stress_utilization > 85:
+            warnings.append(f"Stress utilization is high: {stress_utilization:.1f}%")
+        if deflection_utilization > 85:
+            warnings.append(f"Deflection utilization is high: {deflection_utilization:.1f}%")
+        recommendations.append("Consider increasing section size for margin")
+    else:
+        status = "acceptable"
+
+    mat_density = mat.get("density", 7850)
+    beam_weight = section_props["area"] * span * mat_density * 9.81
+
+    curve = [
+        {"x": x, "deflection": d, "moment": m, "shear": v}
+        for x, d, m, v in zip(x_vals, combined_deflections, combined_moments, combined_shears)
+    ]
+
+    return {
+        "max_deflection": max_deflection,
+        "max_deflection_position": max_deflection_position,
+        "max_moment": max_moment,
+        "max_shear": max_shear,
+        "max_stress": max_stress,
+        "stress_top": stress_top,
+        "stress_bottom": stress_bottom,
+        "allowable_deflection": allowable_deflection,
+        "allowable_stress": allowable_stress,
+        "deflection_utilization": deflection_utilization,
+        "stress_utilization": stress_utilization,
+        "deflection_limit_code": deflection_limit,
+        "status": status,
+        "warnings": warnings,
+        "recommendations": recommendations,
+        "section_properties": section_props,
+        "material": {"name": mat["name"], "E": E, "yield_strength": Fy, "density": mat_density},
+        "beam_weight": beam_weight,
+        "curve": curve,
+        "reactions": combined_reactions,
+        "individual_loads": individual_results,
+        "inputs": {
+            "span": span,
+            "support_type": support_key,
+            "num_loads": len(loads),
+            "safety_factor": safety_factor,
+        },
+    }
 
 
 def get_available_load_cases() -> Dict[str, str]:

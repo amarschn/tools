@@ -18,6 +18,7 @@
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
         /* =============================================================================
@@ -516,6 +517,39 @@
         .beam-diagram-container h4 { margin-bottom: 12px; font-size: 0.95rem; }
         #beam-diagram { width: 100%; height: 200px; }
 
+        /* Live preview panel - always visible above output tabs */
+        .live-preview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .live-preview .preview-pane {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            min-height: 160px;
+        }
+        .live-preview .preview-pane h4 {
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+        .live-preview .preview-pane svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        #beam-preview-svg { max-height: 180px; }
+        #section-preview-container .section-diagram-container {
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin-bottom: 0;
+        }
+
         /* =============================================================================
            10. CHARTS
            ============================================================================= */
@@ -905,6 +939,7 @@
             .input-tabs { flex-direction: column; }
             .results-grid { grid-template-columns: 1fr; }
             .mode-toggle-wrap { flex-direction: column; align-items: stretch; }
+            .live-preview { grid-template-columns: 1fr; }
         }
     
     .support-link {
@@ -916,6 +951,43 @@
     .support-link:hover {
       text-decoration: underline;
     }
+
+    /* Load list entries (Advanced mode) */
+    .load-entry {
+        background: var(--primary-light);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 12px;
+        margin-bottom: 8px;
+        position: relative;
+    }
+    .load-entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .load-entry-header span {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--secondary-color);
+    }
+    .load-entry-remove {
+        background: none;
+        border: none;
+        color: var(--danger-color);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .load-entry-remove:hover { background: rgba(185, 28, 28, 0.1); }
+    .load-entry .input-group { margin-bottom: 8px; }
+    .load-entry .input-group:last-child { margin-bottom: 0; }
+    .load-entry .input-group label { font-size: 0.8rem; margin-bottom: 3px; }
+    .load-entry .input-group input,
+    .load-entry .input-group select { padding: 8px 10px; font-size: 0.85rem; }
     </style>
 </head>
 
@@ -952,6 +1024,17 @@
                         <input type="checkbox" id="setting-auto-calc">
                         <span class="slider-toggle"></span>
                     </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Unit System</div>
+                        <div class="setting-help">MKS (m, N, Pa) · MMGS (mm, N, MPa) · IPS (in, lbf, psi)</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Units">
+                        <button type="button" data-units="MKS" class="active">MKS</button>
+                        <button type="button" data-units="MMGS">MMGS</button>
+                        <button type="button" data-units="IPS">IPS</button>
+                    </div>
                 </div>
             </div>
 
@@ -1114,18 +1197,40 @@
 
                 <!-- LOADING TAB -->
                 <div id="loading-section" class="input-section">
-                    <div class="input-group" id="load-value-group">
-                        <label for="load-value" id="load-value-label">Distributed Load, w (N/m)</label>
-                        <input type="number" id="load-value" value="10000" min="0" step="100">
-                        <span class="tooltip-trigger" data-tooltip="For distributed loads: force per unit length. For point loads: total force in Newtons. Positive values act downward.">?</span>
-                        <p class="input-helper" id="load-helper">Total load on beam: <span id="total-load">50,000 N</span></p>
+                    <!-- Simple mode: single load -->
+                    <div id="simple-load-inputs">
+                        <div class="input-group" id="load-value-group">
+                            <label for="load-value" id="load-value-label">Distributed Load, w (N/m)</label>
+                            <input type="number" id="load-value" value="10000" min="0" step="100">
+                            <span class="tooltip-trigger" data-tooltip="For distributed loads: force per unit length. For point loads: total force in Newtons. Positive values act downward.">?</span>
+                            <p class="input-helper" id="load-helper">Total load on beam: <span id="total-load">50,000 N</span></p>
+                        </div>
+
+                        <div class="input-group" id="load-position-group" style="display: none;">
+                            <label for="load-position">Load Position from Left Support (m)</label>
+                            <input type="number" id="load-position" value="2" min="0.01" step="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Distance from the left support to where the point load is applied. For cantilevers, measured from the fixed end.">?</span>
+                            <p class="input-helper">Distance from left support (or fixed end for cantilevers)</p>
+                        </div>
                     </div>
 
-                    <div class="input-group" id="load-position-group" style="display: none;">
-                        <label for="load-position">Load Position from Left Support (m)</label>
-                        <input type="number" id="load-position" value="2" min="0.01" step="0.1">
-                        <span class="tooltip-trigger" data-tooltip="Distance from the left support to where the point load is applied. For cantilevers, measured from the fixed end.">?</span>
-                        <p class="input-helper">Distance from left support (or fixed end for cantilevers)</p>
+                    <!-- Advanced mode: multiple loads -->
+                    <div id="advanced-load-inputs" style="display: none;">
+                        <div class="input-group">
+                            <label for="support-type">Support Type</label>
+                            <select id="support-type">
+                                <option value="simply_supported" selected>Simply Supported</option>
+                                <option value="cantilever">Cantilever</option>
+                                <option value="fixed_fixed">Fixed-Fixed</option>
+                                <option value="propped">Propped Cantilever</option>
+                            </select>
+                        </div>
+
+                        <div id="load-list-container">
+                            <label style="font-weight: 600; font-size: 0.875rem; margin-bottom: 8px; display: block;">Applied Loads</label>
+                            <div id="load-list"></div>
+                            <button type="button" class="btn btn-secondary" id="add-load-btn" style="width: 100%; margin-top: 8px; padding: 10px; font-size: 0.85rem;">+ Add Load</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1195,10 +1300,30 @@
                 </div>
 
                 <button class="btn btn-primary" id="calculate-btn" disabled>Calculate</button>
+
+                <div id="export-section" style="display: none; margin-top: 12px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" id="export-csv-btn" type="button" style="flex: 1; padding: 10px; font-size: 0.85rem;">CSV</button>
+                        <button class="btn btn-secondary" id="export-json-btn" type="button" style="flex: 1; padding: 10px; font-size: 0.85rem;">JSON</button>
+                        <button class="btn btn-secondary" id="export-pdf-btn" type="button" style="flex: 1; padding: 10px; font-size: 0.85rem;">PDF</button>
+                    </div>
+                </div>
             </section>
 
             <!-- OUTPUT SECTION -->
             <section class="tool-outputs card">
+                <!-- Live preview - always visible -->
+                <div class="live-preview">
+                    <div class="preview-pane">
+                        <h4>Beam Configuration</h4>
+                        <svg id="beam-preview-svg" viewBox="0 0 600 200"></svg>
+                    </div>
+                    <div class="preview-pane">
+                        <h4>Cross Section</h4>
+                        <div id="section-preview-container"></div>
+                    </div>
+                </div>
+
                 <div class="tabs">
                     <button class="tab-link active" data-target="results">Results</button>
                     <button class="tab-link" data-target="diagram">Diagram</button>
@@ -1458,15 +1583,302 @@
             autoCalc: false,
             theme: 'system',
             density: 'comfortable',
-            precision: 3
+            precision: 3,
+            units: 'MKS'
         };
         let settings = { ...defaultSettings };
 
-        // Unit conversion factors to SI (meters, Newtons, Pascals)
-        const LENGTH_TO_M = { m: 1, mm: 0.001, ft: 0.3048, in: 0.0254 };
-        const FORCE_TO_N = { N: 1, kN: 1000, lb: 4.44822, kip: 4448.22 };
-        const DISTRIBUTED_TO_NM = { 'N/m': 1, 'kN/m': 1000, 'lb/ft': 14.5939 };
-        const PRESSURE_TO_PA = { Pa: 1, MPa: 1e6, GPa: 1e9, psi: 6894.76, ksi: 6894760 };
+        // =============================================================================
+        // UNIT MANAGEMENT — MKS / MMGS / IPS
+        // =============================================================================
+        // Each quantity stores { label, fromSI, toSI, prefix }.
+        //   fromSI: multiply an SI value by this to get display value
+        //   toSI:   multiply an input value by this to get SI
+        //   prefix: whether formatEngineering SI prefixes are appropriate
+        const BEAM_UNITS = {
+            MKS: {
+                length:        { label: 'm',    fromSI: 1,        toSI: 1,        prefix: true },
+                smallLength:   { label: 'mm',   fromSI: 1000,     toSI: 1e-3,     prefix: false },
+                force:         { label: 'N',    fromSI: 1,        toSI: 1,        prefix: true },
+                distributed:   { label: 'N/m',  fromSI: 1,        toSI: 1,        prefix: true },
+                moment:        { label: 'N·m',  fromSI: 1,        toSI: 1,        prefix: true },
+                stress:        { label: 'Pa',   fromSI: 1,        toSI: 1,        prefix: true },
+                stressInput:   { label: 'MPa',  fromSI: 1e-6,     toSI: 1e6,      prefix: false },
+                modulusInput:  { label: 'GPa',  fromSI: 1e-9,     toSI: 1e9,      prefix: false },
+                area:          { label: 'm²',   fromSI: 1,        toSI: 1,        prefix: true },
+                sectionModulus:{ label: 'm³',   fromSI: 1,        toSI: 1,        prefix: true },
+                inertia:       { label: 'm⁴',   fromSI: 1,        toSI: 1,        prefix: true },
+            },
+            MMGS: {
+                length:        { label: 'mm',   fromSI: 1e3,      toSI: 1e-3,     prefix: false },
+                smallLength:   { label: 'mm',   fromSI: 1e3,      toSI: 1e-3,     prefix: false },
+                force:         { label: 'N',    fromSI: 1,        toSI: 1,        prefix: true },
+                distributed:   { label: 'N/mm', fromSI: 1e-3,     toSI: 1e3,      prefix: false },
+                moment:        { label: 'N·mm', fromSI: 1e3,      toSI: 1e-3,     prefix: false },
+                stress:        { label: 'MPa',  fromSI: 1e-6,     toSI: 1e6,      prefix: false },
+                stressInput:   { label: 'MPa',  fromSI: 1e-6,     toSI: 1e6,      prefix: false },
+                modulusInput:  { label: 'MPa',  fromSI: 1e-6,     toSI: 1e6,      prefix: false },
+                area:          { label: 'mm²',  fromSI: 1e6,      toSI: 1e-6,     prefix: false },
+                sectionModulus:{ label: 'mm³',  fromSI: 1e9,      toSI: 1e-9,     prefix: false },
+                inertia:       { label: 'mm⁴',  fromSI: 1e12,     toSI: 1e-12,    prefix: false },
+            },
+            IPS: {
+                length:        { label: 'in',     fromSI: 39.3701,     toSI: 0.0254,       prefix: false },
+                smallLength:   { label: 'in',     fromSI: 39.3701,     toSI: 0.0254,       prefix: false },
+                force:         { label: 'lbf',    fromSI: 0.224809,    toSI: 4.44822,      prefix: false },
+                distributed:   { label: 'lbf/in', fromSI: 5.71015e-3,  toSI: 175.127,      prefix: false },
+                moment:        { label: 'lbf·in', fromSI: 8.85075,     toSI: 0.112985,     prefix: false },
+                stress:        { label: 'psi',    fromSI: 1.45038e-4,  toSI: 6894.757,     prefix: false },
+                stressInput:   { label: 'ksi',    fromSI: 1.45038e-7,  toSI: 6.894757e6,   prefix: false },
+                modulusInput:  { label: 'ksi',    fromSI: 1.45038e-7,  toSI: 6.894757e6,   prefix: false },
+                area:          { label: 'in²',    fromSI: 1550.003,    toSI: 6.4516e-4,    prefix: false },
+                sectionModulus:{ label: 'in³',    fromSI: 61023.7,     toSI: 1.63871e-5,   prefix: false },
+                inertia:       { label: 'in⁴',    fromSI: 2402510,     toSI: 4.16231e-7,   prefix: false },
+            },
+        };
+
+        const UnitManager = {
+            _sys() { return BEAM_UNITS[settings.units] || BEAM_UNITS.MKS; },
+            convert(value, unitType) {
+                const u = this._sys()[unitType];
+                return u ? value * u.fromSI : value;
+            },
+            label(unitType) {
+                const u = this._sys()[unitType];
+                return u ? u.label : '';
+            },
+            toSI(unitType) {
+                const u = this._sys()[unitType];
+                return u ? u.toSI : 1;
+            },
+            usePrefix(unitType) {
+                const u = this._sys()[unitType];
+                return u ? u.prefix : true;
+            },
+            formatVal(siValue, unitType) {
+                const converted = this.convert(siValue, unitType);
+                const label = this.label(unitType);
+                return formatAuto(converted, label);
+            },
+        };
+
+        // Compact formatter for non-SI units (no engineering prefixes)
+        function formatCompact(value, unit) {
+            if (!Number.isFinite(value)) return '—';
+            const absVal = Math.abs(value);
+            if (absVal === 0) return `0 ${unit}`;
+            if (absVal >= 1e7 || absVal < 0.001) {
+                return `${value.toExponential(settings.precision)} ${unit}`;
+            }
+            return `${value.toFixed(settings.precision)} ${unit}`;
+        }
+
+        // Auto-format: SI prefixes for base SI units, compact for others
+        const _SI_UNITS = new Set(['Pa','N','m','J','W','N·m','N/m','m²','m³','m⁴']);
+        function formatAuto(value, unit) {
+            if (_SI_UNITS.has(unit)) return formatEngineering(value, unit);
+            return formatCompact(value, unit);
+        }
+
+        // Input conversion factors: multiply input value to get SI
+        function getInputToSI() {
+            const sys = BEAM_UNITS[settings.units] || BEAM_UNITS.MKS;
+            return {
+                length:      sys.length.toSI,
+                force:       sys.force.toSI,
+                distributed: sys.distributed.toSI,
+                stress:      sys.stressInput.toSI,
+                modulus:     sys.modulusInput.toSI,
+            };
+        }
+
+        // =============================================================================
+        // EXPORT FUNCTIONS
+        // =============================================================================
+        function exportCSV() {
+            if (!currentResult || !currentResult.curve) return;
+            const curve = currentResult.curve;
+            const uLen = UnitManager.label('length');
+            const uForce = UnitManager.label('force');
+            const uMoment = UnitManager.label('moment');
+            let csv = `Position (${uLen}),Deflection (${uLen}),Moment (${uMoment}),Shear (${uForce})\n`;
+            curve.forEach(p => {
+                csv += `${UnitManager.convert(p.x, 'length')},${UnitManager.convert(p.deflection, 'length')},${UnitManager.convert(p.moment, 'moment')},${UnitManager.convert(p.shear, 'force')}\n`;
+            });
+            downloadFile(csv, 'beam-analysis.csv', 'text/csv');
+        }
+
+        function exportJSON() {
+            if (!currentResult) return;
+            const json = JSON.stringify(currentResult, null, 2);
+            downloadFile(json, 'beam-analysis.json', 'application/json');
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function exportPDF() {
+            if (!currentResult) return;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            const pw = 210, margin = 15;
+            let y = margin;
+
+            const uLen = UnitManager.label('length');
+            const uForce = UnitManager.label('force');
+            const uMoment = UnitManager.label('moment');
+            const uStress = UnitManager.label('stress');
+
+            // Title
+            doc.setFontSize(18);
+            doc.text('Beam Bending Analysis Report', margin, y);
+            y += 10;
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(`Generated ${new Date().toLocaleString()} | transparent.tools`, margin, y);
+            doc.setTextColor(0);
+            y += 10;
+
+            // Input summary
+            doc.setFontSize(12);
+            doc.text('Input Summary', margin, y);
+            y += 6;
+            doc.setFontSize(9);
+            const loadCase = document.getElementById('load-case')?.value || '';
+            const sectionType = document.getElementById('section-type')?.value || '';
+            const span = document.getElementById('span')?.value || '';
+            const loadVal = document.getElementById('load-value')?.value || '';
+            const inputs = [
+                `Load Case: ${loadCase.replace(/_/g, ' ')}`,
+                `Section Type: ${sectionType.replace(/_/g, ' ')}`,
+                `Span: ${span} ${uLen}`,
+                `Applied Load: ${loadVal}`,
+                `Material: ${document.getElementById('material')?.value?.replace(/_/g, ' ') || ''}`,
+            ];
+            inputs.forEach(line => { doc.text(line, margin, y); y += 5; });
+            y += 4;
+
+            // Section properties
+            doc.setFontSize(12);
+            doc.text('Section Properties', margin, y);
+            y += 6;
+            doc.setFontSize(9);
+            const props = currentResult.section_properties;
+            if (props) {
+                const uArea = UnitManager.label('area');
+                const uInertia = UnitManager.label('inertia');
+                const propLines = [
+                    `Area: ${UnitManager.formatVal(props.area, 'area')}`,
+                    `Moment of Inertia: ${UnitManager.formatVal(props.Ix, 'inertia')}`,
+                    `c_top: ${formatNumber(UnitManager.convert(props.c_top, 'smallLength'), 1)} ${UnitManager.label('smallLength')}`,
+                    `c_bottom: ${formatNumber(UnitManager.convert(props.c_bottom, 'smallLength'), 1)} ${UnitManager.label('smallLength')}`,
+                ];
+                propLines.forEach(line => { doc.text(line, margin, y); y += 5; });
+            }
+            y += 4;
+
+            // Results
+            doc.setFontSize(12);
+            doc.text('Results', margin, y);
+            y += 6;
+            doc.setFontSize(9);
+            const r = currentResult;
+            const resultLines = [
+                `Max Deflection: ${UnitManager.formatVal(r.max_deflection, 'length')}`,
+                `Deflection Utilization: ${formatNumber(r.deflection_utilization, 1)}%`,
+                `Max Moment: ${UnitManager.formatVal(r.max_moment, 'moment')}`,
+                `Max Shear: ${UnitManager.formatVal(r.max_shear, 'force')}`,
+                `Max Bending Stress: ${UnitManager.formatVal(r.max_stress, 'stress')}`,
+                `Stress Utilization: ${formatNumber(r.stress_utilization, 1)}%`,
+                `Status: ${r.status}`,
+            ];
+            resultLines.forEach(line => { doc.text(line, margin, y); y += 5; });
+
+            // Reactions
+            if (r.reactions) {
+                y += 4;
+                doc.setFontSize(12);
+                doc.text('Reaction Forces', margin, y);
+                y += 6;
+                doc.setFontSize(9);
+                const rx = r.reactions;
+                doc.text(`R_left: ${UnitManager.formatVal(rx.R_left, 'force')}`, margin, y); y += 5;
+                if (Math.abs(rx.R_right) > 1e-10) { doc.text(`R_right: ${UnitManager.formatVal(rx.R_right, 'force')}`, margin, y); y += 5; }
+                if (Math.abs(rx.M_left) > 1e-10) { doc.text(`M_left: ${UnitManager.formatVal(rx.M_left, 'moment')}`, margin, y); y += 5; }
+                if (Math.abs(rx.M_right) > 1e-10) { doc.text(`M_right: ${UnitManager.formatVal(rx.M_right, 'moment')}`, margin, y); y += 5; }
+            }
+
+            // Recommendations
+            if (r.recommendations && r.recommendations.length > 0) {
+                y += 4;
+                doc.setFontSize(12);
+                doc.text('Recommendations', margin, y);
+                y += 6;
+                doc.setFontSize(9);
+                r.recommendations.forEach(rec => { doc.text(`- ${rec}`, margin, y); y += 5; });
+            }
+
+            // Beam diagram (capture SVG)
+            try {
+                const beamSvg = document.getElementById('beam-diagram');
+                if (beamSvg) {
+                    const svgData = new XMLSerializer().serializeToString(beamSvg);
+                    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                    const svgUrl = URL.createObjectURL(svgBlob);
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = svgUrl;
+                    });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width * 2;
+                    canvas.height = img.height * 2;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const imgData = canvas.toDataURL('image/png');
+                    URL.revokeObjectURL(svgUrl);
+
+                    // New page for diagrams
+                    doc.addPage();
+                    y = margin;
+                    doc.setFontSize(12);
+                    doc.text('Beam Diagram', margin, y);
+                    y += 6;
+                    const imgW = pw - 2 * margin;
+                    const imgH = imgW * (img.height / img.width);
+                    doc.addImage(imgData, 'PNG', margin, y, imgW, Math.min(imgH, 80));
+                    y += Math.min(imgH, 80) + 8;
+                }
+            } catch (e) { /* SVG capture failed, skip */ }
+
+            // Charts (capture from Plotly)
+            try {
+                const chartEl = document.getElementById('plot-area');
+                if (chartEl && chartEl.data) {
+                    const plotImg = await Plotly.toImage(chartEl, { format: 'png', width: 800, height: 400 });
+                    if (y + 90 > 280) { doc.addPage(); y = margin; }
+                    doc.setFontSize(12);
+                    doc.text('Analysis Charts', margin, y);
+                    y += 6;
+                    const chartW = pw - 2 * margin;
+                    doc.addImage(plotImg, 'PNG', margin, y, chartW, chartW * 0.5);
+                }
+            } catch (e) { /* Chart capture failed, skip */ }
+
+            doc.save('beam-analysis-report.pdf');
+        }
 
         // Section dimension configs
         const SECTION_CONFIGS = {
@@ -1554,6 +1966,7 @@
                 document.getElementById('calculate-btn').disabled = false;
 
                 renderSectionFields();
+                updateSectionPreview();
                 updateLoadLabel();
                 updateMaterialDisplay();
 
@@ -1591,13 +2004,138 @@
             });
 
             const desc = document.getElementById('mode-description');
+            const simpleLoadInputs = document.getElementById('simple-load-inputs');
+            const advancedLoadInputs = document.getElementById('advanced-load-inputs');
+            const loadCaseGroup = document.getElementById('load-case').closest('.input-group');
+
             if (mode === 'simple') {
                 desc.textContent = 'Quick analysis with common defaults. Switch to Advanced for full control over materials, safety factors, and deflection limits.';
                 document.getElementById('material-advanced').classList.remove('visible');
+                simpleLoadInputs.style.display = 'block';
+                advancedLoadInputs.style.display = 'none';
+                if (loadCaseGroup) loadCaseGroup.style.display = 'block';
             } else {
-                desc.textContent = 'Full control over material properties, safety factors, and deflection criteria.';
+                desc.textContent = 'Full control: combine multiple loads, set material properties, safety factors, and deflection criteria.';
                 document.getElementById('material-advanced').classList.add('visible');
+                simpleLoadInputs.style.display = 'none';
+                advancedLoadInputs.style.display = 'block';
+                if (loadCaseGroup) loadCaseGroup.style.display = 'none';
+                // Initialize with one load if empty
+                if (document.getElementById('load-list').children.length === 0) {
+                    addLoadEntry();
+                }
             }
+            drawBeamPreview();
+        }
+
+        // =============================================================================
+        // ADVANCED MODE - LOAD LIST MANAGEMENT
+        // =============================================================================
+        let loadCounter = 0;
+
+        function getLoadTypesForSupport(supportType) {
+            const types = {
+                'simply_supported': [
+                    { value: 'point_center', label: 'Point Load at Center' },
+                    { value: 'point_any', label: 'Point Load at Any Position' },
+                    { value: 'distributed', label: 'Uniform Distributed Load' },
+                    { value: 'triangular', label: 'Triangular Load' },
+                ],
+                'cantilever': [
+                    { value: 'point_end', label: 'Point Load at Free End' },
+                    { value: 'point_any', label: 'Point Load at Any Position' },
+                    { value: 'distributed', label: 'Uniform Distributed Load' },
+                ],
+                'fixed_fixed': [
+                    { value: 'point_center', label: 'Point Load at Center' },
+                    { value: 'distributed', label: 'Uniform Distributed Load' },
+                ],
+                'propped': [
+                    { value: 'distributed', label: 'Uniform Distributed Load' },
+                ],
+            };
+            return types[supportType] || types['simply_supported'];
+        }
+
+        function addLoadEntry() {
+            loadCounter++;
+            const list = document.getElementById('load-list');
+            const supportType = document.getElementById('support-type').value;
+            const loadTypes = getLoadTypesForSupport(supportType);
+
+            const entry = document.createElement('div');
+            entry.className = 'load-entry';
+            entry.dataset.loadId = loadCounter;
+
+            const optionsHtml = loadTypes.map(t => `<option value="${t.value}">${t.label}</option>`).join('');
+            const isDistributed = loadTypes[0].value === 'distributed' || loadTypes[0].value === 'triangular';
+
+            const distU = UnitManager.label('distributed');
+            const forceU = UnitManager.label('force');
+            const lenU = UnitManager.label('length');
+            entry.innerHTML = `
+                <div class="load-entry-header">
+                    <span>Load #${loadCounter}</span>
+                    <button type="button" class="load-entry-remove" data-load-id="${loadCounter}">Remove</button>
+                </div>
+                <div class="input-group">
+                    <label>Load Type</label>
+                    <select class="load-type-select">${optionsHtml}</select>
+                </div>
+                <div class="input-group">
+                    <label class="load-magnitude-label">${isDistributed ? 'Magnitude (' + distU + ')' : 'Magnitude (' + forceU + ')'}</label>
+                    <input type="number" class="load-magnitude" value="5000" min="0" step="100">
+                </div>
+                <div class="input-group load-position-group" style="display: none;">
+                    <label>Position from Left (${lenU})</label>
+                    <input type="number" class="load-position-input" value="2" min="0.01" step="0.1">
+                </div>
+            `;
+
+            list.appendChild(entry);
+
+            // Wire up events
+            const typeSelect = entry.querySelector('.load-type-select');
+            const removeBtn = entry.querySelector('.load-entry-remove');
+            const posGroup = entry.querySelector('.load-position-group');
+            const magLabel = entry.querySelector('.load-magnitude-label');
+
+            typeSelect.addEventListener('change', () => {
+                const val = typeSelect.value;
+                posGroup.style.display = val.includes('any') ? 'block' : 'none';
+                magLabel.textContent = (val === 'distributed' || val === 'triangular') ? `Magnitude (${UnitManager.label('distributed')})` : `Magnitude (${UnitManager.label('force')})`;
+                drawBeamPreview();
+                scheduleCalculation();
+            });
+
+            removeBtn.addEventListener('click', () => {
+                entry.remove();
+                drawBeamPreview();
+                scheduleCalculation();
+            });
+
+            entry.querySelectorAll('input, select').forEach(el => {
+                el.addEventListener('input', scheduleCalculation);
+                el.addEventListener('change', scheduleCalculation);
+            });
+
+            // Show position if first type needs it
+            if (loadTypes[0].value.includes('any')) {
+                posGroup.style.display = 'block';
+            }
+        }
+
+        function getAdvancedLoads() {
+            const entries = document.querySelectorAll('.load-entry');
+            const loads = [];
+            entries.forEach(entry => {
+                const type = entry.querySelector('.load-type-select').value;
+                const magnitude = parseFloat(entry.querySelector('.load-magnitude').value) || 0;
+                const posInput = entry.querySelector('.load-position-input');
+                const position = type.includes('any') ? (parseFloat(posInput.value) || null) : null;
+                loads.push({ type, magnitude, position });
+            });
+            return loads;
         }
 
         function formatNumber(value, decimals = null) {
@@ -1638,6 +2176,9 @@
             if (stored) {
                 try {
                     settings = { ...defaultSettings, ...JSON.parse(stored) };
+                    // Migrate old metric/imperial to new system names
+                    if (settings.units === 'metric') settings.units = 'MKS';
+                    if (settings.units === 'imperial') settings.units = 'IPS';
                 } catch (e) {
                     settings = { ...defaultSettings };
                 }
@@ -1663,10 +2204,20 @@
             document.querySelectorAll('.settings-panel [data-precision]').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.precision === String(settings.precision));
             });
+            document.querySelectorAll('.settings-panel [data-units]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.units === settings.units);
+            });
+
+            // Update input labels for unit system
+            updateUnitLabels();
+            updateSectionPreview();
+            drawBeamPreview();
 
             // Re-render results if we have them
             if (currentResult) {
                 displayResults(currentResult);
+                updateDiagrams(currentResult);
+                updateCharts(currentResult);
             }
         }
 
@@ -1681,12 +2232,66 @@
         }
 
         function handleSettingChange(key, value) {
+            if (key === 'units' && value !== settings.units) {
+                convertInputsToNewUnits(settings.units, value);
+            }
             settings[key] = value;
             saveSettings();
             applySettings();
             if (key === 'autoCalc' && value && beamModule) {
                 calculate();
             }
+        }
+
+        // Convert all input values from old unit system to new unit system
+        function convertInputsToNewUnits(oldSys, newSys) {
+            const oldU = BEAM_UNITS[oldSys] || BEAM_UNITS.MKS;
+            const newU = BEAM_UNITS[newSys] || BEAM_UNITS.MKS;
+
+            // Convert span
+            const spanEl = document.getElementById('span');
+            if (spanEl && spanEl.value) {
+                spanEl.value = parseFloat((parseFloat(spanEl.value) * oldU.length.toSI / newU.length.toSI).toPrecision(6));
+            }
+            // Convert load value
+            const loadEl = document.getElementById('load-value');
+            const loadCase = document.getElementById('load-case').value;
+            if (loadEl && loadEl.value) {
+                const isDist = loadCase.includes('udl') || loadCase.includes('triangular');
+                const key = isDist ? 'distributed' : 'force';
+                loadEl.value = parseFloat((parseFloat(loadEl.value) * oldU[key].toSI / newU[key].toSI).toPrecision(6));
+            }
+            // Convert load position
+            const posEl = document.getElementById('load-position');
+            if (posEl && posEl.value) {
+                posEl.value = parseFloat((parseFloat(posEl.value) * oldU.length.toSI / newU.length.toSI).toPrecision(6));
+            }
+            // Convert E and Fy
+            const eEl = document.getElementById('elastic-modulus');
+            if (eEl && eEl.value) {
+                eEl.value = parseFloat((parseFloat(eEl.value) * oldU.modulusInput.toSI / newU.modulusInput.toSI).toPrecision(6));
+            }
+            const fyEl = document.getElementById('yield-strength');
+            if (fyEl && fyEl.value) {
+                fyEl.value = parseFloat((parseFloat(fyEl.value) * oldU.stressInput.toSI / newU.stressInput.toSI).toPrecision(6));
+            }
+            // Convert section dimensions
+            const sectionType = document.getElementById('section-type').value;
+            const config = SECTION_CONFIGS[sectionType] || [];
+            config.forEach(field => {
+                if (field.type === 'select') return;
+                const el = document.getElementById(`dim-${field.id}`);
+                if (!el || !el.value) return;
+                let oldFactor, newFactor;
+                if (field.unit?.includes('⁴')) {
+                    oldFactor = oldU.inertia.toSI; newFactor = newU.inertia.toSI;
+                } else if (field.unit?.includes('²')) {
+                    oldFactor = oldU.area.toSI; newFactor = newU.area.toSI;
+                } else {
+                    oldFactor = oldU.length.toSI; newFactor = newU.length.toSI;
+                }
+                el.value = parseFloat((parseFloat(el.value) * oldFactor / newFactor).toPrecision(6));
+            });
         }
 
         let calcDebounce = null;
@@ -1725,6 +2330,11 @@
                 btn.addEventListener('click', () => handleSettingChange('precision', Number(btn.dataset.precision)));
             });
 
+            // Unit system buttons
+            document.querySelectorAll('.settings-panel [data-units]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('units', btn.dataset.units));
+            });
+
             // Reset button
             document.getElementById('settings-reset').addEventListener('click', () => {
                 settings = { ...defaultSettings };
@@ -1738,12 +2348,81 @@
             });
         }
 
+        function updateUnitLabels() {
+            const lengthUnit = UnitManager.label('length');
+            const forceUnit = UnitManager.label('force');
+            const distUnit = UnitManager.label('distributed');
+            const stressUnit = UnitManager.label('stressInput');
+            const modulusUnit = UnitManager.label('modulusInput');
+
+            // Update span label
+            const spanLabel = document.querySelector('label[for="span"]');
+            if (spanLabel) spanLabel.textContent = `Span Length (${lengthUnit})`;
+
+            // Update load label
+            const loadCase = document.getElementById('load-case').value;
+            const isDistributed = loadCase.includes('udl') || loadCase.includes('triangular');
+            const loadLabel = document.getElementById('load-value-label');
+            if (loadLabel) {
+                loadLabel.textContent = isDistributed
+                    ? `Distributed Load, w (${distUnit})`
+                    : `Point Load, P (${forceUnit})`;
+            }
+
+            // Update position label
+            const posLabel = document.querySelector('label[for="load-position"]');
+            if (posLabel) posLabel.textContent = `Load Position from Left Support (${lengthUnit})`;
+
+            // Update material input labels
+            const eLabel = document.querySelector('label[for="elastic-modulus"]');
+            if (eLabel) eLabel.textContent = `Elastic Modulus, E (${modulusUnit})`;
+            const fyLabel = document.querySelector('label[for="yield-strength"]');
+            if (fyLabel) fyLabel.textContent = `Yield Strength, Fy (${stressUnit})`;
+
+            // Update section dimension unit badges
+            const sectionType = document.getElementById('section-type').value;
+            const config = SECTION_CONFIGS[sectionType] || [];
+            config.forEach(field => {
+                if (field.type === 'select') return;
+                const group = document.getElementById(`dim-${field.id}`)?.closest('.input-group');
+                if (!group) return;
+                const badge = group.querySelector('.input-row > span');
+                if (badge) {
+                    if (field.unit?.includes('⁴')) badge.textContent = UnitManager.label('inertia');
+                    else if (field.unit?.includes('²')) badge.textContent = UnitManager.label('area');
+                    else badge.textContent = lengthUnit;
+                }
+            });
+
+            // Update total load helper text
+            updateTotalLoad();
+        }
+
         // =============================================================================
         // SECTION DIAGRAMS
         // =============================================================================
         function generateSectionDiagram(sectionType) {
-            const w = 200, h = 160;
+            const w = 220, h = 180;
             const cx = w / 2, cy = h / 2;
+            const pad = 35; // padding for dimension labels
+            const drawW = w - 2 * pad, drawH = h - 2 * pad;
+
+            // Read actual dimension values from inputs
+            function getDimVal(id) {
+                const el = document.getElementById('dim-' + id);
+                return el ? parseFloat(el.value) || 0 : 0;
+            }
+
+            // Format dimension value for label (value is in current input unit system)
+            function fmtDim(val) {
+                const u = UnitManager.label('length');
+                if (settings.units === 'MMGS') return val.toFixed(1) + ' ' + u;
+                if (settings.units === 'IPS') return val.toFixed(3) + ' ' + u;
+                // MKS: auto-format
+                if (val >= 1) return val.toFixed(2) + ' m';
+                if (val >= 0.01) return (val * 1000).toFixed(1) + ' mm';
+                return (val * 1000).toFixed(2) + ' mm';
+            }
 
             // Helper to create dimension lines with arrows and labels
             const dimLine = (x1, y1, x2, y2, label, offset = 0, vertical = false) => {
@@ -1759,94 +2438,163 @@
                 `;
             };
 
+            // Centroid marker
+            const centroidMarker = (x, y) => `
+                <line x1="${x-6}" y1="${y}" x2="${x+6}" y2="${y}" stroke="var(--danger-color)" stroke-width="1.5"/>
+                <line x1="${x}" y1="${y-6}" x2="${x}" y2="${y+6}" stroke="var(--danger-color)" stroke-width="1.5"/>
+                <circle cx="${x}" cy="${y}" r="3" fill="none" stroke="var(--danger-color)" stroke-width="1"/>
+            `;
+
+            // Neutral axis line
+            const naLine = (x1, x2, y) => `
+                <line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="var(--danger-color)" stroke-width="1" stroke-dasharray="6,3"/>
+                <text x="${x2+3}" y="${y+4}" font-size="8" fill="var(--danger-color)" font-weight="600">N.A.</text>
+            `;
+
             let svg = '';
 
             switch (sectionType) {
                 case 'rectangular': {
-                    const rw = 60, rh = 100;
+                    const bVal = getDimVal('width') || 0.2;
+                    const hVal = getDimVal('depth') || 0.4;
+                    const aspect = bVal / hVal;
+                    let rh = drawH, rw = rh * aspect;
+                    if (rw > drawW) { rw = drawW; rh = rw / aspect; }
+                    rw = Math.max(rw, 20); rh = Math.max(rh, 20);
                     svg = `
                         <rect x="${cx-rw/2}" y="${cy-rh/2}" width="${rw}" height="${rh}" class="section-shape"/>
-                        ${dimLine(cx-rw/2-20, cy-rh/2, cx-rw/2-20, cy+rh/2, 'h', -12, true)}
-                        ${dimLine(cx-rw/2, cy+rh/2+20, cx+rw/2, cy+rh/2+20, 'b', 12)}
+                        ${dimLine(cx-rw/2-20, cy-rh/2, cx-rw/2-20, cy+rh/2, fmtDim(hVal), -16, true)}
+                        ${dimLine(cx-rw/2, cy+rh/2+18, cx+rw/2, cy+rh/2+18, fmtDim(bVal), 12)}
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-rw/2-5, cx+rw/2+5, cy)}
                     `;
                     break;
                 }
                 case 'circular_solid': {
-                    const r = 45;
+                    const dVal = getDimVal('diameter') || 0.2;
+                    const r = Math.min(drawW, drawH) / 2 * 0.85;
                     svg = `
                         <circle cx="${cx}" cy="${cy}" r="${r}" class="section-shape"/>
-                        ${dimLine(cx-r, cy+r+15, cx+r, cy+r+15, 'd', 12)}
-                        <line x1="${cx}" y1="${cy-r}" x2="${cx}" y2="${cy+r}" stroke="var(--text-light)" stroke-width="1" stroke-dasharray="4"/>
+                        ${dimLine(cx-r, cy+r+15, cx+r, cy+r+15, fmtDim(dVal), 12)}
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-r-5, cx+r+5, cy)}
                     `;
                     break;
                 }
                 case 'circular_hollow': {
-                    const ro = 45, ri = 30;
+                    const doVal = getDimVal('outer_diameter') || 0.2;
+                    const diVal = getDimVal('inner_diameter') || 0.15;
+                    const ratio = diVal / doVal;
+                    const ro = Math.min(drawW, drawH) / 2 * 0.85;
+                    const ri = ro * ratio;
                     svg = `
                         <circle cx="${cx}" cy="${cy}" r="${ro}" class="section-shape"/>
                         <circle cx="${cx}" cy="${cy}" r="${ri}" fill="var(--primary-light)" stroke="var(--text-color)" stroke-width="2"/>
-                        ${dimLine(cx-ro, cy+ro+15, cx+ro, cy+ro+15, 'd_o', 12)}
-                        ${dimLine(cx-ri, cy-5, cx+ri, cy-5, 'd_i', -10)}
+                        ${dimLine(cx-ro, cy+ro+15, cx+ro, cy+ro+15, fmtDim(doVal), 12)}
+                        ${dimLine(cx-ri, cy-5, cx+ri, cy-5, fmtDim(diVal), -10)}
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-ro-5, cx+ro+5, cy)}
                     `;
                     break;
                 }
                 case 'i_beam': {
-                    const fw = 70, ft = 12, wd = 60, wt = 10;
-                    const totalH = wd + 2*ft;
+                    const dVal = getDimVal('overall_depth') || 0.4;
+                    const bfVal = getDimVal('flange_width') || 0.2;
+                    const tfVal = getDimVal('flange_thickness') || 0.02;
+                    const twVal = getDimVal('web_thickness') || 0.012;
+                    // Scale proportionally
+                    const maxDim = Math.max(dVal, bfVal);
+                    const scale = Math.min(drawW / bfVal, drawH / dVal) * 0.85;
+                    const fw = bfVal * scale, totalH = dVal * scale;
+                    const ft = Math.max(tfVal * scale, 3), wt = Math.max(twVal * scale, 2);
+                    const wd = totalH - 2 * ft;
                     svg = `
                         <path d="M${cx-fw/2},${cy-totalH/2} h${fw} v${ft} h${-(fw-wt)/2} v${wd} h${(fw-wt)/2} v${ft} h${-fw} v${-ft} h${(fw-wt)/2} v${-wd} h${-(fw-wt)/2} z" class="section-shape"/>
-                        ${dimLine(cx-fw/2-25, cy-totalH/2, cx-fw/2-25, cy+totalH/2, 'd', -12, true)}
-                        ${dimLine(cx-fw/2, cy+totalH/2+20, cx+fw/2, cy+totalH/2+20, 'b_f', 12)}
-                        <text x="${cx+fw/2+8}" y="${cy-totalH/2+ft/2+4}" class="dim-text" font-size="9">t_f</text>
-                        <text x="${cx+wt/2+8}" y="${cy}" class="dim-text" font-size="9">t_w</text>
+                        ${dimLine(cx-fw/2-22, cy-totalH/2, cx-fw/2-22, cy+totalH/2, fmtDim(dVal), -18, true)}
+                        ${dimLine(cx-fw/2, cy+totalH/2+18, cx+fw/2, cy+totalH/2+18, fmtDim(bfVal), 12)}
+                        <text x="${cx+fw/2+5}" y="${cy-totalH/2+ft/2+4}" class="dim-text" font-size="8">${fmtDim(tfVal)}</text>
+                        <text x="${cx+wt/2+5}" y="${cy+4}" class="dim-text" font-size="8">${fmtDim(twVal)}</text>
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-fw/2-5, cx+fw/2+5, cy)}
                     `;
                     break;
                 }
                 case 'box': {
-                    const bw = 70, bh = 90, t = 8;
+                    const bVal = getDimVal('width') || 0.2;
+                    const hVal = getDimVal('depth') || 0.3;
+                    const tVal = getDimVal('wall_thickness') || 0.01;
+                    const scale = Math.min(drawW / bVal, drawH / hVal) * 0.85;
+                    const bw = bVal * scale, bh = hVal * scale;
+                    const t = Math.max(tVal * scale, 3);
                     svg = `
                         <rect x="${cx-bw/2}" y="${cy-bh/2}" width="${bw}" height="${bh}" class="section-shape"/>
                         <rect x="${cx-bw/2+t}" y="${cy-bh/2+t}" width="${bw-2*t}" height="${bh-2*t}" fill="var(--primary-light)" stroke="var(--text-color)" stroke-width="1"/>
-                        ${dimLine(cx-bw/2-20, cy-bh/2, cx-bw/2-20, cy+bh/2, 'h', -12, true)}
-                        ${dimLine(cx-bw/2, cy+bh/2+20, cx+bw/2, cy+bh/2+20, 'b', 12)}
-                        <text x="${cx-bw/2+t/2}" y="${cy}" class="dim-text" font-size="9" transform="rotate(-90 ${cx-bw/2+t/2} ${cy})">t</text>
+                        ${dimLine(cx-bw/2-20, cy-bh/2, cx-bw/2-20, cy+bh/2, fmtDim(hVal), -16, true)}
+                        ${dimLine(cx-bw/2, cy+bh/2+18, cx+bw/2, cy+bh/2+18, fmtDim(bVal), 12)}
+                        <text x="${cx-bw/2+t/2}" y="${cy}" class="dim-text" font-size="8" transform="rotate(-90 ${cx-bw/2+t/2} ${cy})">${fmtDim(tVal)}</text>
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-bw/2-5, cx+bw/2+5, cy)}
                     `;
                     break;
                 }
                 case 'c_channel': {
-                    const cw = 40, ch = 90, ft = 10, wt = 8;
+                    const dVal = getDimVal('depth') || 0.25;
+                    const bfVal = getDimVal('flange_width') || 0.1;
+                    const tfVal = getDimVal('flange_thickness') || 0.015;
+                    const twVal = getDimVal('web_thickness') || 0.01;
+                    const scale = Math.min(drawW / bfVal, drawH / dVal) * 0.85;
+                    const cw = bfVal * scale, ch = dVal * scale;
+                    const ft = Math.max(tfVal * scale, 3), wt = Math.max(twVal * scale, 2);
                     svg = `
                         <path d="M${cx-cw/2},${cy-ch/2} h${cw} v${ft} h${-(cw-wt)} v${ch-2*ft} h${cw-wt} v${ft} h${-cw} z" class="section-shape"/>
-                        ${dimLine(cx-cw/2-20, cy-ch/2, cx-cw/2-20, cy+ch/2, 'd', -12, true)}
-                        ${dimLine(cx-cw/2, cy+ch/2+20, cx+cw/2, cy+ch/2+20, 'b_f', 12)}
-                        <text x="${cx+cw/2-wt/2}" y="${cy}" class="dim-text" font-size="9">t_w</text>
+                        ${dimLine(cx-cw/2-20, cy-ch/2, cx-cw/2-20, cy+ch/2, fmtDim(dVal), -16, true)}
+                        ${dimLine(cx-cw/2, cy+ch/2+18, cx+cw/2, cy+ch/2+18, fmtDim(bfVal), 12)}
+                        <text x="${cx+cw/2-wt/2}" y="${cy+4}" class="dim-text" font-size="8">${fmtDim(twVal)}</text>
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-cw/2-5, cx+cw/2+5, cy)}
                     `;
                     break;
                 }
                 case 't_section': {
-                    const fw = 80, ft = 12, sd = 55, st = 12;
+                    const bfVal = getDimVal('flange_width') || 0.2;
+                    const tfVal = getDimVal('flange_thickness') || 0.02;
+                    const dsVal = getDimVal('stem_depth') || 0.2;
+                    const tsVal = getDimVal('stem_thickness') || 0.015;
+                    const totalDepth = tfVal + dsVal;
+                    const scale = Math.min(drawW / bfVal, drawH / totalDepth) * 0.85;
+                    const fw = bfVal * scale, totalH = totalDepth * scale;
+                    const ft = Math.max(tfVal * scale, 3), st = Math.max(tsVal * scale, 2);
+                    const sd = totalH - ft;
+                    // Compute centroid position for display
+                    const A_f = bfVal * tfVal, A_s = tsVal * dsVal;
+                    const y_cen = (A_f * tfVal/2 + A_s * (tfVal + dsVal/2)) / (A_f + A_s);
+                    const cen_frac = y_cen / totalDepth;
+                    const cenY = cy - totalH/2 + cen_frac * totalH;
                     svg = `
-                        <path d="M${cx-fw/2},${cy-sd/2-ft} h${fw} v${ft} h${-(fw-st)/2} v${sd} h${-st} v${-sd} h${-(fw-st)/2} z" class="section-shape"/>
-                        ${dimLine(cx-fw/2-25, cy-sd/2-ft, cx-fw/2-25, cy+sd/2, 'total', -15, true)}
-                        ${dimLine(cx-fw/2, cy-sd/2-ft-15, cx+fw/2, cy-sd/2-ft-15, 'b_f', -10)}
-                        <text x="${cx+st/2+8}" y="${cy+10}" class="dim-text" font-size="9">t_s</text>
-                        <text x="${cx+fw/2+8}" y="${cy-sd/2-ft+ft/2+3}" class="dim-text" font-size="9">t_f</text>
+                        <path d="M${cx-fw/2},${cy-totalH/2} h${fw} v${ft} h${-(fw-st)/2} v${sd} h${-st} v${-sd} h${-(fw-st)/2} z" class="section-shape"/>
+                        ${dimLine(cx-fw/2-22, cy-totalH/2, cx-fw/2-22, cy+totalH/2, fmtDim(totalDepth), -18, true)}
+                        ${dimLine(cx-fw/2, cy-totalH/2-12, cx+fw/2, cy-totalH/2-12, fmtDim(bfVal), -10)}
+                        <text x="${cx+st/2+5}" y="${cy+10}" class="dim-text" font-size="8">${fmtDim(tsVal)}</text>
+                        <text x="${cx+fw/2+5}" y="${cy-totalH/2+ft/2+3}" class="dim-text" font-size="8">${fmtDim(tfVal)}</text>
+                        ${centroidMarker(cx, cenY)}
+                        ${naLine(cx-fw/2-5, cx+fw/2+5, cenY)}
                     `;
                     break;
                 }
                 case 'standard_steel': {
-                    // Show generic I-beam shape
+                    // Show generic I-beam shape with AISC label
                     const fw = 70, ft = 12, wd = 60, wt = 10;
                     const totalH = wd + 2*ft;
                     svg = `
                         <path d="M${cx-fw/2},${cy-totalH/2} h${fw} v${ft} h${-(fw-wt)/2} v${wd} h${(fw-wt)/2} v${ft} h${-fw} v${-ft} h${(fw-wt)/2} v${-wd} h${-(fw-wt)/2} z" class="section-shape"/>
                         <text x="${cx}" y="${cy+5}" class="section-label" font-size="11">AISC</text>
                         <text x="${cx}" y="${cy+17}" class="section-label" font-size="11">W-Shape</text>
+                        ${centroidMarker(cx, cy)}
+                        ${naLine(cx-fw/2-5, cx+fw/2+5, cy)}
                     `;
                     break;
                 }
                 case 'custom': {
-                    // Show generic cross-section with I, c labels
                     svg = `
                         <ellipse cx="${cx}" cy="${cy}" rx="50" ry="40" class="section-shape" stroke-dasharray="5"/>
                         <line x1="${cx-60}" y1="${cy}" x2="${cx+60}" y2="${cy}" stroke="var(--text-light)" stroke-width="1" stroke-dasharray="4"/>
@@ -1876,8 +2624,7 @@
             const container = document.getElementById('section-dimensions');
             const config = SECTION_CONFIGS[sectionType] || [];
 
-            // Add section diagram first
-            container.innerHTML = generateSectionDiagram(sectionType);
+            container.innerHTML = '';
 
             config.forEach(field => {
                 const group = document.createElement('div');
@@ -1891,22 +2638,35 @@
                         </select>
                     `;
                 } else {
+                    // Convert default from SI (m, m², m⁴) to display units
+                    let displayDefault = field.default;
+                    let displayUnit = field.unit;
+                    if (field.unit?.includes('⁴')) {
+                        displayDefault = field.default * UnitManager._sys().inertia.fromSI;
+                        displayUnit = UnitManager.label('inertia');
+                    } else if (field.unit?.includes('²')) {
+                        displayDefault = field.default * UnitManager._sys().area.fromSI;
+                        displayUnit = UnitManager.label('area');
+                    } else {
+                        displayDefault = field.default * UnitManager._sys().length.fromSI;
+                        displayUnit = UnitManager.label('length');
+                    }
                     group.innerHTML = `
                         <label for="dim-${field.id}">${field.label}</label>
                         <div class="input-row">
-                            <input type="number" id="dim-${field.id}" value="${field.default}" step="0.001" min="0">
-                            <span style="padding: 11px; background: var(--primary-light); border-radius: 0 6px 6px 0; font-size: 0.9rem;">${field.unit}</span>
+                            <input type="number" id="dim-${field.id}" value="${parseFloat(displayDefault.toPrecision(6))}" step="any" min="0">
+                            <span style="padding: 11px; background: var(--primary-light); border-radius: 0 6px 6px 0; font-size: 0.9rem;">${displayUnit}</span>
                         </div>
                     `;
                 }
 
                 container.appendChild(group);
 
-                // Add auto-calc listener
+                // Add auto-calc and diagram update listeners
                 const input = group.querySelector('input, select');
                 if (input) {
-                    input.addEventListener('input', scheduleCalculation);
-                    input.addEventListener('change', scheduleCalculation);
+                    input.addEventListener('input', () => { updateSectionPreview(); scheduleCalculation(); });
+                    input.addEventListener('change', () => { updateSectionPreview(); scheduleCalculation(); });
                 }
             });
         }
@@ -1915,11 +2675,25 @@
             const sectionType = document.getElementById('section-type').value;
             const config = SECTION_CONFIGS[sectionType] || [];
             const dims = {};
+            const conv = getInputToSI();
 
             config.forEach(field => {
                 const el = document.getElementById(`dim-${field.id}`);
                 if (el) {
-                    dims[field.id] = field.type === 'select' ? el.value : parseFloat(el.value);
+                    if (field.type === 'select') {
+                        dims[field.id] = el.value;
+                    } else {
+                        let val = parseFloat(el.value);
+                        // Convert to SI using the appropriate unit type
+                        if (field.unit?.includes('⁴')) {
+                            val = val * UnitManager.toSI('inertia');
+                        } else if (field.unit?.includes('²')) {
+                            val = val * UnitManager.toSI('area');
+                        } else {
+                            val = val * UnitManager.toSI('length');
+                        }
+                        dims[field.id] = val;
+                    }
                 }
             });
 
@@ -1937,10 +2711,13 @@
             const isDistributed = loadCase.includes('udl') || loadCase.includes('triangular');
             const needsPosition = loadCase.includes('_any');
 
+            const forceUnit = UnitManager.label('force');
+            const distUnit = UnitManager.label('distributed');
+
             if (isDistributed) {
-                label.textContent = 'Distributed Load, w (N/m)';
+                label.textContent = `Distributed Load, w (${distUnit})`;
             } else {
-                label.textContent = 'Point Load, P (N)';
+                label.textContent = `Point Load, P (${forceUnit})`;
             }
 
             posGroup.style.display = needsPosition ? 'block' : 'none';
@@ -1952,10 +2729,11 @@
             const loadValue = parseFloat(document.getElementById('load-value').value) || 0;
             const span = parseFloat(document.getElementById('span').value) || 1;
             const helper = document.getElementById('load-helper');
+            const forceUnit = UnitManager.label('force');
 
             if (loadCase.includes('udl') || loadCase.includes('triangular')) {
                 const total = loadCase.includes('triangular') ? loadValue * span / 2 : loadValue * span;
-                helper.innerHTML = `Total load on beam: <strong>${formatNumber(total)} N</strong>`;
+                helper.innerHTML = `Total load on beam: <strong>${formatNumber(total)} ${forceUnit}</strong>`;
                 helper.style.display = 'block';
             } else {
                 helper.style.display = 'none';
@@ -1973,9 +2751,16 @@
             if (material === 'custom') {
                 display.textContent = 'Enter custom values below';
             } else {
-                display.textContent = `E = ${props.E} GPa, Fy = ${props.Fy} MPa`;
-                document.getElementById('elastic-modulus').value = props.E;
-                document.getElementById('yield-strength').value = props.Fy;
+                // MATERIAL_PROPS stores E in GPa, Fy in MPa. Convert to SI then to display units.
+                const E_pa = props.E * 1e9;
+                const Fy_pa = props.Fy * 1e6;
+                const E_display = E_pa * UnitManager._sys().modulusInput.fromSI;
+                const Fy_display = Fy_pa * UnitManager._sys().stressInput.fromSI;
+                const modUnit = UnitManager.label('modulusInput');
+                const stressUnit = UnitManager.label('stressInput');
+                display.textContent = `E = ${formatNumber(E_display)} ${modUnit}, Fy = ${formatNumber(Fy_display)} ${stressUnit}`;
+                document.getElementById('elastic-modulus').value = parseFloat(E_display.toPrecision(6));
+                document.getElementById('yield-strength').value = parseFloat(Fy_display.toPrecision(6));
             }
         }
 
@@ -1990,44 +2775,77 @@
             btn.textContent = 'Calculating...';
 
             try {
-                // Gather inputs
-                const loadCase = document.getElementById('load-case').value;
                 const sectionType = document.getElementById('section-type').value;
-                const span = parseFloat(document.getElementById('span').value);
-                const loadValue = parseFloat(document.getElementById('load-value').value);
+                const conv = getInputToSI();
+                const span = parseFloat(document.getElementById('span').value) * conv.length;
                 const material = document.getElementById('material').value;
-                const E = parseFloat(document.getElementById('elastic-modulus').value) * 1e9; // GPa to Pa
-                const Fy = parseFloat(document.getElementById('yield-strength').value) * 1e6; // MPa to Pa
+                const E = parseFloat(document.getElementById('elastic-modulus').value) * conv.modulus;
+                const Fy = parseFloat(document.getElementById('yield-strength').value) * conv.stress;
                 const safetyFactor = parseFloat(document.getElementById('safety-factor').value) || 1.5;
                 const deflectionLimit = document.getElementById('deflection-limit').value;
                 const customDeflectionRatio = deflectionLimit === 'custom'
                     ? parseFloat(document.getElementById('custom-deflection-ratio').value)
                     : null;
-
                 const dims = getSectionDimensions();
-                const loadPosition = loadCase.includes('_any') ?
-                    parseFloat(document.getElementById('load-position').value) : null;
-
-                // Load is already in SI (N or N/m)
-                const loadSI = loadValue;
-
-                // Call Python
                 const pyDims = pyodideInstance.toPy(dims);
-                const result = beamModule.beam_analysis(
-                    loadCase,
-                    sectionType,
-                    pyDims,
-                    span,
-                    loadSI,
-                    material,
-                    E,
-                    Fy,
-                    loadPosition,
-                    deflectionLimit,
-                    customDeflectionRatio,
-                    101,  // num_points
-                    safetyFactor
-                );
+
+                let result;
+
+                if (currentMode === 'advanced') {
+                    // Combined load analysis
+                    const supportType = document.getElementById('support-type').value;
+                    const rawLoads = getAdvancedLoads();
+                    // Convert loads to SI
+                    const loads = rawLoads.map(ld => {
+                        const isDist = ld.type === 'distributed' || ld.type === 'triangular';
+                        return {
+                            type: ld.type,
+                            magnitude: isDist ? ld.magnitude * conv.distributed : ld.magnitude * conv.force,
+                            position: ld.position != null ? ld.position * conv.length : null,
+                        };
+                    });
+                    const pyLoads = pyodideInstance.toPy(loads);
+
+                    result = beamModule.analyze_beam_combined(
+                        supportType,
+                        pyLoads,
+                        sectionType,
+                        pyDims,
+                        span,
+                        material,
+                        E,
+                        Fy,
+                        deflectionLimit,
+                        customDeflectionRatio,
+                        101,
+                        safetyFactor
+                    );
+                    pyLoads.destroy();
+                } else {
+                    // Simple single-load analysis
+                    const loadCase = document.getElementById('load-case').value;
+                    const isDistributed = loadCase.includes('udl') || loadCase.includes('triangular');
+                    const rawLoad = parseFloat(document.getElementById('load-value').value);
+                    const loadValue = isDistributed ? rawLoad * conv.distributed : rawLoad * conv.force;
+                    const loadPosition = loadCase.includes('_any') ?
+                        parseFloat(document.getElementById('load-position').value) * conv.length : null;
+
+                    result = beamModule.beam_analysis(
+                        loadCase,
+                        sectionType,
+                        pyDims,
+                        span,
+                        loadValue,
+                        material,
+                        E,
+                        Fy,
+                        loadPosition,
+                        deflectionLimit,
+                        customDeflectionRatio,
+                        101,
+                        safetyFactor
+                    );
+                }
 
                 currentResult = result.toJs({ dict_converter: Object.fromEntries });
                 pyDims.destroy();
@@ -2035,11 +2853,15 @@
 
                 if (currentResult.error) {
                     alert(`Error: ${currentResult.error}`);
+                    document.getElementById('export-section').style.display = 'none';
                 } else {
                     displayResults(currentResult);
                     updateDiagrams(currentResult);
                     updateCharts(currentResult);
-                    updateEquations(currentResult);
+                    if (currentMode !== 'advanced') {
+                        updateEquations(currentResult);
+                    }
+                    document.getElementById('export-section').style.display = 'block';
                 }
 
             } catch (error) {
@@ -2060,13 +2882,13 @@
             const sectionKey = sectionType.toLowerCase();
             let html = '';
 
-            // Helper to format dimension values nicely
+            // Helper to format SI dimension values in current display units
             const fmtDim = (val) => {
-                if (val >= 1) return val.toFixed(3) + ' m';
-                return (val * 1000).toFixed(1) + ' mm';
+                const converted = UnitManager.convert(val, 'smallLength');
+                return formatNumber(converted, 3) + ' ' + UnitManager.label('smallLength');
             };
-            const fmtArea = (val) => formatEngineering(val, 'm²');
-            const fmtInertia = (val) => formatEngineering(val, 'm⁴');
+            const fmtArea = (val) => UnitManager.formatVal(val, 'area');
+            const fmtInertia = (val) => UnitManager.formatVal(val, 'inertia');
 
             if (sectionKey === 'rectangular') {
                 const b = dimensions.width;
@@ -2088,7 +2910,7 @@
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{I_x}{c} = \\frac{b \\cdot h^2}{6} \\]</div>
                         <div class="equation-calculation">S = I / c = ${fmtInertia(props.Ix)} / ${fmtDim(props.c_top)}</div>
-                        <span class="equation-result">S = ${formatEngineering(props.Sx_top, 'm³')}</span>
+                        <span class="equation-result">S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 'circular_solid') {
@@ -2110,7 +2932,7 @@
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{\\pi d^3}{32} \\]</div>
                         <div class="equation-calculation">S = π × ${fmtDim(d)}³ / 32</div>
-                        <span class="equation-result">S = ${formatEngineering(props.Sx_top, 'm³')}</span>
+                        <span class="equation-result">S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 'circular_hollow') {
@@ -2133,7 +2955,7 @@
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{I_x}{c} \\quad \\text{where } c = \\frac{d_o}{2} \\]</div>
                         <div class="equation-calculation">S = ${fmtInertia(props.Ix)} / ${fmtDim(props.c_top)}</div>
-                        <span class="equation-result">S = ${formatEngineering(props.Sx_top, 'm³')}</span>
+                        <span class="equation-result">S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 'i_beam') {
@@ -2159,7 +2981,7 @@
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{I_x}{c} \\quad \\text{where } c = \\frac{d}{2} \\]</div>
                         <div class="equation-calculation">S = ${fmtInertia(props.Ix)} / ${fmtDim(props.c_top)}</div>
-                        <span class="equation-result">S = ${formatEngineering(props.Sx_top, 'm³')}</span>
+                        <span class="equation-result">S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 'box') {
@@ -2185,7 +3007,7 @@
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{I_x}{c} \\quad \\text{where } c = \\frac{h}{2} \\]</div>
                         <div class="equation-calculation">S = ${fmtInertia(props.Ix)} / ${fmtDim(props.c_top)}</div>
-                        <span class="equation-result">S = ${formatEngineering(props.Sx_top, 'm³')}</span>
+                        <span class="equation-result">S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 'c_channel') {
@@ -2193,24 +3015,25 @@
                 const bf = dimensions.flange_width;
                 const tf = dimensions.flange_thickness;
                 const tw = dimensions.web_thickness;
+                const hw = d - 2 * tf;
                 html = `
                     <div class="equation-step">
                         <div class="equation-step-title">Cross-Sectional Area</div>
                         <div class="equation-formula">\\[ A = 2 \\cdot b_f \\cdot t_f + (d - 2t_f) \\cdot t_w \\]</div>
-                        <div class="equation-calculation">A = 2 × ${fmtDim(bf)} × ${fmtDim(tf)} + ${fmtDim(d - 2*tf)} × ${fmtDim(tw)}</div>
+                        <div class="equation-calculation">A = 2 × ${fmtDim(bf)} × ${fmtDim(tf)} + ${fmtDim(hw)} × ${fmtDim(tw)}</div>
                         <span class="equation-result">A = ${fmtArea(props.area)}</span>
                     </div>
                     <div class="equation-step">
                         <div class="equation-step-title">Moment of Inertia</div>
-                        <div class="equation-formula">\\[ I_x = \\frac{t_w \\cdot d^3}{12} + 2 \\left[ \\frac{b_f \\cdot t_f^3}{12} + b_f \\cdot t_f \\cdot \\left(\\frac{d - t_f}{2}\\right)^2 \\right] \\]</div>
-                        <div class="equation-calculation">Using parallel axis theorem for flanges</div>
+                        <div class="equation-formula">\\[ I_x = \\frac{b_f \\cdot d^3 - (b_f - t_w) \\cdot h_w^3}{12} \\]</div>
+                        <div class="equation-calculation">I = (${fmtDim(bf)} × ${fmtDim(d)}³ − ${fmtDim(bf - tw)} × ${fmtDim(hw)}³) / 12</div>
                         <span class="equation-result">I = ${fmtInertia(props.Ix)}</span>
                     </div>
                     <div class="equation-step">
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{I_x}{c} \\quad \\text{where } c = \\frac{d}{2} \\]</div>
                         <div class="equation-calculation">S = ${fmtInertia(props.Ix)} / ${fmtDim(props.c_top)}</div>
-                        <span class="equation-result">S = ${formatEngineering(props.Sx_top, 'm³')}</span>
+                        <span class="equation-result">S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 't_section') {
@@ -2240,7 +3063,7 @@
                     <div class="equation-step">
                         <div class="equation-step-title">Section Moduli (Unsymmetric)</div>
                         <div class="equation-formula">\\[ S_{top} = \\frac{I_x}{c_{top}}, \\quad S_{bot} = \\frac{I_x}{c_{bot}} \\]</div>
-                        <span class="equation-result">S_top = ${formatEngineering(props.Sx_top, 'm³')}, S_bot = ${formatEngineering(props.Sx_bottom, 'm³')}</span>
+                        <span class="equation-result">S_top = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}, S_bot = ${UnitManager.formatVal(props.Sx_bottom, 'sectionModulus')}</span>
                     </div>
                 `;
             } else if (sectionKey === 'standard_steel') {
@@ -2254,7 +3077,7 @@
                         <div class="equation-calculation">
                             A = ${fmtArea(props.area)}<br>
                             I = ${fmtInertia(props.Ix)}<br>
-                            S = ${formatEngineering(props.Sx_top, 'm³')}
+                            S = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}
                         </div>
                     </div>
                 `;
@@ -2275,7 +3098,7 @@
                     <div class="equation-step">
                         <div class="equation-step-title">Section Modulus</div>
                         <div class="equation-formula">\\[ S_x = \\frac{I_x}{c} \\]</div>
-                        <span class="equation-result">S_top = ${formatEngineering(props.Sx_top, 'm³')}, S_bot = ${formatEngineering(props.Sx_bottom, 'm³')}</span>
+                        <span class="equation-result">S_top = ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}, S_bot = ${UnitManager.formatVal(props.Sx_bottom, 'sectionModulus')}</span>
                     </div>
                 `;
             }
@@ -2315,6 +3138,7 @@
                 limitRatio = parseInt(deflectionLimit.substring(2));
             }
 
+            const uL = UnitManager.label('length');
             const html = `
                 <div class="equation-step">
                     <div class="equation-step-title">Maximum Deflection Formula</div>
@@ -2322,18 +3146,18 @@
                     <div class="equation-calculation">
                         For ${info.load_case_name || 'this load case'}, maximum deflection occurs at ${info.max_deflection_location || 'the critical point'}
                     </div>
-                    <span class="equation-result">δ_max = ${formatEngineering(result.max_deflection, 'm')}</span>
+                    <span class="equation-result">δ_max = ${UnitManager.formatVal(result.max_deflection, 'length')}</span>
                 </div>
                 <div class="equation-step">
                     <div class="equation-step-title">Allowable Deflection</div>
                     <div class="equation-formula">\\[ \\delta_{allow} = \\frac{L}{${limitRatio}} \\]</div>
-                    <div class="equation-calculation">δ_allow = ${formatNumber(span, 3)} m / ${limitRatio}</div>
-                    <span class="equation-result">δ_allow = ${formatEngineering(result.allowable_deflection, 'm')}</span>
+                    <div class="equation-calculation">δ_allow = ${formatNumber(span, 3)} ${uL} / ${limitRatio}</div>
+                    <span class="equation-result">δ_allow = ${UnitManager.formatVal(result.allowable_deflection, 'length')}</span>
                 </div>
                 <div class="equation-step">
                     <div class="equation-step-title">Deflection Utilization</div>
                     <div class="equation-formula">\\[ \\text{Utilization} = \\frac{\\delta_{max}}{\\delta_{allow}} \\times 100\\% \\]</div>
-                    <div class="equation-calculation">Utilization = ${formatEngineering(result.max_deflection, 'm')} / ${formatEngineering(result.allowable_deflection, 'm')} × 100%</div>
+                    <div class="equation-calculation">Utilization = ${UnitManager.formatVal(result.max_deflection, 'length')} / ${UnitManager.formatVal(result.allowable_deflection, 'length')} × 100%</div>
                     <span class="equation-result ${result.deflection_utilization > 100 ? 'style=\"background: var(--danger-color);\"' : ''}">${formatNumber(result.deflection_utilization, 1)}%</span>
                 </div>
             `;
@@ -2345,7 +3169,7 @@
             const container = document.getElementById('stress-equations-content');
             const props = result.section_properties;
             const safetyFactor = parseFloat(document.getElementById('safety-factor').value) || 1.5;
-            const Fy = parseFloat(document.getElementById('yield-strength').value) * 1e6; // MPa to Pa
+            const Fy = parseFloat(document.getElementById('yield-strength').value) * UnitManager.toSI('stressInput');
 
             // Determine which fiber governs
             const stressTop = result.stress_top || result.max_stress;
@@ -2361,19 +3185,19 @@
             if (isAsymmetric) {
                 stressHtml += `
                     <div class="equation-calculation">
-                        <strong>Top fiber:</strong> σ = ${formatEngineering(result.max_moment, 'N·m')} × ${formatNumber(props.c_top * 1000, 1)} mm / ${formatEngineering(props.Ix, 'm⁴')}<br>
-                        <strong>Bottom fiber:</strong> σ = ${formatEngineering(result.max_moment, 'N·m')} × ${formatNumber(props.c_bottom * 1000, 1)} mm / ${formatEngineering(props.Ix, 'm⁴')}
+                        <strong>Top fiber:</strong> σ = ${UnitManager.formatVal(result.max_moment, 'moment')} × ${formatNumber(UnitManager.convert(props.c_top, 'smallLength'), 1)} ${UnitManager.label('smallLength')} / ${UnitManager.formatVal(props.Ix, 'inertia')}<br>
+                        <strong>Bottom fiber:</strong> σ = ${UnitManager.formatVal(result.max_moment, 'moment')} × ${formatNumber(UnitManager.convert(props.c_bottom, 'smallLength'), 1)} ${UnitManager.label('smallLength')} / ${UnitManager.formatVal(props.Ix, 'inertia')}
                     </div>
                     <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
-                        <span class="equation-result ${topGoverns ? '' : 'style=\"background: var(--text-light);\"'}">σ_top = ${formatEngineering(stressTop, 'Pa')}${topGoverns ? ' ← governs' : ''}</span>
-                        <span class="equation-result ${!topGoverns ? '' : 'style=\"background: var(--text-light);\"'}">σ_bot = ${formatEngineering(stressBottom, 'Pa')}${!topGoverns ? ' ← governs' : ''}</span>
+                        <span class="equation-result ${topGoverns ? '' : 'style=\"background: var(--text-light);\"'}">σ_top = ${UnitManager.formatVal(stressTop, 'stress')}${topGoverns ? ' ← governs' : ''}</span>
+                        <span class="equation-result ${!topGoverns ? '' : 'style=\"background: var(--text-light);\"'}">σ_bot = ${UnitManager.formatVal(stressBottom, 'stress')}${!topGoverns ? ' ← governs' : ''}</span>
                     </div>`;
             } else {
                 stressHtml += `
                     <div class="equation-calculation">
-                        σ = ${formatEngineering(result.max_moment, 'N·m')} / ${formatEngineering(props.Sx_top, 'm³')}
+                        σ = ${UnitManager.formatVal(result.max_moment, 'moment')} / ${UnitManager.formatVal(props.Sx_top, 'sectionModulus')}
                     </div>
-                    <span class="equation-result">σ_max = ${formatEngineering(result.max_stress, 'Pa')}</span>`;
+                    <span class="equation-result">σ_max = ${UnitManager.formatVal(result.max_stress, 'stress')}</span>`;
             }
 
             stressHtml += `</div>`;
@@ -2383,16 +3207,16 @@
                     <div class="equation-step-title">Allowable Stress (ASD Method)</div>
                     <div class="equation-formula">\\[ \\sigma_{allow} = \\frac{F_y}{SF} \\]</div>
                     <div class="equation-calculation">
-                        σ_allow = ${formatEngineering(Fy, 'Pa')} / ${formatNumber(safetyFactor, 2)}
+                        σ_allow = ${UnitManager.formatVal(Fy, 'stress')} / ${formatNumber(safetyFactor, 2)}
                     </div>
-                    <span class="equation-result">σ_allow = ${formatEngineering(result.allowable_stress, 'Pa')}</span>
+                    <span class="equation-result">σ_allow = ${UnitManager.formatVal(result.allowable_stress, 'stress')}</span>
                 </div>
                 <div class="equation-step">
                     <div class="equation-step-title">Safety Factor</div>
                     <div class="equation-formula">\\[ SF = \\frac{F_y}{\\sigma_{allow}} \\]</div>
                     <div class="equation-calculation">
                         Applied safety factor: ${formatNumber(safetyFactor, 2)}<br>
-                        F_y (Yield Strength) = ${formatEngineering(Fy, 'Pa')}
+                        F_y (Yield Strength) = ${UnitManager.formatVal(Fy, 'stress')}
                     </div>
                     <p style="margin-top: 8px; font-size: 0.85rem; color: var(--text-light);">
                         Typical values: 1.5–2.0 for buildings, 2.5–4.0 for critical applications
@@ -2401,7 +3225,7 @@
                 <div class="equation-step">
                     <div class="equation-step-title">Stress Utilization</div>
                     <div class="equation-formula">\\[ \\text{Utilization} = \\frac{\\sigma_{max}}{\\sigma_{allow}} \\times 100\\% \\]</div>
-                    <div class="equation-calculation">Utilization = ${formatEngineering(result.max_stress, 'Pa')} / ${formatEngineering(result.allowable_stress, 'Pa')} × 100%</div>
+                    <div class="equation-calculation">Utilization = ${UnitManager.formatVal(result.max_stress, 'stress')} / ${UnitManager.formatVal(result.allowable_stress, 'stress')} × 100%</div>
                     <span class="equation-result ${result.stress_utilization > 100 ? 'style=\"background: var(--danger-color);\"' : ''}">${formatNumber(result.stress_utilization, 1)}%</span>
                 </div>
             `;
@@ -2437,15 +3261,21 @@
             grid.innerHTML = '';
 
             const info = result.load_case_info || {};
+            const uLen = UnitManager.label('length');
+            const uForce = UnitManager.label('force');
+            const uMoment = UnitManager.label('moment');
+            const uStress = UnitManager.label('stress');
+            const uDist = UnitManager.label('distributed');
+
             const cards = [
                 {
                     label: 'Max Deflection',
-                    value: result.max_deflection,
-                    unit: 'm',
+                    value: UnitManager.convert(result.max_deflection, 'length'),
+                    unit: uLen,
                     key: 'deflection',
                     details: {
-                        location: `At x = ${formatNumber(result.max_deflection_position)} m`,
-                        allowable: `Allowable: ${formatEngineering(result.allowable_deflection, 'm')} (${result.deflection_limit_code})`,
+                        location: `At x = ${formatNumber(UnitManager.convert(result.max_deflection_position, 'length'))} ${uLen}`,
+                        allowable: `Allowable: ${UnitManager.formatVal(result.allowable_deflection, 'length')} (${result.deflection_limit_code})`,
                         utilization: `Utilization: ${formatNumber(result.deflection_utilization, 1)}%`,
                         equation: info.max_deflection_formula || '',
                         explanation: 'Maximum vertical displacement of the beam under load. Must be less than the allowable limit to prevent damage to finishes and ensure occupant comfort.'
@@ -2453,8 +3283,8 @@
                 },
                 {
                     label: 'Max Bending Moment',
-                    value: result.max_moment,
-                    unit: 'N·m',
+                    value: UnitManager.convert(result.max_moment, 'moment'),
+                    unit: uMoment,
                     key: 'moment',
                     details: {
                         location: info.max_moment_location || 'At critical section',
@@ -2464,8 +3294,8 @@
                 },
                 {
                     label: 'Max Shear Force',
-                    value: result.max_shear,
-                    unit: 'N',
+                    value: UnitManager.convert(result.max_shear, 'force'),
+                    unit: uForce,
                     key: 'shear',
                     details: {
                         location: info.max_shear_location || 'At support',
@@ -2475,11 +3305,11 @@
                 },
                 {
                     label: 'Max Bending Stress',
-                    value: result.max_stress,
-                    unit: 'Pa',
+                    value: UnitManager.convert(result.max_stress, 'stress'),
+                    unit: uStress,
                     key: 'stress',
                     details: {
-                        allowable: `Allowable: ${formatEngineering(result.allowable_stress, 'Pa')} (Fy/SF)`,
+                        allowable: `Allowable: ${UnitManager.formatVal(result.allowable_stress, 'stress')} (Fy/SF)`,
                         utilization: `Utilization: ${formatNumber(result.stress_utilization, 1)}%`,
                         equation: '\\sigma_{max} = \\frac{M_{max} \\cdot c}{I}',
                         explanation: 'Maximum normal stress at the extreme fiber of the cross-section. Must remain below allowable stress to prevent yielding.'
@@ -2487,15 +3317,41 @@
                 },
                 {
                     label: 'Beam Self-Weight',
-                    value: result.beam_weight,
-                    unit: 'N',
+                    value: UnitManager.convert(result.beam_weight, 'force'),
+                    unit: uForce,
                     key: 'weight',
                     details: {
-                        perMeter: `Per meter: ${formatEngineering(result.beam_weight / parseFloat(document.getElementById('span').value), 'N/m')}`,
+                        perMeter: `Per unit length: ${UnitManager.formatVal(result.beam_weight / parseFloat(document.getElementById('span').value), 'distributed')}`,
                         explanation: 'Total weight of the beam based on cross-sectional area and material density. For steel, density ≈ 7850 kg/m³. Self-weight should be considered as an additional distributed load in design.'
                     }
                 },
             ];
+
+            // Add reaction forces card if available
+            if (result.reactions) {
+                const rx = result.reactions;
+                const hasRightReaction = Math.abs(rx.R_right) > 1e-10;
+                const hasLeftMoment = Math.abs(rx.M_left) > 1e-10;
+                const hasRightMoment = Math.abs(rx.M_right) > 1e-10;
+
+                let reactionDetails = `R_left = ${UnitManager.formatVal(rx.R_left, 'force')}`;
+                if (hasRightReaction) reactionDetails += `<br>R_right = ${UnitManager.formatVal(rx.R_right, 'force')}`;
+                if (hasLeftMoment) reactionDetails += `<br>M_left = ${UnitManager.formatVal(rx.M_left, 'moment')}`;
+                if (hasRightMoment) reactionDetails += `<br>M_right = ${UnitManager.formatVal(rx.M_right, 'moment')}`;
+
+                // Show the dominant reaction as the card value
+                const maxReaction = Math.max(Math.abs(rx.R_left), Math.abs(rx.R_right));
+                cards.push({
+                    label: 'Reaction Forces',
+                    value: UnitManager.convert(maxReaction, 'force'),
+                    unit: uForce,
+                    key: 'reactions',
+                    details: {
+                        location: reactionDetails,
+                        explanation: 'Support reaction forces and moments required for equilibrium. These are the forces and moments the supports must provide to keep the beam in static equilibrium under the applied loading.'
+                    }
+                });
+            }
 
             cards.forEach((card, index) => {
                 const div = document.createElement('div');
@@ -2530,7 +3386,7 @@
                     <div class="result-card-header">
                         <div class="result-card-main">
                             <div class="label">${card.label}</div>
-                            <div class="value">${formatEngineering(card.value, card.unit)}</div>
+                            <div class="value">${formatAuto(card.value, card.unit)}</div>
                         </div>
                         <button class="result-card-toggle" data-target="${detailsId}">Details ▼</button>
                     </div>
@@ -2595,13 +3451,17 @@
             const tbody = document.querySelector('#section-properties-table tbody');
             tbody.innerHTML = '';
             const props = result.section_properties;
+            const uArea = UnitManager.label('area');
+            const uInertia = UnitManager.label('inertia');
+            const uSxUnit = UnitManager.label('sectionModulus');
+            const uSmLen = UnitManager.label('smallLength');
             const propRows = [
-                ['Area (A)', formatEngineering(props.area, 'm²')],
-                ['Moment of Inertia (I)', formatEngineering(props.Ix, 'm⁴')],
-                ['Section Modulus - Top (Sx)', formatEngineering(props.Sx_top, 'm³')],
-                ['Section Modulus - Bottom (Sx)', formatEngineering(props.Sx_bottom, 'm³')],
-                ['Distance to Top Fiber (c)', formatNumber(props.c_top * 1000, 1) + ' mm'],
-                ['Distance to Bottom Fiber (c)', formatNumber(props.c_bottom * 1000, 1) + ' mm'],
+                ['Area (A)', UnitManager.formatVal(props.area, 'area')],
+                ['Moment of Inertia (I)', UnitManager.formatVal(props.Ix, 'inertia')],
+                ['Section Modulus - Top (Sx)', UnitManager.formatVal(props.Sx_top, 'sectionModulus')],
+                ['Section Modulus - Bottom (Sx)', UnitManager.formatVal(props.Sx_bottom, 'sectionModulus')],
+                ['Distance to Top Fiber (c)', formatNumber(UnitManager.convert(props.c_top, 'smallLength'), 1) + ' ' + uSmLen],
+                ['Distance to Bottom Fiber (c)', formatNumber(UnitManager.convert(props.c_bottom, 'smallLength'), 1) + ' ' + uSmLen],
             ];
 
             propRows.forEach(([label, value]) => {
@@ -2638,6 +3498,143 @@
         // =============================================================================
         // DIAGRAMS
         // =============================================================================
+        // =============================================================================
+        // LIVE PREVIEW (no calculation results needed)
+        // =============================================================================
+        function drawBeamPreview() {
+            const svg = document.getElementById('beam-preview-svg');
+            if (!svg) return;
+
+            const span = parseFloat(document.getElementById('span').value) || 5;
+
+            const margin = 60;
+            const width = 600 - 2 * margin;
+            const beamY = 90;
+
+            let html = '';
+
+            // Beam line
+            html += `<line x1="${margin}" y1="${beamY}" x2="${margin + width}" y2="${beamY}"
+                     stroke="#111827" stroke-width="8" stroke-linecap="round"/>`;
+
+            // Determine support type and load type from current mode
+            let supportType, loadCase;
+            if (currentMode === 'advanced') {
+                supportType = document.getElementById('support-type').value;
+                // Get first load entry type for preview
+                const firstLoadType = document.querySelector('#load-list .load-type-select');
+                loadCase = firstLoadType ? firstLoadType.value : 'distributed';
+            } else {
+                loadCase = document.getElementById('load-case').value;
+                supportType = 'simply_supported';
+                if (loadCase.startsWith('cantilever')) supportType = 'cantilever';
+                else if (loadCase.startsWith('fixed_fixed')) supportType = 'fixed_fixed';
+                else if (loadCase.startsWith('propped')) supportType = 'propped';
+            }
+
+            // Supports
+            if (supportType === 'simply_supported') {
+                html += `<polygon points="${margin},${beamY+5} ${margin-15},${beamY+30} ${margin+15},${beamY+30}"
+                         fill="none" stroke="#111827" stroke-width="2"/>`;
+                html += `<polygon points="${margin+width},${beamY+5} ${margin+width-15},${beamY+30} ${margin+width+15},${beamY+30}"
+                         fill="none" stroke="#111827" stroke-width="2"/>`;
+                html += `<circle cx="${margin+width}" cy="${beamY+35}" r="5" fill="none" stroke="#111827" stroke-width="2"/>`;
+            } else if (supportType === 'cantilever') {
+                html += `<rect x="${margin-15}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+                html += `<line x1="${margin-15}" y1="${beamY-30}" x2="${margin-15}" y2="${beamY+30}" stroke="#111827" stroke-width="3"/>`;
+            } else if (supportType === 'fixed_fixed') {
+                html += `<rect x="${margin-15}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+                html += `<rect x="${margin+width}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+            } else if (supportType === 'propped') {
+                html += `<rect x="${margin-15}" y="${beamY-30}" width="15" height="60" fill="#111827"/>`;
+                html += `<polygon points="${margin+width},${beamY+5} ${margin+width-15},${beamY+30} ${margin+width+15},${beamY+30}"
+                         fill="none" stroke="#111827" stroke-width="2"/>`;
+            }
+
+            // Load arrows helper
+            const loadColor = '#b91c1c';
+            function drawLoadArrows(lc, positionValue) {
+                let out = '';
+                let lt = 'distributed';
+                if (lc.includes('point')) lt = 'point';
+                else if (lc.includes('triangular')) lt = 'triangular';
+
+                if (lt === 'point') {
+                    let loadX = margin + width / 2;
+                    if (lc.includes('_end')) loadX = margin + width;
+                    if (lc.includes('_any')) {
+                        const pos = positionValue || span / 2;
+                        loadX = margin + (pos / span) * width;
+                    }
+                    out += `<line x1="${loadX}" y1="${beamY-55}" x2="${loadX}" y2="${beamY-10}" stroke="${loadColor}" stroke-width="3"/>`;
+                    out += `<polygon points="${loadX},${beamY-10} ${loadX-8},${beamY-25} ${loadX+8},${beamY-25}" fill="${loadColor}"/>`;
+                    out += `<text x="${loadX}" y="${beamY-62}" text-anchor="middle" font-size="14" font-weight="600" fill="${loadColor}">P</text>`;
+                } else if (lt === 'distributed') {
+                    const numArrows = 8;
+                    for (let i = 0; i <= numArrows; i++) {
+                        const x = margin + (i / numArrows) * width;
+                        out += `<line x1="${x}" y1="${beamY-45}" x2="${x}" y2="${beamY-10}" stroke="${loadColor}" stroke-width="2"/>`;
+                        out += `<polygon points="${x},${beamY-10} ${x-5},${beamY-20} ${x+5},${beamY-20}" fill="${loadColor}"/>`;
+                    }
+                    out += `<line x1="${margin}" y1="${beamY-45}" x2="${margin+width}" y2="${beamY-45}" stroke="${loadColor}" stroke-width="2"/>`;
+                    out += `<text x="${margin+width/2}" y="${beamY-52}" text-anchor="middle" font-size="14" font-weight="600" fill="${loadColor}">w</text>`;
+                } else if (lt === 'triangular') {
+                    const numArrows = 8;
+                    const maxHeight = 45;
+                    for (let i = 0; i <= numArrows; i++) {
+                        const x = margin + (i / numArrows) * width;
+                        const arrowHeight = (i / numArrows) * maxHeight;
+                        if (arrowHeight > 5) {
+                            out += `<line x1="${x}" y1="${beamY-arrowHeight}" x2="${x}" y2="${beamY-10}" stroke="${loadColor}" stroke-width="2"/>`;
+                            out += `<polygon points="${x},${beamY-10} ${x-5},${beamY-20} ${x+5},${beamY-20}" fill="${loadColor}"/>`;
+                        }
+                    }
+                    out += `<line x1="${margin}" y1="${beamY-10}" x2="${margin+width}" y2="${beamY-maxHeight}" stroke="${loadColor}" stroke-width="2"/>`;
+                    out += `<text x="${margin+width-20}" y="${beamY-maxHeight-8}" text-anchor="middle" font-size="14" font-weight="600" fill="${loadColor}">w</text>`;
+                }
+                return out;
+            }
+
+            // Draw loads based on mode
+            if (currentMode === 'advanced') {
+                document.querySelectorAll('#load-list .load-entry').forEach(entry => {
+                    const type = entry.querySelector('.load-type-select').value;
+                    const posInput = entry.querySelector('.load-position-input');
+                    const pos = posInput ? parseFloat(posInput.value) : null;
+                    html += drawLoadArrows(type, pos);
+                });
+            } else {
+                const pos = parseFloat(document.getElementById('load-position').value);
+                html += drawLoadArrows(loadCase, pos);
+            }
+
+            // Dimension line
+            const dimLineY = beamY + 45;
+            html += `<defs>
+                <marker id="preview-arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 Z" fill="#6b7280"/>
+                </marker>
+            </defs>`;
+            html += `<line x1="${margin}" y1="${dimLineY}" x2="${margin+width}" y2="${dimLineY}"
+                     stroke="#6b7280" stroke-width="1" marker-start="url(#preview-arrow)" marker-end="url(#preview-arrow)"/>`;
+            html += `<text x="${margin+width/2}" y="${dimLineY+16}" text-anchor="middle" font-size="12" fill="#6b7280">L = ${span} ${UnitManager.label('length')}</text>`;
+
+            svg.setAttribute('viewBox', '0 0 600 180');
+            svg.innerHTML = html;
+        }
+
+        function updateSectionPreview() {
+            const container = document.getElementById('section-preview-container');
+            if (!container) return;
+            const sectionType = document.getElementById('section-type').value;
+            container.innerHTML = generateSectionDiagram(sectionType);
+        }
+
+        function updateLivePreview() {
+            drawBeamPreview();
+            updateSectionPreview();
+        }
+
         function updateDiagrams(result) {
             drawBeamDiagram(result);
             drawDeflectionDiagram(result);
@@ -2733,10 +3730,61 @@
                 html += `<text x="${margin+width-20}" y="${beamY-maxHeight-10}" text-anchor="middle" font-size="14" font-weight="600" fill="#b91c1c">w</text>`;
             }
 
+            // Reaction force arrows (green, upward)
+            if (result.reactions) {
+                const rx = result.reactions;
+                const reactionColor = '#0f766e';
+
+                // Left vertical reaction
+                if (Math.abs(rx.R_left) > 1e-10) {
+                    const arrowX = margin;
+                    const arrowTop = beamY + 45;
+                    const arrowBot = arrowTop + 35;
+                    html += `<line x1="${arrowX}" y1="${arrowBot}" x2="${arrowX}" y2="${arrowTop}"
+                             stroke="${reactionColor}" stroke-width="2.5"/>`;
+                    html += `<polygon points="${arrowX},${arrowTop} ${arrowX-6},${arrowTop+10} ${arrowX+6},${arrowTop+10}"
+                             fill="${reactionColor}"/>`;
+                    html += `<text x="${arrowX}" y="${arrowBot+14}" text-anchor="middle" font-size="11" font-weight="600" fill="${reactionColor}">${UnitManager.formatVal(rx.R_left, 'force')}</text>`;
+                }
+
+                // Right vertical reaction
+                if (Math.abs(rx.R_right) > 1e-10) {
+                    const arrowX = margin + width;
+                    const arrowTop = beamY + 45;
+                    const arrowBot = arrowTop + 35;
+                    html += `<line x1="${arrowX}" y1="${arrowBot}" x2="${arrowX}" y2="${arrowTop}"
+                             stroke="${reactionColor}" stroke-width="2.5"/>`;
+                    html += `<polygon points="${arrowX},${arrowTop} ${arrowX-6},${arrowTop+10} ${arrowX+6},${arrowTop+10}"
+                             fill="${reactionColor}"/>`;
+                    html += `<text x="${arrowX}" y="${arrowBot+14}" text-anchor="middle" font-size="11" font-weight="600" fill="${reactionColor}">${UnitManager.formatVal(rx.R_right, 'force')}</text>`;
+                }
+
+                // Left moment reaction (arc arrow)
+                if (Math.abs(rx.M_left) > 1e-10) {
+                    const arcCx = margin - 5, arcCy = beamY;
+                    const arcR = 18;
+                    html += `<path d="M${arcCx},${arcCy-arcR} A${arcR},${arcR} 0 1,1 ${arcCx-arcR},${arcCy}"
+                             fill="none" stroke="${reactionColor}" stroke-width="2"/>`;
+                    html += `<polygon points="${arcCx-arcR},${arcCy} ${arcCx-arcR+6},${arcCy-5} ${arcCx-arcR+6},${arcCy+5}"
+                             fill="${reactionColor}"/>`;
+                }
+
+                // Right moment reaction (arc arrow)
+                if (Math.abs(rx.M_right) > 1e-10) {
+                    const arcCx = margin + width + 5, arcCy = beamY;
+                    const arcR = 18;
+                    html += `<path d="M${arcCx},${arcCy-arcR} A${arcR},${arcR} 0 1,0 ${arcCx+arcR},${arcCy}"
+                             fill="none" stroke="${reactionColor}" stroke-width="2"/>`;
+                    html += `<polygon points="${arcCx+arcR},${arcCy} ${arcCx+arcR-6},${arcCy-5} ${arcCx+arcR-6},${arcCy+5}"
+                             fill="${reactionColor}"/>`;
+                }
+            }
+
             // Dimension line
-            html += `<line x1="${margin}" y1="${beamY+50}" x2="${margin+width}" y2="${beamY+50}"
+            const dimLineY = (result.reactions && (Math.abs(result.reactions.R_left) > 1e-10 || Math.abs(result.reactions.R_right) > 1e-10)) ? beamY + 100 : beamY + 50;
+            html += `<line x1="${margin}" y1="${dimLineY}" x2="${margin+width}" y2="${dimLineY}"
                      stroke="#6b7280" stroke-width="1" marker-start="url(#arrow)" marker-end="url(#arrow)"/>`;
-            html += `<text x="${margin+width/2}" y="${beamY+70}" text-anchor="middle" font-size="12" fill="#6b7280">L = ${span} m</text>`;
+            html += `<text x="${margin+width/2}" y="${dimLineY+16}" text-anchor="middle" font-size="12" fill="#6b7280">L = ${span} ${UnitManager.label('length')}</text>`;
 
             // Arrow marker definition
             html = `<defs>
@@ -2745,6 +3793,9 @@
                 </marker>
             </defs>` + html;
 
+            // Expand viewBox to accommodate reactions
+            const svgHeight = (result.reactions && (Math.abs(result.reactions.R_left) > 1e-10 || Math.abs(result.reactions.R_right) > 1e-10)) ? 250 : 200;
+            svg.setAttribute('viewBox', `0 0 600 ${svgHeight}`);
             svg.innerHTML = html;
         }
 
@@ -2790,7 +3841,7 @@
 
             html += `<circle cx="${maxX}" cy="${maxY}" r="5" fill="#3b82f6"/>`;
             html += `<text x="${maxX}" y="${maxY + 20}" text-anchor="middle" font-size="11" fill="#3b82f6">
-                     δ = ${formatEngineering(maxDefl, 'm')}</text>`;
+                     δ = ${UnitManager.formatVal(maxDefl, 'length')}</text>`;
 
             svg.innerHTML = html;
         }
@@ -2808,43 +3859,52 @@
             const curve = result.curve;
             if (!curve) return;
 
-            const x = curve.map(p => p.x);
+            const uLen = UnitManager.label('length');
+            // Use the system's native units for chart axes
+            const sys = UnitManager._sys();
+            const deflUnit = sys.smallLength.label;
+            const deflFactor = sys.smallLength.fromSI;
+            const momentUnit = sys.moment.label;
+            const momentFactor = sys.moment.fromSI;
+            const shearUnit = sys.force.label;
+            const shearFactor = sys.force.fromSI;
+            const xData = curve.map(p => UnitManager.convert(p.x, 'length'));
+
             let y, title, yLabel;
 
             if (chartType === 'deflection') {
-                y = curve.map(p => p.deflection * 1000); // mm
+                y = curve.map(p => p.deflection * deflFactor);
                 title = 'Deflection Along Beam';
-                yLabel = 'Deflection (mm)';
+                yLabel = `Deflection (${deflUnit})`;
             } else if (chartType === 'moment') {
-                y = curve.map(p => p.moment / 1000); // kN·m
+                y = curve.map(p => p.moment * momentFactor);
                 title = 'Bending Moment Diagram';
-                yLabel = 'Moment (kN·m)';
+                yLabel = `Moment (${momentUnit})`;
             } else if (chartType === 'shear') {
-                y = curve.map(p => p.shear / 1000); // kN
+                y = curve.map(p => p.shear * shearFactor);
                 title = 'Shear Force Diagram';
-                yLabel = 'Shear (kN)';
+                yLabel = `Shear (${shearUnit})`;
             } else if (chartType === 'combined') {
-                // Multiple traces
                 const traces = [
                     {
-                        x: x,
-                        y: curve.map(p => p.deflection * 1000),
-                        name: 'Deflection (mm)',
+                        x: xData,
+                        y: curve.map(p => p.deflection * deflFactor),
+                        name: `Deflection (${deflUnit})`,
                         yaxis: 'y',
                     },
                     {
-                        x: x,
-                        y: curve.map(p => p.moment / 1000),
-                        name: 'Moment (kN·m)',
+                        x: xData,
+                        y: curve.map(p => p.moment * momentFactor),
+                        name: `Moment (${momentUnit})`,
                         yaxis: 'y2',
                     },
                 ];
 
                 Plotly.newPlot('response-chart', traces, {
                     title: 'Combined Response',
-                    xaxis: { title: 'Position (m)' },
-                    yaxis: { title: 'Deflection (mm)', side: 'left' },
-                    yaxis2: { title: 'Moment (kN·m)', side: 'right', overlaying: 'y' },
+                    xaxis: { title: `Position (${uLen})` },
+                    yaxis: { title: `Deflection (${deflUnit})`, side: 'left' },
+                    yaxis2: { title: `Moment (${momentUnit})`, side: 'right', overlaying: 'y' },
                     legend: { x: 0.5, y: 1.1, orientation: 'h' },
                     margin: { t: 60, b: 50, l: 60, r: 60 },
                 }, { responsive: true });
@@ -2852,7 +3912,7 @@
             }
 
             const trace = {
-                x: x,
+                x: xData,
                 y: y,
                 type: 'scatter',
                 mode: 'lines',
@@ -2863,7 +3923,7 @@
 
             Plotly.newPlot('response-chart', [trace], {
                 title: title,
-                xaxis: { title: 'Position along beam (m)' },
+                xaxis: { title: `Position along beam (${uLen})` },
                 yaxis: { title: yLabel },
                 margin: { t: 50, b: 50, l: 60, r: 30 },
             }, { responsive: true });
@@ -2889,6 +3949,10 @@
             initSettings();
             initPyodide();
             initGaugeToggles();
+
+            // Draw initial live preview (doesn't need Pyodide)
+            drawBeamPreview();
+            updateSectionPreview();
 
             // Mode toggle
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -2918,12 +3982,14 @@
             // Section type change
             document.getElementById('section-type').addEventListener('change', () => {
                 renderSectionFields();
+                updateSectionPreview();
                 scheduleCalculation();
             });
 
             // Load case change
             document.getElementById('load-case').addEventListener('change', () => {
                 updateLoadLabel();
+                drawBeamPreview();
                 scheduleCalculation();
             });
 
@@ -2940,6 +4006,7 @@
             });
             document.getElementById('span').addEventListener('input', () => {
                 updateTotalLoad();
+                drawBeamPreview();
                 scheduleCalculation();
             });
 
@@ -2951,6 +4018,12 @@
                     el.addEventListener('change', scheduleCalculation);
                 }
             });
+
+            // Load position also updates beam preview
+            const loadPosEl = document.getElementById('load-position');
+            if (loadPosEl) {
+                loadPosEl.addEventListener('input', drawBeamPreview);
+            }
 
             // Show/hide custom deflection ratio input
             document.getElementById('deflection-limit').addEventListener('change', function() {
@@ -2969,6 +4042,25 @@
 
             // Calculate button
             document.getElementById('calculate-btn').addEventListener('click', calculate);
+
+            // Advanced mode: support type change updates available load types
+            document.getElementById('support-type').addEventListener('change', () => {
+                // Clear and rebuild load entries with new load type options
+                const list = document.getElementById('load-list');
+                list.innerHTML = '';
+                loadCounter = 0;
+                addLoadEntry();
+                drawBeamPreview();
+                scheduleCalculation();
+            });
+
+            // Advanced mode: add load button
+            document.getElementById('add-load-btn').addEventListener('click', addLoadEntry);
+
+            // Export buttons
+            document.getElementById('export-csv-btn').addEventListener('click', exportCSV);
+            document.getElementById('export-json-btn').addEventListener('click', exportJSON);
+            document.getElementById('export-pdf-btn').addEventListener('click', exportPDF);
         });
     </script>
 </body>

@@ -9,6 +9,7 @@ Business planning and strategy documents for the engineering tools platform.
 | [LAUNCH_PLAN.md](LAUNCH_PLAN.md) | Pre-launch requirements, soft launch plan, traffic acquisition |
 | [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) | Competitor landscape, differentiation opportunities |
 | [MONETIZATION_ROADMAP.md](MONETIZATION_ROADMAP.md) | Revenue strategies, payment platforms, projections |
+| [SITE_AUDIT_2026-02.md](SITE_AUDIT_2026-02.md) | Feb 2026 codebase audit: bugs, consistency gaps, strategic ideas |
 
 ## Current Priority
 

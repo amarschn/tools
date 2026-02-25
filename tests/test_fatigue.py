@@ -79,3 +79,46 @@ def test_invalid_inputs_raise():
             yield_strength_mpa=350.0,
             mean_stress_correction="invalid",
         )
+
+
+def test_polymer_mode_uses_target_life_reference_and_derating():
+    results = estimate_fatigue_life(
+        max_stress_mpa=24.0,
+        min_stress_mpa=4.0,
+        ultimate_strength_mpa=70.0,
+        yield_strength_mpa=60.0,
+        material_family="polymer",
+        material_preset="pom",
+        temperature_c=60.0,
+        load_frequency_hz=8.0,
+        moisture_derating_factor=0.95,
+        chemical_derating_factor=0.90,
+        uv_derating_factor=0.92,
+        target_life_cycles=1e6,
+    )
+
+    assert results["material_family"] == "polymer"
+    assert results["reference_stress_basis"] == "target_life"
+    assert results["polymer_derating_factor"] < 1.0
+    assert results["endurance_limit_mpa"] == pytest.approx(0.0, abs=1e-12)
+    assert math.isfinite(results["estimated_life_cycles"])
+    assert math.isfinite(results["estimated_life_hours"])
+
+
+def test_stress_uncertainty_life_bounds():
+    results = estimate_fatigue_life(
+        max_stress_mpa=260.0,
+        min_stress_mpa=20.0,
+        ultimate_strength_mpa=600.0,
+        yield_strength_mpa=350.0,
+        stress_uncertainty_pct=20.0,
+        target_life_cycles=1e6,
+    )
+
+    assert results["uncertainty_active"] is True
+    assert results["conservative_life_cycles"] <= results["estimated_life_cycles"]
+    assert results["optimistic_life_cycles"] >= results["estimated_life_cycles"]
+    assert (
+        results["conservative_life_safety_factor"]
+        <= results["life_safety_factor"]
+    )

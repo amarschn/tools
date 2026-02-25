@@ -358,6 +358,8 @@
         }
         .advanced-section.visible { display: block; }
         .advanced-section h4 { margin-bottom: 12px; color: var(--secondary-color); font-size: 0.9rem; }
+        .polymer-only { display: none; }
+        body.polymer-mode .polymer-only { display: block; }
         .advanced-toggle {
             background: none; border: none;
             color: var(--accent-color);
@@ -439,6 +441,7 @@
         .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
         .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
         .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .value .value-note { font-size: 0.72rem; color: var(--text-light); margin-top: 4px; font-family: var(--font-sans); }
         .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
         .result-item .icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.4; }
 
@@ -895,8 +898,8 @@
     <main class="container">
         <h1>Fatigue Life Estimator</h1>
         <p class="tool-description" id="tool-description">
-            Estimate cycles to failure using mean stress correction and Basquin S-N curves.
-            Compare fatigue life and yield margins against your targets.
+            Estimate fatigue life for metals and plastics using mean stress correction and Basquin S-N curves.
+            Compare life and static strength margins, and bound results when stress is uncertain.
         </p>
 
         <details class="purpose-section">
@@ -905,13 +908,13 @@
                 <h3>Tool Purpose</h3>
                 <p>
                     This tool estimates fatigue life for a cyclic stress history using mean stress
-                    correction and a Basquin S-N model. It highlights both fatigue life margin and
-                    static yield margin so you can assess durability and peak stress risk together.
+                    correction and a Basquin S-N model. It supports metal and polymer presets,
+                    environmental derating for plastics, and stress-uncertainty bounding.
                 </p>
                 <ul>
-                    <li>Inputs: max/min stress, material strengths, correction method</li>
-                    <li>Advanced: endurance limit modifiers and Basquin coefficients</li>
-                    <li>Outputs: estimated cycles, safety factors, and status guidance</li>
+                    <li>Inputs: stress cycle, material family/preset, strengths, correction method</li>
+                    <li>Advanced: endurance and Basquin parameters, polymer derating, uncertainty</li>
+                    <li>Outputs: life, safety factors, status guidance, and uncertainty bounds</li>
                 </ul>
                 <p>For detailed assumptions and references, see the README in this tool folder.</p>
             </div>
@@ -935,6 +938,28 @@
                 </div>
 
                 <form id="calc-form">
+                    <h4>Material Model</h4>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="material_family">Material Family</label>
+                            <select id="material_family" name="material_family">
+                                <option value="metal">Metal</option>
+                                <option value="polymer">Polymer / Plastic</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="material_preset">Material Preset</label>
+                            <select id="material_preset" name="material_preset">
+                                <option value="custom">Custom</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+                    <div class="callout-info" id="preset-note" style="margin-top: 0;">
+                        <strong>Preset:</strong> Custom values are active.
+                    </div>
+
                     <h4>Stress Cycle</h4>
                     <div class="input-row">
                         <div class="input-group">
@@ -947,6 +972,11 @@
                             <input type="number" id="min_stress_mpa" name="min_stress_mpa" value="50" step="any">
                             <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
                         </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="stress_uncertainty_pct">Stress Uncertainty (+/- %)</label>
+                        <input type="number" id="stress_uncertainty_pct" name="stress_uncertainty_pct" value="0" min="0" max="95" step="1">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
                     </div>
 
                     <h4 style="margin-top: 16px;">Material Strength</h4>
@@ -1015,6 +1045,39 @@
                             </div>
                         </div>
 
+                        <div class="polymer-only">
+                            <h4 style="margin-top: 16px;">Polymer Performance Derating</h4>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="temperature_c">Service Temperature (deg C)</label>
+                                    <input type="number" id="temperature_c" name="temperature_c" value="23" step="1">
+                                    <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="load_frequency_hz">Load Frequency (Hz)</label>
+                                    <input type="number" id="load_frequency_hz" name="load_frequency_hz" value="2.0" step="0.1" min="0.01">
+                                    <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                                </div>
+                            </div>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="moisture_derating_factor">Moisture Derating Factor</label>
+                                    <input type="number" id="moisture_derating_factor" name="moisture_derating_factor" value="1.00" step="0.01" min="0.2" max="1.2">
+                                    <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                                </div>
+                                <div class="input-group">
+                                    <label for="chemical_derating_factor">Chemical Derating Factor</label>
+                                    <input type="number" id="chemical_derating_factor" name="chemical_derating_factor" value="1.00" step="0.01" min="0.2" max="1.2">
+                                    <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="uv_derating_factor">UV/Weathering Derating Factor</label>
+                                <input type="number" id="uv_derating_factor" name="uv_derating_factor" value="1.00" step="0.01" min="0.2" max="1.2">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
                         <h4 style="margin-top: 16px;">Targets</h4>
                         <div class="input-row">
                             <div class="input-group">
@@ -1064,7 +1127,7 @@
                             <span class="icon">&#9660;</span>
                         </div>
                         <div class="result-item" data-key="life_safety_factor" onclick="toggleDerivation('life_safety_factor')">
-                            <div class="label">Life Safety Factor</div>
+                            <div class="label" id="label-life-sf">Life Safety Factor</div>
                             <div class="value" id="val-life_safety_factor">--</div>
                             <span class="icon">&#9660;</span>
                         </div>
@@ -1079,11 +1142,14 @@
                             <span class="icon">&#9660;</span>
                         </div>
                         <div class="result-item" data-key="yield_safety_factor" onclick="toggleDerivation('yield_safety_factor')">
-                            <div class="label">Yield Safety Factor</div>
+                            <div class="label" id="label-yield-factor">Yield Safety Factor</div>
                             <div class="value" id="val-yield_safety_factor">--</div>
                             <span class="icon">&#9660;</span>
                         </div>
                     </div>
+
+                    <div class="callout-warning" id="uncertainty-summary" style="display: none;"></div>
+                    <div class="callout-info" id="material-summary" style="display: none;"></div>
 
                     <!-- Derivation Panels -->
                     <div class="derivation-panel" id="deriv-estimated_life_cycles">
@@ -1189,7 +1255,7 @@
                         </div>
 
                         <div class="safety-gauge" onclick="toggleGaugeExplainer('b')" style="cursor: pointer;">
-                            <div class="gauge-label">Yield Safety Factor</div>
+                            <div class="gauge-label" id="gauge-b-label">Yield Safety Factor</div>
                             <div class="gauge-bar-container">
                                 <div class="gauge-bar" id="gauge-b-bar"></div>
                                 <div class="gauge-threshold" id="gauge-b-threshold"></div>
@@ -1199,10 +1265,10 @@
                         </div>
                         <div class="gauge-explainer" id="explainer-b">
                             <div class="explainer-header">
-                                <strong>Peak Stress vs Yield</strong>
+                                <strong id="explainer-b-title">Peak Stress vs Yield</strong>
                                 <button class="derivation-close" onclick="event.stopPropagation(); toggleGaugeExplainer('b')">&times;</button>
                             </div>
-                            <p>This compares peak stress to yield strength.</p>
+                            <p id="explainer-b-desc">This compares peak stress to yield strength.</p>
                             <div class="explainer-equation">$$SF_y = \frac{S_y}{\sigma_{peak}}$$</div>
                             <div class="explainer-values">
                                 <span class="value-tag" id="explainer-b-yield">Yield: --</span>
@@ -1231,7 +1297,7 @@
                     <div class="chart-container">
                         <h4>S-N Curve</h4>
                         <div id="sn-plot" class="chart-plot"></div>
-                        <div class="chart-explanation">
+                        <div class="chart-explanation" id="sn-chart-explanation">
                             <strong>What this shows:</strong> Basquin S-N curve with an endurance limit floor.
                             <strong>Key insight:</strong> The marker shows the current equivalent stress and estimated life.
                         </div>
@@ -1243,7 +1309,7 @@
                     <div class="chart-container">
                         <h4>Mean Stress Diagram</h4>
                         <div id="mean-stress-plot" class="chart-plot"></div>
-                        <div class="chart-explanation">
+                        <div class="chart-explanation" id="mean-chart-explanation">
                             <strong>What this shows:</strong> Allowable alternating stress vs mean stress for the selected correction.
                             <strong>Key insight:</strong> The marker shows your current operating point.
                         </div>
@@ -1851,6 +1917,7 @@
         // =================================================================
         let toolDocumentation = {};
         let pyUtils, pyToolModule;
+        let materialPresets = {};
         let lastResults = null;
         let lastContext = null;
         let openDerivation = null;
@@ -1858,8 +1925,11 @@
         const TOOL_MODULE_NAME = 'fatigue';
         const TOOL_FUNCTION_NAME = 'estimate_fatigue_life';
         const PARAM_ORDER = [
+            'material_family',
+            'material_preset',
             'max_stress_mpa',
             'min_stress_mpa',
+            'stress_uncertainty_pct',
             'ultimate_strength_mpa',
             'yield_strength_mpa',
             'mean_stress_correction',
@@ -1871,7 +1941,12 @@
             'fatigue_strength_exponent',
             'target_life_cycles',
             'required_fatigue_factor',
-            'required_yield_factor'
+            'required_yield_factor',
+            'temperature_c',
+            'load_frequency_hz',
+            'moisture_derating_factor',
+            'chemical_derating_factor',
+            'uv_derating_factor'
         ];
         const STORAGE_KEY = 'fatigue-life-estimator-settings';
 
@@ -2004,6 +2079,159 @@
                 return value.toExponential(2);
             }
             return value.toFixed(0);
+        }
+
+        function formatHours(value) {
+            if (value === Infinity) return 'Inf';
+            if (!Number.isFinite(value) || value <= 0) return 'N/A';
+            if (value >= 1e5 || value < 1e-2) {
+                return value.toExponential(2);
+            }
+            return value.toFixed(2);
+        }
+
+        function toPlainObject(value) {
+            if (value instanceof Map) {
+                const obj = {};
+                value.forEach((v, k) => {
+                    obj[k] = toPlainObject(v);
+                });
+                return obj;
+            }
+            if (Array.isArray(value)) {
+                return value.map(item => toPlainObject(item));
+            }
+            return value;
+        }
+
+        function setInputValueIfPresent(id, value, digits = 4) {
+            const element = document.getElementById(id);
+            if (!element || value === undefined || value === null) return;
+
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                const rounded = Number(value.toFixed(digits));
+                element.value = String(rounded);
+                return;
+            }
+            element.value = String(value);
+        }
+
+        function getCurrentPresetData() {
+            const family = document.getElementById('material_family').value;
+            const presetKey = document.getElementById('material_preset').value;
+            const familyPresets = materialPresets[family] || {};
+            return familyPresets[presetKey] || null;
+        }
+
+        function updatePresetNote() {
+            const note = document.getElementById('preset-note');
+            const presetKey = document.getElementById('material_preset').value;
+            const presetData = getCurrentPresetData();
+
+            if (!presetData || presetKey === 'custom') {
+                note.innerHTML = '<strong>Preset:</strong> Custom values are active.';
+                return;
+            }
+
+            const presetName = presetData.display_name || presetKey;
+            note.innerHTML =
+                `<strong>Preset:</strong> Loaded ${presetName}. You can still edit all fields after loading.`;
+        }
+
+        function applyPresetDefaults() {
+            const presetData = getCurrentPresetData();
+            const presetKey = document.getElementById('material_preset').value;
+
+            if (!presetData || presetKey === 'custom') {
+                updatePresetNote();
+                return;
+            }
+
+            [
+                'ultimate_strength_mpa',
+                'yield_strength_mpa',
+                'endurance_limit_ratio',
+                'surface_factor',
+                'size_factor',
+                'reliability_factor',
+                'fatigue_strength_coeff_ratio',
+                'fatigue_strength_exponent'
+            ].forEach(fieldId => {
+                if (presetData[fieldId] !== undefined) {
+                    setInputValueIfPresent(fieldId, Number(presetData[fieldId]));
+                }
+            });
+
+            updatePresetNote();
+        }
+
+        function populateMaterialPresetOptions() {
+            const family = document.getElementById('material_family').value;
+            const presetSelect = document.getElementById('material_preset');
+            const familyPresets = materialPresets[family] || {};
+            const previousValue = presetSelect.value;
+
+            presetSelect.innerHTML = '';
+            const presetEntries = Object.entries(familyPresets);
+            presetEntries.sort(([a], [b]) => {
+                if (a === 'custom') return -1;
+                if (b === 'custom') return 1;
+                return a.localeCompare(b);
+            });
+
+            presetEntries.forEach(([key, preset]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = preset.display_name || key;
+                presetSelect.appendChild(option);
+            });
+
+            if (familyPresets[previousValue]) {
+                presetSelect.value = previousValue;
+            } else {
+                presetSelect.value = 'custom';
+            }
+
+            applyPresetDefaults();
+            updateMaterialModeUI();
+        }
+
+        function updateMaterialModeUI() {
+            const family = document.getElementById('material_family').value;
+            const isPolymer = family === 'polymer';
+            document.body.classList.toggle('polymer-mode', isPolymer);
+
+            const yieldLabel = document.querySelector('label[for="yield_strength_mpa"]');
+            if (yieldLabel) {
+                yieldLabel.textContent = isPolymer
+                    ? 'Static Strength Sy/Allowable (MPa)'
+                    : 'Yield Strength Sy (MPa)';
+            }
+
+            const correctionSelect = document.getElementById('mean_stress_correction');
+            const soderbergOption = correctionSelect?.querySelector('option[value="soderberg"]');
+            if (soderbergOption) {
+                soderbergOption.disabled = isPolymer;
+                if (isPolymer && correctionSelect.value === 'soderberg') {
+                    correctionSelect.value = 'goodman';
+                }
+            }
+        }
+
+        function bindMaterialControls() {
+            const familySelect = document.getElementById('material_family');
+            const presetSelect = document.getElementById('material_preset');
+
+            familySelect.addEventListener('change', () => {
+                populateMaterialPresetOptions();
+            });
+            presetSelect.addEventListener('change', () => {
+                applyPresetDefaults();
+            });
+
+            populateMaterialPresetOptions();
+            updatePresetNote();
+            updateMaterialModeUI();
         }
 
         // =================================================================
@@ -2170,6 +2398,16 @@
                 pyUtils = pyodide.globals.get('utils');
                 pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
 
+                // Load material presets directly from Python (single source of truth)
+                loadingText.textContent = 'Loading material presets...';
+                const presetProxy = pyToolModule.get_fatigue_material_presets();
+                materialPresets = toPlainObject(
+                    presetProxy.toJs({ dict_converter: Object.fromEntries })
+                );
+                presetProxy.destroy();
+
+                bindMaterialControls();
+
                 // Parse documentation
                 loadingText.textContent = 'Parsing documentation...';
                 const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
@@ -2228,8 +2466,11 @@
 
             try {
                 // Gather inputs
+                const material_family = document.getElementById('material_family').value;
+                const material_preset = document.getElementById('material_preset').value;
                 const max_stress_mpa = parseFloat(document.getElementById('max_stress_mpa').value);
                 const min_stress_mpa = parseFloat(document.getElementById('min_stress_mpa').value);
+                const stress_uncertainty_pct = parseFloat(document.getElementById('stress_uncertainty_pct').value);
                 const ultimate_strength_mpa = parseFloat(document.getElementById('ultimate_strength_mpa').value);
                 const yield_strength_mpa = parseFloat(document.getElementById('yield_strength_mpa').value);
                 const mean_stress_correction = document.getElementById('mean_stress_correction').value;
@@ -2242,6 +2483,11 @@
                 const target_life_cycles = parseFloat(document.getElementById('target_life_cycles').value);
                 const required_fatigue_factor = parseFloat(document.getElementById('required_fatigue_factor').value);
                 const required_yield_factor = parseFloat(document.getElementById('required_yield_factor').value);
+                const temperature_c = parseFloat(document.getElementById('temperature_c').value);
+                const load_frequency_hz = parseFloat(document.getElementById('load_frequency_hz').value);
+                const moisture_derating_factor = parseFloat(document.getElementById('moisture_derating_factor').value);
+                const chemical_derating_factor = parseFloat(document.getElementById('chemical_derating_factor').value);
+                const uv_derating_factor = parseFloat(document.getElementById('uv_derating_factor').value);
 
                 // Call Python function
                 const resultProxy = pyToolModule.estimate_fatigue_life(
@@ -2258,36 +2504,34 @@
                     fatigue_strength_exponent,
                     target_life_cycles,
                     required_fatigue_factor,
-                    required_yield_factor
+                    required_yield_factor,
+                    material_family,
+                    material_preset,
+                    temperature_c,
+                    load_frequency_hz,
+                    moisture_derating_factor,
+                    chemical_derating_factor,
+                    uv_derating_factor,
+                    stress_uncertainty_pct
                 );
 
                 // Convert to JS object with proper nested dict handling
-                lastResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                lastResults = toPlainObject(
+                    resultProxy.toJs({ dict_converter: Object.fromEntries })
+                );
                 resultProxy.destroy();
 
-                // Ensure nested objects are properly converted (arrays should be arrays, not Maps)
-                if (lastResults.sn_curve) {
-                    lastResults.sn_curve = Object.fromEntries(
-                        Object.entries(lastResults.sn_curve).map(([k, v]) =>
-                            [k, Array.isArray(v) ? v : (v instanceof Map ? Array.from(v.values()) : v)]
-                        )
-                    );
-                }
-                if (lastResults.mean_stress_curve) {
-                    lastResults.mean_stress_curve = Object.fromEntries(
-                        Object.entries(lastResults.mean_stress_curve).map(([k, v]) =>
-                            [k, Array.isArray(v) ? v : (v instanceof Map ? Array.from(v.values()) : v)]
-                        )
-                    );
-                }
-                if (lastResults.recommendations && lastResults.recommendations instanceof Map) {
-                    lastResults.recommendations = Array.from(lastResults.recommendations.values());
+                if (!Array.isArray(lastResults.recommendations)) {
+                    lastResults.recommendations = lastResults.recommendations
+                        ? Object.values(lastResults.recommendations)
+                        : [];
                 }
 
                 lastContext = {
                     requiredFatigueFactor: required_fatigue_factor,
                     requiredYieldFactor: required_yield_factor,
                     targetLifeCycles: target_life_cycles,
+                    materialFamily: material_family,
                     inputs: {
                         max_stress_mpa: max_stress_mpa,
                         min_stress_mpa: min_stress_mpa,
@@ -2322,18 +2566,68 @@
             document.getElementById('safety-section').style.display = 'block';
             document.getElementById('status-banner').style.display = 'flex';
 
+            const isPolymer = results.material_family === 'polymer';
+            const uncertaintyActive = Boolean(results.uncertainty_active);
+
             const lifeFactor = results.life_safety_factor;
             const yieldFactor = results.yield_safety_factor;
             const fatigueFactor = results.fatigue_safety_factor;
+            const conservativeLifeFactor = results.conservative_life_safety_factor ?? lifeFactor;
+            const conservativeYieldFactor = results.conservative_yield_safety_factor ?? yieldFactor;
+            const lifeFactorForStatus = uncertaintyActive ? conservativeLifeFactor : lifeFactor;
+            const yieldFactorForStatus = uncertaintyActive ? conservativeYieldFactor : yieldFactor;
+
+            document.getElementById('label-life-sf').textContent = uncertaintyActive
+                ? 'Life Safety Factor (nominal)'
+                : 'Life Safety Factor';
+            document.getElementById('label-yield-factor').textContent = isPolymer
+                ? 'Strength Safety Factor'
+                : 'Yield Safety Factor';
+            document.getElementById('gauge-b-label').textContent = isPolymer
+                ? 'Strength Safety Factor'
+                : 'Yield Safety Factor';
+            document.getElementById('explainer-b-title').textContent = isPolymer
+                ? 'Peak Stress vs Static Strength'
+                : 'Peak Stress vs Yield';
+            document.getElementById('explainer-b-desc').textContent = isPolymer
+                ? 'This compares peak stress to the static strength input.'
+                : 'This compares peak stress to yield strength.';
 
             // Update result values using precision setting
             document.getElementById('val-estimated_life_cycles').innerHTML =
-                formatCycles(results.estimated_life_cycles) + '<span class="unit">cycles</span>';
+                formatCycles(results.estimated_life_cycles) +
+                '<span class="unit">cycles</span>' +
+                `<div class="value-note">${formatHours(results.estimated_life_hours)} h @ ${formatNumber(results.load_frequency_hz, 2)} Hz</div>`;
             document.getElementById('val-life_safety_factor').innerHTML = formatNumber(lifeFactor, 2);
             document.getElementById('val-equivalent_stress_mpa').innerHTML =
                 formatNumber(results.equivalent_stress_mpa, 1) + '<span class="unit">MPa</span>';
             document.getElementById('val-fatigue_safety_factor').innerHTML = formatNumber(fatigueFactor, 2);
             document.getElementById('val-yield_safety_factor').innerHTML = formatNumber(yieldFactor, 2);
+
+            const uncertaintyBox = document.getElementById('uncertainty-summary');
+            if (uncertaintyActive) {
+                uncertaintyBox.style.display = 'block';
+                uncertaintyBox.innerHTML =
+                    `<strong>Stress uncertainty active (+/- ${formatNumber(results.stress_uncertainty_pct, 1)}%).</strong> ` +
+                    `Conservative life: ${formatCycles(results.conservative_life_cycles)} cycles ` +
+                    `(${formatHours(results.conservative_life_hours)} h, SF ${formatNumber(conservativeLifeFactor, 2)}). ` +
+                    `Optimistic life: ${formatCycles(results.optimistic_life_cycles)} cycles ` +
+                    `(${formatHours(results.optimistic_life_hours)} h, SF ${formatNumber(results.optimistic_life_safety_factor, 2)}).`;
+            } else {
+                uncertaintyBox.style.display = 'none';
+            }
+
+            const materialBox = document.getElementById('material-summary');
+            if (isPolymer) {
+                materialBox.style.display = 'block';
+                materialBox.innerHTML =
+                    `<strong>Polymer derating:</strong> Combined factor ${formatNumber(results.polymer_derating_factor, 3)} ` +
+                    `(temperature ${formatNumber(results.temperature_factor, 3)}, frequency ${formatNumber(results.frequency_factor, 3)}, ` +
+                    `moisture ${formatNumber(results.moisture_factor, 3)}, chemical ${formatNumber(results.chemical_factor, 3)}, ` +
+                    `UV ${formatNumber(results.uv_factor, 3)}).`;
+            } else {
+                materialBox.style.display = 'none';
+            }
 
             // Handle show derivations setting
             if (settings.showDerivations && !openDerivation) {
@@ -2363,36 +2657,44 @@
             }
 
             // Update safety gauges
-            const classA = getGaugeClass(lifeFactor, requiredFatigueFactor);
-            const classB = getGaugeClass(yieldFactor, requiredYieldFactor);
+            const classA = getGaugeClass(lifeFactorForStatus, requiredFatigueFactor);
+            const classB = getGaugeClass(yieldFactorForStatus, requiredYieldFactor);
 
             document.getElementById('gauge-a-bar').className = 'gauge-bar ' + classA;
-            document.getElementById('gauge-a-bar').style.width = getGaugeWidth(lifeFactor) + '%';
+            document.getElementById('gauge-a-bar').style.width = getGaugeWidth(lifeFactorForStatus) + '%';
             document.getElementById('gauge-a-value').className = 'gauge-value ' + classA;
-            document.getElementById('gauge-a-value').textContent = 'SF_L = ' + formatNumber(lifeFactor, 2);
+            document.getElementById('gauge-a-value').textContent = uncertaintyActive
+                ? 'SF_L,c = ' + formatNumber(lifeFactorForStatus, 2)
+                : 'SF_L = ' + formatNumber(lifeFactorForStatus, 2);
             document.getElementById('gauge-a-threshold').style.left = getGaugeWidth(requiredFatigueFactor) + '%';
 
             document.getElementById('gauge-b-bar').className = 'gauge-bar ' + classB;
-            document.getElementById('gauge-b-bar').style.width = getGaugeWidth(yieldFactor) + '%';
+            document.getElementById('gauge-b-bar').style.width = getGaugeWidth(yieldFactorForStatus) + '%';
             document.getElementById('gauge-b-value').className = 'gauge-value ' + classB;
-            document.getElementById('gauge-b-value').textContent = 'SF_y = ' + formatNumber(yieldFactor, 2);
+            document.getElementById('gauge-b-value').textContent = isPolymer
+                ? 'SF_s = ' + formatNumber(yieldFactorForStatus, 2)
+                : 'SF_y = ' + formatNumber(yieldFactorForStatus, 2);
             document.getElementById('gauge-b-threshold').style.left = getGaugeWidth(requiredYieldFactor) + '%';
 
             // Update explainer panels
-            const peakStress = Math.max(Math.abs(inputs.max_stress_mpa), Math.abs(inputs.min_stress_mpa));
+            const uncertaintyScale = uncertaintyActive
+                ? (1 + results.stress_uncertainty_pct / 100.0)
+                : 1.0;
+            const peakStress = Math.max(Math.abs(inputs.max_stress_mpa), Math.abs(inputs.min_stress_mpa)) * uncertaintyScale;
 
-            document.getElementById('explainer-a-life').textContent =
-                'Estimated: ' + formatCycles(results.estimated_life_cycles) + ' cycles';
+            document.getElementById('explainer-a-life').textContent = uncertaintyActive
+                ? 'Conservative: ' + formatCycles(results.conservative_life_cycles) + ' cycles'
+                : 'Estimated: ' + formatCycles(results.estimated_life_cycles) + ' cycles';
             document.getElementById('explainer-a-target').textContent =
                 'Target: ' + formatCycles(targetLifeCycles) + ' cycles';
             document.getElementById('explainer-a-result').textContent =
-                'SF_L: ' + formatNumber(lifeFactor, 2);
+                (uncertaintyActive ? 'SF_L,c: ' : 'SF_L: ') + formatNumber(lifeFactorForStatus, 2);
 
             const guidanceA = document.getElementById('explainer-a-guidance');
-            if (lifeFactor >= requiredFatigueFactor || lifeFactor === Infinity) {
+            if (lifeFactorForStatus >= requiredFatigueFactor || lifeFactorForStatus === Infinity) {
                 guidanceA.className = 'explainer-guidance good';
                 guidanceA.textContent = 'Life margin meets the required factor of ' + requiredFatigueFactor.toFixed(2) + '.';
-            } else if (lifeFactor >= 1.0) {
+            } else if (lifeFactorForStatus >= 1.0) {
                 guidanceA.className = 'explainer-guidance marginal';
                 guidanceA.textContent = 'Life margin is below target. Consider lowering alternating stress or improving finish.';
             } else {
@@ -2405,18 +2707,18 @@
             document.getElementById('explainer-b-peak').textContent =
                 'Peak: ' + formatNumber(peakStress, 1) + ' MPa';
             document.getElementById('explainer-b-result').textContent =
-                'SF_y: ' + formatNumber(yieldFactor, 2);
+                (isPolymer ? 'SF_s: ' : 'SF_y: ') + formatNumber(yieldFactorForStatus, 2);
 
             const guidanceB = document.getElementById('explainer-b-guidance');
-            if (yieldFactor >= requiredYieldFactor) {
+            if (yieldFactorForStatus >= requiredYieldFactor) {
                 guidanceB.className = 'explainer-guidance good';
-                guidanceB.textContent = 'Peak stress is within the yield margin.';
-            } else if (yieldFactor >= 1.0) {
+                guidanceB.textContent = 'Peak stress is within the static strength margin.';
+            } else if (yieldFactorForStatus >= 1.0) {
                 guidanceB.className = 'explainer-guidance marginal';
-                guidanceB.textContent = 'Yield margin is low. Consider reducing peak stress.';
+                guidanceB.textContent = 'Static strength margin is low. Consider reducing peak stress.';
             } else {
                 guidanceB.className = 'explainer-guidance bad';
-                guidanceB.textContent = 'Yielding is predicted at peak load.';
+                guidanceB.textContent = 'Static strength limit is exceeded at peak load.';
             }
 
             // Update status banner
@@ -2434,14 +2736,25 @@
                 'unacceptable': '&#10007;'
             };
             const statusMessages = {
-                'acceptable': 'Fatigue life and yield margins meet the specified targets.',
+                'acceptable': isPolymer
+                    ? 'Fatigue life and static strength margins meet the specified targets.'
+                    : 'Fatigue life and yield margins meet the specified targets.',
                 'marginal': 'At least one margin is below target. Review stress levels.',
-                'unacceptable': 'Target life or yield margin is not met.'
+                'unacceptable': isPolymer
+                    ? 'Target life or static strength margin is not met.'
+                    : 'Target life or yield margin is not met.'
             };
 
             document.getElementById('status-icon').innerHTML = statusIcons[results.status];
             document.getElementById('status-title').textContent = statusTitles[results.status];
-            document.getElementById('status-message').textContent = statusMessages[results.status];
+            let statusMessage = statusMessages[results.status];
+            if (uncertaintyActive) {
+                statusMessage += ' Assessment uses the conservative stress bound.';
+            }
+            if (isPolymer) {
+                statusMessage += ' Polymer derating is included.';
+            }
+            document.getElementById('status-message').textContent = statusMessage;
 
             const recList = document.getElementById('recommendations-list');
             recList.innerHTML = '';
@@ -2508,14 +2821,6 @@
                     line: { color: theme.accentColor, width: 2 }
                 },
                 {
-                    x: [data.cycles[0], data.cycles[data.cycles.length - 1]],
-                    y: [data.endurance_limit_mpa, data.endurance_limit_mpa],
-                    name: 'Endurance Limit',
-                    type: 'scatter',
-                    mode: 'lines',
-                    line: { color: theme.successColor, width: 2, dash: 'dash' }
-                },
-                {
                     x: [currentCycles],
                     y: [data.current_stress_mpa],
                     name: 'Operating Point',
@@ -2524,6 +2829,31 @@
                     marker: { color: theme.successColor, size: 9 }
                 }
             ];
+
+            const hasEnduranceLimit = Boolean(data.has_endurance_limit) && data.endurance_limit_mpa > 0;
+            const referenceStress = Number.isFinite(data.reference_stress_mpa)
+                ? data.reference_stress_mpa
+                : null;
+
+            if (hasEnduranceLimit) {
+                traces.splice(1, 0, {
+                    x: [data.cycles[0], data.cycles[data.cycles.length - 1]],
+                    y: [data.endurance_limit_mpa, data.endurance_limit_mpa],
+                    name: 'Endurance Limit',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.successColor, width: 2, dash: 'dash' }
+                });
+            } else if (referenceStress !== null) {
+                traces.splice(1, 0, {
+                    x: [data.cycles[0], data.cycles[data.cycles.length - 1]],
+                    y: [referenceStress, referenceStress],
+                    name: 'Target-Life Stress',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.successColor, width: 2, dash: 'dot' }
+                });
+            }
 
             const layout = {
                 xaxis: {
@@ -2545,6 +2875,13 @@
             };
 
             Plotly.newPlot('sn-plot', traces, layout, { responsive: true });
+
+            const explainer = document.getElementById('sn-chart-explanation');
+            if (explainer) {
+                explainer.innerHTML = hasEnduranceLimit
+                    ? '<strong>What this shows:</strong> Basquin S-N curve with endurance-limit floor. <strong>Key insight:</strong> The operating point below the floor indicates infinite-life expectation in this model.'
+                    : '<strong>What this shows:</strong> Basquin S-N curve without an endurance-limit floor (typical for plastics and many non-ferrous alloys). <strong>Key insight:</strong> The dotted line marks stress corresponding to your target life.';
+            }
         }
 
         function plotMeanStressDiagram(data) {
@@ -2598,6 +2935,16 @@
             };
 
             Plotly.newPlot('mean-stress-plot', traces, layout, { responsive: true });
+
+            const explainer = document.getElementById('mean-chart-explanation');
+            if (explainer) {
+                const basis = data.reference_stress_basis === 'endurance_limit'
+                    ? 'endurance-limit allowable stress.'
+                    : 'allowable stress at the selected target life.';
+                explainer.innerHTML =
+                    `<strong>What this shows:</strong> Allowable alternating stress vs mean stress based on ${basis} ` +
+                    '<strong>Key insight:</strong> Keep the operating point below the allowable curve.';
+            }
         }
     </script>
 </body>
