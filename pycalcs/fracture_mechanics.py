@@ -634,8 +634,14 @@ def analyze_fracture_and_crack_growth(
     a_cr_mm = a_cr_m * 1000.0
 
     # ---- Paris-law integration ----
-    # Fix #2: if initial crack is already at/above critical, cycles = 0
-    if a_0_m >= a_cr_m:
+    if not critical_crack_reached:
+        # K never reaches K_IC within the ligament — no true critical crack size.
+        # Life is effectively infinite; report inf cycles and zero life usage.
+        cycles_list = [0.0]
+        a_list = [a_0_m]
+        cycles_to_failure = float("inf")
+    elif a_0_m >= a_cr_m:
+        # Initial crack already at or above critical — immediate failure
         cycles_list = [0.0, 0.0]
         a_list = [a_0_m, a_0_m]
         cycles_to_failure = 0.0
@@ -646,8 +652,8 @@ def analyze_fracture_and_crack_growth(
         )
         cycles_to_failure = cycles_list[-1] if len(cycles_list) > 1 else float("inf")
 
-    life_fraction_used = design_life_cycles / cycles_to_failure if cycles_to_failure > 0 else float("inf")
-    inspection_interval = cycles_to_failure / 3.0 if cycles_to_failure > 0 else 0.0
+    life_fraction_used = design_life_cycles / cycles_to_failure if cycles_to_failure > 0 and math.isfinite(cycles_to_failure) else (float("inf") if cycles_to_failure == 0 else 0.0)
+    inspection_interval = cycles_to_failure / 3.0 if cycles_to_failure > 0 and math.isfinite(cycles_to_failure) else 0.0
 
     # Initial crack growth rate
     delta_sigma = sigma_driving_pa * (1.0 - stress_ratio_R)
@@ -696,6 +702,12 @@ def analyze_fracture_and_crack_growth(
         recommendations.append(
             "High initial crack growth rate detected. Prioritize NDT inspection "
             "and consider damage-tolerant design review."
+        )
+
+    if not critical_crack_reached:
+        recommendations.append(
+            "K_I never reaches K_IC within the available ligament. "
+            "Fatigue crack growth life is effectively infinite for this geometry."
         )
 
     if not recommendations:
