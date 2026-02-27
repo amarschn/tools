@@ -9,5 +9,8 @@ from . import example  # noqa: F401
 from . import fits  # noqa: F401
 from . import snapfits  # noqa: F401
 from . import materials  # noqa: F401
+from . import gases  # noqa: F401
 from . import orders_of_magnitude  # noqa: F401
 from . import pressure_vessels  # noqa: F401
+from . import rotor_stress  # noqa: F401
+from . import fracture_mechanics  # noqa: F401

@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Structural Resonance Calculator - Engineering Tools</title>
+    
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* --- 1. Global Styles & Variables --- */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
+        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        /* --- 2. Navigation --- */
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        /* --- 3. Main Tool Layout --- */
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.1rem; max-width: 80ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: minmax(320px, 0.85fr) minmax(420px, 1.15fr); gap: 24px; align-items: start; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        /* --- 3b. Purpose/README Section --- */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+
+        /* --- 4. Input Section --- */
+        .tool-inputs h2 { margin-top: 0; margin-bottom: 0.75rem; }
+        .input-tabs { display: flex; gap: 6px; margin-bottom: 1rem; flex-wrap: wrap; }
+        .input-tab { flex: 1 1 auto; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-light); cursor: pointer; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.03em; text-transform: uppercase; transition: all 0.2s ease; }
+        .input-tab.active { background: #fff; color: var(--text-color); border-color: var(--text-color); }
+        .input-section { display: none; animation: fadeIn 0.3s ease; }
+        .input-section.active { display: block; }
+        .input-group { margin-bottom: 1rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group input[type="number"], .input-group input[type="text"], .input-group select {
+            width: 100%;
+            padding: 12px 14px;
+            padding-right: 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
+        .input-group select {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+        
+        /* --- 5. Input Tooltip --- */
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: #f1f5f9;
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 38px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 220px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 6. Button Styles --- */
+        .btn { display: inline-block; padding: 10px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-align: center; transition: background-color 0.2s, box-shadow 0.2s; }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.1rem; padding: 12px; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* --- 7. Output Section --- */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #results-display { background-color: var(--primary-light); border-radius: 6px; padding: 16px; margin-bottom: 1.5rem; }
+        
+        /* --- 7b. Inline Result Details --- */
+        .result-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-item:first-child { padding-top: 0; }
+        .result-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;}
+        .result-header p { margin: 0; font-size: 1.1rem; flex: 1 1 auto; min-width: 250px;}
+        .result-header p strong { color: var(--text-color); }
+        details.inline-details { width: 100%; margin-top: 4px; }
+        details.inline-details > summary { color: var(--secondary-color); font-weight: 500; font-size: 0.9rem; text-align: right; }
+        details.inline-details > summary::after { content: '[Show Equation]'; }
+        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
+        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px; }
+        .equation-details p { margin-bottom: 0.5rem; }
+
+        .equation-container {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-top: 0.85rem;
+        }
+        .equation-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 12px 16px;
+        }
+        .equation-card strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--secondary-color);
+            font-size: 1rem;
+        }
+        .equation-card .equation-expression {
+            display: block;
+            margin-bottom: 8px;
+            overflow-x: auto;
+        }
+
+        /* --- 7d. Interactive Definitions (Tooltips) --- */
+        .def { position: relative; cursor: help; border-bottom: 2px dotted var(--border-color); }
+        .def::after { content: attr(data-def); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: var(--text-color); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 400; line-height: 1.4; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 10; }
+        .def:hover::after { opacity: 1; visibility: visible; }
+
+        /* --- 8. Footer --- */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* --- 9. Responsive Layout --- */
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+    
+    .support-link {
+      color: inherit;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .support-link:hover {
+      text-decoration: underline;
+    }
+    
+    .hidden { display: none !important; }
+    </style>
+</head>
+
+<body>
+    
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+
+        <h1>Structural Resonance Quick-Checker</h1>
+        <p class="tool-description" id="tool-description">
+            Loading description...
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & Background</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>Purpose of This Tool</h3>
+                <p>
+                    This tool estimates the structural natural frequencies of flat rectangular plates and cylindrical shells (rings). 
+                    It is especially useful in the context of eNVH (Electrified Noise, Vibration, and Harshness) analysis for 
+                    electric motor design. By checking the natural frequencies of motor housings or inverter covers, engineers can 
+                    avoid structural resonance driven by electromagnetic excitation frequencies (like the spatial orders from motor pole/slot combinations).
+                </p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+                <div class="input-tabs">
+                    <button type="button" class="input-tab active" data-target="section-geometry">Geometry & Mode</button>
+                    <button type="button" class="input-tab" data-target="section-material">Material</button>
+                </div>
+                <form id="calc-form">
+                    <div id="section-geometry" class="input-section active">
+                        <div class="input-group">
+                            <label for="geometry_type">Geometry Type</label>
+                            <select id="geometry_type" name="geometry_type" onchange="toggleGeometryInputs()">
+                                <option value="plate">Rectangular Plate</option>
+                                <option value="cylinder">Cylindrical Ring</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        
+                        <div class="input-group plate-only">
+                            <label for="length_mm">Length, a (mm)</label>
+                            <input type="number" id="length_mm" name="length_mm" value="300" step="any" required>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        
+                        <div class="input-group plate-only">
+                            <label for="width_mm">Width, b (mm)</label>
+                            <input type="number" id="width_mm" name="width_mm" value="200" step="any" required>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+
+                        <div class="input-group cylinder-only hidden">
+                            <label for="diameter_mm">Mean Diameter, 2R (mm)</label>
+                            <input type="number" id="diameter_mm" name="diameter_mm" value="150" step="any" required>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="thickness_mm">Thickness, h (mm)</label>
+                            <input type="number" id="thickness_mm" name="thickness_mm" value="5" step="any" required>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+
+                        <div class="input-group plate-only">
+                            <label for="mode_1">Mode m (Length-wise)</label>
+                            <input type="number" id="mode_1" name="mode_1" value="1" step="1" min="1" required>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="mode_2" id="label_mode_2">Mode n (Width-wise)</label>
+                            <input type="number" id="mode_2" name="mode_2" value="1" step="1" min="0" required>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+                    
+                    <div id="section-material" class="input-section">
+                        <div class="input-group">
+                            <label for="material">Material</label>
+                            <select id="material" name="material" onchange="toggleMaterialInputs()">
+                                <option value="aluminum">Aluminum 6061</option>
+                                <option value="steel">Steel (General)</option>
+                                <option value="cast_iron">Cast Iron (Gray)</option>
+                                <option value="titanium">Titanium (Grade 5)</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        
+                        <div class="custom-material-only hidden">
+                            <div class="input-group">
+                                <label for="custom_e_gpa">Elastic Modulus (GPa)</label>
+                                <input type="number" id="custom_e_gpa" name="custom_e_gpa" value="200" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="custom_rho_kg_m3">Density (kg/m³)</label>
+                                <input type="number" id="custom_rho_kg_m3" name="custom_rho_kg_m3" value="7850" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="custom_nu">Poisson's Ratio</label>
+                                <input type="number" id="custom_nu" name="custom_nu" value="0.3" step="0.01" max="0.49" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>Calculated Resonance</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Please enter inputs and press Calculate.</p>
+                    </div>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <p id="background-description">Loading equations...</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        // --- 0. Global Store & Config ---
+        let toolDocumentation = {};
+        let pyUtils, pyToolModule;
+        
+        const TOOL_MODULE_NAME = 'structural_resonance';
+        const TOOL_FUNCTION_NAME = 'calculate_structural_resonance';
+
+        // --- UI Toggles ---
+        function toggleGeometryInputs() {
+            const type = document.getElementById("geometry_type").value;
+            const plateInputs = document.querySelectorAll(".plate-only");
+            const cylinderInputs = document.querySelectorAll(".cylinder-only");
+            const labelMode2 = document.getElementById("label_mode_2");
+            const mode2Input = document.getElementById("mode_2");
+            
+            if (type === "plate") {
+                plateInputs.forEach(el => el.classList.remove("hidden"));
+                cylinderInputs.forEach(el => el.classList.add("hidden"));
+                labelMode2.textContent = "Mode n (Width-wise)";
+                mode2Input.min = 1;
+                if (mode2Input.value == 0) mode2Input.value = 1;
+            } else {
+                plateInputs.forEach(el => el.classList.add("hidden"));
+                cylinderInputs.forEach(el => el.classList.remove("hidden"));
+                labelMode2.textContent = "Circumferential Wave No. (n)";
+                mode2Input.min = 0;
+            }
+        }
+        
+        function toggleMaterialInputs() {
+            const material = document.getElementById("material").value;
+            const customInputs = document.querySelectorAll(".custom-material-only");
+            if (material === "custom") {
+                customInputs.forEach(el => el.classList.remove("hidden"));
+            } else {
+                customInputs.forEach(el => el.classList.add("hidden"));
+            }
+        }
+
+        // --- 1. Tabbed Interface Logic ---
+        function openTab(event, tabName) {
+            document.querySelectorAll(".tab-content").forEach(tab => tab.style.display = "none");
+            document.querySelectorAll(".tab-link").forEach(link => link.classList.remove("active"));
+            document.getElementById(tabName).style.display = "block";
+            event.currentTarget.classList.add("active");
+        }
+        function typesetMath() {
+            if (window.MathJax) { window.MathJax.typesetPromise(); }
+        }
+
+        const inputTabs = document.querySelectorAll('.input-tab');
+        const inputSections = document.querySelectorAll('.input-section');
+
+        inputTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetId = tab.dataset.target;
+                inputTabs.forEach(btn => btn.classList.toggle('active', btn === tab));
+                inputSections.forEach(section => {
+                    section.classList.toggle('active', section.id === targetId);
+                });
+            });
+        });
+
+        // --- 2. Pyodide Initialization ---
+        async function main() {
+            document.getElementById("calculate-btn").textContent = "Loading Pyodide...";
+            let pyodide = await loadPyodide();
+            await pyodide.loadPackage("micropip");
+            
+            document.getElementById("calculate-btn").textContent = "Loading Python...";
+            await pyodide.runPythonAsync(`
+                import micropip
+                from pyodide.http import pyfetch
+                
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+                
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+                
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+            
+            pyUtils = pyodide.globals.get('utils');
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+            
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                console.error("Docstring Error:", docMap.get('error'));
+                document.getElementById("results-placeholder").innerHTML = `
+                    <p style="color: red; font-weight: bold;">Initialization Error:</p>
+                    <p style="color: red;">Could not parse docstring from ${TOOL_MODULE_NAME}.py</p>
+                    <p style="color: red; font-size: 0.9em;">${docMap.get('error')}</p>
+                `;
+                return;
+            }
+            
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+            
+            populateUiFromDocs();
+            document.getElementById("calculate-btn").textContent = "Calculate";
+        }
+        main();
+        
+        // --- 3. Populate UI from Docstring ---
+        function populateUiFromDocs() {
+            if (!toolDocumentation.parameters) return;
+            
+            document.getElementById("tool-description").textContent = toolDocumentation.description;
+            
+            const paramList = [
+                'geometry_type', 'length_mm', 'width_mm', 'diameter_mm', 'thickness_mm', 
+                'mode_1', 'mode_2', 'material', 'custom_e_gpa', 'custom_rho_kg_m3', 'custom_nu'
+            ];
+            
+            paramList.forEach(id => {
+                document.querySelector('#' + id + ' + .tooltip-trigger')
+                    ?.setAttribute('data-tooltip', toolDocumentation.parameters[id] || 'N/A');
+            });
+            
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('
+').filter(line => line.trim().length > 0)
+                : [];
+            
+            const equationCards = latexLines.map((expression, index) => `
+                <div class="equation-card">
+                    <strong>Equation (${index + 1})</strong>
+                    <span class="equation-expression">\[ ${expression} \]</span>
+                </div>
+            `).join('');
+
+            document.getElementById('background').innerHTML = `
+                <h3>Underlying Principles</h3>
+                <p>${toolDocumentation.description.replace(/
+/g, '<br>')}</p>
+                <h4>Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations provided.</p>'}
+                </div>
+            `;
+            typesetMath();
+        }
+
+        // --- 4. Handle Calculation ---
+        const form = document.getElementById("calc-form");
+        form.addEventListener("submit", function(event) {
+            event.preventDefault(); 
+            
+            const geometry_type = document.getElementById("geometry_type").value;
+            const thickness_mm = parseFloat(document.getElementById("thickness_mm").value) || 0;
+            const length_mm = parseFloat(document.getElementById("length_mm").value) || 0;
+            const width_mm = parseFloat(document.getElementById("width_mm").value) || 0;
+            const diameter_mm = parseFloat(document.getElementById("diameter_mm").value) || 0;
+            const mode_1 = parseInt(document.getElementById("mode_1").value) || 0;
+            const mode_2 = parseInt(document.getElementById("mode_2").value) || 0;
+            const material = document.getElementById("material").value;
+            const custom_e_gpa = parseFloat(document.getElementById("custom_e_gpa").value) || 0;
+            const custom_rho_kg_m3 = parseFloat(document.getElementById("custom_rho_kg_m3").value) || 0;
+            const custom_nu = parseFloat(document.getElementById("custom_nu").value) || 0;
+
+            try {
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](
+                    geometry_type, thickness_mm, length_mm, width_mm, diameter_mm, 
+                    mode_1, mode_2, material, custom_e_gpa, custom_rho_kg_m3, custom_nu
+                ).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                const resultsDiv = document.getElementById("results-display");
+                resultsDiv.innerHTML = ''; 
+
+                const returnDefs = toolDocumentation.returns;
+                
+                // Format the numbers reasonably
+                const formatVal = (val, key) => {
+                    if (typeof val === 'string') return val;
+                    if (key.includes('frequency')) return val.toFixed(1) + ' Hz';
+                    if (key.includes('velocity')) return val.toFixed(0) + ' m/s';
+                    if (key.includes('rigidity')) return val.toExponential(3) + ' N·m';
+                    return val.toExponential(3);
+                };
+
+                for (const key in returnDefs) {
+                    if (key.startsWith('subst_')) continue; // Skip substitutions in the main loop
+                    
+                    const definition = returnDefs[key];
+                    const value = results[key];
+                    const substString = results[`subst_${key}`];
+                    
+                    const displayName = key.split('_')
+                        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(' ')
+                        .replace('Hz', '')
+                        .replace('M S', '')
+                        .replace('N M', '');
+
+                    const html = `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <p><strong><span class="def" data-def="${definition}">${displayName}</span>:</strong> ${formatVal(value, key)}</p>
+                            ${substString ? `
+                            <details class="inline-details">
+                                <summary></summary>
+                                <div class="equation-details">
+                                    <p><strong>Substituted:</strong> $$${substString}$$</p>
+                                </div>
+                            </details>` : ''}
+                        </div>
+                    </div>`;
+                    
+                    resultsDiv.innerHTML += html;
+                }
+                typesetMath();
+
+            } catch (error) {
+                console.error("Python calculation error:", error);
+                document.getElementById("results-display").innerHTML = `<p style="color: red; font-weight:bold;">Calculation Error:</p><p style="color: red;">${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

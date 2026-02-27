@@ -577,6 +577,34 @@ CSS for expert mode:
 body.expert-mode .advanced-section { display: block; }
 ```
 
+### Numeric Input `step` / `min` Alignment (Common Pitfall)
+
+HTML5 `<input type="number">` validates that entered values must equal `min + n × step` for some non-negative integer `n`. When `min` and `step` are misaligned with the default `value`, the browser flags the default as invalid and shows "nearest valid value" errors on form submission.
+
+**Examples of the bug:**
+```html
+<!-- BAD: valid values are 0.1, 1.1, 2.1... so 25 is invalid -->
+<input type="number" value="25" step="1" min="0.1">
+
+<!-- BAD: valid values are 0.01, 0.11, 0.21... so 1.0 is invalid -->
+<input type="number" value="1.0" step="0.1" min="0.01">
+
+<!-- BAD: valid values are 0.01, 1.01, 2.01... so 237 is invalid -->
+<input type="number" value="237" step="1" min="0.01">
+```
+
+**Fix — use one of these approaches:**
+```html
+<!-- PREFERRED: step="any" accepts all values, no grid constraint -->
+<input type="number" value="25" step="any" min="0.1">
+
+<!-- ALTERNATIVE: align min to the step grid (min is a multiple of step) -->
+<input type="number" value="25" step="1" min="1">
+<input type="number" value="1.0" step="0.1" min="0">
+```
+
+**Rule of thumb:** Use `step="any"` whenever `min` is not a clean multiple of `step`, or whenever the user may need to enter arbitrary-precision values. Reserve explicit `step` values only when arrow-key increment behavior matters AND `min` is aligned.
+
 ### Auto-Calculate: When to Use (and When Not To)
 
 Auto-calculate updates results in real-time as inputs change. While convenient for simple tools, it adds complexity and can degrade the user experience for complex calculations.

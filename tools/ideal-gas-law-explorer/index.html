@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Ideal Gas Law Explorer - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.01em; }
+        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        h3 { font-size: 1.05rem; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; color: var(--text-color); }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: none; padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1.05rem; max-width: 82ch; margin-bottom: 1rem; }
+        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Shrink]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
+        .purpose-content ul { padding-left: 20px; }
+
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.05rem; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 130px;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .input-group input[type="number"], .input-group select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+        }
+
+        .input-group input[disabled] {
+            background: #f1f5f9;
+            color: #64748b;
+            cursor: not-allowed;
+        }
+
+        .solve-banner {
+            margin-bottom: 1.25rem;
+            background: #e8edf3;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background-color: #f1f5f9;
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            line-height: 18px;
+            cursor: help;
+            position: absolute;
+            right: 8px;
+            top: 38px;
+        }
+
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--text-color);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            width: 240px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary { background-color: var(--text-color); color: white; width: 100%; font-size: 1.05rem; padding: 12px; }
+        .btn-primary:hover { background-color: #050608; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; }
+        .tab-link {
+            padding: 12px 16px;
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #results-display { background-color: var(--primary-light); border-radius: 6px; padding: 16px; margin-bottom: 1rem; }
+        .result-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .result-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-item:first-child { padding-top: 0; }
+        .result-item.highlight {
+            background: rgba(15, 118, 110, 0.1);
+            margin: -8px;
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .result-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+
+        .result-value {
+            font-family: var(--font-mono);
+            font-size: 1.02rem;
+            margin: 0;
+            color: var(--text-color);
+        }
+
+        .result-badge {
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            background: var(--success-color);
+            color: #fff;
+            border-radius: 999px;
+            padding: 2px 8px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        details.inline-details > summary {
+            color: var(--secondary-color);
+            font-weight: 500;
+            font-size: 0.84rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        details.inline-details > summary::after { content: '[Show Equation]'; }
+        details.inline-details[open] > summary::after { content: '[Hide Equation]'; }
+        .equation-details { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 10px; }
+        .equation-details p { margin-bottom: 0.45rem; }
+
+        .state-check {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+
+        .state-check p { margin-bottom: 0.5rem; }
+
+        .si-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .si-grid .row {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 8px 10px;
+            color: var(--text-color);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+
+        #plot-container {
+            width: 100%;
+            min-height: 360px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+            padding: 12px;
+        }
+
+        .plot-caption {
+            margin-top: 10px;
+            font-size: 0.92rem;
+            color: var(--text-light);
+        }
+
+        .equation-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 0.75rem;
+        }
+
+        .equation-card {
+            background: rgba(248, 250, 252, 0.75);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+
+        .equation-card strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--secondary-color);
+        }
+
+        .equation-card .equation-expression {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .equation-card ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            display: grid;
+            gap: 6px 18px;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+        .support-link { color: inherit; font-weight: 600; text-decoration: none; }
+        .support-link:hover { text-decoration: underline; }
+
+        @media (max-width: 900px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .input-row { grid-template-columns: 1fr; }
+            .si-grid { grid-template-columns: 1fr; }
+            .tabs { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Ideal Gas Law Explorer</h1>
+        <p class="tool-description" id="tool-description">
+            Solve the ideal gas relationship (PV = nRT) for pressure, volume, amount, or temperature,
+            with common engineering units and traceable substitutions.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content" id="readme-content">
+                <h3>Purpose of This Tool</h3>
+                <p>
+                    This tool supports quick state-point checks for ideal gases while keeping every step auditable.
+                    You pick one unknown, provide the other three quantities, and get the solved value in your selected units.
+                </p>
+                <ul>
+                    <li>Single-equation solver for pressure, volume, amount, or temperature.</li>
+                    <li>Unit-aware inputs (SI and common Imperial-friendly options).</li>
+                    <li>Progressive disclosure: equation, substituted values, and SI verification.</li>
+                    <li>Simple P-V isotherm visualization around the solved operating point.</li>
+                </ul>
+                <p>
+                    Core logic lives in <code>pycalcs/gases.py</code> and is shared between tests and the browser UI.
+                </p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+
+                <div class="solve-banner" id="solve-banner">Solving for: Pressure</div>
+
+                <form id="calc-form">
+                    <div class="input-group">
+                        <label for="solve_for">Solve For</label>
+                        <select id="solve_for" name="solve_for">
+                            <option value="pressure" selected>Pressure (P)</option>
+                            <option value="volume">Volume (V)</option>
+                            <option value="amount">Amount (n)</option>
+                            <option value="temperature">Temperature (T)</option>
+                        </select>
+                        <span class="tooltip-trigger" id="tooltip-solve_for" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="input-group" id="group-pressure">
+                        <label for="pressure_value">Pressure (P)</label>
+                        <div class="input-row">
+                            <input type="number" id="pressure_value" name="pressure_value" value="101.325" step="any">
+                            <select id="pressure_unit" name="pressure_unit">
+                                <option value="Pa">Pa</option>
+                                <option value="kPa" selected>kPa</option>
+                                <option value="bar">bar</option>
+                                <option value="atm">atm</option>
+                                <option value="psi">psi</option>
+                            </select>
+                        </div>
+                        <span class="tooltip-trigger" id="tooltip-pressure_value" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="input-group" id="group-volume">
+                        <label for="volume_value">Volume (V)</label>
+                        <div class="input-row">
+                            <input type="number" id="volume_value" name="volume_value" value="24.0" step="any">
+                            <select id="volume_unit" name="volume_unit">
+                                <option value="m^3">m^3</option>
+                                <option value="L" selected>L</option>
+                                <option value="mL">mL</option>
+                                <option value="ft^3">ft^3</option>
+                            </select>
+                        </div>
+                        <span class="tooltip-trigger" id="tooltip-volume_value" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="input-group" id="group-amount">
+                        <label for="amount_value">Amount (n)</label>
+                        <div class="input-row">
+                            <input type="number" id="amount_value" name="amount_value" value="1.0" step="any">
+                            <select id="amount_unit" name="amount_unit">
+                                <option value="mol" selected>mol</option>
+                                <option value="kmol">kmol</option>
+                                <option value="lbmol">lbmol</option>
+                            </select>
+                        </div>
+                        <span class="tooltip-trigger" id="tooltip-amount_value" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="input-group" id="group-temperature">
+                        <label for="temperature_value">Temperature (T)</label>
+                        <div class="input-row">
+                            <input type="number" id="temperature_value" name="temperature_value" value="25.0" step="any">
+                            <select id="temperature_unit" name="temperature_unit">
+                                <option value="K">K</option>
+                                <option value="degC" selected>Celsius (&deg;C)</option>
+                                <option value="degF">Fahrenheit (&deg;F)</option>
+                                <option value="degR">Rankine (&deg;R)</option>
+                            </select>
+                        </div>
+                        <span class="tooltip-trigger" id="tooltip-temperature_value" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'plot')">Visualization</button>
+                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
+                </div>
+
+                <div id="results" class="tab-content" style="display: block;">
+                    <h3>State Solution</h3>
+                    <div id="results-display">
+                        <p id="results-placeholder">Enter known values and press Calculate.</p>
+                    </div>
+                    <button class="btn btn-secondary" id="export-btn" style="margin-top: 8px;">Export Results</button>
+                </div>
+
+                <div id="plot" class="tab-content">
+                    <h3>P-V Isotherm Around Solution</h3>
+                    <div id="plot-container">
+                        <p>Plot appears after calculation.</p>
+                    </div>
+                    <p class="plot-caption">
+                        The curve is generated with solved <code>n</code> and <code>T</code>, using
+                        \(P = \frac{nRT}{V}\). The marker shows your solved state point.
+                    </p>
+                </div>
+
+                <div id="background" class="tab-content">
+                    <h3>Underlying Principles</h3>
+                    <p id="background-description">General principles and equations load from the Python docstring.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        let toolDocumentation = {};
+        let pyUtils;
+        let pyToolModule;
+        let lastResults = null;
+        let lastInputs = null;
+
+        const TOOL_MODULE_NAME = 'gases';
+        const TOOL_FUNCTION_NAME = 'solve_ideal_gas_law';
+        const PARAM_ORDER = [
+            'solve_for',
+            'pressure_value',
+            'pressure_unit',
+            'volume_value',
+            'volume_unit',
+            'amount_value',
+            'amount_unit',
+            'temperature_value',
+            'temperature_unit',
+        ];
+
+        const VARIABLE_META = {
+            pressure: { outputKey: 'pressure_output', title: 'Pressure (P)', unitSelector: 'pressure_unit', equation: 'P = \\frac{nRT}{V}' },
+            volume: { outputKey: 'volume_output', title: 'Volume (V)', unitSelector: 'volume_unit', equation: 'V = \\frac{nRT}{P}' },
+            amount: { outputKey: 'amount_output', title: 'Amount (n)', unitSelector: 'amount_unit', equation: 'n = \\frac{PV}{RT}' },
+            temperature: { outputKey: 'temperature_output', title: 'Temperature (T)', unitSelector: 'temperature_unit', equation: 'T = \\frac{PV}{nR}' },
+        };
+
+        const PRESSURE_TO_PA = { Pa: 1.0, kPa: 1e3, bar: 1e5, atm: 101325.0, psi: 6894.757293168 };
+        const VOLUME_TO_M3 = { 'm^3': 1.0, L: 1e-3, mL: 1e-6, 'ft^3': 0.028316846592 };
+
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach((tab) => {
+                tab.style.display = 'none';
+            });
+            document.querySelectorAll('.tab-link').forEach((link) => {
+                link.classList.remove('active');
+            });
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function typesetMath() {
+            if (window.MathJax) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        function formatNumber(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return 'NaN';
+            const absValue = Math.abs(numeric);
+            if ((absValue >= 1e5 || (absValue > 0 && absValue < 1e-3))) {
+                return numeric.toExponential(4);
+            }
+            return numeric.toFixed(6).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+        }
+
+        function unitDisplay(unitValue) {
+            const map = {
+                degC: '&deg;C',
+                degF: '&deg;F',
+                degR: '&deg;R',
+            };
+            return map[unitValue] || unitValue;
+        }
+
+        function updateSolveModeUi() {
+            const solveFor = document.getElementById('solve_for').value;
+            document.getElementById('solve-banner').textContent = `Solving for: ${VARIABLE_META[solveFor].title}`;
+
+            ['pressure', 'volume', 'amount', 'temperature'].forEach((key) => {
+                const input = document.getElementById(`${key}_value`);
+                const group = document.getElementById(`group-${key}`);
+                if (key === solveFor) {
+                    input.disabled = true;
+                    input.placeholder = 'Solved by equation';
+                    input.style.backgroundColor = '#f1f5f9';
+                    group.style.borderLeft = '3px solid var(--success-color)';
+                    group.style.paddingLeft = '10px';
+                } else {
+                    input.disabled = false;
+                    input.style.backgroundColor = '#fff';
+                    group.style.borderLeft = 'none';
+                    group.style.paddingLeft = '0';
+                }
+            });
+        }
+
+        function collectInputs() {
+            return {
+                solve_for: document.getElementById('solve_for').value,
+                pressure_value: Number(document.getElementById('pressure_value').value),
+                pressure_unit: document.getElementById('pressure_unit').value,
+                volume_value: Number(document.getElementById('volume_value').value),
+                volume_unit: document.getElementById('volume_unit').value,
+                amount_value: Number(document.getElementById('amount_value').value),
+                amount_unit: document.getElementById('amount_unit').value,
+                temperature_value: Number(document.getElementById('temperature_value').value),
+                temperature_unit: document.getElementById('temperature_unit').value,
+            };
+        }
+
+        function renderResults(results, inputs) {
+            const solvedVariable = results.solved_variable;
+            const order = ['pressure', 'volume', 'amount', 'temperature'];
+
+            let html = '';
+            order.forEach((key) => {
+                const meta = VARIABLE_META[key];
+                const isSolved = key === solvedVariable;
+                const outputKey = meta.outputKey;
+                const value = formatNumber(results[outputKey]);
+                const unit = unitDisplay(inputs[meta.unitSelector]);
+                const subst = results[`subst_${outputKey}`] || 'No substituted form available.';
+
+                html += `
+                <div class="result-item ${isSolved ? 'highlight' : ''}">
+                    <div class="result-header">
+                        <p class="result-label">${meta.title}${isSolved ? '<span class="result-badge">Solved</span>' : ''}</p>
+                        <p class="result-value">${value} <span class="unit">${unit}</span></p>
+                    </div>
+                    <details class="inline-details">
+                        <summary></summary>
+                        <div class="equation-details">
+                            <p><strong>Equation:</strong> $$${meta.equation}$$</p>
+                            <p><strong>Substituted:</strong> $$${subst}$$</p>
+                        </div>
+                    </details>
+                </div>`;
+            });
+
+            html += `
+                <div class="state-check">
+                    <p><strong>Residual Check:</strong> $$PV - nRT = ${Number(results.equation_residual_pa_m3).toExponential(3)}\,\\text{Pa}\\cdot\\text{m}^3$$</p>
+                    <details class="inline-details">
+                        <summary></summary>
+                        <div class="equation-details">
+                            <p><strong>Substituted:</strong> $$${results.subst_equation_residual_pa_m3 || ''}$$</p>
+                        </div>
+                    </details>
+                    <div class="si-grid">
+                        <div class="row">P = ${formatNumber(results.pressure_si_pa)} Pa</div>
+                        <div class="row">V = ${formatNumber(results.volume_si_m3)} m^3</div>
+                        <div class="row">n = ${formatNumber(results.amount_si_mol)} mol</div>
+                        <div class="row">T = ${formatNumber(results.temperature_si_k)} K</div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('results-display').innerHTML = html;
+            typesetMath();
+        }
+
+        function drawPVPlot(results, inputs) {
+            const plotContainer = document.getElementById('plot-container');
+            const n = Number(results.amount_si_mol);
+            const t = Number(results.temperature_si_k);
+            const solvedP = Number(results.pressure_si_pa);
+            const solvedV = Number(results.volume_si_m3);
+
+            if (!Number.isFinite(n) || !Number.isFinite(t) || !Number.isFinite(solvedP) || !Number.isFinite(solvedV) || solvedV <= 0) {
+                plotContainer.innerHTML = '<p>Unable to generate plot for this state.</p>';
+                return;
+            }
+
+            const pressureUnit = inputs.pressure_unit;
+            const volumeUnit = inputs.volume_unit;
+            const pFactor = PRESSURE_TO_PA[pressureUnit];
+            const vFactor = VOLUME_TO_M3[volumeUnit];
+
+            const vMin = Math.max(solvedV * 0.5, 1e-12);
+            const vMax = solvedV * 2.0;
+            const nPoints = 60;
+
+            const points = [];
+            for (let i = 0; i < nPoints; i += 1) {
+                const v = vMin + (i / (nPoints - 1)) * (vMax - vMin);
+                const p = (n * Number(results.gas_constant_j_per_mol_k) * t) / v;
+                points.push({
+                    vDisplay: v / vFactor,
+                    pDisplay: p / pFactor,
+                });
+            }
+
+            const pValues = points.map((pt) => pt.pDisplay);
+            const vValues = points.map((pt) => pt.vDisplay);
+            const pMin = Math.min(...pValues);
+            const pMax = Math.max(...pValues);
+            const vMinDisplay = Math.min(...vValues);
+            const vMaxDisplay = Math.max(...vValues);
+            const pSpan = Math.max(pMax - pMin, 1e-12);
+            const vSpan = Math.max(vMaxDisplay - vMinDisplay, 1e-12);
+
+            const width = 680;
+            const height = 320;
+            const margin = { top: 20, right: 20, bottom: 55, left: 75 };
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            const scaleX = (value) => margin.left + ((value - vMinDisplay) / vSpan) * innerWidth;
+            const scaleY = (value) => margin.top + (1 - (value - pMin) / pSpan) * innerHeight;
+
+            const pathData = points
+                .map((pt, index) => `${index === 0 ? 'M' : 'L'} ${scaleX(pt.vDisplay).toFixed(2)} ${scaleY(pt.pDisplay).toFixed(2)}`)
+                .join(' ');
+
+            const solvedX = scaleX(solvedV / vFactor);
+            const solvedY = scaleY(solvedP / pFactor);
+
+            const xTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => vMinDisplay + ratio * vSpan);
+            const yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => pMin + ratio * pSpan);
+
+            const xTickElements = xTicks.map((tick) => {
+                const x = scaleX(tick);
+                return `
+                    <line x1="${x}" y1="${height - margin.bottom}" x2="${x}" y2="${height - margin.bottom + 6}" stroke="#64748b" />
+                    <text x="${x}" y="${height - margin.bottom + 22}" text-anchor="middle" font-size="11" fill="#334155">${formatNumber(tick)}</text>
+                `;
+            }).join('');
+
+            const yTickElements = yTicks.map((tick) => {
+                const y = scaleY(tick);
+                return `
+                    <line x1="${margin.left - 6}" y1="${y}" x2="${margin.left}" y2="${y}" stroke="#64748b" />
+                    <text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" font-size="11" fill="#334155">${formatNumber(tick)}</text>
+                `;
+            }).join('');
+
+            plotContainer.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" aria-label="P-V isotherm plot">
+                    <rect x="0" y="0" width="${width}" height="${height}" fill="#f8fafc" />
+
+                    <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="#334155" stroke-width="1.5" />
+                    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="#334155" stroke-width="1.5" />
+
+                    ${xTickElements}
+                    ${yTickElements}
+
+                    <path d="${pathData}" fill="none" stroke="#0f766e" stroke-width="2.5" />
+
+                    <circle cx="${solvedX}" cy="${solvedY}" r="5" fill="#b91c1c" />
+                    <text x="${solvedX + 8}" y="${solvedY - 8}" font-size="11" fill="#7f1d1d">Solved state</text>
+
+                    <text x="${width / 2}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#1f2937">Volume (${unitDisplay(volumeUnit)})</text>
+                    <text x="18" y="${height / 2}" transform="rotate(-90 18 ${height / 2})" text-anchor="middle" font-size="12" fill="#1f2937">Pressure (${unitDisplay(pressureUnit)})</text>
+                </svg>
+            `;
+        }
+
+        function populateBackgroundFromDocs() {
+            const latexLines = toolDocumentation.latex
+                ? toolDocumentation.latex.split('\n').filter((line) => line.trim().length > 0)
+                : [];
+
+            const legends = [
+                ['P: Absolute pressure', 'V: Gas volume', 'n: Amount of substance', 'R: Ideal gas constant', 'T: Absolute temperature'],
+                ['P: Pressure', 'n: Amount', 'R: Ideal gas constant', 'T: Absolute temperature', 'V: Volume'],
+                ['V: Volume', 'n: Amount', 'R: Ideal gas constant', 'T: Absolute temperature', 'P: Pressure'],
+                ['n: Amount', 'P: Pressure', 'V: Volume', 'R: Ideal gas constant', 'T: Absolute temperature'],
+                ['T: Absolute temperature', 'P: Pressure', 'V: Volume', 'n: Amount', 'R: Ideal gas constant'],
+            ];
+
+            const equationCards = latexLines.map((expression, index) => {
+                const legendItems = (legends[index] || [])
+                    .map((item) => `<li>${item}</li>`)
+                    .join('');
+
+                return `
+                    <div class="equation-card">
+                        <strong>Equation (${index + 1})</strong>
+                        <span class="equation-expression">\\[ ${expression} \\]</span>
+                        <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:0.35rem;">Variables:</p>
+                        <ul>${legendItems || '<li>No variable legend provided.</li>'}</ul>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('background').innerHTML = `
+                <h3>Underlying Principles</h3>
+                <p>${toolDocumentation.description ? toolDocumentation.description.replace(/\n/g, '<br>') : ''}</p>
+                <h4>Equations</h4>
+                <div class="equation-container">
+                    ${equationCards || '<p>No equations available.</p>'}
+                </div>
+                <h4>Assumptions</h4>
+                <p>
+                    Ideal-gas behavior is most accurate at low pressure and moderate-to-high temperature,
+                    away from phase boundaries. For high-pressure and real-gas work, include a compressibility factor.
+                </p>
+            `;
+            typesetMath();
+        }
+
+        function populateUiFromDocs() {
+            if (!toolDocumentation.parameters) return;
+
+            document.getElementById('tool-description').textContent = toolDocumentation.description;
+
+            const tooltipIds = [
+                'solve_for',
+                'pressure_value',
+                'pressure_unit',
+                'volume_value',
+                'volume_unit',
+                'amount_value',
+                'amount_unit',
+                'temperature_value',
+                'temperature_unit',
+            ];
+
+            tooltipIds.forEach((id) => {
+                const node = document.getElementById(`tooltip-${id}`) || document.querySelector(`#${id} + .tooltip-trigger`);
+                if (node) {
+                    node.setAttribute('data-tooltip', toolDocumentation.parameters[id] || 'N/A');
+                }
+            });
+
+            populateBackgroundFromDocs();
+        }
+
+        async function main() {
+            const calculateButton = document.getElementById('calculate-btn');
+            calculateButton.disabled = true;
+            calculateButton.textContent = 'Loading Pyodide...';
+
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage('micropip');
+
+            calculateButton.textContent = 'Loading Python...';
+            await pyodide.runPythonAsync(`
+                from pyodide.http import pyfetch
+
+                response_utils = await pyfetch('../../pycalcs/utils.py')
+                with open('utils.py', 'w') as f:
+                    f.write(await response_utils.string())
+
+                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                    f.write(await response_tool.string())
+
+                import utils
+                import ${TOOL_MODULE_NAME}
+            `);
+
+            pyUtils = pyodide.globals.get('utils');
+            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+            if (docMap.has('error')) {
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight: bold;">Initialization Error</p>
+                    <p style="color: red;">${docMap.get('error')}</p>
+                `;
+                return;
+            }
+
+            toolDocumentation = Object.fromEntries(docMap);
+            if (toolDocumentation.parameters) {
+                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+            }
+            if (toolDocumentation.returns) {
+                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
+            }
+
+            populateUiFromDocs();
+            updateSolveModeUi();
+            calculateButton.textContent = 'Calculate';
+            calculateButton.disabled = false;
+        }
+
+        const form = document.getElementById('calc-form');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            try {
+                const inputs = collectInputs();
+                const args = PARAM_ORDER.map((param) => inputs[param]);
+                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](...args).toJs();
+                const results = Object.fromEntries(resultMap);
+
+                if (results.error) {
+                    throw new Error(results.error);
+                }
+
+                lastInputs = inputs;
+                lastResults = results;
+
+                renderResults(results, inputs);
+                drawPVPlot(results, inputs);
+            } catch (error) {
+                document.getElementById('results-display').innerHTML = `
+                    <p style="color: red; font-weight:bold;">Calculation Error</p>
+                    <p style="color: red;">${error.message}</p>
+                `;
+            }
+        });
+
+        document.getElementById('solve_for').addEventListener('change', () => {
+            updateSolveModeUi();
+        });
+
+        document.getElementById('export-btn').addEventListener('click', () => {
+            if (!lastResults || !lastInputs) {
+                alert('Run a calculation before exporting.');
+                return;
+            }
+
+            const payload = {
+                tool: 'Ideal Gas Law Explorer',
+                timestamp_utc: new Date().toISOString(),
+                inputs: lastInputs,
+                results: lastResults,
+            };
+
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'ideal-gas-law-results.json';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        });
+
+        main();
+    </script>
+</body>
+</html>

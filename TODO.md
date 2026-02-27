@@ -74,7 +74,7 @@ This backlog consolidates platform work, template upgrades, and future tool idea
 
 ## Chemical & Process Engineering Tools
 
-- [ ] Ideal gas law explorer with common engineering unit options.
+- [x] Ideal gas law explorer with common engineering unit options.
 - [ ] Reaction kinetics simulator (Arrhenius, CSTR/PFR sizing).
 - [ ] Distillation column McCabe-Thiele assistant (complex).
 - [ ] Process safety relief-valve sizing utility.
