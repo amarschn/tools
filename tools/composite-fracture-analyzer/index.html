@@ -1710,28 +1710,37 @@
                             <div class="input-group" style="flex: 2;">
                                 <label for="sweep-param">Parameter to Sweep</label>
                                 <select id="sweep-param">
-                                    <option value="initial_crack_size_mm">Initial Crack Size (mm)</option>
-                                    <option value="speed_rpm">Speed (RPM)</option>
-                                    <option value="stress_ratio_R">Stress Ratio (R)</option>
-                                    <option value="fracture_toughness">Fracture Toughness K_IC</option>
-                                    <option value="paris_C">Paris C</option>
-                                    <option value="paris_m">Paris m</option>
-                                    <option value="thickness_mm">Thickness (mm)</option>
-                                    <option value="crack_location_radius_mm">Crack Location Radius (mm)</option>
-                                    <option value="crack_aspect_ratio">Crack Aspect Ratio (a/c)</option>
+                                    <optgroup label="Numeric Parameters">
+                                        <option value="initial_crack_size_mm">Initial Crack Size (mm)</option>
+                                        <option value="speed_rpm">Speed (RPM)</option>
+                                        <option value="stress_ratio_R">Stress Ratio (R)</option>
+                                        <option value="fracture_toughness">Fracture Toughness K_IC</option>
+                                        <option value="paris_C">Paris C</option>
+                                        <option value="paris_m">Paris m</option>
+                                        <option value="thickness_mm">Thickness (mm)</option>
+                                        <option value="crack_location_radius_mm">Crack Location Radius (mm)</option>
+                                        <option value="crack_aspect_ratio">Crack Aspect Ratio (a/c)</option>
+                                    </optgroup>
+                                    <optgroup label="Categorical Parameters">
+                                        <option value="crack_type">Crack Type</option>
+                                        <option value="crack_orientation">Crack Orientation</option>
+                                        <option value="geometry_type">Geometry Type</option>
+                                    </optgroup>
                                 </select>
                             </div>
-                            <div class="input-group">
-                                <label for="sweep-min">Min</label>
-                                <input type="number" id="sweep-min" step="any">
-                            </div>
-                            <div class="input-group">
-                                <label for="sweep-max">Max</label>
-                                <input type="number" id="sweep-max" step="any">
-                            </div>
-                            <div class="input-group" style="max-width: 80px;">
-                                <label for="sweep-steps">Points</label>
-                                <input type="number" id="sweep-steps" value="20" min="5" max="100" step="1">
+                            <div id="sweep-numeric-controls" style="display: contents;">
+                                <div class="input-group">
+                                    <label for="sweep-min">Min</label>
+                                    <input type="number" id="sweep-min" step="any">
+                                </div>
+                                <div class="input-group">
+                                    <label for="sweep-max">Max</label>
+                                    <input type="number" id="sweep-max" step="any">
+                                </div>
+                                <div class="input-group" style="max-width: 80px;">
+                                    <label for="sweep-steps">Points</label>
+                                    <input type="number" id="sweep-steps" value="20" min="5" max="100" step="1">
+                                </div>
                             </div>
                         </div>
                         <button type="button" class="btn btn-primary" id="run-sweep-btn" style="margin-top: 12px;">Run Sweep</button>
@@ -2916,18 +2925,59 @@
                 },
                 logSpace: false
             },
-            crack_aspect_ratio: { label: 'Crack Aspect Ratio (a/c)', rangeFn: v => [0.1, Math.max(v * 3, 3)], logSpace: false }
+            crack_aspect_ratio: { label: 'Crack Aspect Ratio (a/c)', rangeFn: v => [0.1, Math.max(v * 3, 3)], logSpace: false },
+            // Categorical parameters
+            crack_type: {
+                label: 'Crack Type',
+                categorical: true,
+                options: [
+                    { value: 'through', label: 'Through' },
+                    { value: 'surface', label: 'Surface' },
+                    { value: 'edge', label: 'Edge' },
+                    { value: 'embedded', label: 'Embedded' },
+                    { value: 'elliptical_surface', label: 'Elliptical Surface' },
+                    { value: 'corner', label: 'Corner' },
+                    { value: 'double_edge', label: 'Double Edge' }
+                ],
+                baselineKey: 'crack_t'
+            },
+            crack_orientation: {
+                label: 'Crack Orientation',
+                categorical: true,
+                options: [
+                    { value: 'radial', label: 'Radial' },
+                    { value: 'circumferential', label: 'Circumferential' }
+                ],
+                baselineKey: 'crack_orient'
+            },
+            geometry_type: {
+                label: 'Geometry Type',
+                categorical: true,
+                options: [
+                    { value: 'hollow_disk', label: 'Hollow Disk' },
+                    { value: 'solid_disk', label: 'Solid Disk' },
+                    { value: 'hollow_cylinder', label: 'Hollow Cylinder' }
+                ],
+                baselineKey: 'geom'
+            }
         };
 
         function onSweepParamChange() {
             const key = document.getElementById('sweep-param').value;
             const cfg = SWEEP_PARAMS[key];
-            const currentVal = parseFloat(document.getElementById(key).value);
-            const [lo, hi] = cfg.rangeFn(currentVal);
+            const numericControls = document.getElementById('sweep-numeric-controls');
 
-            const precision = key === 'paris_C' ? 2 : (lo < 1 ? 3 : 1);
-            document.getElementById('sweep-min').value = cfg.logSpace ? lo.toExponential(1) : parseFloat(lo.toFixed(precision));
-            document.getElementById('sweep-max').value = cfg.logSpace ? hi.toExponential(1) : parseFloat(hi.toFixed(precision));
+            if (cfg.categorical) {
+                numericControls.style.display = 'none';
+            } else {
+                numericControls.style.display = 'contents';
+                const currentVal = parseFloat(document.getElementById(key).value);
+                const [lo, hi] = cfg.rangeFn(currentVal);
+
+                const precision = key === 'paris_C' ? 2 : (lo < 1 ? 3 : 1);
+                document.getElementById('sweep-min').value = cfg.logSpace ? lo.toExponential(1) : parseFloat(lo.toFixed(precision));
+                document.getElementById('sweep-max').value = cfg.logSpace ? hi.toExponential(1) : parseFloat(hi.toFixed(precision));
+            }
         }
 
         function generateSweepValues(min, max, n, logSpace) {
@@ -2946,23 +2996,8 @@
             return vals;
         }
 
-        async function runSensitivity() {
-            if (!lastResults || !pyToolModule) return;
-
-            const btn = document.getElementById('run-sweep-btn');
-            btn.textContent = 'Running...';
-            btn.disabled = true;
-
-            const paramKey = document.getElementById('sweep-param').value;
-            const sweepMin = parseFloat(document.getElementById('sweep-min').value);
-            const sweepMax = parseFloat(document.getElementById('sweep-max').value);
-            const steps = parseInt(document.getElementById('sweep-steps').value) || 20;
-            const cfg = SWEEP_PARAMS[paramKey];
-
-            const sweepValues = generateSweepValues(sweepMin, sweepMax, steps, cfg.logSpace);
-
-            // Read baseline form values
-            const baseline = {
+        function readBaseline() {
+            return {
                 geom: document.getElementById('geometry_type').value,
                 inner_r: parseFloat(document.getElementById('inner_radius_mm').value) || 0,
                 outer_r: parseFloat(document.getElementById('outer_radius_mm').value),
@@ -2984,15 +3019,65 @@
                 thickness: parseFloat(document.getElementById('thickness_mm').value),
                 crack_ar: parseFloat(document.getElementById('crack_aspect_ratio').value) || 1.0
             };
+        }
+
+        function runSweepCall(params) {
+            const resultProxy = pyToolModule.analyze_fracture_and_crack_growth(
+                params.geom, params.inner_r, params.outer_r, params.speed,
+                params.crack_loc, params.crack_size, params.crack_t, params.crack_orient,
+                params.mat_preset, params.k_ic, params.pC, params.pm,
+                params.density, params.poisson, params.uts,
+                params.R, params.design_life, params.req_sf, params.thickness,
+                params.crack_ar
+            );
+            const r = resultProxy.toJs({ dict_converter: Object.fromEntries });
+            resultProxy.destroy();
+            return r;
+        }
+
+        async function runSensitivity() {
+            if (!lastResults || !pyToolModule) return;
+
+            const btn = document.getElementById('run-sweep-btn');
+            btn.textContent = 'Running...';
+            btn.disabled = true;
+
+            const paramKey = document.getElementById('sweep-param').value;
+            const cfg = SWEEP_PARAMS[paramKey];
+            const baseline = readBaseline();
 
             // Fix #6: Force custom preset when sweeping K_IC, Paris C, or Paris m
-            // so the backend doesn't override swept values with preset values
             const presetOverrideParams = ['fracture_toughness', 'paris_C', 'paris_m'];
             if (presetOverrideParams.includes(paramKey) && baseline.mat_preset !== 'custom') {
                 baseline.mat_preset = 'custom';
             }
 
-            // Map param key to the baseline property to override
+            const progressDiv = document.getElementById('sweep-progress');
+            const progressFill = document.getElementById('sweep-progress-fill');
+            const progressText = document.getElementById('sweep-progress-text');
+            progressDiv.style.display = 'block';
+            progressFill.style.width = '0%';
+
+            try {
+                if (cfg.categorical) {
+                    await runCategoricalSweep(cfg, baseline, progressFill, progressText);
+                } else {
+                    await runNumericSweep(paramKey, cfg, baseline, progressFill, progressText);
+                }
+                document.getElementById('sensitivity-plots').style.display = 'block';
+            } finally {
+                progressDiv.style.display = 'none';
+                btn.textContent = 'Run Sweep';
+                btn.disabled = false;
+            }
+        }
+
+        async function runNumericSweep(paramKey, cfg, baseline, progressFill, progressText) {
+            const sweepMin = parseFloat(document.getElementById('sweep-min').value);
+            const sweepMax = parseFloat(document.getElementById('sweep-max').value);
+            const steps = parseInt(document.getElementById('sweep-steps').value) || 20;
+            const sweepValues = generateSweepValues(sweepMin, sweepMax, steps, cfg.logSpace);
+
             const paramMap = {
                 initial_crack_size_mm: 'crack_size',
                 speed_rpm: 'speed',
@@ -3006,65 +3091,73 @@
             };
             const overrideKey = paramMap[paramKey];
 
-            // Show progress
-            const progressDiv = document.getElementById('sweep-progress');
-            const progressFill = document.getElementById('sweep-progress-fill');
-            const progressText = document.getElementById('sweep-progress-text');
-            progressDiv.style.display = 'block';
-            progressFill.style.width = '0%';
             progressText.textContent = `0 / ${steps}`;
 
-            const sfArr = [];
-            const nfArr = [];
-            const lifeArr = [];
+            const sfArr = [], nfArr = [], lifeArr = [];
 
-            // Run sweep with yielding for UI updates (Fix #10: try/finally for button)
-            try {
-                for (let i = 0; i < sweepValues.length; i++) {
-                    const params = { ...baseline };
-                    params[overrideKey] = sweepValues[i];
+            for (let i = 0; i < sweepValues.length; i++) {
+                const params = { ...baseline };
+                params[overrideKey] = sweepValues[i];
 
-                    try {
-                        const resultProxy = pyToolModule.analyze_fracture_and_crack_growth(
-                            params.geom, params.inner_r, params.outer_r, params.speed,
-                            params.crack_loc, params.crack_size, params.crack_t, params.crack_orient,
-                            params.mat_preset, params.k_ic, params.pC, params.pm,
-                            params.density, params.poisson, params.uts,
-                            params.R, params.design_life, params.req_sf, params.thickness,
-                            params.crack_ar
-                        );
-                        const r = resultProxy.toJs({ dict_converter: Object.fromEntries });
-                        resultProxy.destroy();
-
-                        sfArr.push(r.fracture_safety_factor);
-                        nfArr.push(r.cycles_to_failure);
-                        lifeArr.push(r.life_fraction_used);
-                    } catch (e) {
-                        sfArr.push(NaN);
-                        nfArr.push(NaN);
-                        lifeArr.push(NaN);
-                    }
-
-                    // Update progress
-                    const pct = ((i + 1) / steps * 100).toFixed(0);
-                    progressFill.style.width = pct + '%';
-                    progressText.textContent = `${i + 1} / ${steps}`;
-
-                    // Yield to UI every few iterations
-                    if (i % 3 === 0) await new Promise(r => setTimeout(r, 0));
+                try {
+                    const r = runSweepCall(params);
+                    sfArr.push(r.fracture_safety_factor);
+                    nfArr.push(r.cycles_to_failure);
+                    lifeArr.push(r.life_fraction_used);
+                } catch (e) {
+                    sfArr.push(NaN);
+                    nfArr.push(NaN);
+                    lifeArr.push(NaN);
                 }
 
-                // Current baseline value for vertical marker
-                const currentVal = parseFloat(document.getElementById(paramKey).value);
-
-                plotSensitivity(sweepValues, sfArr, nfArr, lifeArr, cfg, currentVal, baseline.req_sf, baseline.design_life);
-
-                document.getElementById('sensitivity-plots').style.display = 'block';
-            } finally {
-                progressDiv.style.display = 'none';
-                btn.textContent = 'Run Sweep';
-                btn.disabled = false;
+                const pct = ((i + 1) / steps * 100).toFixed(0);
+                progressFill.style.width = pct + '%';
+                progressText.textContent = `${i + 1} / ${steps}`;
+                if (i % 3 === 0) await new Promise(r => setTimeout(r, 0));
             }
+
+            const currentVal = parseFloat(document.getElementById(paramKey).value);
+            plotSensitivity(sweepValues, sfArr, nfArr, lifeArr, cfg, currentVal, baseline.req_sf, baseline.design_life);
+        }
+
+        async function runCategoricalSweep(cfg, baseline, progressFill, progressText) {
+            const options = cfg.options;
+            const overrideKey = cfg.baselineKey;
+            const currentVal = baseline[overrideKey];
+
+            progressText.textContent = `0 / ${options.length}`;
+
+            const labels = [], sfArr = [], nfArr = [], lifeArr = [], errors = [];
+
+            for (let i = 0; i < options.length; i++) {
+                const opt = options[i];
+                const params = { ...baseline };
+                params[overrideKey] = opt.value;
+
+                labels.push(opt.label);
+                try {
+                    const r = runSweepCall(params);
+                    sfArr.push(r.fracture_safety_factor);
+                    nfArr.push(r.cycles_to_failure);
+                    lifeArr.push(r.life_fraction_used);
+                    errors.push(null);
+                } catch (e) {
+                    sfArr.push(NaN);
+                    nfArr.push(NaN);
+                    lifeArr.push(NaN);
+                    errors.push(e.message || String(e));
+                }
+
+                const pct = ((i + 1) / options.length * 100).toFixed(0);
+                progressFill.style.width = pct + '%';
+                progressText.textContent = `${i + 1} / ${options.length}`;
+                await new Promise(r => setTimeout(r, 0));
+            }
+
+            // Find the index of the current baseline value
+            const currentIdx = options.findIndex(o => o.value === currentVal);
+
+            plotCategoricalSensitivity(labels, sfArr, nfArr, lifeArr, errors, cfg, currentIdx, baseline.req_sf, baseline.design_life);
         }
 
         function plotSensitivity(xVals, sfArr, nfArr, lifeArr, cfg, currentVal, reqSF, designLife) {
@@ -3132,6 +3225,68 @@
             ], {
                 ...layoutBase,
                 xaxis: { title: xLabel, type: xAxisType, gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Life Fraction', gridcolor: theme.gridColor, color: theme.textColor, rangemode: 'tozero' }
+            }, { responsive: true });
+        }
+
+        function plotCategoricalSensitivity(labels, sfArr, nfArr, lifeArr, errors, cfg, currentIdx, reqSF, designLife) {
+            const theme = getChartTheme();
+
+            // Color each bar: highlight current baseline, grey out errors
+            const barColors = labels.map((_, i) => {
+                if (errors[i]) return theme.gridColor;
+                if (i === currentIdx) return theme.accentColor;
+                return '#3b82f6';
+            });
+
+            const hoverText = labels.map((lbl, i) =>
+                errors[i] ? `${lbl}<br><i>Error: ${errors[i].substring(0, 60)}</i>` : lbl
+            );
+
+            const layoutBase = {
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor },
+                margin: { t: 10, r: 20, b: 80, l: 60 },
+                bargap: 0.25
+            };
+
+            // --- Plot 1: Fracture Safety Factor ---
+            Plotly.newPlot('sensitivity-sf-plot', [
+                { x: labels, y: sfArr, type: 'bar', marker: { color: barColors },
+                  text: sfArr.map(v => isFinite(v) ? v.toFixed(2) : '—'), textposition: 'outside',
+                  hovertext: hoverText, hoverinfo: 'text+y' },
+                { x: [labels[0], labels[labels.length - 1]], y: [reqSF, reqSF], mode: 'lines',
+                  line: { color: theme.dangerColor, width: 1.5, dash: 'dot' }, name: 'Required SF', showlegend: true }
+            ], {
+                ...layoutBase,
+                xaxis: { title: cfg.label, tickangle: -30, gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Safety Factor', gridcolor: theme.gridColor, color: theme.textColor, rangemode: 'tozero' }
+            }, { responsive: true });
+
+            // --- Plot 2: Cycles to Failure (log y) ---
+            Plotly.newPlot('sensitivity-nf-plot', [
+                { x: labels, y: nfArr, type: 'bar', marker: { color: barColors },
+                  text: nfArr.map(v => isFinite(v) ? v.toExponential(1) : '—'), textposition: 'outside',
+                  hovertext: hoverText, hoverinfo: 'text+y' },
+                { x: [labels[0], labels[labels.length - 1]], y: [designLife, designLife], mode: 'lines',
+                  line: { color: theme.dangerColor, width: 1.5, dash: 'dot' }, name: 'Design Life', showlegend: true }
+            ], {
+                ...layoutBase,
+                xaxis: { title: cfg.label, tickangle: -30, gridcolor: theme.gridColor, color: theme.textColor },
+                yaxis: { title: 'Cycles to Failure', type: 'log', gridcolor: theme.gridColor, color: theme.textColor }
+            }, { responsive: true });
+
+            // --- Plot 3: Life Fraction Used ---
+            Plotly.newPlot('sensitivity-life-plot', [
+                { x: labels, y: lifeArr, type: 'bar', marker: { color: barColors },
+                  text: lifeArr.map(v => isFinite(v) ? v.toFixed(3) : '—'), textposition: 'outside',
+                  hovertext: hoverText, hoverinfo: 'text+y' },
+                { x: [labels[0], labels[labels.length - 1]], y: [1.0, 1.0], mode: 'lines',
+                  line: { color: theme.dangerColor, width: 1.5, dash: 'dot' }, name: '100% Life', showlegend: true }
+            ], {
+                ...layoutBase,
+                xaxis: { title: cfg.label, tickangle: -30, gridcolor: theme.gridColor, color: theme.textColor },
                 yaxis: { title: 'Life Fraction', gridcolor: theme.gridColor, color: theme.textColor, rangemode: 'tozero' }
             }, { responsive: true });
         }
