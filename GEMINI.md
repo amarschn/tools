@@ -24,6 +24,9 @@ python -m http.server
 # Navigate to tools at http://localhost:8000/tools/<tool-name>/
 ```
 
+### Parameter JSON Test Cases
+Tools may include `test-cases/*.json` files with pre-configured input parameters.
+See AGENTS.md "Parameter JSON Test Cases" for the full specification.
 ### Testing
 ```bash
 # Run pytest suite

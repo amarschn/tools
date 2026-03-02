@@ -36,15 +36,24 @@ class TestGeometryFactorY:
         Y = _geometry_factor_Y("edge", 1e-6, 1.0)
         assert Y == pytest.approx(1.12, abs=0.01)
 
-    def test_surface_crack_constant(self):
-        """Surface crack Y is a constant 0.728."""
-        Y = _geometry_factor_Y("surface", 0.005, 0.1)
-        assert Y == pytest.approx(0.728, rel=1e-6)
+    def test_surface_crack_varies_with_aW(self):
+        """Surface crack Y should vary with a/W (Newman-Raju with a/c=1)."""
+        Y_small = _geometry_factor_Y("surface", 0.001, 0.1)  # a/W = 0.01
+        Y_large = _geometry_factor_Y("surface", 0.05, 0.1)   # a/W = 0.5
+        # At small a/W, Y ≈ 0.66; at larger a/W, Y increases due to f_w
+        assert 0.5 < Y_small < 0.8
+        assert Y_large > Y_small
 
-    def test_embedded_crack_constant(self):
-        """Embedded/penny crack Y = 2/pi ≈ 0.637."""
-        Y = _geometry_factor_Y("embedded", 0.003, 0.05)
-        assert Y == pytest.approx(2.0 / math.pi, rel=1e-6)
+    def test_embedded_crack_ac1_matches_penny(self):
+        """Embedded crack at a/c=1 gives Y ≈ 2/pi (penny-shaped)."""
+        Y = _geometry_factor_Y("embedded", 0.003, 0.05, aspect_ratio=1.0)
+        assert Y == pytest.approx(2.0 / math.pi, abs=0.01)
+
+    def test_embedded_crack_varies_with_aspect_ratio(self):
+        """Embedded crack Y should change with aspect_ratio."""
+        Y_penny = _geometry_factor_Y("embedded", 0.003, 0.05, aspect_ratio=1.0)
+        Y_elongated = _geometry_factor_Y("embedded", 0.003, 0.05, aspect_ratio=0.3)
+        assert Y_elongated > Y_penny  # elongated crack is more severe
 
     def test_unknown_crack_type_raises(self):
         with pytest.raises(ValueError, match="Unknown crack_type"):
@@ -53,9 +62,10 @@ class TestGeometryFactorY:
     # --- New crack type tests ---
 
     def test_elliptical_surface_ac_1_matches_surface(self):
-        """At a/c=1.0 with small a/W, elliptical_surface should approximate 0.728."""
-        Y = _geometry_factor_Y("elliptical_surface", 0.001, 0.1, aspect_ratio=1.0)
-        assert Y == pytest.approx(0.728, abs=0.1)
+        """At a/c=1.0, elliptical_surface should exactly match surface crack."""
+        Y_ellip = _geometry_factor_Y("elliptical_surface", 0.005, 0.1, aspect_ratio=1.0)
+        Y_surf = _geometry_factor_Y("surface", 0.005, 0.1)
+        assert Y_ellip == pytest.approx(Y_surf, rel=1e-10)
 
     def test_elliptical_surface_low_ac(self):
         """Elongated crack (a/c=0.2) gives higher Y than a/c=1."""
@@ -124,15 +134,16 @@ class TestStressIntensityFactor:
 # ---------------------------------------------------------------------------
 
 class TestCriticalCrackSize:
-    def test_surface_crack_analytical(self):
-        """For surface crack (constant Y=0.728), a_cr = (K_IC / (Y*sigma))^2 / pi."""
+    def test_surface_crack_bisection(self):
+        """Surface crack critical size should satisfy K_I(a_cr) ≈ K_IC."""
         sigma = 100e6  # Pa
         K_IC = 7e6     # Pa*sqrt(m)
-        Y = 0.728
-        expected_a_cr = (K_IC / (Y * sigma)) ** 2 / math.pi
         a_cr, reached = _critical_crack_size(sigma, K_IC, "surface", W=0.1)
-        assert a_cr == pytest.approx(expected_a_cr, rel=0.01)
         assert reached is True
+        # Verify that K_I at a_cr ≈ K_IC
+        Y_cr = _geometry_factor_Y("surface", a_cr, 0.1)
+        K_at_cr = _stress_intensity_factor(sigma, a_cr, Y_cr)
+        assert K_at_cr == pytest.approx(K_IC, rel=0.01)
 
     def test_critical_size_increases_with_toughness(self):
         """Higher K_IC should yield larger critical crack size."""
@@ -492,6 +503,173 @@ class TestAnalyzeFractureAndCrackGrowth:
         assert "life_fraction_used" in result
         assert "remaining_life_fraction" not in result
 
+    def test_k_never_reached_infinite_life(self):
+        """When K never reaches K_IC, cycles_to_failure should be inf and life_fraction 0."""
+        # Very tough material + small crack + low speed = K never reaches K_IC
+        result = analyze_fracture_and_crack_growth(
+            geometry_type="annular_disk",
+            inner_radius_mm=25.0,
+            outer_radius_mm=100.0,
+            speed_rpm=1000,
+            crack_location_radius_mm=50.0,
+            initial_crack_size_mm=0.1,
+            material_preset="cfrp_hoop_wound",  # K_IC = 35 MPa√m
+        )
+        assert result["critical_crack_reached"] is False
+        assert result["cycles_to_failure"] == float("inf")
+        assert result["life_fraction_used"] == 0.0
+        assert result["inspection_interval_cycles"] == 0.0
+
+    def test_k_never_reached_not_zero_life(self):
+        """When critical_crack_reached=False and a_0 >= a_cr (the search cap),
+        should NOT report zero cycles — should report infinite life."""
+        # Use a large crack that approaches the search cap but with a
+        # very tough material so K never reaches K_IC
+        result = analyze_fracture_and_crack_growth(
+            geometry_type="annular_disk",
+            inner_radius_mm=25.0,
+            outer_radius_mm=100.0,
+            speed_rpm=500,
+            crack_location_radius_mm=50.0,
+            initial_crack_size_mm=20.0,
+            material_preset="cfrp_hoop_wound",
+            thickness_mm=50.0,
+        )
+        if result["critical_crack_reached"] is False:
+            assert result["cycles_to_failure"] == float("inf")
+            assert result["life_fraction_used"] == 0.0
+
+    def test_invalid_crack_orientation_raises(self):
+        """Unknown crack_orientation should raise ValueError."""
+        with pytest.raises(ValueError, match="crack_orientation"):
+            analyze_fracture_and_crack_growth(
+                geometry_type="annular_disk",
+                inner_radius_mm=25.0,
+                outer_radius_mm=100.0,
+                speed_rpm=10000,
+                crack_location_radius_mm=50.0,
+                initial_crack_size_mm=1.0,
+                crack_orientation="axial",
+            )
+
+    def test_negative_crack_location_solid_disk_raises(self):
+        """Negative crack location on solid disk should raise ValueError."""
+        with pytest.raises(ValueError, match="Crack location"):
+            analyze_fracture_and_crack_growth(
+                geometry_type="solid_disk",
+                inner_radius_mm=0.0,
+                outer_radius_mm=50.0,
+                speed_rpm=10000,
+                crack_location_radius_mm=-5.0,
+                initial_crack_size_mm=1.0,
+            )
+
+    def test_invalid_design_life_raises(self):
+        """Non-positive design_life_cycles should raise ValueError."""
+        with pytest.raises(ValueError, match="design_life_cycles"):
+            analyze_fracture_and_crack_growth(
+                geometry_type="annular_disk",
+                inner_radius_mm=25.0,
+                outer_radius_mm=100.0,
+                speed_rpm=10000,
+                crack_location_radius_mm=50.0,
+                initial_crack_size_mm=1.0,
+                design_life_cycles=-100,
+            )
+
+    def test_invalid_required_sf_raises(self):
+        """Non-positive required_fracture_sf should raise ValueError."""
+        with pytest.raises(ValueError, match="required_fracture_sf"):
+            analyze_fracture_and_crack_growth(
+                geometry_type="annular_disk",
+                inner_radius_mm=25.0,
+                outer_radius_mm=100.0,
+                speed_rpm=10000,
+                crack_location_radius_mm=50.0,
+                initial_crack_size_mm=1.0,
+                required_fracture_sf=-1.0,
+            )
+
+    def test_invalid_crack_aspect_ratio_raises(self):
+        """Non-positive crack_aspect_ratio should raise ValueError."""
+        with pytest.raises(ValueError, match="crack_aspect_ratio"):
+            analyze_fracture_and_crack_growth(
+                geometry_type="annular_disk",
+                inner_radius_mm=25.0,
+                outer_radius_mm=100.0,
+                speed_rpm=10000,
+                crack_location_radius_mm=50.0,
+                initial_crack_size_mm=1.0,
+                crack_aspect_ratio=0.0,
+            )
+
+    def test_aspect_ratio_clamped_flag(self):
+        """aspect_ratio_clamped should be True when a/c > 1 for elliptical_surface."""
+        r1 = analyze_fracture_and_crack_growth(
+            geometry_type="annular_disk",
+            inner_radius_mm=25.0,
+            outer_radius_mm=100.0,
+            speed_rpm=10000,
+            crack_location_radius_mm=50.0,
+            initial_crack_size_mm=1.0,
+            crack_type="elliptical_surface",
+            material_preset="pa6_gf30",
+            crack_aspect_ratio=1.5,
+        )
+        assert r1["aspect_ratio_clamped"] is True
+
+        r2 = analyze_fracture_and_crack_growth(
+            geometry_type="annular_disk",
+            inner_radius_mm=25.0,
+            outer_radius_mm=100.0,
+            speed_rpm=10000,
+            crack_location_radius_mm=50.0,
+            initial_crack_size_mm=1.0,
+            crack_type="elliptical_surface",
+            material_preset="pa6_gf30",
+            crack_aspect_ratio=0.8,
+        )
+        assert r2["aspect_ratio_clamped"] is False
+
+    def test_status_marginal_when_fatigue_life_exceeded(self):
+        """Status should downgrade to marginal when life_fraction > 1 even if fracture SF passes."""
+        # High toughness material (SF will be high) + fast crack growth + short design life
+        result = analyze_fracture_and_crack_growth(
+            geometry_type="annular_disk",
+            inner_radius_mm=25.0,
+            outer_radius_mm=100.0,
+            speed_rpm=15000,
+            crack_location_radius_mm=50.0,
+            initial_crack_size_mm=2.0,
+            material_preset="custom",
+            fracture_toughness_mpa_sqrt_m=50.0,  # very tough — high SF
+            paris_C=1e-6,  # aggressive crack growth
+            paris_m=4.0,
+            density_kg_m3=1600.0,
+            tensile_strength_mpa=500.0,
+            design_life_cycles=1e9,  # very long design life
+        )
+        # Fracture SF should be well above 1.0
+        assert result["fracture_safety_factor"] > 1.5
+        # But if fatigue life is exceeded, status must not be "acceptable"
+        if result["life_fraction_used"] > 1.0:
+            assert result["status"] in ("marginal", "unacceptable")
+
+    def test_status_unacceptable_when_zero_cycles(self):
+        """Status should be unacceptable when cycles_to_failure is 0."""
+        result = analyze_fracture_and_crack_growth(
+            geometry_type="annular_disk",
+            inner_radius_mm=25.0,
+            outer_radius_mm=100.0,
+            speed_rpm=50000,
+            crack_location_radius_mm=50.0,
+            initial_crack_size_mm=30.0,
+            material_preset="generic_polymer",
+            crack_orientation="radial",
+        )
+        if result["cycles_to_failure"] == 0.0:
+            assert result["status"] == "unacceptable"
+
 
 # ---------------------------------------------------------------------------
 # Material database tests
@@ -510,3 +688,80 @@ class TestMaterialDatabase:
 
     def test_get_presets_matches_dict(self):
         assert get_fracture_material_presets() is FRACTURE_MATERIALS
+
+
+# ---------------------------------------------------------------------------
+# Knockdown factor tests
+# ---------------------------------------------------------------------------
+
+class TestKnockdownFactors:
+    """Tests for UTS and K_IC knockdown factors."""
+
+    _BASE_KWARGS = dict(
+        geometry_type="annular_disk",
+        inner_radius_mm=25.0,
+        outer_radius_mm=100.0,
+        speed_rpm=10000,
+        crack_location_radius_mm=50.0,
+        initial_crack_size_mm=1.0,
+        material_preset="custom",
+        fracture_toughness_mpa_sqrt_m=7.0,
+        paris_C=5e-8,
+        paris_m=5.0,
+        density_kg_m3=1360.0,
+        tensile_strength_mpa=180.0,
+    )
+
+    def test_zero_knockdown_matches_baseline(self):
+        """knockdown=0 should produce same results as no knockdown args."""
+        r_base = analyze_fracture_and_crack_growth(**self._BASE_KWARGS)
+        r_zero = analyze_fracture_and_crack_growth(
+            **self._BASE_KWARGS, uts_knockdown_pct=0.0, k_ic_knockdown_pct=0.0
+        )
+        assert r_base["K_I_mpa_sqrt_m"] == pytest.approx(r_zero["K_I_mpa_sqrt_m"])
+        assert r_base["K_IC_mpa_sqrt_m"] == pytest.approx(r_zero["K_IC_mpa_sqrt_m"])
+        assert r_base["fracture_safety_factor"] == pytest.approx(r_zero["fracture_safety_factor"])
+
+    def test_uts_knockdown_50_halves_uts(self):
+        """50% UTS knockdown should not affect K_IC but echoes back."""
+        r = analyze_fracture_and_crack_growth(
+            **self._BASE_KWARGS, uts_knockdown_pct=50.0
+        )
+        assert r["uts_knockdown_pct"] == 50.0
+        # K_IC should be unchanged
+        assert r["K_IC_mpa_sqrt_m"] == pytest.approx(7.0)
+
+    def test_k_ic_knockdown_50_halves_kic(self):
+        """50% K_IC knockdown should halve K_IC and roughly halve SF."""
+        r_base = analyze_fracture_and_crack_growth(**self._BASE_KWARGS)
+        r_kd = analyze_fracture_and_crack_growth(
+            **self._BASE_KWARGS, k_ic_knockdown_pct=50.0
+        )
+        assert r_kd["K_IC_mpa_sqrt_m"] == pytest.approx(3.5)
+        assert r_kd["fracture_safety_factor"] == pytest.approx(
+            r_base["fracture_safety_factor"] * 0.5, rel=0.01
+        )
+
+    def test_knockdown_echoed_in_result(self):
+        """Knockdown percentages should be echoed in the result dict."""
+        r = analyze_fracture_and_crack_growth(
+            **self._BASE_KWARGS, uts_knockdown_pct=20.0, k_ic_knockdown_pct=30.0
+        )
+        assert r["uts_knockdown_pct"] == 20.0
+        assert r["k_ic_knockdown_pct"] == 30.0
+
+    def test_negative_uts_knockdown_raises(self):
+        with pytest.raises(ValueError, match="uts_knockdown_pct"):
+            analyze_fracture_and_crack_growth(**self._BASE_KWARGS, uts_knockdown_pct=-5.0)
+
+    def test_uts_knockdown_100_raises(self):
+        with pytest.raises(ValueError, match="uts_knockdown_pct"):
+            analyze_fracture_and_crack_growth(**self._BASE_KWARGS, uts_knockdown_pct=100.0)
+
+    def test_negative_k_ic_knockdown_raises(self):
+        with pytest.raises(ValueError, match="k_ic_knockdown_pct"):
+            analyze_fracture_and_crack_growth(**self._BASE_KWARGS, k_ic_knockdown_pct=-1.0)
+
+    def test_k_ic_knockdown_100_raises(self):
+        with pytest.raises(ValueError, match="k_ic_knockdown_pct"):
+            analyze_fracture_and_crack_growth(**self._BASE_KWARGS, k_ic_knockdown_pct=100.0)

@@ -12,7 +12,7 @@
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
 
-    <title>Composite Fracture Analyzer - Engineering Tools</title>
+    <title>Rotor Fracture Analyzer - Engineering Tools</title>
 
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
@@ -287,6 +287,41 @@
             right: auto;
             margin-left: 6px;
             vertical-align: middle;
+        }
+
+        /* Parameter JSON Import/Export */
+        .param-json-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .btn-sm {
+            font-size: 0.8rem;
+            padding: 5px 12px;
+        }
+        .sample-cases {
+            margin-bottom: 14px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .sample-cases summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 6px;
+        }
+        .sample-cases ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 6px 0 0;
+        }
+        .sample-cases li {
+            margin-bottom: 4px;
+        }
+        .sample-cases a {
+            color: var(--accent-color);
+            text-decoration: underline;
+            cursor: pointer;
         }
 
         /* Expert Mode Toggle */
@@ -757,7 +792,7 @@
     </aside>
 
     <main class="container">
-        <h1>Composite Fracture Analyzer</h1>
+        <h1>Rotor Fracture Analyzer</h1>
         <p class="tool-description" id="tool-description">
             Assess fracture risk and fatigue crack growth in fiber-reinforced polymer rotors under centrifugal loading.
             Combines LEFM stress intensity analysis with Paris-law crack growth life prediction.
@@ -767,7 +802,7 @@
             <summary>Tool Purpose & README</summary>
             <div class="purpose-content" id="readme-content">
                 <h3>About This Tool</h3>
-                <p>The <strong>Composite Fracture Analyzer</strong> evaluates two tightly coupled failure modes for rotating composite components:</p>
+                <p>The <strong>Rotor Fracture Analyzer</strong> evaluates two tightly coupled failure modes for rotating composite components:</p>
                 <ul>
                     <li><strong>Static fracture assessment</strong> &mdash; stress intensity factor K<sub>I</sub> vs fracture toughness K<sub>IC</sub>, critical crack size</li>
                     <li><strong>Fatigue crack growth</strong> &mdash; Paris law integration (da/dN = C(&Delta;K)<sup>m</sup>) to determine remaining life</li>
@@ -804,6 +839,22 @@
                         <span class="expert-toggle-label" id="expert-mode-status">Off</span>
                     </label>
                 </div>
+
+                <!-- Parameter JSON Import/Export -->
+                <div class="param-json-bar">
+                    <input type="file" id="import-json-input" accept=".json" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="import-json-btn" type="button">Load JSON</button>
+                    <button class="btn btn-secondary btn-sm" id="export-json-btn" type="button">Export JSON</button>
+                </div>
+                <details class="sample-cases">
+                    <summary>Sample Test Cases</summary>
+                    <ul>
+                        <li><a href="#" class="load-sample" data-src="test-cases/finite-life-radial.json">Finite Life (radial, 20k RPM)</a></li>
+                        <li><a href="#" class="load-sample" data-src="test-cases/infinite-life-low-rpm.json">Infinite Life (circumferential, 5k RPM)</a></li>
+                        <li><a href="#" class="load-sample" data-src="test-cases/marginal-high-toughness.json">Marginal (high toughness, fast growth)</a></li>
+                        <li><a href="#" class="load-sample" data-src="test-cases/immediate-failure.json">Immediate Failure (50k RPM, large crack)</a></li>
+                    </ul>
+                </details>
 
                 <form id="calc-form">
                     <!-- Geometry -->
@@ -878,7 +929,7 @@
                             <option value="edge">Edge Crack</option>
                             <option value="through">Through Crack</option>
                             <option value="surface">Surface Crack (semi-circular)</option>
-                            <option value="embedded">Embedded (penny-shaped)</option>
+                            <option value="embedded">Embedded (elliptical)</option>
                             <option value="elliptical_surface">Elliptical Surface Crack</option>
                             <option value="corner">Corner Crack</option>
                             <option value="double_edge">Double Edge Crack</option>
@@ -890,7 +941,7 @@
                     <div class="input-group" id="aspect-ratio-group" style="display: none;">
                         <label for="crack_aspect_ratio">Crack Aspect Ratio (a/c)</label>
                         <input type="number" id="crack_aspect_ratio" name="crack_aspect_ratio" value="1.0" step="0.1" min="0.1" max="10">
-                        <span class="tooltip-trigger" data-tooltip="Ratio of crack depth (a) to half-surface-length (c). 1.0 = semicircular. < 1 = elongated surface flaw. > 1 = deep narrow flaw.">?</span>
+                        <span class="tooltip-trigger" data-tooltip="Ratio of crack depth (a) to half-surface-length (c). 1.0 = semicircular. < 1 = elongated surface flaw. Newman-Raju M-factors are validated for a/c ≤ 1; values > 1 are clamped internally.">?</span>
                     </div>
 
                     <!-- Required SF slider -->
@@ -945,6 +996,24 @@
                             </div>
                         </div>
 
+                        <h4 style="margin-top: 16px;">Material Knockdown Factors</h4>
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>UTS Knockdown <span class="tooltip-trigger slider-tooltip" data-tooltip="Percentage reduction applied to ultimate tensile strength to account for knit lines, temperature, moisture, or manufacturing defects.">?</span></span>
+                                <span class="slider-value" id="uts_knockdown_display">0%</span>
+                            </div>
+                            <input type="range" id="uts_knockdown_pct" name="uts_knockdown_pct" min="0" max="80" step="5" value="0" oninput="document.getElementById('uts_knockdown_display').textContent=this.value+'%'">
+                            <div class="slider-labels"><span>0%</span><span>80%</span></div>
+                        </div>
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>K<sub>IC</sub> Knockdown <span class="tooltip-trigger slider-tooltip" data-tooltip="Percentage reduction applied to fracture toughness to account for environmental degradation, processing defects, or conservative design margins.">?</span></span>
+                                <span class="slider-value" id="k_ic_knockdown_display">0%</span>
+                            </div>
+                            <input type="range" id="k_ic_knockdown_pct" name="k_ic_knockdown_pct" min="0" max="80" step="5" value="0" oninput="document.getElementById('k_ic_knockdown_display').textContent=this.value+'%'">
+                            <div class="slider-labels"><span>0%</span><span>80%</span></div>
+                        </div>
+
                         <h4 style="margin-top: 16px;">Paris Law Parameters</h4>
                         <div class="input-row">
                             <div class="input-group">
@@ -964,7 +1033,7 @@
                             <div class="input-group">
                                 <label for="stress_ratio_R">Stress Ratio R</label>
                                 <input type="number" id="stress_ratio_R" name="stress_ratio_R" value="0.0" step="0.05" min="0" max="0.99">
-                                <span class="tooltip-trigger" data-tooltip="R = sigma_min/sigma_max. 0 = zero-to-max cycling (start-stop rotor), 0.1 = typical with residual stress.">?</span>
+                                <span class="tooltip-trigger" data-tooltip="R = &sigma;_min / &sigma;_max, where &sigma;_max is the centrifugal stress at operating speed (hoop for radial cracks, radial for circumferential cracks). R = 0 means zero-to-max cycling (rotor starts from rest each cycle). R > 0 means the rotor maintains some minimum speed, reducing &Delta;&sigma; and slowing crack growth.">?</span>
                             </div>
                             <div class="input-group">
                                 <label for="design_life_cycles">Design Life (cycles)</label>
@@ -985,6 +1054,7 @@
                     <button class="tab-link" onclick="openTab(event, 'crack-growth')">Crack Growth</button>
                     <button class="tab-link" onclick="openTab(event, 'visualization')">Visualization</button>
                     <button class="tab-link" onclick="openTab(event, 'sensitivity')">Sensitivity</button>
+                    <button class="tab-link" onclick="openTab(event, 'contour')">Contour</button>
                     <button class="tab-link" onclick="openTab(event, 'background')">Background</button>
                 </div>
 
@@ -1496,23 +1566,23 @@
                             <span class="equation-expression">$$ Y = 1.12 - 0.231\frac{a}{W} + 10.55\left(\frac{a}{W}\right)^2 - 21.72\left(\frac{a}{W}\right)^3 + 30.39\left(\frac{a}{W}\right)^4 $$</span>
                             <p style="margin-top: 6px; font-size: 0.9rem; color: var(--text-light);">
                                 Single edge crack of depth a in a plate of width W. The leading coefficient 1.12 reflects
-                                the free-surface correction. Valid for a/W &lt; 0.6.
+                                the free-surface correction. Valid for a/W &lt; 0.7.
                             </p>
                         </div>
                         <div class="equation-card">
-                            <strong>Surface Crack (Newman-Raju simplified, a/c = 1)</strong>
-                            <span class="equation-expression">$$ Y \approx 0.728 $$</span>
+                            <strong>Surface Crack (Newman-Raju, a/c = 1 fixed)</strong>
+                            <span class="equation-expression">$$ Y = \frac{F}{\sqrt{Q}}, \quad F = (M_1 + M_2 \alpha^2 + M_3 \alpha^4)\,f_w $$</span>
                             <p style="margin-top: 6px; font-size: 0.9rem; color: var(--text-light);">
-                                Semicircular surface flaw (a/c = 1) at the deepest point. For non-semicircular shapes
-                                (a/c &ne; 1), the full Newman-Raju parametric equations should be used.
+                                Semicircular surface flaw (a/c = 1) using the full Newman-Raju model.
+                                Y &approx; 0.66 at small a/W, increasing as the crack approaches the back face.
                             </p>
                         </div>
                         <div class="equation-card">
-                            <strong>Embedded / Penny-shaped Crack</strong>
-                            <span class="equation-expression">$$ Y = \frac{2}{\pi} \approx 0.637 $$</span>
+                            <strong>Embedded Elliptical Crack (Irwin/Green-Sneddon)</strong>
+                            <span class="equation-expression">$$ Y = \frac{1}{\sqrt{Q}}, \quad Q = 1 + 1.464\left(\frac{a}{c}\right)^{1.65} $$</span>
                             <p style="margin-top: 6px; font-size: 0.9rem; color: var(--text-light);">
-                                Circular (penny-shaped) embedded crack in an infinite body. The lowest Y of common
-                                crack types because the crack tip is fully surrounded by material.
+                                Embedded elliptical crack. At a/c = 1 (penny-shaped), Y &approx; 2/&pi; &approx; 0.637.
+                                Shape factor Q accounts for crack aspect ratio; elongated cracks (a/c &lt; 1) are more severe.
                             </p>
                         </div>
 
@@ -1530,7 +1600,7 @@
                             </ul>
                             <p style="margin-top: 6px; font-size: 0.9rem; color: var(--text-light);">
                                 <strong>Applicability:</strong> Most common real-world flaw shape. Manufacturing defects, porosity,
-                                delamination origins. Reduces to Y &asymp; 0.728 at a/c = 1 (semicircular).
+                                delamination origins. At a/c = 1, matches the simplified surface crack model.
                             </p>
                             <p style="margin-top: 4px; font-size: 0.9rem; color: var(--text-light);">
                                 <strong>Examples:</strong> Composite layup voids, fiber breakage zones, impact damage sites.
@@ -1612,10 +1682,61 @@
 
                         <h4>Stress Ratio Effects</h4>
                         <p>
-                            The stress ratio R affects crack growth through its influence on &Delta;K. For a rotating component
-                            that spins up from rest each cycle, R = 0 (zero-to-max loading). If the component maintains a
-                            minimum speed during operation, R &gt; 0 and &Delta;K is reduced, slowing crack growth. This tool
-                            uses the basic Paris model with &Delta;K = (1&minus;R)&middot;K<sub>max</sub> for the stress range reduction.
+                            The stress ratio <em>R</em>&nbsp;=&nbsp;&sigma;<sub>min</sub>&nbsp;/&nbsp;&sigma;<sub>max</sub> describes
+                            the cyclic loading range. In this tool, <strong>&sigma;<sub>max</sub> is the centrifugal stress at the
+                            crack location at operating speed</strong> &mdash; specifically the hoop stress for radial cracks or
+                            the radial stress for circumferential cracks, as computed from the rotating disk equations. The minimum
+                            stress &sigma;<sub>min</sub>&nbsp;=&nbsp;R&nbsp;&times;&nbsp;&sigma;<sub>max</sub> represents the stress
+                            at the lowest speed in the duty cycle.
+                        </p>
+                        <p>
+                            For a rotor that starts from rest each cycle, R&nbsp;=&nbsp;0 (zero-to-max loading) and the full
+                            stress range drives crack growth: &Delta;&sigma;&nbsp;=&nbsp;&sigma;<sub>max</sub>. If the rotor
+                            maintains a minimum idle speed, R&nbsp;&gt;&nbsp;0 and the effective stress range is reduced to
+                            &Delta;&sigma;&nbsp;=&nbsp;&sigma;<sub>max</sub>(1&nbsp;&minus;&nbsp;R), which lowers &Delta;K and
+                            slows crack growth. This tool uses the basic Paris model with
+                            &Delta;K&nbsp;=&nbsp;Y&nbsp;&Delta;&sigma;&nbsp;&radic;(&pi;a).
+                        </p>
+
+                        <h4>Loading Frequency Limitation</h4>
+                        <p>
+                            The Paris law is purely cycle-based &mdash; it counts cycles (da/dN), not time. The rate at which
+                            stress is applied (how fast the rotor spins up) does not appear in any equation and has no effect
+                            on the results. In reality, loading frequency can matter for polymer composites:
+                        </p>
+                        <ul>
+                            <li><strong>Viscoelastic rate sensitivity</strong> &mdash; Polymers are stiffer and more brittle at
+                                high strain rates, which shifts the effective K<sub>IC</sub> and Paris constants.</li>
+                            <li><strong>Environmental interaction</strong> &mdash; At lower frequencies, each cycle gives more
+                                time for moisture or chemical attack at the crack tip (corrosion fatigue), accelerating growth.</li>
+                            <li><strong>Hysteretic heating</strong> &mdash; At very high frequencies, internal heat generation
+                                in polymers can soften the crack-tip material and alter fracture behavior.</li>
+                        </ul>
+                        <p>
+                            The preset Paris constants in this tool are representative of moderate test frequencies
+                            (1&ndash;10&nbsp;Hz) in laboratory air. If the actual duty cycle involves very slow thermal
+                            cycling (hours per cycle) or high-frequency vibration (hundreds of Hz), the constants C and m
+                            may not be applicable. Accounting for this requires frequency-dependent crack growth models,
+                            which are beyond the scope of this tool.
+                        </p>
+
+                        <h4>Vibratory Fatigue (Not Modeled)</h4>
+                        <p>
+                            This tool models <strong>low-cycle fatigue from start-stop centrifugal loading</strong> only. In real
+                            rotating machinery, cracks can also be driven by <strong>vibratory stresses</strong> &mdash; alternating
+                            loads from resonances, blade-passing excitation, or rotor imbalance &mdash; superimposed on the steady
+                            centrifugal stress. In that scenario the cyclic stress parameters become:
+                        </p>
+                        <ul>
+                            <li>&sigma;<sub>max</sub> = &sigma;<sub>centrifugal</sub> + &sigma;<sub>vibratory</sub></li>
+                            <li>&sigma;<sub>min</sub> = &sigma;<sub>centrifugal</sub> &minus; &sigma;<sub>vibratory</sub></li>
+                            <li>R = &sigma;<sub>min</sub> / &sigma;<sub>max</sub></li>
+                        </ul>
+                        <p>
+                            Vibratory fatigue often dominates crack growth even when the alternating stress amplitude is small,
+                            because cycle counts can reach millions per hour at resonant frequencies compared to thousands of
+                            start-stop cycles over a service life. Estimating &sigma;<sub>vibratory</sub> typically requires
+                            modal finite-element analysis or strain-gauge test data, which is beyond the scope of this tool.
                         </p>
                     </div>
 
@@ -1766,6 +1887,91 @@
                             <h4>Life Fraction Used</h4>
                             <div id="sensitivity-life-plot" class="chart-plot"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Contour Tab -->
+                <div id="contour" class="tab-content">
+                    <h3>2D Contour Sensitivity</h3>
+                    <p id="contour-placeholder" style="color: var(--text-light);">
+                        Run a baseline calculation first, then select two parameters to generate a 2D contour map.
+                    </p>
+
+                    <div class="sensitivity-controls" id="contour-controls" style="display: none;">
+                        <div class="input-row" style="align-items: end;">
+                            <div class="input-group" style="flex: 2;">
+                                <label for="contour-x-param">X-Axis Parameter</label>
+                                <select id="contour-x-param">
+                                    <option value="initial_crack_size_mm">Initial Crack Size (mm)</option>
+                                    <option value="speed_rpm">Speed (RPM)</option>
+                                    <option value="stress_ratio_R">Stress Ratio (R)</option>
+                                    <option value="fracture_toughness">Fracture Toughness K_IC</option>
+                                    <option value="paris_C">Paris C</option>
+                                    <option value="paris_m">Paris m</option>
+                                    <option value="thickness_mm">Thickness (mm)</option>
+                                    <option value="crack_location_radius_mm">Crack Location Radius (mm)</option>
+                                    <option value="crack_aspect_ratio">Crack Aspect Ratio (a/c)</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="contour-x-min">X Min</label>
+                                <input type="number" id="contour-x-min" step="any">
+                            </div>
+                            <div class="input-group">
+                                <label for="contour-x-max">X Max</label>
+                                <input type="number" id="contour-x-max" step="any">
+                            </div>
+                        </div>
+                        <div class="input-row" style="align-items: end;">
+                            <div class="input-group" style="flex: 2;">
+                                <label for="contour-y-param">Y-Axis Parameter</label>
+                                <select id="contour-y-param">
+                                    <option value="initial_crack_size_mm">Initial Crack Size (mm)</option>
+                                    <option value="speed_rpm" selected>Speed (RPM)</option>
+                                    <option value="stress_ratio_R">Stress Ratio (R)</option>
+                                    <option value="fracture_toughness">Fracture Toughness K_IC</option>
+                                    <option value="paris_C">Paris C</option>
+                                    <option value="paris_m">Paris m</option>
+                                    <option value="thickness_mm">Thickness (mm)</option>
+                                    <option value="crack_location_radius_mm">Crack Location Radius (mm)</option>
+                                    <option value="crack_aspect_ratio">Crack Aspect Ratio (a/c)</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="contour-y-min">Y Min</label>
+                                <input type="number" id="contour-y-min" step="any">
+                            </div>
+                            <div class="input-group">
+                                <label for="contour-y-max">Y Max</label>
+                                <input type="number" id="contour-y-max" step="any">
+                            </div>
+                        </div>
+                        <div class="input-row" style="align-items: end; margin-top: 8px;">
+                            <div class="input-group" style="max-width: 100px;">
+                                <label for="contour-grid">Grid Size</label>
+                                <input type="number" id="contour-grid" value="20" min="5" max="40" step="1">
+                            </div>
+                            <div class="input-group" style="flex: 2;">
+                                <label for="contour-metric">Output Metric</label>
+                                <select id="contour-metric">
+                                    <option value="fracture_safety_factor">Safety Factor</option>
+                                    <option value="cycles_to_failure">Cycles to Failure</option>
+                                    <option value="life_fraction_used">Life Fraction Used</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-primary" id="run-contour-btn">Run Contour</button>
+                        </div>
+
+                        <div class="sweep-progress" id="contour-progress" style="display: none; margin-top: 12px;">
+                            <div class="sweep-progress-bar">
+                                <div class="sweep-progress-fill" id="contour-progress-fill" style="width: 0%;"></div>
+                            </div>
+                            <span class="sweep-progress-text" id="contour-progress-text">0 / 400</span>
+                        </div>
+                    </div>
+
+                    <div class="chart-container" style="margin-top: 20px;">
+                        <div id="contour-plot" class="chart-plot"></div>
                     </div>
                 </div>
             </section>
@@ -2351,6 +2557,16 @@
                         if (el && el.data) Plotly.Plots.resize(el);
                     });
                 }, 100);
+            } else if (tabName === 'contour') {
+                if (lastResults) {
+                    document.getElementById('contour-placeholder').style.display = 'none';
+                    document.getElementById('contour-controls').style.display = 'block';
+                    onContourParamChange();
+                }
+                setTimeout(() => {
+                    const el = document.getElementById('contour-plot');
+                    if (el && el.data) Plotly.Plots.resize(el);
+                }, 100);
             }
         }
 
@@ -2369,7 +2585,7 @@
         function onCrackTypeChange() {
             const ct = document.getElementById('crack_type').value;
             const arGroup = document.getElementById('aspect-ratio-group');
-            arGroup.style.display = (ct === 'elliptical_surface' || ct === 'corner') ? 'block' : 'none';
+            arGroup.style.display = (ct === 'elliptical_surface' || ct === 'corner' || ct === 'embedded') ? 'block' : 'none';
             renderCrossSectionPreview();
             renderCrackTypeDiagram();
         }
@@ -2513,6 +2729,42 @@
 
                 document.getElementById('calc-form').addEventListener('submit', handleCalculate);
                 document.getElementById('export-csv-btn').addEventListener('click', exportCSV);
+
+                // JSON parameter import/export
+                document.getElementById('export-json-btn').addEventListener('click', exportParameterJSON);
+                document.getElementById('import-json-btn').addEventListener('click', () => {
+                    document.getElementById('import-json-input').click();
+                });
+                document.getElementById('import-json-input').addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        try {
+                            const params = JSON.parse(ev.target.result);
+                            loadParameterJSON(params);
+                        } catch (err) {
+                            alert('Invalid JSON file: ' + err.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = ''; // reset so same file can be re-loaded
+                });
+                document.querySelectorAll('.load-sample').forEach(link => {
+                    link.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const src = link.dataset.src;
+                        try {
+                            const resp = await fetch(src);
+                            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                            const params = await resp.json();
+                            loadParameterJSON(params);
+                        } catch (err) {
+                            alert('Failed to load sample: ' + err.message);
+                        }
+                    });
+                });
+
                 document.getElementById('loading-overlay').classList.add('hidden');
                 document.getElementById('calculate-btn').textContent = 'Calculate';
                 document.getElementById('calculate-btn').disabled = false;
@@ -2532,6 +2784,11 @@
                 // Sensitivity sweep controls
                 document.getElementById('sweep-param').addEventListener('change', onSweepParamChange);
                 document.getElementById('run-sweep-btn').addEventListener('click', runSensitivity);
+
+                // Contour controls
+                document.getElementById('contour-x-param').addEventListener('change', onContourParamChange);
+                document.getElementById('contour-y-param').addEventListener('change', onContourParamChange);
+                document.getElementById('run-contour-btn').addEventListener('click', runContour);
 
             } catch (error) {
                 loadingText.textContent = 'Error loading: ' + error.message;
@@ -2571,12 +2828,15 @@
                 const thickness = parseFloat(document.getElementById('thickness_mm').value);
 
                 const crack_ar = parseFloat(document.getElementById('crack_aspect_ratio').value) || 1.0;
+                const uts_kd = parseFloat(document.getElementById('uts_knockdown_pct').value) || 0;
+                const k_ic_kd = parseFloat(document.getElementById('k_ic_knockdown_pct').value) || 0;
 
                 const resultProxy = pyToolModule.analyze_fracture_and_crack_growth(
                     geom, inner_r, outer_r, speed, crack_loc, crack_size,
                     crack_t, crack_orient, mat_preset,
                     k_ic, pC, pm, density, poisson, uts,
-                    R, design_life, req_sf, thickness, crack_ar
+                    R, design_life, req_sf, thickness, crack_ar,
+                    uts_kd, k_ic_kd
                 );
 
                 lastResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
@@ -2602,6 +2862,17 @@
                 console.error('Calculation error:', error);
                 document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
                 document.getElementById('results-placeholder').style.color = 'var(--danger-color)';
+                document.getElementById('results-placeholder').style.display = '';
+                // Hide stale results so old outputs aren't mistaken for current
+                document.getElementById('results-grid').style.display = 'none';
+                document.getElementById('safety-section').style.display = 'none';
+                document.getElementById('status-banner').style.display = 'none';
+                document.getElementById('export-section').style.display = 'none';
+                document.getElementById('growth-grid').style.display = 'none';
+                document.getElementById('growth-chart-container').style.display = 'none';
+                document.getElementById('sensitivity-controls').style.display = 'none';
+                document.getElementById('sensitivity-plots').style.display = 'none';
+                lastResults = null;
             }
 
             btn.textContent = 'Calculate';
@@ -2612,6 +2883,7 @@
         // DISPLAY RESULTS
         // =================================================================
         function displayResults(r, reqSF) {
+            const noCritical = r.critical_crack_reached === false;
             // Fracture tab
             document.getElementById('results-placeholder').style.display = 'none';
             document.getElementById('results-grid').style.display = 'grid';
@@ -2663,22 +2935,35 @@
                 acrEl.innerHTML += '<span class="unit" style="color:var(--warning-color);"> (K never reaches K_IC)</span>';
             }
 
+            // Aspect ratio clamp warning
+            if (r.aspect_ratio_clamped) {
+                const kiEl = document.getElementById('val-K_I');
+                kiEl.innerHTML += '<span class="unit" style="color:var(--warning-color);"> (a/c clamped to 1.0 for M-factors)</span>';
+            }
+
             // Life fraction gauge
             const lifeFrac = r.life_fraction_used;
-            const lifeClass = lifeFrac <= 0.5 ? 'success' : lifeFrac <= 1.0 ? 'warning' : 'danger';
-            document.getElementById('gauge-life-bar').className = 'gauge-bar ' + lifeClass;
-            document.getElementById('gauge-life-bar').style.width = Math.min(100, lifeFrac * 100) + '%';
-            document.getElementById('gauge-life-value').className = 'gauge-value ' + lifeClass;
-            document.getElementById('gauge-life-value').textContent = (lifeFrac * 100).toFixed(0) + '%';
+            if (noCritical) {
+                document.getElementById('gauge-life-bar').className = 'gauge-bar success';
+                document.getElementById('gauge-life-bar').style.width = '0%';
+                document.getElementById('gauge-life-value').className = 'gauge-value success';
+                document.getElementById('gauge-life-value').textContent = '0%';
+            } else {
+                const lifeClass = lifeFrac <= 0.5 ? 'success' : lifeFrac <= 1.0 ? 'warning' : 'danger';
+                document.getElementById('gauge-life-bar').className = 'gauge-bar ' + lifeClass;
+                document.getElementById('gauge-life-bar').style.width = Math.min(100, lifeFrac * 100) + '%';
+                document.getElementById('gauge-life-value').className = 'gauge-value ' + lifeClass;
+                document.getElementById('gauge-life-value').textContent = (lifeFrac * 100).toFixed(0) + '%';
+            }
             document.getElementById('gauge-life-threshold').style.left = '100%';
 
             const designLife = parseFloat(document.getElementById('design_life_cycles').value);
             document.getElementById('explainer-life-design').textContent = 'Design: ' + formatCycles(designLife) + ' cycles';
-            document.getElementById('explainer-life-predicted').textContent = 'N_f: ' + formatCycles(r.cycles_to_failure) + ' cycles';
-            document.getElementById('explainer-life-fraction').textContent = 'Fraction: ' + (lifeFrac * 100).toFixed(1) + '%';
+            document.getElementById('explainer-life-predicted').textContent = noCritical ? 'N_f: \u221E (no critical crack)' : 'N_f: ' + formatCycles(r.cycles_to_failure) + ' cycles';
+            document.getElementById('explainer-life-fraction').textContent = noCritical ? 'Fraction: 0%' : 'Fraction: ' + (lifeFrac * 100).toFixed(1) + '%';
 
             // Populate life fraction derivation steps (Fracture tab)
-            if (r.subst_nf_step_delta_sigma) {
+            if (r.subst_nf_step_delta_sigma && !noCritical) {
                 document.getElementById('explainer-life-delta-sigma').innerHTML = '$$' + r.subst_nf_step_delta_sigma + '$$';
                 document.getElementById('explainer-life-delta-K').innerHTML = '$$' + r.subst_nf_step_delta_K + '$$';
                 document.getElementById('explainer-life-dadN').innerHTML = '$$' + r.subst_nf_step_dadN + '$$';
@@ -2687,9 +2972,14 @@
                     document.getElementById('explainer-life-frac-eq').innerHTML = '$$' + r.subst_life_fraction_used + '$$';
                 }
                 document.getElementById('explainer-life-steps').style.display = 'block';
+            } else {
+                document.getElementById('explainer-life-steps').style.display = 'none';
             }
             const guidanceL = document.getElementById('explainer-life-guidance');
-            if (lifeFrac <= 0.5) {
+            if (noCritical) {
+                guidanceL.className = 'explainer-guidance good';
+                guidanceL.textContent = 'K_I never reaches K_IC within the ligament — the centrifugal stress is too low relative to material toughness for fast fracture. The crack grows but cannot cause fracture failure. Try increasing RPM or using a less tough material.';
+            } else if (lifeFrac <= 0.5) {
                 guidanceL.className = 'explainer-guidance good';
                 guidanceL.textContent = 'Predicted crack growth life well exceeds the design life target.';
             } else if (lifeFrac <= 1.0) {
@@ -2703,9 +2993,9 @@
             // Status banner
             const banner = document.getElementById('status-banner');
             banner.className = 'status-banner ' + r.status;
-            const statusTitles = { acceptable: 'Fracture Assessment: Acceptable', marginal: 'Fracture Assessment: Marginal', unacceptable: 'Fracture Assessment: Unacceptable' };
+            const statusTitles = { acceptable: 'Assessment: Acceptable', marginal: 'Assessment: Marginal', unacceptable: 'Assessment: Unacceptable' };
             const statusIcons = { acceptable: '&#10003;', marginal: '&#9888;', unacceptable: '&#10007;' };
-            const statusMessages = { acceptable: 'Fracture safety factor meets requirements.', marginal: 'Safety factor is below the target but above 1.0.', unacceptable: 'Crack exceeds critical threshold or safety factor is below 1.0.' };
+            const statusMessages = { acceptable: 'Fracture safety factor and fatigue life meet requirements.', marginal: 'Safety factor or fatigue life below target — review recommendations.', unacceptable: 'Crack exceeds critical threshold, safety factor below 1.0, or immediate failure predicted.' };
             document.getElementById('status-icon').innerHTML = statusIcons[r.status];
             document.getElementById('status-title').textContent = statusTitles[r.status];
             document.getElementById('status-message').textContent = statusMessages[r.status];
@@ -2728,7 +3018,6 @@
             document.getElementById('growth-grid').style.display = 'grid';
             document.getElementById('growth-chart-container').style.display = 'block';
 
-            const noCritical = r.critical_crack_reached === false;
             if (noCritical) {
                 document.getElementById('val-cycles').innerHTML = '&infin; <span class="unit" style="color:var(--warning-color);">(K never reaches K_IC)</span>';
                 document.getElementById('val-inspection').innerHTML = 'N/A';
@@ -2747,7 +3036,7 @@
             if (r.subst_life_fraction_used) document.getElementById('subst-life_fraction').innerHTML = '$$' + r.subst_life_fraction_used + '$$';
 
             // Plot charts
-            plotCrackGrowth(r.crack_growth_curve, r.inspection_interval_cycles);
+            plotCrackGrowth(r.crack_growth_curve, r.inspection_interval_cycles, noCritical);
             plotKvsA(r.K_vs_a_curve);
 
             typesetMath();
@@ -2794,6 +3083,8 @@
             rows.push('Stress Ratio (R),' + document.getElementById('stress_ratio_R').value + ',');
             rows.push('Design Life,' + document.getElementById('design_life_cycles').value + ',cycles');
             rows.push('Required SF,' + document.getElementById('required_fracture_sf').value + ',');
+            rows.push('UTS Knockdown,' + document.getElementById('uts_knockdown_pct').value + ',%');
+            rows.push('K_IC Knockdown,' + document.getElementById('k_ic_knockdown_pct').value + ',%');
 
             // Blank line separator
             rows.push('');
@@ -2826,6 +3117,81 @@
         }
 
         // =================================================================
+        // JSON PARAMETER IMPORT / EXPORT
+        // =================================================================
+
+        // Mapping from Python kwarg names to HTML element IDs
+        const PARAM_TO_ELEMENT = {
+            geometry_type: 'geometry_type',
+            inner_radius_mm: 'inner_radius_mm',
+            outer_radius_mm: 'outer_radius_mm',
+            speed_rpm: 'speed_rpm',
+            crack_location_radius_mm: 'crack_location_radius_mm',
+            initial_crack_size_mm: 'initial_crack_size_mm',
+            crack_type: 'crack_type',
+            crack_orientation: 'crack_orientation',
+            material_preset: 'material_preset',
+            fracture_toughness_mpa_sqrt_m: 'fracture_toughness',
+            paris_C: 'paris_C',
+            paris_m: 'paris_m',
+            density_kg_m3: 'density_kg_m3',
+            poisson_ratio: 'poisson_ratio',
+            tensile_strength_mpa: 'tensile_strength_mpa',
+            stress_ratio_R: 'stress_ratio_R',
+            design_life_cycles: 'design_life_cycles',
+            required_fracture_sf: 'required_fracture_sf',
+            thickness_mm: 'thickness_mm',
+            crack_aspect_ratio: 'crack_aspect_ratio',
+            uts_knockdown_pct: 'uts_knockdown_pct',
+            k_ic_knockdown_pct: 'k_ic_knockdown_pct',
+        };
+
+        // Reverse mapping: element ID → JSON key
+        const ELEMENT_TO_PARAM = {};
+        for (const [k, v] of Object.entries(PARAM_TO_ELEMENT)) {
+            ELEMENT_TO_PARAM[v] = k;
+        }
+
+        function exportParameterJSON() {
+            const params = { name: '', description: '' };
+            for (const [jsonKey, elId] of Object.entries(PARAM_TO_ELEMENT)) {
+                const el = document.getElementById(elId);
+                if (!el) continue;
+                if (el.tagName === 'SELECT') {
+                    params[jsonKey] = el.value;
+                } else {
+                    const num = parseFloat(el.value);
+                    params[jsonKey] = isNaN(num) ? el.value : num;
+                }
+            }
+            const json = JSON.stringify(params, null, 2) + '\n';
+            downloadFile(json, 'fracture-parameters.json', 'application/json');
+        }
+
+        function loadParameterJSON(params) {
+            for (const [jsonKey, elId] of Object.entries(PARAM_TO_ELEMENT)) {
+                if (!(jsonKey in params)) continue;
+                const el = document.getElementById(elId);
+                if (!el) continue;
+                el.value = params[jsonKey];
+            }
+            // Update slider displays
+            const sfDisplay = document.getElementById('sf_display');
+            if (sfDisplay) sfDisplay.textContent = parseFloat(document.getElementById('required_fracture_sf').value).toFixed(1);
+            const utsKdDisplay = document.getElementById('uts_knockdown_display');
+            if (utsKdDisplay) utsKdDisplay.textContent = document.getElementById('uts_knockdown_pct').value + '%';
+            const kicKdDisplay = document.getElementById('k_ic_knockdown_display');
+            if (kicKdDisplay) kicKdDisplay.textContent = document.getElementById('k_ic_knockdown_pct').value + '%';
+
+            // Trigger dependent UI updates
+            onGeometryChange();
+            onCrackTypeChange();
+            if (params.material_preset && params.material_preset !== 'custom') {
+                onMaterialChange();
+            }
+        }
+
+        // =================================================================
         // PLOTTING
         // =================================================================
         function getChartTheme() {
@@ -2841,17 +3207,18 @@
             };
         }
 
-        function plotCrackGrowth(data, inspectionInterval) {
+        function plotCrackGrowth(data, inspectionInterval, noCritical) {
             if (!data || !data.cycles || data.cycles.length < 2) return;
             const theme = getChartTheme();
 
             const traces = [{
                 x: data.cycles,
                 y: data.crack_size_mm,
-                name: 'Crack Size',
+                name: noCritical ? 'Crack Size (K < K_IC throughout)' : 'Crack Size',
                 type: 'scatter',
                 mode: 'lines',
-                line: { color: theme.accentColor, width: 2 }
+                line: { color: noCritical ? theme.warningColor : theme.accentColor, width: 2,
+                        dash: noCritical ? 'dot' : 'solid' }
             }];
 
             // Add inspection interval line
@@ -2867,11 +3234,16 @@
                 });
             }
 
+            const title = noCritical
+                ? 'Crack Growth (K never reaches K_IC — no fracture failure)'
+                : '';
+
             Plotly.newPlot('growth-plot', traces, {
+                title: title ? { text: title, font: { size: 12, color: theme.warningColor } } : undefined,
                 xaxis: { title: 'Cycles', gridcolor: theme.gridColor, color: theme.textColor },
                 yaxis: { title: 'Crack Size (mm)', gridcolor: theme.gridColor, color: theme.textColor },
                 legend: { x: 0.02, y: 0.98, font: { color: theme.textColor } },
-                margin: { t: 20, r: 20 },
+                margin: { t: title ? 40 : 20, r: 20 },
                 paper_bgcolor: theme.bgColor,
                 plot_bgcolor: theme.bgColor,
                 font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
@@ -2961,9 +3333,9 @@
                 label: 'Geometry Type',
                 categorical: true,
                 options: [
-                    { value: 'hollow_disk', label: 'Hollow Disk' },
+                    { value: 'annular_disk', label: 'Annular Disk' },
                     { value: 'solid_disk', label: 'Solid Disk' },
-                    { value: 'hollow_cylinder', label: 'Hollow Cylinder' }
+                    { value: 'thin_ring', label: 'Thin Ring' }
                 ],
                 baselineKey: 'geom'
             }
@@ -3003,6 +3375,18 @@
             return vals;
         }
 
+        const NUMERIC_PARAM_MAP = {
+            initial_crack_size_mm: 'crack_size',
+            speed_rpm: 'speed',
+            stress_ratio_R: 'R',
+            fracture_toughness: 'k_ic',
+            paris_C: 'pC',
+            paris_m: 'pm',
+            thickness_mm: 'thickness',
+            crack_location_radius_mm: 'crack_loc',
+            crack_aspect_ratio: 'crack_ar'
+        };
+
         function readBaseline() {
             return {
                 geom: document.getElementById('geometry_type').value,
@@ -3024,7 +3408,9 @@
                 design_life: parseFloat(document.getElementById('design_life_cycles').value),
                 req_sf: parseFloat(document.getElementById('required_fracture_sf').value),
                 thickness: parseFloat(document.getElementById('thickness_mm').value),
-                crack_ar: parseFloat(document.getElementById('crack_aspect_ratio').value) || 1.0
+                crack_ar: parseFloat(document.getElementById('crack_aspect_ratio').value) || 1.0,
+                uts_kd: parseFloat(document.getElementById('uts_knockdown_pct').value) || 0,
+                k_ic_kd: parseFloat(document.getElementById('k_ic_knockdown_pct').value) || 0
             };
         }
 
@@ -3035,7 +3421,7 @@
                 params.mat_preset, params.k_ic, params.pC, params.pm,
                 params.density, params.poisson, params.uts,
                 params.R, params.design_life, params.req_sf, params.thickness,
-                params.crack_ar
+                params.crack_ar, params.uts_kd, params.k_ic_kd
             );
             const r = resultProxy.toJs({ dict_converter: Object.fromEntries });
             resultProxy.destroy();
@@ -3058,6 +3444,12 @@
             if (presetOverrideParams.includes(paramKey) && baseline.mat_preset !== 'custom') {
                 baseline.mat_preset = 'custom';
             }
+
+            // Zero out knockdown when sweeping the knocked-down variable itself,
+            // since the sweep already directly varies the property value.
+            if (paramKey === 'fracture_toughness') baseline.k_ic_kd = 0;
+            // (UTS is not currently a sweep parameter, but guard for future use)
+            if (paramKey === 'tensile_strength_mpa') baseline.uts_kd = 0;
 
             const progressDiv = document.getElementById('sweep-progress');
             const progressFill = document.getElementById('sweep-progress-fill');
@@ -3085,18 +3477,7 @@
             const steps = parseInt(document.getElementById('sweep-steps').value) || 20;
             const sweepValues = generateSweepValues(sweepMin, sweepMax, steps, cfg.logSpace);
 
-            const paramMap = {
-                initial_crack_size_mm: 'crack_size',
-                speed_rpm: 'speed',
-                stress_ratio_R: 'R',
-                fracture_toughness: 'k_ic',
-                paris_C: 'pC',
-                paris_m: 'pm',
-                thickness_mm: 'thickness',
-                crack_location_radius_mm: 'crack_loc',
-                crack_aspect_ratio: 'crack_ar'
-            };
-            const overrideKey = paramMap[paramKey];
+            const overrideKey = NUMERIC_PARAM_MAP[paramKey];
 
             progressText.textContent = `0 / ${steps}`;
 
@@ -3296,6 +3677,203 @@
                 xaxis: { title: cfg.label, tickangle: -30, gridcolor: theme.gridColor, color: theme.textColor },
                 yaxis: { title: 'Life Fraction', gridcolor: theme.gridColor, color: theme.textColor, rangemode: 'tozero' }
             }, { responsive: true });
+        }
+
+        // =================================================================
+        // 2D CONTOUR SENSITIVITY
+        // =================================================================
+        function onContourParamChange() {
+            const axes = [
+                { paramId: 'contour-x-param', minId: 'contour-x-min', maxId: 'contour-x-max' },
+                { paramId: 'contour-y-param', minId: 'contour-y-min', maxId: 'contour-y-max' }
+            ];
+            for (const axis of axes) {
+                const key = document.getElementById(axis.paramId).value;
+                const cfg = SWEEP_PARAMS[key];
+                if (!cfg || cfg.categorical) continue;
+                const currentVal = parseFloat(document.getElementById(key).value);
+                const [lo, hi] = cfg.rangeFn(currentVal);
+                const precision = key === 'paris_C' ? 2 : (lo < 1 ? 3 : 1);
+                document.getElementById(axis.minId).value = cfg.logSpace ? lo.toExponential(1) : parseFloat(lo.toFixed(precision));
+                document.getElementById(axis.maxId).value = cfg.logSpace ? hi.toExponential(1) : parseFloat(hi.toFixed(precision));
+            }
+        }
+
+        async function runContour() {
+            if (!lastResults || !pyToolModule) return;
+
+            const xParamKey = document.getElementById('contour-x-param').value;
+            const yParamKey = document.getElementById('contour-y-param').value;
+
+            if (xParamKey === yParamKey) {
+                alert('X and Y parameters must be different. Please select two distinct parameters.');
+                return;
+            }
+
+            const xMin = parseFloat(document.getElementById('contour-x-min').value);
+            const xMax = parseFloat(document.getElementById('contour-x-max').value);
+            const yMin = parseFloat(document.getElementById('contour-y-min').value);
+            const yMax = parseFloat(document.getElementById('contour-y-max').value);
+            const gridSize = Math.min(40, Math.max(5, parseInt(document.getElementById('contour-grid').value) || 20));
+            const metricKey = document.getElementById('contour-metric').value;
+
+            const metricLabels = {
+                fracture_safety_factor: 'Safety Factor',
+                cycles_to_failure: 'Cycles to Failure (log\u2081\u2080)',
+                life_fraction_used: 'Life Fraction Used'
+            };
+
+            const btn = document.getElementById('run-contour-btn');
+            btn.textContent = 'Running...';
+            btn.disabled = true;
+
+            const progressDiv = document.getElementById('contour-progress');
+            const progressFill = document.getElementById('contour-progress-fill');
+            const progressText = document.getElementById('contour-progress-text');
+            const total = gridSize * gridSize;
+            progressDiv.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = `0 / ${total}`;
+
+            try {
+                const baseline = readBaseline();
+
+                // Force custom preset when sweeping K_IC, Paris C, or Paris m
+                const presetOverrideParams = ['fracture_toughness', 'paris_C', 'paris_m'];
+                if ((presetOverrideParams.includes(xParamKey) || presetOverrideParams.includes(yParamKey)) && baseline.mat_preset !== 'custom') {
+                    baseline.mat_preset = 'custom';
+                }
+
+                // Zero knockdowns when sweeping the knocked-down variable
+                if (xParamKey === 'fracture_toughness' || yParamKey === 'fracture_toughness') baseline.k_ic_kd = 0;
+                if (xParamKey === 'tensile_strength_mpa' || yParamKey === 'tensile_strength_mpa') baseline.uts_kd = 0;
+
+                const xCfg = SWEEP_PARAMS[xParamKey];
+                const yCfg = SWEEP_PARAMS[yParamKey];
+                const xVals = generateSweepValues(xMin, xMax, gridSize, xCfg.logSpace);
+                const yVals = generateSweepValues(yMin, yMax, gridSize, yCfg.logSpace);
+
+                const xOverride = NUMERIC_PARAM_MAP[xParamKey];
+                const yOverride = NUMERIC_PARAM_MAP[yParamKey];
+
+                const z = [];
+                let count = 0;
+
+                for (let i = 0; i < gridSize; i++) {
+                    const row = [];
+                    for (let j = 0; j < gridSize; j++) {
+                        const params = { ...baseline };
+                        params[xOverride] = xVals[j];
+                        params[yOverride] = yVals[i];
+
+                        try {
+                            const r = runSweepCall(params);
+                            let val = r[metricKey];
+                            if (metricKey === 'cycles_to_failure') {
+                                val = val > 0 ? Math.log10(val) : 0;
+                            }
+                            row.push(val);
+                        } catch (e) {
+                            row.push(NaN);
+                        }
+
+                        count++;
+                        const pct = (count / total * 100).toFixed(0);
+                        progressFill.style.width = pct + '%';
+                        progressText.textContent = `${count} / ${total}`;
+                        if (count % 20 === 0) await new Promise(r => setTimeout(r, 0));
+                    }
+                    z.push(row);
+                }
+
+                plotContour(xVals, yVals, z, xCfg, yCfg, metricLabels[metricKey], baseline, xParamKey, yParamKey, metricKey);
+            } finally {
+                progressDiv.style.display = 'none';
+                btn.textContent = 'Run Contour';
+                btn.disabled = false;
+            }
+        }
+
+        function plotContour(xVals, yVals, z, xCfg, yCfg, metricLabel, baseline, xParamKey, yParamKey, metricKey) {
+            const theme = getChartTheme();
+
+            const xBaseVal = parseFloat(document.getElementById(xParamKey).value);
+            const yBaseVal = parseFloat(document.getElementById(yParamKey).value);
+
+            const traces = [{
+                x: xVals,
+                y: yVals,
+                z: z,
+                type: 'contour',
+                colorscale: 'Viridis',
+                contours: {
+                    coloring: 'heatmap',
+                    showlabels: true,
+                    labelfont: { size: 11, color: 'white' }
+                },
+                colorbar: { title: metricLabel, titlefont: { color: theme.textColor }, tickfont: { color: theme.textColor } }
+            }];
+
+            // Baseline crosshair — vertical line at X baseline
+            traces.push({
+                x: [xBaseVal, xBaseVal],
+                y: [yVals[0], yVals[yVals.length - 1]],
+                mode: 'lines',
+                line: { color: theme.accentColor, width: 1.5, dash: 'dash' },
+                name: 'Baseline',
+                showlegend: true,
+                hoverinfo: 'skip'
+            });
+
+            // Baseline crosshair — horizontal line at Y baseline
+            traces.push({
+                x: [xVals[0], xVals[xVals.length - 1]],
+                y: [yBaseVal, yBaseVal],
+                mode: 'lines',
+                line: { color: theme.accentColor, width: 1.5, dash: 'dash' },
+                name: 'Baseline',
+                showlegend: false,
+                hoverinfo: 'skip'
+            });
+
+            // SF threshold contour line at required SF
+            if (metricKey === 'fracture_safety_factor') {
+                const reqSF = baseline.req_sf;
+                traces.push({
+                    x: xVals,
+                    y: yVals,
+                    z: z,
+                    type: 'contour',
+                    contours: { start: reqSF, end: reqSF, size: 0, coloring: 'lines' },
+                    line: { color: theme.dangerColor, width: 2.5 },
+                    showscale: false,
+                    name: `Required SF = ${reqSF}`,
+                    showlegend: true,
+                    hoverinfo: 'skip'
+                });
+            }
+
+            const layout = {
+                xaxis: {
+                    title: xCfg.label,
+                    type: xCfg.logSpace ? 'log' : 'linear',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                yaxis: {
+                    title: yCfg.label,
+                    type: yCfg.logSpace ? 'log' : 'linear',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor },
+                margin: { t: 20, r: 20, b: 60, l: 70 },
+                legend: { x: 0.02, y: 0.98, font: { color: theme.textColor, size: 11 } }
+            };
+
+            Plotly.newPlot('contour-plot', traces, layout, { responsive: true });
         }
     </script>
 </body>

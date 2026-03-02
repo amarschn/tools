@@ -1012,6 +1012,28 @@ This provides `pytest` (and any future lint/test utilities) while leaving the Py
 * **Graph verification (required):** Any tool that renders a graph, plot, or diagram must include a quick visual check. Capture at least one screenshot after running nominal inputs and review it against this checklist: axis labels and units present, scale type correct (linear/log), legend matches series, data values are finite (no NaN/inf gaps), ranges look physically plausible, and any annotations or highlights map to the right values.
 * **Export/visual checks:** When the tool supports exports or plots, download the artifact and ensure units, labels, and legends align with the on-screen values.
 
+### Parameter JSON Test Cases
+
+Tools can include a `test-cases/` directory containing `.json` files that represent known input scenarios for reproducible testing.
+
+**Schema:**
+- JSON keys match the Python function's keyword argument names exactly (e.g., `geometry_type`, `speed_rpm`, `paris_C`)
+- Two metadata keys — `name` (short title) and `description` (expected behavior) — are not passed to the backend
+- All values use the same units as the tool's UI (mm, RPM, MPa, etc.)
+
+**Usage:**
+- Users can load these via the tool's "Load JSON" button or the "Sample Test Cases" collapsible section
+- The "Export JSON" button captures the current form state for sharing or archival
+- Round-trip fidelity: exporting and re-importing should reproduce identical form state
+
+**When to create test cases:**
+- Edge cases (infinite life, immediate failure, boundary conditions)
+- Failure modes (SF < 1, zero cycles, extreme inputs)
+- Regression scenarios (bugs that were fixed and should stay fixed)
+- Validation against known analytical or textbook solutions
+
+**Canonical example:** `tools/composite-fracture-analyzer/test-cases/` contains four reference cases covering finite life, infinite life, marginal status, and immediate failure.
+
 ---
 
 ## Deployment & Hosting

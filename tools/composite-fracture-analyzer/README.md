@@ -1,4 +1,4 @@
-# Composite Fracture Analyzer
+# Rotor Fracture Analyzer
 
 Assess fracture risk and fatigue crack growth in fiber-reinforced polymer rotors under centrifugal loading.
 
@@ -14,7 +14,7 @@ Combines two tightly coupled analyses for rotating composite components:
 
 - **Geometry**: Solid disk, annular disk, or thin ring with inner/outer radius and thickness
 - **Loading**: Rotational speed (RPM)
-- **Crack definition**: Location radius, initial size, type (edge/through/surface/embedded), orientation
+- **Crack definition**: Location radius, initial size, type (through, surface, edge, embedded, elliptical surface, corner, double edge), orientation (radial/circumferential), aspect ratio (a/c)
 - **Material**: 6 presets (CFRP, GFRP, Aramid, PA6-GF30, PEEK-CF30, generic polymer) or custom
 - **Expert mode**: Paris law constants, stress ratio R, design life, Poisson ratio, required safety factor
 
@@ -22,14 +22,14 @@ Combines two tightly coupled analyses for rotating composite components:
 
 - Python module: `pycalcs/fracture_mechanics.py`
 - Main function: `analyze_fracture_and_crack_growth()`
-- Tests: `tests/test_fracture_mechanics.py` (21 tests)
+- Tests: `tests/test_fracture_mechanics.py` (49 tests)
 
 ## Key Equations
 
 - K_I = Y * sigma * sqrt(pi * a)
 - SF = K_IC / K_I
 - da/dN = C * (DeltaK)^m
-- Geometry factors from Tada/Paris/Irwin handbook
+- Geometry factors from Tada/Paris/Irwin handbook and Newman-Raju (NASA TM-85793)
 
 ## References
 

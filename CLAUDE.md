@@ -33,6 +33,10 @@ pytest tests/
 python -c "from pycalcs import utils, <module>; print(utils.get_documentation('<module>', '<function>'))"
 ```
 
+### Parameter JSON Test Cases
+Tools may include `test-cases/*.json` files with pre-configured input parameters.
+See AGENTS.md "Parameter JSON Test Cases" for the full specification.
+
 ### Netlify Deployment & Site Management
 
 **Live URLs:**

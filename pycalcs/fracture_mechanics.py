@@ -179,25 +179,41 @@ def _geometry_factor_Y(crack_type: str, a: float, W: float, aspect_ratio: float 
                 + 30.39 * r ** 4)
 
     if ct == "surface":
-        # Newman-Raju simplified for semicircular surface crack (a/c=1)
-        return 0.728
+        # Newman-Raju for semicircular surface crack (a/c = 1, fixed)
+        # Same model as elliptical_surface but aspect ratio locked to 1.0
+        ac = 1.0
+        Q = 1.0 + 1.464 * ac ** 1.65  # = 2.464
+        M1 = 1.13 - 0.09 * ac
+        M2 = -0.54 + 0.89 / (0.2 + ac)
+        M3 = 0.5 - 1.0 / (0.65 + ac) + 14.0 * (1.0 - ac) ** 24
+        aW = ratio
+        f_w = math.sqrt(1.0 / math.cos(math.sqrt(aW) * math.pi / 2.0)) if aW < 0.95 else 5.0
+        F = (M1 + M2 * aW ** 2 + M3 * aW ** 4) * f_w
+        return F / math.sqrt(Q)
 
     if ct == "embedded":
-        # Penny-shaped (embedded) crack
-        return 2.0 / math.pi
-
-    if ct == "elliptical_surface":
-        # Newman-Raju parametric (NASA TM-85793) for semi-elliptical surface crack
+        # Embedded elliptical crack (Irwin/Green-Sneddon)
+        # At a/c=1 (penny-shaped): Q=2.464, Y=1/√Q ≈ 0.637 ≈ 2/π
         ac = max(aspect_ratio, 0.01)
-        # Shape factor Q
         if ac <= 1.0:
             Q = 1.0 + 1.464 * ac ** 1.65
         else:
             Q = 1.0 + 1.464 * (1.0 / ac) ** 1.65
-        # M-factors for deepest point of surface crack
-        M1 = 1.13 - 0.09 * ac
-        M2 = -0.54 + 0.89 / (0.2 + ac)
-        M3 = 0.5 - 1.0 / (0.65 + ac) + 14.0 * (1.0 - ac) ** 24
+        return 1.0 / math.sqrt(Q)
+
+    if ct == "elliptical_surface":
+        # Newman-Raju parametric (NASA TM-85793) for semi-elliptical surface crack
+        ac = max(aspect_ratio, 0.01)
+        # Shape factor Q (valid for all a/c via reciprocal)
+        if ac <= 1.0:
+            Q = 1.0 + 1.464 * ac ** 1.65
+        else:
+            Q = 1.0 + 1.464 * (1.0 / ac) ** 1.65
+        # M-factors: Newman-Raju validated for a/c <= 1; clamp for M-factor calc
+        ac_m = min(ac, 1.0)
+        M1 = 1.13 - 0.09 * ac_m
+        M2 = -0.54 + 0.89 / (0.2 + ac_m)
+        M3 = 0.5 - 1.0 / (0.65 + ac_m) + 14.0 * (1.0 - ac_m) ** 24
         # Front-face correction
         aW = ratio
         f_w = math.sqrt(1.0 / math.cos(math.sqrt(aW) * math.pi / 2.0)) if aW < 0.95 else 5.0
@@ -213,9 +229,11 @@ def _geometry_factor_Y(crack_type: str, a: float, W: float, aspect_ratio: float 
             Q = 1.0 + 1.464 * ac ** 1.65
         else:
             Q = 1.0 + 1.464 * (1.0 / ac) ** 1.65
-        M1 = 1.13 - 0.09 * ac
-        M2 = -0.54 + 0.89 / (0.2 + ac)
-        M3 = 0.5 - 1.0 / (0.65 + ac) + 14.0 * (1.0 - ac) ** 24
+        # M-factors: clamp a/c to validated range
+        ac_m = min(ac, 1.0)
+        M1 = 1.13 - 0.09 * ac_m
+        M2 = -0.54 + 0.89 / (0.2 + ac_m)
+        M3 = 0.5 - 1.0 / (0.65 + ac_m) + 14.0 * (1.0 - ac_m) ** 24
         aW = ratio
         f_w = math.sqrt(1.0 / math.cos(math.sqrt(aW) * math.pi / 2.0)) if aW < 0.95 else 5.0
         F_surface = (M1 + M2 * aW ** 2 + M3 * aW ** 4) * f_w
@@ -277,9 +295,13 @@ def _critical_crack_size(
         reaches K_IC (returned a_cr is the upper search bound).
     """
     ct = crack_type.strip().lower()
-    # Cap a_max_factor for edge and double_edge cracks (polynomial validity)
-    if ct in ("edge", "double_edge"):
+    # Cap a_max_factor for polynomial validity.
+    # Edge crack (Tada 4-term): monotonically increasing, well-behaved to ~0.9.
+    # Double-edge (Tada/Isida): accuracy degrades above ~0.7 (Y decreases).
+    if ct == "double_edge":
         a_max_factor = min(a_max_factor, 0.7)
+    elif ct == "edge":
+        a_max_factor = min(a_max_factor, 0.9)
 
     a_lo = a_min
     a_hi = a_max_factor * W
@@ -410,6 +432,8 @@ def analyze_fracture_and_crack_growth(
     required_fracture_sf: float = 1.5,
     thickness_mm: float = 10.0,
     crack_aspect_ratio: float = 1.0,
+    uts_knockdown_pct: float = 0.0,
+    k_ic_knockdown_pct: float = 0.0,
 ) -> Dict[str, Any]:
     r"""
     Assess fracture risk and fatigue crack growth in a rotating composite component.
@@ -434,8 +458,8 @@ def analyze_fracture_and_crack_growth(
         Crack geometry: `through`, `edge`, `surface`, `embedded`,
         `elliptical_surface`, `corner`, or `double_edge`.
     crack_orientation : str
-        `circumferential` (crack opens under hoop stress) or
-        `radial` (crack opens under radial stress).
+        `radial` (crack opens under hoop stress) or
+        `circumferential` (crack opens under radial stress).
     material_preset : str
         Key from the material database, or `custom` for user-supplied values.
     fracture_toughness_mpa_sqrt_m : float
@@ -461,6 +485,10 @@ def analyze_fracture_and_crack_growth(
     crack_aspect_ratio : float
         Crack depth-to-half-surface-length ratio (a/c). Only used by
         `elliptical_surface` and `corner` crack types. Default 1.0.
+    uts_knockdown_pct : float
+        Percentage reduction applied to UTS (0–99). Default 0.0.
+    k_ic_knockdown_pct : float
+        Percentage reduction applied to K_IC (0–99). Default 0.0.
 
     ---Returns---
     K_I_mpa_sqrt_m : float
@@ -538,6 +566,17 @@ def analyze_fracture_and_crack_growth(
     else:
         raise ValueError(f"Unknown material_preset: '{material_preset}'.")
 
+    # ---- Validate and apply knockdown factors ----
+    if uts_knockdown_pct < 0.0 or uts_knockdown_pct >= 100.0:
+        raise ValueError("uts_knockdown_pct must be in [0, 100). Got {}.".format(uts_knockdown_pct))
+    if k_ic_knockdown_pct < 0.0 or k_ic_knockdown_pct >= 100.0:
+        raise ValueError("k_ic_knockdown_pct must be in [0, 100). Got {}.".format(k_ic_knockdown_pct))
+
+    if uts_knockdown_pct > 0:
+        tensile_strength_mpa *= (1.0 - uts_knockdown_pct / 100.0)
+    if k_ic_knockdown_pct > 0:
+        fracture_toughness_mpa_sqrt_m *= (1.0 - k_ic_knockdown_pct / 100.0)
+
     # ---- Validate ----
     geom = geometry_type.strip().lower()
     if geom not in {"solid_disk", "annular_disk", "thin_ring"}:
@@ -559,9 +598,17 @@ def analyze_fracture_and_crack_growth(
         raise ValueError("stress_ratio_R must be in [0, 1).")
     if poisson_ratio < 0.0 or poisson_ratio >= 0.5:
         raise ValueError("poisson_ratio must be in [0, 0.5).")
+    _validate_positive("design_life_cycles", design_life_cycles)
+    _validate_positive("required_fracture_sf", required_fracture_sf)
+    if crack_aspect_ratio <= 0.0:
+        raise ValueError("crack_aspect_ratio must be > 0.")
 
     crack_type_clean = crack_type.strip().lower()
     crack_orient = crack_orientation.strip().lower()
+    if crack_orient not in ("radial", "circumferential"):
+        raise ValueError(
+            f"crack_orientation must be 'radial' or 'circumferential', got '{crack_orient}'."
+        )
 
     if geom == "solid_disk":
         ri_m = 0.0
@@ -584,10 +631,10 @@ def analyze_fracture_and_crack_growth(
             f"Crack location ({crack_location_radius_mm} mm) must be between "
             f"inner radius ({ri_m * 1000:.1f} mm) and outer radius ({ro_m * 1000:.1f} mm)."
         )
-    if geom == "solid_disk" and r_crack_m > ro_m:
+    if geom == "solid_disk" and (r_crack_m < 0 or r_crack_m > ro_m):
         raise ValueError(
-            f"Crack location ({crack_location_radius_mm} mm) must be within "
-            f"outer radius ({ro_m * 1000:.1f} mm)."
+            f"Crack location ({crack_location_radius_mm} mm) must be between "
+            f"0 and outer radius ({ro_m * 1000:.1f} mm)."
         )
 
     # ---- Convert Paris C from MPa√m convention to Pa√m (SI) ----
@@ -636,9 +683,16 @@ def analyze_fracture_and_crack_growth(
     # ---- Paris-law integration ----
     if not critical_crack_reached:
         # K never reaches K_IC within the ligament — no true critical crack size.
-        # Life is effectively infinite; report inf cycles and zero life usage.
-        cycles_list = [0.0]
-        a_list = [a_0_m]
+        # Still integrate Paris law to the search cap so the growth curve has data,
+        # but report infinite life since fast fracture never occurs.
+        if a_0_m < a_cr_m:
+            cycles_list, a_list = _paris_law_integration(
+                sigma_driving_pa, stress_ratio_R, a_0_m, a_cr_m,
+                crack_type_clean, W_m, paris_C_si, paris_m, crack_aspect_ratio,
+            )
+        else:
+            cycles_list = [0.0]
+            a_list = [a_0_m]
         cycles_to_failure = float("inf")
     elif a_0_m >= a_cr_m:
         # Initial crack already at or above critical — immediate failure
@@ -672,21 +726,22 @@ def analyze_fracture_and_crack_growth(
         K_plot.append(Kp)
 
     # ---- Status and recommendations ----
+    # Status integrates both fracture and fatigue criteria
     recommendations: List[str] = []
 
-    if fracture_sf >= required_fracture_sf:
-        status = "acceptable"
-    elif fracture_sf >= 1.0:
+    if fracture_sf < 1.0 or cycles_to_failure == 0.0:
+        status = "unacceptable"
+    elif fracture_sf < required_fracture_sf or life_fraction_used > 1.0:
         status = "marginal"
     else:
-        status = "unacceptable"
+        status = "acceptable"
 
-    if status == "unacceptable":
+    if fracture_sf < 1.0:
         recommendations.append(
             "Crack size exceeds critical threshold — immediate action required. "
             "Reduce operating speed, repair the defect, or replace the component."
         )
-    elif status == "marginal":
+    elif fracture_sf < required_fracture_sf:
         recommendations.append(
             "Safety factor is below the required target. Consider reducing speed, "
             "using a tougher material, or increasing inspection frequency."
@@ -779,9 +834,21 @@ def analyze_fracture_and_crack_growth(
     )
 
     # Step 4: Integration / result
-    if math.isinf(cycles_to_failure):
+    if not critical_crack_reached:
+        K_max_mpa = 0.0
+        if a_cr_m > 0 and W_m > 0:
+            Y_max = _geometry_factor_Y(crack_type_clean, a_cr_m, W_m, crack_aspect_ratio)
+            K_max_mpa = _stress_intensity_factor(sigma_driving_pa, a_cr_m, Y_max) / 1e6
         subst_nf_step_integral = (
-            "N_f = \\infty \\text{ (crack does not grow)}"
+            f"K_{{I,max}} = {K_max_mpa:.3f}\\text{{ MPa}}\\sqrt{{\\text{{m}}}}"
+            f" < K_{{IC}} = {fracture_toughness_mpa_sqrt_m:.1f}"
+            f"\\text{{ MPa}}\\sqrt{{\\text{{m}}}}"
+            f" \\Rightarrow N_f = \\infty"
+            f"\\text{{ (K never reaches K_{{IC}}; fast fracture cannot occur)}}"
+        )
+    elif math.isinf(cycles_to_failure):
+        subst_nf_step_integral = (
+            "N_f = \\infty \\text{ (zero stress range)}"
         )
     else:
         subst_nf_step_integral = (
@@ -793,8 +860,14 @@ def analyze_fracture_and_crack_growth(
         )
 
     # Keep a combined single-line version for compact display
-    if math.isinf(cycles_to_failure):
-        subst_N = "N_f = \\infty \\text{ (crack does not grow)}"
+    if not critical_crack_reached:
+        subst_N = (
+            f"K_{{I,max}} = {K_max_mpa:.3f} < K_{{IC}} = {fracture_toughness_mpa_sqrt_m:.1f}"
+            f" \\Rightarrow N_f = \\infty"
+            f"\\text{{ (fast fracture cannot occur)}}"
+        )
+    elif math.isinf(cycles_to_failure):
+        subst_N = "N_f = \\infty \\text{ (zero stress range)}"
     else:
         subst_N = (
             f"\\frac{{da}}{{dN}} = C(\\Delta K)^m"
@@ -846,6 +919,12 @@ def analyze_fracture_and_crack_growth(
             f" = {sigma_hoop_mpa:.2f}\\text{{ MPa}}"
         )
 
+    # Warn if a/c was clamped for M-factor computation
+    aspect_ratio_clamped = (
+        crack_type_clean in ("elliptical_surface", "corner")
+        and crack_aspect_ratio > 1.0
+    )
+
     return {
         # Primary fracture results
         "K_I_mpa_sqrt_m": K_I_mpa,
@@ -853,6 +932,9 @@ def analyze_fracture_and_crack_growth(
         "fracture_safety_factor": fracture_sf,
         "critical_crack_size_mm": a_cr_mm,
         "critical_crack_reached": critical_crack_reached,
+        "aspect_ratio_clamped": aspect_ratio_clamped,
+        "uts_knockdown_pct": uts_knockdown_pct,
+        "k_ic_knockdown_pct": k_ic_knockdown_pct,
         # Fatigue results
         "cycles_to_failure": cycles_to_failure,
         "life_fraction_used": life_fraction_used,

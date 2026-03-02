@@ -1,4 +1,4 @@
-# Composite Fracture Analyzer — Deep Audit Recommendations
+# Rotor Fracture Analyzer — Deep Audit Recommendations
 
 Date: 2026-02-27
 Tool: `tools/composite-fracture-analyzer/`
