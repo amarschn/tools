@@ -6,52 +6,59 @@ standards (templates, docstrings, required files), see `AGENTS.md`.
 
 ## Branch Model
 
-- `main`: Production. Only verified or approved releases land here.
-- `staging`: Integration and QA. Safe place for prototypes and experiments.
-- `feature/*`: All new work starts here.
+- `main`: Stable, verified, and close to deployable at all times.
+- `task/<short-name>`: One branch per active task. Use it for features, fixes, refactors, and experiments.
 
-## Prototype-to-Production Workflow
+## Branching Rules
+
+- Start each non-trivial change from `main`.
+- Use one branch per task, not per computer and not per AI agent.
+- Reuse the same `task/<short-name>` branch across all computers until the task is complete.
+- Push task branches frequently so another machine can resume from the same remote branch.
+- Merge back to `main` only after the task is verified.
+- Delete the task branch after merge to keep the branch list clean.
+
+## Day-to-Day Workflow
 
 1. Sync:
-   - `git checkout main`
+   - `git switch main`
    - `git pull`
 2. Create a branch:
-   - `git checkout -b feature/<short-name>`
+   - `git switch -c task/<short-name>`
 3. Build your tool:
    - Add `/tools/<tool-slug>/index.html` and `README.md`.
    - Add or update `/pycalcs/*.py` functions with full docstrings.
    - Add `/tests/test_<module>.py`.
-   - Update `catalog.json` only if you want the tool visible in staging.
+   - Update `catalog.json` if the tool should appear on the site after merge to `main`.
 4. Run tests:
    - `python -m pytest`
-5. Open a PR to `staging`:
-   - Mark as Draft if it is experimental or incomplete.
-   - CI should run checks and generate a preview URL.
-6. Merge to `staging`:
-   - Use the staging site for QA and sharing.
-7. Promote to production:
-   - Open a PR from `staging` to `main`.
-   - Use the release checklist in `docs/RELEASE.md`.
+5. Push your branch:
+   - `git push -u origin task/<short-name>`
+6. Resume work on another computer:
+   - `git fetch`
+   - `git switch task/<short-name>`
+   - `git pull`
+7. Open a PR to `main`:
+   - Mark as Draft if the task is still in progress.
+   - Merge only after review and verification.
 
 ## Visibility Rules
 
-- Only `main` is production. Anything merged only to `staging` will not ship.
-- Experimental tools are allowed in `staging` and should be clearly labeled
-  as experimental in their tool title or tags.
-- Tools are visible on a site only if they appear in that branch's
-  `catalog.json`.
+- Only `main` should be treated as the trustworthy branch for shipping or deployment.
+- Experimental work belongs on a `task/<short-name>` branch until it is ready.
+- Tools are visible on a site only if they appear in that branch's `catalog.json`.
 
 ## Pull Request Checklist
 
 - Tool folder has `index.html` and `README.md`.
 - Pycalcs function docstrings follow the required format.
 - Tests added or updated.
-- `catalog.json` entry added (if the tool should appear in staging or prod).
+- `catalog.json` entry added (if the tool should appear after merge to `main`).
 - `python -m pytest` passes.
 
 ## CI Expectations (High Level)
 
-CI should run on every PR and on `staging`/`main` pushes:
+CI should run on every PR and on `main` pushes:
 - Unit tests (`pytest`)
 - `catalog.json` validation (paths exist, JSON is valid)
 

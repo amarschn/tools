@@ -13,6 +13,13 @@ For comprehensive guidance on:
 
 **Please refer to [AGENTS.md](AGENTS.md)** - this file contains all essential information for working in this repository.
 
+## Branch Workflow
+
+- Keep `main` stable and deployable.
+- Do non-trivial work on `task/<short-name>` branches.
+- Use one task branch per piece of work, and reuse it across computers instead of creating separate machine-specific branches.
+- Push task branches frequently and merge back to `main` only after verification.
+
 ## Essential Commands
 
 ### Local Development

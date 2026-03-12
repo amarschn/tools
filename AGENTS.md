@@ -136,9 +136,10 @@ For the day-to-day workflow and release process, see `CONTRIBUTING.md` and `docs
 ### Branching Strategy
 
 * The `main` branch is for the live, deployed version of the tools.
-* All new development, whether it's a new tool or a major change to an existing one, should be done in a separate feature branch.
-* Create a branch with a descriptive name (e.g., `feature/add-stress-calculator`).
-* Once the feature is complete and tested, submit a pull request to merge it into the `main` branch.
+* All non-trivial development should be done in a separate task branch named `task/<short-name>`.
+* Use one branch per task, not per computer or per AI agent. Continue the same task branch across machines until the work is done.
+* Keep `main` clean and deployable. Merge a task branch back only after the work has been verified.
+* Once the task is complete and tested, submit a pull request to merge it into the `main` branch.
 
 ### Creating a New Tool
 
@@ -210,9 +211,11 @@ Here is a simple, step-by-step guide for contributing code using Git. These comm
     ```
 
 2.  **Create a New Branch:**
-    Always work on a new branch for your feature or bug fix. Name it descriptively.
+    For any non-trivial feature, fix, refactor, or experiment, create a task branch from `main` and use that same branch on every computer until the task is finished.
     ```bash
-    git checkout -b feature/your-feature-name
+    git switch main
+    git pull
+    git switch -c task/your-task-name
     ```
 
 3.  **Make Your Changes:**
@@ -227,13 +230,13 @@ Here is a simple, step-by-step guide for contributing code using Git. These comm
     *(We recommend following the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages.)*
 
 5.  **Push Your Branch:**
-    Push your new branch to the remote repository on GitHub.
+    Push your task branch to GitHub so you can resume the same work on another computer.
     ```bash
-    git push -u origin feature/your-feature-name
+    git push -u origin task/your-task-name
     ```
 
 6.  **Open a Pull Request:**
-    Go to the repository on GitHub. You will see a prompt to create a pull request from your newly pushed branch. Click it, fill out the details explaining your changes, and submit it for review.
+    Go to the repository on GitHub. Open a pull request from `task/your-task-name` into `main` once the task is ready for review or merge.
 
 ## Coding Practices and Standards
 
