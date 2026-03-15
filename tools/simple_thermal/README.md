@@ -1,78 +1,75 @@
-# Thermal Calculator
+# Heatsink Designer & Analysis Tool
 
-A web-based tool for modeling basic thermal behavior of objects, including finned heat sinks, using convection and radiation heat transfer.
+This tool is being rebuilt as a dedicated heatsink design and analysis workflow for air-cooled plate-fin heatsinks.
 
 ## Purpose
 
-This calculator provides engineering estimates for:
-- **Transient Cooling:** How quickly a hot object cools down in air over time.
-- **Steady State Temperature:** The final equilibrium temperature an object reaches when subjected to a constant heat input power.
+The redesigned tool is meant to answer three practical questions:
 
-It helps understand heat transfer rates, temperature profiles (for transient), equilibrium points, and time constants for simple shapes and standard extruded heat sinks.
+1. What sink-to-ambient thermal resistance is required for a target source, junction, or case temperature?
+2. How will a specific plate-fin heatsink perform under natural convection, forced flow, or a fan-limited operating point?
+3. Which geometry changes matter most when trading thermal resistance against airflow impedance?
 
-## Features
+The tool is intentionally design-oriented rather than a generic "thermal calculator." The focus is understanding thermal capability, limits, and tradeoffs for realistic heatsink layouts while still supporting progressive simplicity and progressive disclosure.
 
-- Supports two calculation modes:
-    - **Transient Cooling:** Simulates temperature drop from an initial state.
-    - **Steady State (with Heat Source):** Calculates equilibrium temperature with constant power input.
-- Supports multiple geometries:
-  - Rectangular plates
-  - Cylinders
-  - **Finned Heat Sinks:** With user-defined base, fin, and spacing parameters.
-- Models both **natural** and **forced** convection with appropriate correlations for each geometry.
-- Includes radiation heat transfer.
-- Handles different material properties (presets and custom).
-- Visualizes results (plots for transient, summary and charts for steady state).
-- Provides theoretical background and equations.
+## Progressive Simplicity
 
-## Usage Instructions
+The default workflow should expose only the minimum inputs needed to get a useful result quickly:
 
-1.  **Select Mode:** Choose between "Transient Cooling" or "Steady State".
-2.  **Input Parameters:**
-    *   Select geometry type (Plate, Cylinder, or **Heatsink**) and orientation.
-    *   Enter dimensions for the selected geometry.
-    *   Choose material (from presets or custom properties). Note: Density and Specific Heat are only used in Transient mode.
-    *   Set thermal conditions:
-        *   *Transient:* Initial temperature, ambient temperature, air velocity.
-        *   *Steady State:* Heat input power (W), ambient temperature, air velocity.
-    *   *Transient:* Adjust simulation time and number of steps if needed.
-3.  **Calculate Results:**
-    *   Click "Compute".
-    *   *Transient:* View results including cooling time constants, final temperature, and examine temperature/heat loss rate plots.
-    *   *Steady State:* View the calculated equilibrium temperature and the balance between heat input and heat loss, including a breakdown of convection vs. radiation.
+- Heat load
+- Ambient temperature
+- Target source/junction or base temperature
+- Cooling mode
+- Envelope dimensions
 
-4.  **Theory Section:**
-    *   Learn about the heat transfer mechanisms and calculation methods.
-    *   Understand the equations used for each geometry.
-    *   Review assumptions and limitations.
+Everything else belongs behind expert-mode toggles or deeper analysis views.
 
-## Mathematical Approach
+## Progressive Disclosure
 
-- **Transient Cooling:** Uses the lumped capacitance method (assumes uniform internal temperature). Solves the energy balance equation `ρVcₚ dT/dt = - (q_conv + q_rad)` over discrete time steps.
-- **Steady State:** Solves the steady-state energy balance `Q_input = q_conv + q_rad`. Finds the surface temperature `T_ss` where `Q_input = h(T_ss)A(T_ss - T_amb) + εσA(T_ss_K⁴ - T_amb_K⁴)` using an iterative numerical solver.
-- **Heatsink Modeling:**
-  - **Natural Convection:** The characteristic length is assumed to be the **fin spacing (`s`)**. The fins are modeled as an array of vertical plates, which is the most effective orientation for natural convection.
-  - **Forced Convection:** Models airflow through the channels between fins.
-    - The **in-channel air velocity** is calculated, accounting for blockage by the fins.
-    - The characteristic length is the **hydraulic diameter (`D_h = 2s`)**.
-    - A specific Nusselt number correlation for **developing flow in a duct** is used to find the convection coefficient `h`.
-- **Convection & Radiation:** All modes use the same underlying functions to calculate `q_conv` and `q_rad`, based on empirical correlations and the Stefan-Boltzmann law.
+The rebuilt tool will expose thermal reasoning in layers. The term "junction" is
+kept for the upper thermal node because it matches standard thermal-resistance
+notation, but in general heatsink work it should be read as the hottest internal
+source temperature of the mounted part.
 
-## Limitations
+- **L0 Result:** Required thermal resistance, base temperature, source/junction temperature, pressure drop, and pass/fail margin
+- **L1 Equation:** Numbered governing equations for resistance, convection, radiation, and fin efficiency
+- **L2 Substitution:** Actual values inserted into each governing equation
+- **L3 Intermediate steps:** Geometry breakdown, channel velocity, Reynolds/Rayleigh/Nusselt numbers, efficiency factors, and resistance stack
+- **L4 Background:** Deep explanation of parallel-plate natural convection, developing duct flow, fan/system curves, and fin tradeoffs
+- **L5 References:** Primary papers, textbooks, and validation notes
 
-This tool provides approximate results and is intended for educational and early design purposes.
+## Phase 1 Scope
 
-- Assumes uniform temperature throughout the object (Lumped Capacitance/uniform surface temp). Less accurate for large objects, low-conductivity materials, or very tall fins.
-- **Heatsink model is simplified:** It does not account for fin efficiency, heat spreading resistance in the base, or airflow bypassing the heat sink.
-- Steady state assumes heat input is instantly and uniformly distributed over the base.
-- Uses empirical correlations for convection coefficients (`h`).
-- Assumes simple radiation view factor of 1 to surroundings.
-- Assumes constant material properties (except air properties for `h`) and ambient conditions.
+The first implementation slice is limited to straight plate-fin heatsinks in air with steady-state analysis.
 
-For more detailed analysis, CFD (Computational Fluid Dynamics) or FEA (Finite Element Analysis) simulations are recommended.
+Included in Phase 1:
 
-## Technical Implementation
+- Plate-fin geometry model
+- Natural convection analysis for vertical plate arrays
+- Forced convection analysis for user-specified flow or simple fan curves
+- Radiation as a linearized coefficient
+- Straight-fin efficiency and overall surface efficiency
+- Pressure-drop estimation for fin channels
+- Required sink-resistance calculation from thermal budget
 
-- Frontend: HTML, CSS, JavaScript
-- Calculation Logic: Python (via Pyodide for in-browser execution)
-- Visualization: Chart.js for plots
+Deferred to later phases:
+
+- Transient thermal response
+- Pin-fin or radial-fin geometries
+- Multi-source spreading resistance models
+- Airflow bypass estimation
+- Export/report generation
+
+## Technical Direction
+
+The old local `thermal_calc.py` implementation is being retired in favor of a reusable `pycalcs` module and a full advanced-template UI. That aligns this tool with the project standard and removes the current legacy duplication problem.
+
+The solver should stay explicit about what is modeled versus what is not. When a shortcut is used, the UI and background section must state it plainly.
+
+## References Driving the Rewrite
+
+- Bar-Cohen, A., Rohsenow, W. M. (1984). *Thermally Optimum Spacing of Vertical, Natural Convection Cooled, Parallel Plates*. Journal of Heat Transfer. https://doi.org/10.1115/1.3246622
+- Teertstra, P., Yovanovich, M. M., Culham, J. R., Lemczyk, T. (1999). *Analytical forced convection modeling of plate fin heat sinks*. https://doi.org/10.1109/STHERM.1999.762426
+- Muzychka, Y. S., Yovanovich, M. M. (2004). *Laminar Forced Convection Heat Transfer in the Combined Entry Region of Non-Circular Ducts*. Journal of Heat Transfer. https://doi.org/10.1115/1.1643752
+- Simons, R. E. (2003/2016 reprint). *Estimating Parallel Plate-fin Heat Sink Pressure Drop*. Electronics Cooling. https://www.electronics-cooling.com/2016/04/calculation-corner-estimating-parallel-plate-fin-heat-sink-pressure-drop/
+- Incropera, F. P., DeWitt, D. P., Bergman, T. L., Lavine, A. S. *Fundamentals of Heat and Mass Transfer*.
