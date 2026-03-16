@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ring Fit Calculator — Shigley's Method</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2d6da3;
+    --accent: #4a90d9;
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --text-muted: #7f8c8d;
+    --border: #d0dce8;
+    --success: #27ae60;
+    --warning: #e67e22;
+    --danger: #e74c3c;
+    --shaft-color: #8e9eab;
+    --hub-color: #3498db;
+    --radius: 6px;
+    --shadow: 0 2px 8px rgba(0,0,0,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* Loading overlay */
+  #loading-overlay {
+    position: fixed; inset: 0; background: var(--primary);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 1000; color: #fff;
+  }
+  .spinner {
+    width: 48px; height: 48px; border: 5px solid rgba(255,255,255,0.3);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-overlay p { font-size: 16px; opacity: 0.9; }
+
+  /* Header */
+  header {
+    background: var(--primary); color: #fff;
+    padding: 14px 24px; display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header span { font-size: 13px; opacity: 0.75; margin-left: 8px; }
+
+  /* Main layout */
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  main {
+    display: grid; grid-template-columns: 400px 1fr;
+    gap: 0; flex: 1; overflow: hidden;
+  }
+
+  /* Panels */
+  #input-panel {
+    background: #e8eef5; overflow-y: auto;
+    border-right: 2px solid var(--border);
+    padding: 16px 14px; display: flex; flex-direction: column; gap: 12px;
+  }
+  #result-panel {
+    background: var(--bg); overflow-y: auto;
+    padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--card); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 14px 16px;
+  }
+  .card-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--primary-light);
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;
+  }
+
+  /* Units row */
+  .units-row {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .units-row label { font-size: 12px; color: var(--text-muted); margin-right: 4px; }
+  .seg-btn-group { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .seg-btn {
+    padding: 5px 12px; font-size: 12px; border: none; background: #fff;
+    cursor: pointer; color: var(--text-muted); transition: all 0.15s;
+  }
+  .seg-btn.active { background: var(--primary); color: #fff; }
+  .seg-btn:not(:last-child) { border-right: 1px solid var(--border); }
+
+  /* Form rows */
+  .form-row {
+    display: flex; align-items: center; margin-bottom: 8px; gap: 8px;
+  }
+  .form-row label {
+    min-width: 140px; font-size: 13px; color: var(--text);
+  }
+  .form-row label small { display: block; font-size: 11px; color: var(--text-muted); }
+  .form-row input[type="number"], .form-row select {
+    flex: 1; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 13px; background: #fff;
+    transition: border-color 0.15s;
+  }
+  .form-row input[type="number"]:focus, .form-row select:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .form-row .unit-label {
+    min-width: 36px; font-size: 12px; color: var(--text-muted); text-align: left;
+  }
+
+  /* Material props display */
+  .mat-props {
+    background: #f8fafc; border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px 10px; font-size: 12px; color: var(--text-muted);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px;
+    margin-top: 6px;
+  }
+  .mat-props span { color: var(--text); font-weight: 500; }
+  .custom-mat { display: none; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .custom-mat .form-row label { min-width: 110px; }
+
+  /* Calculate button */
+  #calc-btn {
+    width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    background: var(--primary); color: #fff; border: none; border-radius: var(--radius);
+    cursor: pointer; transition: background 0.2s; letter-spacing: 0.03em;
+  }
+  #calc-btn:hover { background: var(--primary-light); }
+  #calc-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+  /* Results placeholder */
+  #result-placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; opacity: 0.4; padding: 40px;
+  }
+  #result-placeholder svg { width: 64px; height: 64px; margin-bottom: 12px; }
+  #result-placeholder p { font-size: 15px; }
+
+  /* Result tables */
+  .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .result-table th {
+    background: var(--primary); color: #fff; padding: 7px 10px;
+    text-align: left; font-weight: 600; font-size: 12px;
+  }
+  .result-table td { padding: 6px 10px; border-bottom: 1px solid #edf2f7; }
+  .result-table tr:last-child td { border-bottom: none; }
+  .result-table tr:hover td { background: #f8fafc; }
+  .result-table td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+  .result-table td:first-child { color: var(--text-muted); font-size: 12px; }
+
+  /* Stat cards */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .stat-card {
+    background: var(--card); border-radius: var(--radius); padding: 12px 14px;
+    box-shadow: var(--shadow); border-left: 4px solid var(--accent);
+  }
+  .stat-card.warn { border-left-color: var(--warning); }
+  .stat-card.danger { border-left-color: var(--danger); }
+  .stat-card.ok { border-left-color: var(--success); }
+  .stat-card .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .stat-value { font-size: 20px; font-weight: 700; color: var(--text); }
+  .stat-card .stat-unit { font-size: 12px; color: var(--text-muted); }
+
+  /* SF badge */
+  .sf-ok { color: var(--success); font-weight: 700; }
+  .sf-warn { color: var(--warning); font-weight: 700; }
+  .sf-danger { color: var(--danger); font-weight: 700; }
+
+  /* Alert box */
+  .alert {
+    padding: 10px 14px; border-radius: 4px; font-size: 13px;
+    border-left: 4px solid; margin-bottom: 8px;
+  }
+  .alert-warn { background: #fef9ed; border-color: var(--warning); color: #7d4a00; }
+  .alert-danger { background: #fdf0f0; border-color: var(--danger); color: #922b21; }
+  .alert-info { background: #eef6ff; border-color: var(--accent); color: #1a3a6a; }
+
+  /* Canvas section */
+  .canvas-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  canvas { border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+
+  /* Temperature grid */
+  .temp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .temp-item { text-align: center; }
+  .temp-item .t-val { font-size: 18px; font-weight: 700; color: var(--primary); }
+  .temp-item .t-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+
+  /* Result section titles */
+  .result-section-title {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .result-section-title::before {
+    content: ''; display: block; width: 3px; height: 16px;
+    background: var(--accent); border-radius: 2px;
+  }
+
+  /* Error state */
+  .error-card {
+    background: #fdf0f0; border: 1px solid var(--danger);
+    border-radius: var(--radius); padding: 16px; color: #922b21;
+    font-size: 14px;
+  }
+
+  /* Tooltip-like note */
+  .note { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Loading Pyodide — Python engine initializing…</p>
+</div>
+
+<!-- Main app -->
+<div id="app" style="display:none">
+  <header>
+    <h1>Ring Fit Calculator</h1>
+    <span>Shigley's Thick-Walled Cylinder &amp; Press/Shrink Fit Analysis</span>
+  </header>
+
+  <main>
+    <!-- ===================== INPUT PANEL ===================== -->
+    <div id="input-panel">
+
+      <!-- Units selector -->
+      <div class="card">
+        <div class="card-title">Units &amp; Display</div>
+        <div class="units-row">
+          <label>Length/Stress:</label>
+          <div class="seg-btn-group" id="units-group">
+            <button class="seg-btn active" onclick="setUnits('metric',this)">Metric (mm / MPa)</button>
+            <button class="seg-btn" onclick="setUnits('imperial',this)">Imperial (in / psi)</button>
+          </div>
+        </div>
+        <div class="units-row" style="margin-top:8px">
+          <label>Temperature:</label>
+          <div class="seg-btn-group" id="temp-unit-group">
+            <button class="seg-btn active" onclick="setTempUnit('C',this)">°C</button>
+            <button class="seg-btn" onclick="setTempUnit('F',this)">°F</button>
+            <button class="seg-btn" onclick="setTempUnit('K',this)">K</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Geometry -->
+      <div class="card">
+        <div class="card-title">Geometry</div>
+        <div class="form-row">
+          <label>Fit Diameter d <small>Nominal interface dia.</small></label>
+          <input type="number" id="d" value="50" min="0.001" step="0.01">
+          <span class="unit-label" id="len-unit-1">mm</span>
+        </div>
+        <div class="form-row">
+          <label>Hub Outer Dia. d<sub>o</sub> <small>Outer dia. of hub</small></label>
+          <input type="number" id="d_o" value="100" min="0.001" step="0.01">
+          <span class="unit-label" id="len-unit-2">mm</span>
+        </div>
+        <div class="form-row">
+          <label>Shaft Inner Dia. d<sub>i</sub> <small>0 = solid shaft</small></label>
+          <input type="number" id="d_i" value="0" min="0" step="0.01">
+          <span class="unit-label" id="len-unit-3">mm</span>
+        </div>
+        <div class="form-row">
+          <label>Fit Length L <small>Axial length of fit</small></label>
+          <input type="number" id="L" value="60" min="0" step="0.1">
+          <span class="unit-label" id="len-unit-4">mm</span>
+        </div>
+      </div>
+
+      <!-- Shaft Material -->
+      <div class="card">
+        <div class="card-title">Shaft (Inner Member) Material</div>
+        <div class="form-row">
+          <label>Material</label>
+          <select id="shaft-mat" onchange="updateMaterial('shaft')">
+            <option value="Steel (Generic)">Steel (Generic)</option>
+            <option value="Steel 1020">Steel 1020</option>
+            <option value="Steel 1045 (annealed)">Steel 1045 (annealed)</option>
+            <option value="Steel 4140 (Q&T)" selected>Steel 4140 (Q&amp;T)</option>
+            <option value="Steel 4340 (Q&T)">Steel 4340 (Q&amp;T)</option>
+            <option value="Stainless 304">Stainless 304</option>
+            <option value="Stainless 316">Stainless 316</option>
+            <option value="Cast Iron (Gray)">Cast Iron (Gray)</option>
+            <option value="Aluminum 2024-T4">Aluminum 2024-T4</option>
+            <option value="Aluminum 6061-T6">Aluminum 6061-T6</option>
+            <option value="Aluminum 7075-T6">Aluminum 7075-T6</option>
+            <option value="Brass (70/30)">Brass (70/30)</option>
+            <option value="Copper (annealed)">Copper (annealed)</option>
+            <option value="Bronze (bearing)">Bronze (bearing)</option>
+            <option value="Titanium 6Al-4V">Titanium 6Al-4V</option>
+            <option value="Custom">Custom…</option>
+          </select>
+        </div>
+        <div class="mat-props" id="shaft-props-display">
+          <div>E: <span id="s-E">207 GPa</span></div>
+          <div>ν: <span id="s-nu">0.292</span></div>
+          <div>α: <span id="s-alpha">11.7 × 10⁻⁶ /°C</span></div>
+          <div>Sy: <span id="s-Sy">655 MPa</span></div>
+        </div>
+        <div class="custom-mat" id="shaft-custom">
+          <div class="form-row">
+            <label>E (GPa)</label>
+            <input type="number" id="s-E-custom" value="207" step="0.1">
+          </div>
+          <div class="form-row">
+            <label>ν (Poisson's)</label>
+            <input type="number" id="s-nu-custom" value="0.292" step="0.001" min="0" max="0.5">
+          </div>
+          <div class="form-row">
+            <label>α (×10⁻⁶/°C)</label>
+            <input type="number" id="s-alpha-custom" value="11.7" step="0.1">
+          </div>
+          <div class="form-row">
+            <label>Sy (MPa)</label>
+            <input type="number" id="s-Sy-custom" value="250" step="1">
+          </div>
+          <div class="form-row">
+            <label>Sut (MPa)</label>
+            <input type="number" id="s-Sut-custom" value="400" step="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Hub Material -->
+      <div class="card">
+        <div class="card-title">Hub (Outer Member) Material</div>
+        <div class="form-row">
+          <label>Material</label>
+          <select id="hub-mat" onchange="updateMaterial('hub')">
+            <option value="Steel (Generic)">Steel (Generic)</option>
+            <option value="Steel 1020">Steel 1020</option>
+            <option value="Steel 1045 (annealed)">Steel 1045 (annealed)</option>
+            <option value="Steel 4140 (Q&T)">Steel 4140 (Q&amp;T)</option>
+            <option value="Steel 4340 (Q&T)">Steel 4340 (Q&amp;T)</option>
+            <option value="Stainless 304">Stainless 304</option>
+            <option value="Stainless 316">Stainless 316</option>
+            <option value="Cast Iron (Gray)">Cast Iron (Gray)</option>
+            <option value="Aluminum 2024-T4">Aluminum 2024-T4</option>
+            <option value="Aluminum 6061-T6" selected>Aluminum 6061-T6</option>
+            <option value="Aluminum 7075-T6">Aluminum 7075-T6</option>
+            <option value="Brass (70/30)">Brass (70/30)</option>
+            <option value="Copper (annealed)">Copper (annealed)</option>
+            <option value="Bronze (bearing)">Bronze (bearing)</option>
+            <option value="Titanium 6Al-4V">Titanium 6Al-4V</option>
+            <option value="Custom">Custom…</option>
+          </select>
+        </div>
+        <div class="mat-props" id="hub-props-display">
+          <div>E: <span id="h-E">69 GPa</span></div>
+          <div>ν: <span id="h-nu">0.33</span></div>
+          <div>α: <span id="h-alpha">23.6 × 10⁻⁶ /°C</span></div>
+          <div>Sy: <span id="h-Sy">276 MPa</span></div>
+        </div>
+        <div class="custom-mat" id="hub-custom">
+          <div class="form-row">
+            <label>E (GPa)</label>
+            <input type="number" id="h-E-custom" value="69" step="0.1">
+          </div>
+          <div class="form-row">
+            <label>ν (Poisson's)</label>
+            <input type="number" id="h-nu-custom" value="0.33" step="0.001" min="0" max="0.5">
+          </div>
+          <div class="form-row">
+            <label>α (×10⁻⁶/°C)</label>
+            <input type="number" id="h-alpha-custom" value="23.6" step="0.1">
+          </div>
+          <div class="form-row">
+            <label>Sy (MPa)</label>
+            <input type="number" id="h-Sy-custom" value="276" step="1">
+          </div>
+          <div class="form-row">
+            <label>Sut (MPa)</label>
+            <input type="number" id="h-Sut-custom" value="310" step="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Fit Parameters -->
+      <div class="card">
+        <div class="card-title">Fit Parameters</div>
+        <div class="form-row">
+          <label>Diametral Interference δ <small>δ = d_shaft − d_bore</small></label>
+          <input type="number" id="delta" value="0.05" min="0" step="0.001">
+          <span class="unit-label" id="len-unit-5">mm</span>
+        </div>
+        <div class="form-row">
+          <label>Friction Coeff. μ <small>For torque estimate</small></label>
+          <input type="number" id="mu" value="0.15" min="0" max="1" step="0.01">
+          <span class="unit-label">—</span>
+        </div>
+        <p class="note">δ is specified at room temperature. Positive = interference (press/shrink fit).</p>
+      </div>
+
+      <!-- Temperatures -->
+      <div class="card">
+        <div class="card-title">Temperature Conditions</div>
+        <div class="form-row">
+          <label>Room Temp T<sub>room</sub> <small>Ref. temp for δ</small></label>
+          <input type="number" id="T_room" value="20" step="1">
+          <span class="unit-label" id="temp-unit-1">°C</span>
+        </div>
+        <div class="form-row">
+          <label>Assembly Temp T<sub>asm</sub> <small>Hub heated / shaft cooled</small></label>
+          <input type="number" id="T_asm" value="150" step="1">
+          <span class="unit-label" id="temp-unit-2">°C</span>
+        </div>
+        <div class="form-row">
+          <label>Operating Temp T<sub>op</sub> <small>Service temperature</small></label>
+          <input type="number" id="T_op" value="80" step="1">
+          <span class="unit-label" id="temp-unit-3">°C</span>
+        </div>
+        <p class="note">Assembly temp used to check shrink-fit feasibility. Operating temp corrects interference for service conditions.</p>
+      </div>
+
+      <!-- Calculate -->
+      <button id="calc-btn" onclick="runCalculation()">&#x25B6;  Calculate</button>
+
+    </div><!-- end input-panel -->
+
+    <!-- ===================== RESULT PANEL ===================== -->
+    <div id="result-panel">
+
+      <div id="result-placeholder">
+        <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="40" cy="40" r="30" stroke="#aaa" stroke-width="4"/>
+          <circle cx="40" cy="40" r="14" stroke="#aaa" stroke-width="4"/>
+          <line x1="10" y1="40" x2="20" y2="40" stroke="#aaa" stroke-width="3"/>
+          <line x1="60" y1="40" x2="70" y2="40" stroke="#aaa" stroke-width="3"/>
+          <line x1="40" y1="10" x2="40" y2="20" stroke="#aaa" stroke-width="3"/>
+          <line x1="40" y1="60" x2="40" y2="70" stroke="#aaa" stroke-width="3"/>
+        </svg>
+        <p>Enter parameters and click <strong>Calculate</strong></p>
+      </div>
+
+      <div id="results-content" style="display:none; flex-direction:column; gap:14px;">
+
+        <!-- Error display -->
+        <div id="error-card" class="error-card" style="display:none"></div>
+
+        <!-- Pressure summary -->
+        <div>
+          <div class="result-section-title">Interface Pressure</div>
+          <div class="stat-grid" id="pressure-stats"></div>
+        </div>
+
+        <!-- Hub stresses -->
+        <div>
+          <div class="result-section-title">Hub (Outer Member) Stresses</div>
+          <table class="result-table" id="hub-table">
+            <thead><tr>
+              <th>Location</th><th>σ<sub>r</sub></th><th>σ<sub>θ</sub></th><th>σ<sub>VM</sub></th><th>SF</th>
+            </tr></thead>
+            <tbody id="hub-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Shaft stresses -->
+        <div>
+          <div class="result-section-title">Shaft (Inner Member) Stresses</div>
+          <table class="result-table" id="shaft-table">
+            <thead><tr>
+              <th>Location</th><th>σ<sub>r</sub></th><th>σ<sub>θ</sub></th><th>σ<sub>VM</sub></th><th>SF</th>
+            </tr></thead>
+            <tbody id="shaft-tbody"></tbody>
+          </table>
+          <p class="note" id="shaft-note" style="margin-top:4px"></p>
+        </div>
+
+        <!-- Temperature analysis -->
+        <div>
+          <div class="result-section-title">Temperature Analysis</div>
+          <div class="stat-grid" id="temp-stats"></div>
+          <div id="temp-alerts" style="margin-top:10px"></div>
+        </div>
+
+        <!-- Assembly info -->
+        <div id="assembly-section">
+          <div class="result-section-title">Assembly &amp; Shrink Fit</div>
+          <div class="stat-grid" id="assembly-stats"></div>
+          <div id="assembly-alerts" style="margin-top:10px"></div>
+        </div>
+
+        <!-- Torque -->
+        <div id="torque-section" style="display:none">
+          <div class="result-section-title">Torque Capacity (Friction)</div>
+          <div class="stat-grid" id="torque-stats"></div>
+          <p class="note">Based on interface friction only. T = μ · p · π · d · L · (d/2)</p>
+        </div>
+
+        <!-- Visualizations -->
+        <div>
+          <div class="result-section-title">Cross-Section &amp; Stress Distribution</div>
+          <div class="canvas-row">
+            <div>
+              <p style="font-size:11px; color:var(--text-muted); margin-bottom:4px; text-align:center">Cross-Section (Room Temp)</p>
+              <canvas id="cross-canvas" width="240" height="240"></canvas>
+            </div>
+            <div style="flex:1; min-width:300px">
+              <p style="font-size:11px; color:var(--text-muted); margin-bottom:4px; text-align:center">Hub Stress Distribution (radial)</p>
+              <canvas id="stress-canvas" width="460" height="240"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Geometry factors -->
+        <div>
+          <div class="result-section-title">Compliance Factors (Shigley Eq. 3-57)</div>
+          <div class="stat-grid" id="compliance-stats"></div>
+          <p class="note">C<sub>o</sub> = (d<sub>o</sub>²+d²)/(d<sub>o</sub>²−d²) + ν<sub>hub</sub> &nbsp;|&nbsp; C<sub>i</sub> = (d²+d<sub>i</sub>²)/(d²−d<sub>i</sub>²) − ν<sub>shaft</sub> &nbsp;|&nbsp; p = δ / [d·(C<sub>o</sub>/E<sub>o</sub> + C<sub>i</sub>/E<sub>i</sub>)]</p>
+        </div>
+
+      </div><!-- end results-content -->
+    </div><!-- end result-panel -->
+  </main>
+</div><!-- end app -->
+
+
+<!-- ========== PYTHON ENGINE (via Pyodide) ========== -->
+<script id="py-code" type="text/x-python">
+import math
+import json
+
+MATERIALS = {
+    "Steel (Generic)":       {"E": 207e9, "nu": 0.292, "alpha": 11.7e-6, "Sy": 250e6,  "Sut": 400e6},
+    "Steel 1020":            {"E": 207e9, "nu": 0.292, "alpha": 11.7e-6, "Sy": 210e6,  "Sut": 380e6},
+    "Steel 1045 (annealed)": {"E": 207e9, "nu": 0.292, "alpha": 11.7e-6, "Sy": 310e6,  "Sut": 570e6},
+    "Steel 4140 (Q&T)":      {"E": 207e9, "nu": 0.292, "alpha": 11.7e-6, "Sy": 655e6,  "Sut": 800e6},
+    "Steel 4340 (Q&T)":      {"E": 207e9, "nu": 0.292, "alpha": 12.3e-6, "Sy": 470e6,  "Sut": 745e6},
+    "Stainless 304":         {"E": 193e9, "nu": 0.29,  "alpha": 17.2e-6, "Sy": 207e6,  "Sut": 517e6},
+    "Stainless 316":         {"E": 193e9, "nu": 0.29,  "alpha": 16.0e-6, "Sy": 207e6,  "Sut": 517e6},
+    "Cast Iron (Gray)":      {"E": 170e9, "nu": 0.26,  "alpha": 11.0e-6, "Sy": 0,      "Sut": 214e6},
+    "Aluminum 2024-T4":      {"E":  73e9, "nu": 0.33,  "alpha": 22.9e-6, "Sy": 324e6,  "Sut": 469e6},
+    "Aluminum 6061-T6":      {"E":  69e9, "nu": 0.33,  "alpha": 23.6e-6, "Sy": 276e6,  "Sut": 310e6},
+    "Aluminum 7075-T6":      {"E":  72e9, "nu": 0.33,  "alpha": 23.6e-6, "Sy": 503e6,  "Sut": 572e6},
+    "Brass (70/30)":         {"E": 110e9, "nu": 0.34,  "alpha": 19.1e-6, "Sy": 200e6,  "Sut": 330e6},
+    "Copper (annealed)":     {"E": 117e9, "nu": 0.34,  "alpha": 16.5e-6, "Sy":  70e6,  "Sut": 220e6},
+    "Bronze (bearing)":      {"E": 110e9, "nu": 0.34,  "alpha": 18.0e-6, "Sy": 140e6,  "Sut": 310e6},
+    "Titanium 6Al-4V":       {"E": 114e9, "nu": 0.342, "alpha":  8.6e-6, "Sy": 880e6,  "Sut": 950e6},
+    "Custom":                {"E": 207e9, "nu": 0.292, "alpha": 11.7e-6, "Sy": 250e6,  "Sut": 400e6},
+}
+
+def to_celsius(T, unit):
+    if unit == 'F':
+        return (T - 32.0) * 5.0 / 9.0
+    elif unit == 'K':
+        return T - 273.15
+    return float(T)
+
+def temp_from_celsius(T_c, unit):
+    if unit == 'F':
+        return T_c * 9.0 / 5.0 + 32.0
+    elif unit == 'K':
+        return T_c + 273.15
+    return T_c
+
+def von_mises_2d(sr, st):
+    return math.sqrt(sr*sr + st*st - sr*st)
+
+def safety_factor(Sy, vm):
+    if Sy <= 0 or vm <= 0:
+        return None
+    return Sy / vm
+
+def hub_stresses(p, d, d_o):
+    """Shigley Lame equations for hub (outer member) under internal pressure p."""
+    if p <= 0:
+        return dict(sigma_r_inner=0, sigma_t_inner=0, sigma_r_outer=0, sigma_t_outer=0,
+                    vm_inner=0, vm_outer=0)
+    sr_in = -p
+    st_in = p * (d_o**2 + d**2) / (d_o**2 - d**2)
+    sr_out = 0.0
+    st_out = 2.0 * p * d**2 / (d_o**2 - d**2)
+    return dict(
+        sigma_r_inner=sr_in, sigma_t_inner=st_in,
+        sigma_r_outer=sr_out, sigma_t_outer=st_out,
+        vm_inner=von_mises_2d(sr_in, st_in),
+        vm_outer=abs(st_out)
+    )
+
+def shaft_stresses(p, d, d_i):
+    """Shigley Lame equations for shaft (inner member) under external pressure p."""
+    if p <= 0:
+        return dict(sigma_r_outer=0, sigma_t_outer=0, sigma_t_bore=None,
+                    vm_outer=0, vm_bore=None, shaft_type='solid' if d_i == 0 else 'hollow')
+    if d_i == 0:
+        # Solid shaft: uniform biaxial compression
+        return dict(sigma_r_outer=-p, sigma_t_outer=-p, sigma_t_bore=None,
+                    vm_outer=p, vm_bore=None, shaft_type='solid')
+    else:
+        sr_out = -p
+        st_out = -p * (d**2 + d_i**2) / (d**2 - d_i**2)
+        st_bore = -2.0 * p * d**2 / (d**2 - d_i**2)
+        sr_bore = 0.0
+        return dict(
+            sigma_r_outer=sr_out, sigma_t_outer=st_out,
+            sigma_t_bore=st_bore,
+            vm_outer=von_mises_2d(sr_out, st_out),
+            vm_bore=abs(st_bore),
+            shaft_type='hollow'
+        )
+
+def hub_stress_distribution(p, r_i, r_o, n=60):
+    """Radial stress distribution through hub thickness."""
+    radii = [r_i + (r_o - r_i) * i / (n - 1) for i in range(n)]
+    sig_r, sig_t = [], []
+    k = p * r_i**2 / (r_o**2 - r_i**2)
+    for r in radii:
+        sig_r.append(k * (1.0 - r_o**2 / r**2))
+        sig_t.append(k * (1.0 + r_o**2 / r**2))
+    return radii, sig_r, sig_t
+
+def shaft_stress_distribution(p, r_i, r_o, n=40):
+    """Radial stress distribution through shaft (hollow)."""
+    if r_i == 0:
+        return [], [], []
+    radii = [r_i + (r_o - r_i) * i / (n - 1) for i in range(n)]
+    sig_r, sig_t = [], []
+    k = -p * r_o**2 / (r_o**2 - r_i**2)
+    for r in radii:
+        sig_r.append(k * (1.0 - r_i**2 / r**2))
+        sig_t.append(k * (1.0 + r_i**2 / r**2))
+    return radii, sig_r, sig_t
+
+def calculate(json_str):
+    try:
+        p = json.loads(json_str)
+
+        units    = p.get('units', 'metric')       # 'metric' or 'imperial'
+        tu       = p.get('temp_unit', 'C')        # 'C', 'F', 'K'
+
+        # Unit scale factors: input -> SI (m, Pa)
+        if units == 'metric':
+            L_scale = 1e-3       # mm  -> m
+            S_scale = 1e6        # MPa -> Pa
+        else:
+            L_scale = 0.0254     # in  -> m
+            S_scale = 6894.757   # psi -> Pa
+
+        def lenIn(v):  return float(v) * L_scale
+        def lenOut(v): return v / L_scale
+        def stIn(v):   return float(v) * S_scale
+        def stOut(v):  return v / S_scale
+
+        # Geometry
+        d   = lenIn(p['d'])
+        d_o = lenIn(p['d_o'])
+        d_i = lenIn(p['d_i'])
+        L   = lenIn(p.get('L', 0))
+        delta = lenIn(p['delta'])   # diametral interference at T_room
+        mu    = float(p.get('mu', 0.15))
+
+        # Temperatures -> Celsius internally
+        T_room = to_celsius(p['T_room'], tu)
+        T_asm  = to_celsius(p['T_asm'],  tu)
+        T_op   = to_celsius(p['T_op'],   tu)
+
+        # Shaft material (SI)
+        sm = p['shaft_mat']
+        E_s   = float(sm['E'])   * 1e9
+        nu_s  = float(sm['nu'])
+        a_s   = float(sm['alpha']) * 1e-6
+        Sy_s  = float(sm['Sy'])  * 1e6
+        Sut_s = float(sm['Sut']) * 1e6
+
+        # Hub material (SI)
+        hm = p['hub_mat']
+        E_h   = float(hm['E'])   * 1e9
+        nu_h  = float(hm['nu'])
+        a_h   = float(hm['alpha']) * 1e-6
+        Sy_h  = float(hm['Sy'])  * 1e6
+        Sut_h = float(hm['Sut']) * 1e6
+
+        # Validation
+        errors = []
+        if d_o <= d:    errors.append("Hub outer diameter must exceed fit diameter.")
+        if d_i >= d:    errors.append("Shaft bore diameter must be less than fit diameter.")
+        if d_i < 0:     errors.append("Shaft inner diameter cannot be negative.")
+        if delta < 0:   errors.append("Diametral interference must be ≥ 0.")
+        if d <= 0:      errors.append("Fit diameter must be positive.")
+        if errors:
+            return json.dumps({"error": " | ".join(errors)})
+
+        # Geometry factors (Shigley 3rd ed, Eq. 3-57)
+        C_o = (d_o**2 + d**2) / (d_o**2 - d**2) + nu_h
+        if d_i == 0:
+            C_i = 1.0 - nu_s
+        else:
+            C_i = (d**2 + d_i**2) / (d**2 - d_i**2) - nu_s
+
+        compliance = d * (C_o / E_h + C_i / E_s)   # m / Pa -> m^2/N...
+
+        def interference_at(T):
+            """Diametral interference at temperature T (Celsius), corrected from room temp."""
+            return delta + d * (a_s - a_h) * (T - T_room)
+
+        def pressure_at(delta_val):
+            return max(0.0, delta_val / compliance) if compliance > 0 else 0.0
+
+        delta_op  = interference_at(T_op)
+        delta_asm = interference_at(T_asm)
+
+        p_room = pressure_at(delta)
+        p_op   = pressure_at(delta_op)
+        p_asm  = pressure_at(delta_asm)
+
+        # Temperature at which fit becomes loose
+        # delta + d*(a_s - a_h)*(T_loose - T_room) = 0
+        if abs(a_s - a_h) > 1e-12:
+            T_loose_C = T_room - delta / (d * (a_s - a_h))
+        else:
+            T_loose_C = None  # same material, fit never loosens thermally
+
+        # Minimum shrink-fit assembly temp (heat hub until bore expands by delta + small margin)
+        margin = max(delta * 0.05, 1e-6)   # 5% margin or 1 µm
+        if a_h > 1e-12:
+            T_shrink_hub_C = T_room + (delta + margin) / (a_h * d)
+        else:
+            T_shrink_hub_C = None
+
+        # Minimum cooling temp (cool shaft until shaft shrinks by delta + margin)
+        if a_s > 1e-12:
+            T_cool_shaft_C = T_room - (delta + margin) / (a_s * d)
+        else:
+            T_cool_shaft_C = None
+
+        # Clearance at assembly temperature (positive = clearance, negative = still interference)
+        delta_asm_val = delta + d * (a_s - a_h) * (T_asm - T_room)
+        # For shrink fit: hub heated, so hub bore expands more than shaft
+        # Net clearance when hub is at T_asm and shaft at T_room:
+        #   clearance = d * a_h * (T_asm - T_room) - delta  (positive = can assemble)
+        shrink_clearance = d * a_h * (T_asm - T_room) - delta
+
+        # Stresses at room temperature
+        hub_r  = hub_stresses(p_room, d, d_o)
+        shft_r = shaft_stresses(p_room, d, d_i)
+
+        # Stresses at operating temperature
+        hub_op  = hub_stresses(p_op, d, d_o)
+        shft_op = shaft_stresses(p_op, d, d_i)
+
+        # Safety factors
+        sf_hub_inner_r  = safety_factor(Sy_h, hub_r['vm_inner'])
+        sf_hub_outer_r  = safety_factor(Sy_h, hub_r['vm_outer'])
+        sf_shft_outer_r = safety_factor(Sy_s, shft_r['vm_outer'])
+        sf_shft_bore_r  = safety_factor(Sy_s, shft_r['vm_bore']) if shft_r['vm_bore'] is not None else None
+
+        sf_hub_inner_op  = safety_factor(Sy_h, hub_op['vm_inner'])
+        sf_shft_outer_op = safety_factor(Sy_s, shft_op['vm_outer'])
+
+        # Torque capacity: T = mu * p * A_contact * r = mu * p * (pi*d*L) * (d/2)
+        if L > 0 and p_room > 0:
+            torque_room = mu * p_room * math.pi * d * L * (d / 2)  # N·m in SI
+            torque_op   = mu * p_op   * math.pi * d * L * (d / 2)
+        else:
+            torque_room = None
+            torque_op   = None
+
+        # Convert torque to output units
+        if units == 'imperial' and torque_room is not None:
+            NM_TO_LBFIN = 8.85075  # 1 N·m = 8.85075 lbf·in
+            torque_room *= NM_TO_LBFIN
+            torque_op   *= NM_TO_LBFIN
+
+        # Stress distribution for plotting (hub, room temp)
+        r_i_hub = d / 2
+        r_o_hub = d_o / 2
+        plot_r, plot_sr, plot_st = hub_stress_distribution(p_room, r_i_hub, r_o_hub)
+
+        # Shaft distribution (hollow only)
+        if d_i > 0:
+            plot_rs, plot_srs, plot_sts = shaft_stress_distribution(p_room, d_i/2, d/2)
+        else:
+            plot_rs, plot_srs, plot_sts = [], [], []
+
+        # Output unit helpers
+        def out_s(v): return stOut(v) if v is not None else None
+        def out_l(v): return lenOut(v) if v is not None else None
+        def out_t(v): return temp_from_celsius(v, tu) if v is not None else None
+        def out_sf(v): return round(v, 3) if v is not None else None
+
+        result = {
+            "units": units, "temp_unit": tu,
+            "stress_unit": "MPa" if units == 'metric' else "psi",
+            "len_unit": "mm" if units == 'metric' else "in",
+
+            # Geometry
+            "d": lenOut(d), "d_o": lenOut(d_o), "d_i": lenOut(d_i),
+
+            # Pressures
+            "p_room":  out_s(p_room),
+            "p_op":    out_s(p_op),
+            "p_asm":   out_s(p_asm),
+
+            # Interferences
+            "delta_room":  out_l(delta),
+            "delta_op":    out_l(delta_op),
+            "delta_asm":   out_l(delta_asm_val),
+
+            # Compliance
+            "C_o": round(C_o, 4),
+            "C_i": round(C_i, 4),
+
+            # Shaft type
+            "shaft_type": shft_r['shaft_type'],
+
+            # Hub stresses (room)
+            "hub_sr_inner_r":  out_s(hub_r['sigma_r_inner']),
+            "hub_st_inner_r":  out_s(hub_r['sigma_t_inner']),
+            "hub_vm_inner_r":  out_s(hub_r['vm_inner']),
+            "hub_sr_outer_r":  out_s(hub_r['sigma_r_outer']),
+            "hub_st_outer_r":  out_s(hub_r['sigma_t_outer']),
+            "hub_vm_outer_r":  out_s(hub_r['vm_outer']),
+            "sf_hub_inner_r":  out_sf(sf_hub_inner_r),
+            "sf_hub_outer_r":  out_sf(sf_hub_outer_r),
+
+            # Hub stresses (operating)
+            "hub_sr_inner_op":  out_s(hub_op['sigma_r_inner']),
+            "hub_st_inner_op":  out_s(hub_op['sigma_t_inner']),
+            "hub_vm_inner_op":  out_s(hub_op['vm_inner']),
+            "sf_hub_inner_op":  out_sf(sf_hub_inner_op),
+
+            # Shaft stresses (room)
+            "shft_sr_outer_r":  out_s(shft_r['sigma_r_outer']),
+            "shft_st_outer_r":  out_s(shft_r['sigma_t_outer']),
+            "shft_vm_outer_r":  out_s(shft_r['vm_outer']),
+            "shft_st_bore_r":   out_s(shft_r.get('sigma_t_bore')),
+            "shft_vm_bore_r":   out_s(shft_r.get('vm_bore')),
+            "sf_shft_outer_r":  out_sf(sf_shft_outer_r),
+            "sf_shft_bore_r":   out_sf(sf_shft_bore_r),
+
+            # Shaft stresses (operating)
+            "shft_sr_outer_op": out_s(shft_op['sigma_r_outer']),
+            "shft_st_outer_op": out_s(shft_op['sigma_t_outer']),
+            "shft_vm_outer_op": out_s(shft_op['vm_outer']),
+            "sf_shft_outer_op": out_sf(safety_factor(Sy_s, shft_op['vm_outer'])),
+
+            # Temperatures
+            "T_room": p['T_room'], "T_asm": p['T_asm'], "T_op": p['T_op'],
+            "T_loose": out_t(T_loose_C),
+            "T_shrink_hub": out_t(T_shrink_hub_C),
+            "T_cool_shaft": out_t(T_cool_shaft_C),
+            "shrink_clearance": out_l(shrink_clearance),
+
+            # Torque (N·m or lbf·in)
+            "torque_room": torque_room,
+            "torque_op":   torque_op,
+            "torque_unit": "N·m" if units == 'metric' else "lbf·in",
+
+            # Plot data (always in SI meters / Pa for canvas normalization)
+            "plot_r":  [lenOut(v) for v in plot_r],
+            "plot_sr": [out_s(v) for v in plot_sr],
+            "plot_st": [out_s(v) for v in plot_st],
+            "plot_rs": [lenOut(v) for v in plot_rs],
+            "plot_srs":[out_s(v) for v in plot_srs],
+            "plot_sts":[out_s(v) for v in plot_sts],
+        }
+        return json.dumps(result)
+
+    except Exception as ex:
+        import traceback
+        return json.dumps({"error": str(ex) + "\n" + traceback.format_exc()})
+</script>
+
+
+<!-- ========== JAVASCRIPT ========== -->
+<script>
+// ---- Material database (mirrors Python, used for UI display) ----
+const MATS = {
+  "Steel (Generic)":       {E:207,  nu:0.292, alpha:11.7,  Sy:250,  Sut:400},
+  "Steel 1020":            {E:207,  nu:0.292, alpha:11.7,  Sy:210,  Sut:380},
+  "Steel 1045 (annealed)": {E:207,  nu:0.292, alpha:11.7,  Sy:310,  Sut:570},
+  "Steel 4140 (Q&T)":      {E:207,  nu:0.292, alpha:11.7,  Sy:655,  Sut:800},
+  "Steel 4340 (Q&T)":      {E:207,  nu:0.292, alpha:12.3,  Sy:470,  Sut:745},
+  "Stainless 304":         {E:193,  nu:0.29,  alpha:17.2,  Sy:207,  Sut:517},
+  "Stainless 316":         {E:193,  nu:0.29,  alpha:16.0,  Sy:207,  Sut:517},
+  "Cast Iron (Gray)":      {E:170,  nu:0.26,  alpha:11.0,  Sy:0,    Sut:214},
+  "Aluminum 2024-T4":      {E:73,   nu:0.33,  alpha:22.9,  Sy:324,  Sut:469},
+  "Aluminum 6061-T6":      {E:69,   nu:0.33,  alpha:23.6,  Sy:276,  Sut:310},
+  "Aluminum 7075-T6":      {E:72,   nu:0.33,  alpha:23.6,  Sy:503,  Sut:572},
+  "Brass (70/30)":         {E:110,  nu:0.34,  alpha:19.1,  Sy:200,  Sut:330},
+  "Copper (annealed)":     {E:117,  nu:0.34,  alpha:16.5,  Sy:70,   Sut:220},
+  "Bronze (bearing)":      {E:110,  nu:0.34,  alpha:18.0,  Sy:140,  Sut:310},
+  "Titanium 6Al-4V":       {E:114,  nu:0.342, alpha:8.6,   Sy:880,  Sut:950},
+  "Custom":                {E:207,  nu:0.292, alpha:11.7,  Sy:250,  Sut:400},
+};
+
+let currentUnits = 'metric';
+let currentTempUnit = 'C';
+let pyodide = null;
+let pyReady = false;
+let lastResult = null;
+
+// ---- Pyodide init ----
+async function initPyodide() {
+  try {
+    pyodide = await loadPyodide();
+    const code = document.getElementById('py-code').textContent;
+    await pyodide.runPythonAsync(code);
+    pyReady = true;
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('app').style.flexDirection = 'column';
+    // Init material display
+    updateMaterial('shaft');
+    updateMaterial('hub');
+  } catch(e) {
+    document.getElementById('loading-overlay').innerHTML =
+      `<p style="color:#f66;font-size:16px">Failed to load Pyodide.<br>${e}</p>`;
+  }
+}
+initPyodide();
+
+// ---- Units ----
+function setUnits(u, btn) {
+  currentUnits = u;
+  document.querySelectorAll('#units-group .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const isM = u === 'metric';
+  const lenLbl = isM ? 'mm' : 'in';
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById('len-unit-' + i);
+    if (el) el.textContent = lenLbl;
+  }
+  // Update custom material labels to match unit system
+  // Note: material props are ALWAYS entered in GPa / MPa regardless of unit system
+  // but we add a reminder when in imperial mode
+  document.querySelectorAll('.custom-mat').forEach(div => {
+    const note = div.querySelector('.custom-unit-note');
+    if (!isM && !note) {
+      const p = document.createElement('p');
+      p.className = 'note custom-unit-note';
+      p.textContent = 'Material properties are always entered in metric (GPa, MPa, ×10⁻⁶/°C).';
+      div.insertBefore(p, div.firstChild);
+    } else if (isM && note) {
+      note.remove();
+    }
+  });
+}
+
+function setTempUnit(u, btn) {
+  currentTempUnit = u;
+  document.querySelectorAll('#temp-unit-group .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const lbl = '°' + (u === 'K' ? '' : '') + u;
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('temp-unit-' + i);
+    if (el) el.textContent = u === 'K' ? 'K' : '°' + u;
+  }
+}
+
+// ---- Material display ----
+function updateMaterial(which) {
+  const sel = document.getElementById(which === 'shaft' ? 'shaft-mat' : 'hub-mat');
+  const name = sel.value;
+  const mat = MATS[name];
+  const pre = which === 'shaft' ? 's' : 'h';
+
+  if (name === 'Custom') {
+    document.getElementById(pre + '-E').textContent = '(custom)';
+    document.getElementById(pre + '-nu').textContent = '(custom)';
+    document.getElementById(pre + '-alpha').textContent = '(custom)';
+    document.getElementById(pre + '-Sy').textContent = '(custom)';
+    document.getElementById(which + '-custom').style.display = 'block';
+  } else {
+    document.getElementById(pre + '-E').textContent = mat.E + ' GPa';
+    document.getElementById(pre + '-nu').textContent = mat.nu;
+    document.getElementById(pre + '-alpha').textContent = mat.alpha.toFixed(1) + ' × 10⁻⁶ /°C';
+    document.getElementById(pre + '-Sy').textContent = mat.Sy > 0 ? mat.Sy + ' MPa' : 'Brittle';
+    document.getElementById(which + '-custom').style.display = 'none';
+  }
+}
+
+function getMaterialData(which) {
+  const pre = which === 'shaft' ? 's' : 'h';
+  const name = document.getElementById(which === 'shaft' ? 'shaft-mat' : 'hub-mat').value;
+  if (name === 'Custom') {
+    return {
+      E:     parseFloat(document.getElementById(pre + '-E-custom').value),
+      nu:    parseFloat(document.getElementById(pre + '-nu-custom').value),
+      alpha: parseFloat(document.getElementById(pre + '-alpha-custom').value),
+      Sy:    parseFloat(document.getElementById(pre + '-Sy-custom').value),
+      Sut:   parseFloat(document.getElementById(pre + '-Sut-custom').value),
+    };
+  }
+  return { ...MATS[name] };
+}
+
+// ---- Build params and run ----
+async function runCalculation() {
+  if (!pyReady) { alert('Python engine not ready yet.'); return; }
+
+  const btn = document.getElementById('calc-btn');
+  btn.disabled = true;
+  btn.textContent = 'Calculating…';
+
+  try {
+    const params = {
+      units:     currentUnits,
+      temp_unit: currentTempUnit,
+      d:       parseFloat(document.getElementById('d').value),
+      d_o:     parseFloat(document.getElementById('d_o').value),
+      d_i:     parseFloat(document.getElementById('d_i').value),
+      L:       parseFloat(document.getElementById('L').value),
+      delta:   parseFloat(document.getElementById('delta').value),
+      mu:      parseFloat(document.getElementById('mu').value),
+      T_room:  parseFloat(document.getElementById('T_room').value),
+      T_asm:   parseFloat(document.getElementById('T_asm').value),
+      T_op:    parseFloat(document.getElementById('T_op').value),
+      shaft_mat: getMaterialData('shaft'),
+      hub_mat:   getMaterialData('hub'),
+    };
+
+    pyodide.globals.set('_input_json', JSON.stringify(params));
+    const raw = await pyodide.runPythonAsync('calculate(_input_json)');
+    const result = JSON.parse(raw);
+    lastResult = result;
+
+    displayResults(result);
+  } catch(e) {
+    displayError('JavaScript error: ' + e.toString());
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶  Calculate';
+  }
+}
+
+function displayError(msg) {
+  document.getElementById('result-placeholder').style.display = 'none';
+  const rc = document.getElementById('results-content');
+  rc.style.display = 'flex';
+  document.getElementById('error-card').style.display = 'block';
+  document.getElementById('error-card').textContent = '⚠ Error: ' + msg;
+}
+
+// ---- Display results ----
+function displayResults(r) {
+  document.getElementById('result-placeholder').style.display = 'none';
+  const rc = document.getElementById('results-content');
+  rc.style.display = 'flex';
+  document.getElementById('error-card').style.display = 'none';
+
+  if (r.error) { displayError(r.error); return; }
+
+  const su = r.stress_unit;
+  const lu = r.len_unit;
+  const tu = r.temp_unit === 'K' ? 'K' : '°' + r.temp_unit;
+
+  function fmt(v, dec=2) {
+    if (v === null || v === undefined) return '—';
+    return v.toFixed(dec);
+  }
+  function fmtS(v) { return fmt(v, 1) + ' ' + su; }
+  function fmtL(v) { return fmt(v, 4) + ' ' + lu; }
+  function fmtT(v) { if (v === null || v === undefined) return '—'; return fmt(v, 1) + ' ' + tu; }
+  function fmtSF(v) {
+    if (v === null || v === undefined) return '—';
+    let cls = v >= 2 ? 'sf-ok' : (v >= 1.25 ? 'sf-warn' : 'sf-danger');
+    return `<span class="${cls}">${v.toFixed(2)}</span>`;
+  }
+  function statCard(label, value, unit, cls='') {
+    return `<div class="stat-card ${cls}">
+      <div class="stat-label">${label}</div>
+      <div class="stat-value">${value}</div>
+      <div class="stat-unit">${unit}</div>
+    </div>`;
+  }
+
+  // ---- Pressures ----
+  let pressureHtml = '';
+  pressureHtml += statCard('p (Room Temp)', fmt(r.p_room, 2), su,
+    r.p_room > 0 ? '' : 'warn');
+  pressureHtml += statCard('p (Operating)', fmt(r.p_op, 2), su,
+    r.p_op <= 0 ? 'danger' : (r.p_op < r.p_room * 0.5 ? 'warn' : ''));
+  if (r.p_asm !== null) pressureHtml += statCard('p (Assembly Temp)', fmt(r.p_asm, 2), su);
+  pressureHtml += statCard('δ (Room)', fmt(r.delta_room, 4), lu);
+  pressureHtml += statCard('δ (Operating)', fmt(r.delta_op, 4), lu,
+    r.delta_op <= 0 ? 'danger' : '');
+  document.getElementById('pressure-stats').innerHTML = pressureHtml;
+
+  // ---- Hub stress table ----
+  let hubRows = `
+    <tr>
+      <td>Inner surface (r = d/2)<br><small>Room temp — critical!</small></td>
+      <td>${fmtS(r.hub_sr_inner_r)}</td>
+      <td>${fmtS(r.hub_st_inner_r)}</td>
+      <td>${fmtS(r.hub_vm_inner_r)}</td>
+      <td>${fmtSF(r.sf_hub_inner_r)}</td>
+    </tr>
+    <tr>
+      <td>Outer surface (r = d<sub>o</sub>/2)<br><small>Room temp</small></td>
+      <td>${fmtS(r.hub_sr_outer_r)}</td>
+      <td>${fmtS(r.hub_st_outer_r)}</td>
+      <td>${fmtS(r.hub_vm_outer_r)}</td>
+      <td>${fmtSF(r.sf_hub_outer_r)}</td>
+    </tr>
+    <tr>
+      <td>Inner surface<br><small>Operating temp</small></td>
+      <td>${fmtS(r.hub_sr_inner_op)}</td>
+      <td>${fmtS(r.hub_st_inner_op)}</td>
+      <td>${fmtS(r.hub_vm_inner_op)}</td>
+      <td>${fmtSF(r.sf_hub_inner_op)}</td>
+    </tr>`;
+  document.getElementById('hub-tbody').innerHTML = hubRows;
+
+  // ---- Shaft stress table ----
+  const isSolid = r.shaft_type === 'solid';
+  let shaftRows = `
+    <tr>
+      <td>Outer surface (r = d/2)<br><small>Room temp</small></td>
+      <td>${fmtS(r.shft_sr_outer_r)}</td>
+      <td>${fmtS(r.shft_st_outer_r)}</td>
+      <td>${fmtS(r.shft_vm_outer_r)}</td>
+      <td>${fmtSF(r.sf_shft_outer_r)}</td>
+    </tr>`;
+  if (!isSolid && r.shft_st_bore_r !== null) {
+    shaftRows += `
+    <tr>
+      <td>Bore surface (r = d<sub>i</sub>/2)<br><small>Room temp</small></td>
+      <td>0</td>
+      <td>${fmtS(r.shft_st_bore_r)}</td>
+      <td>${fmtS(r.shft_vm_bore_r)}</td>
+      <td>${fmtSF(r.sf_shft_bore_r)}</td>
+    </tr>`;
+  }
+  shaftRows += `
+    <tr>
+      <td>Outer surface<br><small>Operating temp</small></td>
+      <td>${fmtS(r.shft_sr_outer_op)}</td>
+      <td>${fmtS(r.shft_st_outer_op)}</td>
+      <td>${fmtS(r.shft_vm_outer_op)}</td>
+      <td>${fmtSF(r.sf_shft_outer_op)}</td>
+    </tr>`;
+  document.getElementById('shaft-tbody').innerHTML = shaftRows;
+  let shaftNote = isSolid
+    ? 'Solid shaft: uniform biaxial compression (σ_r = σ_θ = −p).'
+    : 'Hollow shaft: maximum stress at bore surface.';
+  // Warn if either material has Sy=0 (brittle, e.g. cast iron)
+  const sMat = getMaterialData('shaft'), hMat = getMaterialData('hub');
+  if (sMat.Sy <= 0 || hMat.Sy <= 0) {
+    shaftNote += ' Note: SF = "—" for brittle materials (Sy = 0). Use Sut with modified-Mohr or Coulomb-Mohr theory instead of Von Mises.';
+  }
+  document.getElementById('shaft-note').textContent = shaftNote;
+
+  // ---- Temperature stats ----
+  let tempHtml = '';
+  tempHtml += statCard('Room Temp', fmt(r.T_room, 1), tu);
+  tempHtml += statCard('Assembly Temp', fmt(r.T_asm, 1), tu);
+  tempHtml += statCard('Operating Temp', fmt(r.T_op, 1), tu);
+  if (r.T_loose !== null) {
+    const cls = (r.T_loose !== null && r.T_loose < parseFloat(document.getElementById('T_op').value) * 1.5) ? 'warn' : '';
+    tempHtml += statCard('Fit Loses Interference', fmt(r.T_loose, 1), tu, cls);
+  }
+  document.getElementById('temp-stats').innerHTML = tempHtml;
+
+  // Temperature alerts
+  let tempAlerts = '';
+  if (r.delta_op <= 0) {
+    tempAlerts += `<div class="alert alert-danger">⚠ <b>Fit is loose at operating temperature!</b> δ = ${fmtL(r.delta_op)} — the fit has zero or negative interference at T<sub>op</sub>. Consider increasing room-temperature interference or revising material selection.</div>`;
+  } else if (r.delta_op < r.delta_room * 0.5) {
+    tempAlerts += `<div class="alert alert-warn">⚠ Interference reduced significantly at operating temperature (δ<sub>op</sub> = ${fmtL(r.delta_op)} vs δ<sub>room</sub> = ${fmtL(r.delta_room)}).</div>`;
+  }
+  if (r.T_loose !== null) {
+    const T_op_val = parseFloat(document.getElementById('T_op').value);
+    if (r.T_loose < T_op_val + 50) {
+      tempAlerts += `<div class="alert alert-warn">ℹ Fit becomes loose at ${fmtT(r.T_loose)}. This is close to the operating temperature.</div>`;
+    }
+  }
+  document.getElementById('temp-alerts').innerHTML = tempAlerts;
+
+  // ---- Assembly stats ----
+  let asmHtml = '';
+  if (r.T_shrink_hub !== null) asmHtml += statCard('Min. Hub Heat Temp', fmt(r.T_shrink_hub, 1), tu);
+  if (r.T_cool_shaft !== null) asmHtml += statCard('Min. Shaft Cool Temp', fmt(r.T_cool_shaft, 1), tu);
+  if (r.shrink_clearance !== null) {
+    asmHtml += statCard('Clearance at T<sub>asm</sub>', fmt(r.shrink_clearance, 4), lu,
+      r.shrink_clearance < 0 ? 'danger' : 'ok');
+  }
+  document.getElementById('assembly-stats').innerHTML = asmHtml;
+
+  let asmAlerts = '';
+  if (r.shrink_clearance !== null && r.shrink_clearance < 0) {
+    asmAlerts += `<div class="alert alert-danger">⚠ <b>Assembly temperature insufficient for shrink fit.</b> At T<sub>asm</sub> = ${fmtT(r.T_asm)}, the hub bore does not expand enough. Minimum hub temperature required: ${fmtT(r.T_shrink_hub)}.</div>`;
+  } else if (r.shrink_clearance !== null && r.shrink_clearance < 0.0001) {
+    asmAlerts += `<div class="alert alert-warn">ℹ Clearance at assembly temperature is very small (${fmtL(r.shrink_clearance)}). Consider increasing assembly temperature for easier handling.</div>`;
+  }
+  document.getElementById('assembly-alerts').innerHTML = asmAlerts;
+
+  // ---- Torque ----
+  const L_val = parseFloat(document.getElementById('L').value);
+  if (r.torque_room !== null && L_val > 0) {
+    document.getElementById('torque-section').style.display = 'block';
+    let tqHtml = statCard('Torque (Room Temp)', fmt(r.torque_room, 1), r.torque_unit);
+    tqHtml += statCard('Torque (Operating)', fmt(r.torque_op, 1), r.torque_unit);
+    document.getElementById('torque-stats').innerHTML = tqHtml;
+  } else {
+    document.getElementById('torque-section').style.display = 'none';
+  }
+
+  // ---- Compliance factors ----
+  let compHtml = statCard('C<sub>o</sub> (Hub)', fmt(r.C_o, 4), '');
+  compHtml += statCard('C<sub>i</sub> (Shaft)', fmt(r.C_i, 4), '');
+  document.getElementById('compliance-stats').innerHTML = compHtml;
+
+  // ---- Draw canvases ----
+  drawCrossSection(r);
+  drawStressChart(r);
+}
+
+// ---- Cross-section diagram ----
+function drawCrossSection(r) {
+  const canvas = document.getElementById('cross-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  const margin = 18;
+  const maxR = Math.min(W, H) / 2 - margin;
+
+  const d    = r.d;
+  const d_o  = r.d_o;
+  const d_i  = r.d_i;
+
+  const scale = maxR / (d_o / 2);
+
+  const R_o   = (d_o / 2) * scale;
+  const R_fit = (d   / 2) * scale;
+  const R_i   = (d_i / 2) * scale;
+
+  // Hub (outer ring)
+  ctx.beginPath();
+  ctx.arc(cx, cy, R_o, 0, Math.PI * 2);
+  ctx.fillStyle = '#bbdefb';
+  ctx.fill();
+  ctx.strokeStyle = '#1565c0';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Shaft (inner disk/ring)
+  ctx.beginPath();
+  ctx.arc(cx, cy, R_fit, 0, Math.PI * 2);
+  ctx.fillStyle = '#cfd8dc';
+  ctx.fill();
+
+  // Hollow bore
+  if (R_i > 1) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, R_i, 0, Math.PI * 2);
+    ctx.fillStyle = '#e8eef5';
+    ctx.fill();
+    ctx.strokeStyle = '#607d8b';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Shaft outline
+  ctx.beginPath();
+  ctx.arc(cx, cy, R_fit, 0, Math.PI * 2);
+  ctx.strokeStyle = '#37474f';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Interface line (dashed)
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.arc(cx, cy, R_fit, 0, Math.PI * 2);
+  ctx.strokeStyle = '#e53935';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels
+  ctx.font = '11px Segoe UI, sans-serif';
+  ctx.fillStyle = '#1565c0';
+  ctx.textAlign = 'center';
+  ctx.fillText('Hub', cx, cy - R_fit - (R_o - R_fit)/2 + 4);
+
+  ctx.fillStyle = '#37474f';
+  ctx.fillText('Shaft', cx, cy + 4);
+
+  // Dimension lines
+  ctx.strokeStyle = '#546e7a';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 2]);
+  // d/2 line
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + R_fit, cy);
+  ctx.stroke();
+  // d_o/2 line
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + R_o, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels at bottom
+  ctx.font = '10px Segoe UI, sans-serif';
+  ctx.fillStyle = '#546e7a';
+  ctx.textAlign = 'center';
+  ctx.fillText('d=' + r.d.toFixed(1) + ' ' + r.len_unit, cx + R_fit/2, cy + 14);
+  ctx.fillText('d_o=' + r.d_o.toFixed(1), cx + R_fit + (R_o-R_fit)/2, cy + 14);
+  if (d_i > 0) ctx.fillText('d_i=' + r.d_i.toFixed(1), cx - R_i/2, cy + 14);
+
+  // Legend
+  ctx.font = '10px Segoe UI, sans-serif';
+  ctx.fillStyle = '#bbdefb'; ctx.fillRect(8, H-32, 12, 10); ctx.strokeStyle='#1565c0'; ctx.strokeRect(8, H-32, 12, 10);
+  ctx.fillStyle = '#1565c0'; ctx.textAlign = 'left'; ctx.fillText('Hub', 23, H-22);
+  ctx.fillStyle = '#cfd8dc'; ctx.fillRect(60, H-32, 12, 10); ctx.strokeStyle='#37474f'; ctx.strokeRect(60, H-32, 12, 10);
+  ctx.fillStyle = '#37474f'; ctx.fillText('Shaft', 75, H-22);
+  ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(8, H-10); ctx.lineTo(20, H-10); ctx.strokeStyle='#e53935'; ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#e53935'; ctx.fillText('Interface', 23, H-6);
+}
+
+// ---- Stress distribution chart ----
+function drawStressChart(r) {
+  const canvas = document.getElementById('stress-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = {top:16, right:16, bottom:40, left:58};
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top - PAD.bottom;
+
+  const rVals  = r.plot_r;
+  const srVals = r.plot_sr;
+  const stVals = r.plot_st;
+
+  if (!rVals || rVals.length < 2) {
+    ctx.fillStyle = '#aaa'; ctx.font = '13px Segoe UI'; ctx.textAlign = 'center';
+    ctx.fillText('No data (p = 0)', W/2, H/2);
+    return;
+  }
+
+  // Data ranges
+  const allS = [...srVals, ...stVals, ...r.plot_srs, ...r.plot_sts].filter(v => v !== null && isFinite(v));
+  const allR = [...rVals, ...r.plot_rs].filter(v => v !== null && isFinite(v));
+  const sMin = Math.min(...allS, 0);
+  const sMax = Math.max(...allS, 0);
+  const rMin = Math.min(...allR);
+  const rMax = Math.max(...allR);
+  const sPad = (sMax - sMin) * 0.1 || 1;
+
+  const sLo = sMin - sPad, sHi = sMax + sPad;
+  const toX = rv => PAD.left + (rv - rMin) / (rMax - rMin) * CW;
+  const toY = sv => PAD.top  + (1 - (sv - sLo) / (sHi - sLo)) * CH;
+
+  // Grid
+  ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+  const nGridY = 6;
+  for (let i = 0; i <= nGridY; i++) {
+    const y = PAD.top + CH * i / nGridY;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+CW, y); ctx.stroke();
+    const val = sHi - (sHi-sLo)*i/nGridY;
+    ctx.fillStyle = '#666'; ctx.font = '10px Segoe UI'; ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(0), PAD.left-4, y+4);
+  }
+
+  // Zero line
+  const y0 = toY(0);
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD.left, y0); ctx.lineTo(PAD.left+CW, y0); ctx.stroke();
+
+  // Interface line (r = d/2)
+  const r_fit = r.d / 2;
+  const x_fit = toX(r_fit);
+  ctx.strokeStyle = '#e5393570'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(x_fit, PAD.top); ctx.lineTo(x_fit, PAD.top+CH); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw shaft stress distribution (if hollow)
+  if (r.plot_rs && r.plot_rs.length > 1) {
+    const drawLine = (xArr, yArr, color, dash=[]) => {
+      ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash);
+      xArr.forEach((rv, i) => {
+        const x = toX(rv), y = toY(yArr[i]);
+        i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    drawLine(r.plot_rs, r.plot_srs, '#78909c', [4,2]);
+    drawLine(r.plot_rs, r.plot_sts, '#546e7a', [4,2]);
+  }
+
+  // Draw hub stress distribution
+  const drawLine = (xArr, yArr, color, dash=[]) => {
+    if (!xArr || xArr.length < 2) return;
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash);
+    xArr.forEach((rv, i) => {
+      const x = toX(rv), y = toY(yArr[i]);
+      i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke(); ctx.setLineDash([]);
+  };
+  drawLine(rVals, srVals, '#e53935');
+  drawLine(rVals, stVals, '#1976d2');
+
+  // Axes
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(PAD.left, PAD.top); ctx.lineTo(PAD.left, PAD.top+CH);
+  ctx.lineTo(PAD.left+CW, PAD.top+CH); ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle = '#333'; ctx.font = '11px Segoe UI'; ctx.textAlign = 'center';
+  ctx.fillText('Radius (' + r.len_unit + ')', PAD.left + CW/2, H - 6);
+  ctx.save(); ctx.translate(12, PAD.top + CH/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Stress (' + r.stress_unit + ')', 0, 0); ctx.restore();
+
+  // X axis ticks
+  ctx.fillStyle = '#666'; ctx.font = '10px Segoe UI'; ctx.textAlign = 'center';
+  const nTicks = 5;
+  for (let i = 0; i <= nTicks; i++) {
+    const rv = rMin + (rMax-rMin)*i/nTicks;
+    const x = toX(rv);
+    ctx.fillText(rv.toFixed(1), x, PAD.top+CH+14);
+  }
+
+  // Legend
+  const lx = PAD.left + CW - 150, ly = PAD.top + 6;
+  ctx.fillStyle = '#fff'; ctx.fillRect(lx-4, ly-4, 160, 68);
+  ctx.strokeStyle = '#ccc'; ctx.lineWidth=1; ctx.strokeRect(lx-4, ly-4, 160, 68);
+
+  const legendItems = [
+    {color:'#e53935', dash:[], label:'σ_r  (hub, radial)'},
+    {color:'#1976d2', dash:[], label:'σ_θ  (hub, tangential)'},
+    {color:'#78909c', dash:[4,2], label:'σ_r  (shaft, radial)'},
+    {color:'#546e7a', dash:[4,2], label:'σ_θ  (shaft, tangential)'},
+  ];
+  legendItems.forEach((item, i) => {
+    const y = ly + i * 15 + 4;
+    ctx.beginPath(); ctx.strokeStyle = item.color; ctx.lineWidth = 2;
+    ctx.setLineDash(item.dash);
+    ctx.moveTo(lx, y); ctx.lineTo(lx+22, y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#333'; ctx.font = '10px Segoe UI'; ctx.textAlign = 'left';
+    ctx.fillText(item.label, lx+26, y+4);
+  });
+
+  // Interface label
+  ctx.fillStyle = '#e53935'; ctx.font = '10px Segoe UI'; ctx.textAlign = 'left';
+  ctx.fillText('interface', x_fit+3, PAD.top+12);
+}
+
+// Allow Enter key to trigger calculation
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.target.matches('select')) runCalculation();
+});
+</script>
+</body>
+</html>

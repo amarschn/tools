@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Fatigue Mean-Stress Explorer - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            /* Light mode specific colors */
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #111827;
+            --tooltip-text: #ffffff;
+            --callout-info-bg: #dbeafe;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #fef3c7;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #fef2f2;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #d1fae5;
+            --callout-success-border: #22c55e;
+        }
+        /* Dark theme */
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            /* Dark mode specific colors */
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #1f2937;
+            --tooltip-text: #f9fafb;
+            --callout-info-bg: #1e3a5f;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #422006;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #450a0a;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #052e16;
+            --callout-success-border: #22c55e;
+        }
+        /* System theme - follows OS preference */
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+                /* Dark mode specific colors */
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+                --tooltip-bg: #1f2937;
+                --tooltip-text: #f9fafb;
+                --callout-info-bg: #1e3a5f;
+                --callout-info-border: #3b82f6;
+                --callout-warning-bg: #422006;
+                --callout-warning-border: #f59e0b;
+                --callout-danger-bg: #450a0a;
+                --callout-danger-border: #ef4444;
+                --callout-success-bg: #052e16;
+                --callout-success-border: #22c55e;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* =================================================================
+           2. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            transition: background-color 0.2s ease;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* =================================================================
+           3. LAYOUT & CONTAINERS
+           ================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-brand:hover { text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+
+        main.container { flex-grow: 1; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        /* =================================================================
+           4. PURPOSE/README SECTION
+           ================================================================= */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .purpose-content code { background-color: var(--primary-light); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
+
+        /* =================================================================
+           5. INPUT SECTION
+           ================================================================= */
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            color: var(--text-color);
+            transition: border-color 0.15s ease;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* Tooltip */
+        .tooltip-trigger {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px; font-weight: bold;
+            cursor: help;
+            position: absolute; right: 10px; top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--tooltip-bg); color: var(--tooltip-text);
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5;
+            white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        /* Buttons */
+        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s, opacity 0.15s; }
+        .btn-primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); width: 100%; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+
+        /* =================================================================
+           6. TABS
+           ================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px; cursor: pointer;
+            background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* =================================================================
+           7. RESULTS SECTION
+           ================================================================= */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .result-item {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            border: 2px solid transparent;
+        }
+        .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
+        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
+        .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
+
+        /* Derivation Panel */
+        .derivation-panel {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .derivation-title { font-weight: 600; font-size: 1rem; }
+        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
+        .derivation-close:hover { color: var(--text-color); }
+        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); font-size: 0.9rem; }
+        .derivation-step .equation { background: var(--bg-card); padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
+
+        /* =================================================================
+           8. CHARTS
+           ================================================================= */
+        .chart-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 18px; margin-bottom: 20px; }
+        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+        .chart-plot { width: 100%; min-height: 380px; height: 380px; }
+        .chart-explanation { margin-top: 12px; font-size: 0.85rem; color: var(--text-light); line-height: 1.5; padding: 10px; background: var(--primary-light); border-radius: 6px; }
+        .chart-explanation strong { color: var(--text-color); }
+
+        /* =================================================================
+           9. BACKGROUND TAB
+           ================================================================= */
+        .toc-card { background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px; }
+        .toc-card strong { color: var(--primary-color); }
+        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
+        .toc-card a { color: var(--accent-color); }
+
+        .bg-section { margin-bottom: 32px; }
+        .bg-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-bottom: 16px; }
+        .bg-section h4 { margin-top: 20px; color: var(--secondary-color); }
+
+        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin: 16px 0; }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+
+        /* Callout boxes */
+        .callout-info { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-info strong { color: var(--callout-info-border); }
+        .callout-warning { background: var(--callout-warning-bg); border-left: 4px solid var(--callout-warning-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-warning strong { color: var(--callout-warning-border); }
+        .callout-danger { background: var(--callout-danger-bg); border-left: 4px solid var(--callout-danger-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-danger strong { color: var(--callout-danger-border); }
+        .callout-success { background: var(--callout-success-bg); border-left: 4px solid var(--callout-success-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-success strong { color: var(--callout-success-border); }
+
+        /* =================================================================
+           10. SETTINGS PANEL
+           ================================================================= */
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close {
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.2s;
+            border-radius: 999px;
+        }
+        .switch .slider-toggle::before {
+            position: absolute;
+            content: '';
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: var(--bg-card);
+            transition: 0.2s;
+            border-radius: 50%;
+            box-shadow: var(--shadow);
+        }
+        .switch input:checked + .slider-toggle { background-color: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(20px); }
+
+        /* Segmented Control */
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        /* =================================================================
+           11. COMPACT DENSITY MODE
+           ================================================================= */
+        body[data-density="compact"] .container { padding: 16px 0; }
+        body[data-density="compact"] .card { padding: 12px; }
+        body[data-density="compact"] .tool-layout { gap: 16px; }
+        body[data-density="compact"] h1 { font-size: 1.7rem; margin-bottom: 0.25rem; }
+        body[data-density="compact"] h2 { font-size: 1.1rem; padding-bottom: 8px; margin-bottom: 10px; }
+        body[data-density="compact"] .tool-description { font-size: 0.9rem; margin-bottom: 1rem; }
+        body[data-density="compact"] .input-group { margin-bottom: 10px; }
+        body[data-density="compact"] .input-group label { font-size: 0.78rem; margin-bottom: 3px; }
+        body[data-density="compact"] .input-group input,
+        body[data-density="compact"] .input-group select { padding: 6px 10px; font-size: 0.85rem; }
+        body[data-density="compact"] .input-group .tooltip-trigger { top: 28px; }
+        body[data-density="compact"] .input-row { gap: 10px; }
+        body[data-density="compact"] .btn-primary { padding: 10px 20px; font-size: 0.9rem; }
+        body[data-density="compact"] .tabs { margin-bottom: 12px; }
+        body[data-density="compact"] .result-item { padding: 8px 12px; margin-bottom: 8px; }
+        body[data-density="compact"] .result-item .label { font-size: 0.78rem; }
+        body[data-density="compact"] .result-item .value { font-size: 1rem; }
+        body[data-density="compact"] .callout-info,
+        body[data-density="compact"] .callout-warning,
+        body[data-density="compact"] .callout-danger { padding: 10px 12px; margin-bottom: 12px; }
+        body[data-density="compact"] .equation-card { padding: 12px; margin-bottom: 12px; }
+
+        /* =================================================================
+           12. FOOTER
+           ================================================================= */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+
+        /* =================================================================
+           13. RESPONSIVE
+           ================================================================= */
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .settings-panel { width: 100%; }
+            .settings-button { padding: 8px 12px; font-size: 0.8rem; }
+        }
+        @media (max-width: 600px) {
+            .input-row { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+            .segmented { flex-wrap: wrap; }
+            .method-checks { grid-template-columns: 1fr; }
+        }
+
+        .support-link {
+            color: inherit;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .support-link:hover { text-decoration: underline; }
+
+        /* =================================================================
+           14. FATIGUE-SPECIFIC COMPONENTS
+           ================================================================= */
+
+        /* Comparison table */
+        .method-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 20px; }
+        .method-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border-color); font-size: 0.78rem; color: var(--text-light); font-weight: 600; text-transform: uppercase; }
+        .method-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+        .method-table tr { cursor: pointer; transition: background 0.15s; }
+        .method-table tr:hover td { background: var(--primary-light); }
+        .method-table tr.expanded td { background: var(--primary-light); }
+        .method-table .method-name { font-weight: 600; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+        .badge-valid { background: var(--callout-success-bg); color: var(--success-color); }
+        .badge-warning { background: var(--callout-warning-bg); color: var(--warning-color); }
+        .badge-invalid { background: var(--callout-danger-bg); color: var(--danger-color); }
+        .pass-icon { color: var(--success-color); font-weight: bold; }
+        .fail-icon { color: var(--danger-color); font-weight: bold; }
+
+        /* Method derivation panel within table */
+        .method-derivation-row { display: none; }
+        .method-derivation-row.visible { display: table-row; }
+        .method-derivation-row td { padding: 12px 16px; background: var(--primary-light); border-bottom: 1px solid var(--border-color); }
+        .method-derivation-inner { padding: 4px 0; }
+        .method-derivation-inner .deriv-step { margin-bottom: 10px; }
+        .method-derivation-inner .deriv-step-title { font-size: 0.8rem; font-weight: 600; color: var(--text-light); margin-bottom: 4px; text-transform: uppercase; }
+        .method-derivation-inner .equation { background: var(--bg-card); padding: 10px 12px; border-radius: 6px; font-size: 0.9rem; overflow-x: auto; }
+
+        /* Summary banner */
+        .spread-banner { display: flex; gap: 24px; flex-wrap: wrap; padding: 14px 18px; background: var(--primary-light); border: 1px solid var(--border-color); border-radius: var(--border-radius); margin-bottom: 16px; }
+        .spread-item .spread-label { font-size: 0.75rem; color: var(--text-light); text-transform: uppercase; font-weight: 600; }
+        .spread-item .spread-value { font-size: 1.1rem; font-weight: 600; font-family: var(--font-mono); color: var(--text-color); }
+
+        /* Derived stress state */
+        .stress-state-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+        .stress-state-item { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px 14px; text-align: center; flex: 1; min-width: 80px; }
+        .stress-state-item .ss-label { font-size: 0.72rem; color: var(--text-light); }
+        .stress-state-item .ss-value { font-size: 0.95rem; font-weight: 600; font-family: var(--font-mono); }
+
+        /* Input section headers */
+        .input-section-header { font-size: 0.8rem; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 10px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+
+        /* Method checkboxes */
+        .method-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; }
+        .method-check-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; }
+        .method-check-item input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer; }
+        .method-check-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    </style>
+</head>
+
+<body data-theme="system" data-density="comfortable">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show derivations by default</div>
+                        <div class="setting-help">Auto-expand method derivation rows on calculate.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-derivations">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in results.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2 dp</button>
+                        <button type="button" data-precision="3">3 dp</button>
+                        <button type="button" data-precision="4">4 dp</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Fatigue Mean-Stress Explorer</h1>
+        <p class="tool-description">
+            Compare Goodman, Gerber, and Soderberg mean-stress corrections side by side. See how mean stress shifts the Haigh diagram, changes predicted life, and separates the three classical methods.
+        </p>
+
+        <div class="tool-layout">
+            <!-- ============== INPUTS ============== -->
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+
+                <form id="calc-form">
+
+                    <!-- Section 1: Operating Point -->
+                    <div class="input-section-header">Operating Point</div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="alternating_stress_mpa">Alternating Stress &sigma;_a (MPa)</label>
+                            <input type="number" id="alternating_stress_mpa" name="alternating_stress_mpa" value="180" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="mean_stress_mpa">Mean Stress &sigma;_m (MPa)</label>
+                            <input type="number" id="mean_stress_mpa" name="mean_stress_mpa" value="120" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Material -->
+                    <div class="input-section-header">Material</div>
+
+                    <div class="input-group">
+                        <label for="material_preset">Material Preset</label>
+                        <select id="material_preset" name="material_preset">
+                            <option value="loading">Loading presets...</option>
+                        </select>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="ultimate_strength_mpa">Ultimate Strength S_ut (MPa)</label>
+                            <input type="number" id="ultimate_strength_mpa" name="ultimate_strength_mpa" value="625" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="yield_strength_mpa">Yield Strength S_y (MPa)</label>
+                            <input type="number" id="yield_strength_mpa" name="yield_strength_mpa" value="530" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="endurance_limit_ratio">Endurance Limit Ratio S_e'/S_ut</label>
+                            <input type="number" id="endurance_limit_ratio" name="endurance_limit_ratio" value="0.50" step="0.01" min="0.01" max="1.0">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="fatigue_strength_coeff_ratio">Fatigue Strength Coeff Ratio &sigma;_f'/S_ut</label>
+                            <input type="number" id="fatigue_strength_coeff_ratio" name="fatigue_strength_coeff_ratio" value="1.55" step="0.01">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="fatigue_strength_exponent">Fatigue Strength Exponent b</label>
+                        <input type="number" id="fatigue_strength_exponent" name="fatigue_strength_exponent" value="-0.090" step="0.001">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <!-- Section 3: Modifying Factors -->
+                    <div class="input-section-header">Modifying Factors</div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="surface_factor">Surface Factor k_s</label>
+                            <input type="number" id="surface_factor" name="surface_factor" value="1.0" step="0.01" min="0.01" max="1.0">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="size_factor">Size Factor k_d</label>
+                            <input type="number" id="size_factor" name="size_factor" value="1.0" step="0.01" min="0.01" max="1.0">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="reliability_factor">Reliability Factor k_r</label>
+                        <input type="number" id="reliability_factor" name="reliability_factor" value="1.0" step="0.01" min="0.01" max="1.0">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <!-- Section 4: Life Target & Reference -->
+                    <div class="input-section-header">Life Target &amp; Reference</div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="target_life_cycles">Target Life (cycles)</label>
+                            <input type="number" id="target_life_cycles" name="target_life_cycles" value="1000000" step="any" min="1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="load_frequency_hz">Load Frequency (Hz)</label>
+                            <input type="number" id="load_frequency_hz" name="load_frequency_hz" value="2.0" step="0.1" min="0.001">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="reference_basis">Envelope Reference Basis</label>
+                        <select id="reference_basis" name="reference_basis">
+                            <option value="target_life" selected>Target Life</option>
+                            <option value="endurance_limit">Endurance Limit</option>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <!-- Section 5: Methods to Compare -->
+                    <div class="input-section-header">Methods to Compare</div>
+                    <div class="method-checks">
+                        <label class="method-check-item">
+                            <input type="checkbox" id="check-none" value="none" checked>
+                            <span class="method-check-dot" style="background:#6b7280;"></span>
+                            <span>No Correction</span>
+                        </label>
+                        <label class="method-check-item">
+                            <input type="checkbox" id="check-goodman" value="goodman" checked>
+                            <span class="method-check-dot" style="background:#3b82f6;"></span>
+                            <span>Goodman</span>
+                        </label>
+                        <label class="method-check-item">
+                            <input type="checkbox" id="check-gerber" value="gerber" checked>
+                            <span class="method-check-dot" style="background:#22c55e;"></span>
+                            <span>Gerber</span>
+                        </label>
+                        <label class="method-check-item">
+                            <input type="checkbox" id="check-soderberg" value="soderberg" checked>
+                            <span class="method-check-dot" style="background:#f59e0b;"></span>
+                            <span>Soderberg</span>
+                        </label>
+                    </div>
+
+                    <!-- Section 6: Sweep Controls -->
+                    <div class="input-section-header">Sweep Controls</div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="sweep_min_mpa">Sweep Min (MPa)</label>
+                            <input type="number" id="sweep_min_mpa" name="sweep_min_mpa" value="-100" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep_max_mpa">Sweep Max (MPa)</label>
+                            <input type="number" id="sweep_max_mpa" name="sweep_max_mpa" value="400" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="n_sweep_points">Sweep Points</label>
+                        <input type="number" id="n_sweep_points" name="n_sweep_points" value="81" step="1" min="10" max="500">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" style="margin-top: 16px;" disabled>Loading...</button>
+                </form>
+            </section>
+
+            <!-- ============== OUTPUTS ============== -->
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'tab-results')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-haigh')">Haigh Diagram</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-sn')">S-N Curve</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-sweep')">Sweep</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-background')">Background</button>
+                </div>
+
+                <!-- Results Tab -->
+                <div id="tab-results" class="tab-content" style="display: block;">
+                    <p id="results-placeholder" style="color: var(--text-light);">Enter inputs and press Calculate to see results.</p>
+
+                    <!-- Summary banner (hidden until results) -->
+                    <div class="spread-banner" id="spread-banner" style="display: none;">
+                        <div class="spread-item">
+                            <div class="spread-label">Most Conservative</div>
+                            <div class="spread-value" id="spread-most-conservative">—</div>
+                        </div>
+                        <div class="spread-item">
+                            <div class="spread-label">Least Conservative</div>
+                            <div class="spread-value" id="spread-least-conservative">—</div>
+                        </div>
+                        <div class="spread-item">
+                            <div class="spread-label">Equivalent Stress Spread</div>
+                            <div class="spread-value" id="spread-eq-stress">—</div>
+                        </div>
+                        <div class="spread-item">
+                            <div class="spread-label">Life Spread</div>
+                            <div class="spread-value" id="spread-life">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Derived stress state -->
+                    <div class="stress-state-row" id="stress-state-row" style="display: none;">
+                        <div class="stress-state-item">
+                            <div class="ss-label">&sigma;<sub>max</sub> (MPa)</div>
+                            <div class="ss-value" id="ss-sigma-max">—</div>
+                        </div>
+                        <div class="stress-state-item">
+                            <div class="ss-label">&sigma;<sub>min</sub> (MPa)</div>
+                            <div class="ss-value" id="ss-sigma-min">—</div>
+                        </div>
+                        <div class="stress-state-item">
+                            <div class="ss-label">R (stress ratio)</div>
+                            <div class="ss-value" id="ss-r-ratio">—</div>
+                        </div>
+                        <div class="stress-state-item">
+                            <div class="ss-label">S_e (MPa)</div>
+                            <div class="ss-value" id="ss-endurance">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Comparison table -->
+                    <div id="comparison-table-container" style="display: none;">
+                        <table class="method-table" id="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Method</th>
+                                    <th>&sigma;<sub>a,eq</sub> (MPa)</th>
+                                    <th>Life (cycles)</th>
+                                    <th>Life (hours)</th>
+                                    <th>Fatigue SF</th>
+                                    <th>Yield SF</th>
+                                    <th>Allow. &sigma;<sub>a</sub></th>
+                                    <th>vs Target</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Warnings section -->
+                    <div id="warnings-section" style="display: none;"></div>
+                </div>
+
+                <!-- Haigh Diagram Tab -->
+                <div id="tab-haigh" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Haigh Diagram</h4>
+                        <div id="haigh-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> The allowable alternating stress as a function of mean stress for each method.
+                            The operating point (red marker) should lie below all active envelope lines for the design to pass at the selected reference stress.
+                            <strong>Yield line</strong> (gray dashed) bounds the envelope regardless of method.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- S-N Curve Tab -->
+                <div id="tab-sn" class="tab-content">
+                    <div class="chart-container">
+                        <h4>S-N Curve</h4>
+                        <div id="sn-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> The base material S-N curve with each method's predicted operating point plotted.
+                            Methods that predict infinite life are not shown as markers.
+                            The vertical dashed line is the target life; the horizontal dashed line is the endurance limit.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sweep Tab -->
+                <div id="tab-sweep" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Life vs Mean Stress Sweep</h4>
+                        <div id="sweep-plot" class="chart-plot"></div>
+                        <div class="chart-explanation">
+                            <strong>What this shows:</strong> How predicted fatigue life varies as mean stress is swept across the range, holding alternating stress constant.
+                            Null/invalid regions appear as line breaks.
+                            The vertical dashed line marks the current operating mean stress; the horizontal dashed line marks target life.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Background Tab -->
+                <div id="tab-background" class="tab-content">
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-stress-state">Stress State Definitions</a></li>
+                            <li><a href="#bg-haigh">The Haigh Diagram</a></li>
+                            <li><a href="#bg-methods">Mean-Stress Correction Methods</a></li>
+                            <li><a href="#bg-tensile">Why Tensile Mean Stress Hurts Fatigue</a></li>
+                            <li><a href="#bg-compressive">Compressive Mean Stress: Not a Free Credit</a></li>
+                            <li><a href="#bg-limitations">When Not to Use This Tool</a></li>
+                            <li><a href="#bg-example">Worked Example</a></li>
+                            <li><a href="#bg-references">References</a></li>
+                        </ol>
+                    </div>
+
+                    <div id="bg-stress-state" class="bg-section">
+                        <h3>1. Stress State Definitions</h3>
+                        <p>
+                            A fluctuating stress cycle is characterized by four quantities that are all interrelated:
+                        </p>
+                        <div class="equation-card">
+                            <strong>Mean and Alternating Stress</strong>
+                            <span class="equation-expression">$$\sigma_m = \frac{\sigma_{max} + \sigma_{min}}{2}, \quad \sigma_a = \frac{\sigma_{max} - \sigma_{min}}{2}$$</span>
+                            <ul>
+                                <li>&sigma;<sub>m</sub>: Mean (steady) stress component</li>
+                                <li>&sigma;<sub>a</sub>: Alternating (amplitude) stress component</li>
+                                <li>&sigma;<sub>max</sub>: Maximum stress in the cycle</li>
+                                <li>&sigma;<sub>min</sub>: Minimum stress in the cycle</li>
+                            </ul>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Stress Ratio R</strong>
+                            <span class="equation-expression">$$R = \frac{\sigma_{min}}{\sigma_{max}} = \frac{\sigma_m - \sigma_a}{\sigma_m + \sigma_a}$$</span>
+                            <ul>
+                                <li>R = -1: Fully reversed (zero mean stress, pure bending)</li>
+                                <li>R = 0: Pulsating (minimum stress is zero)</li>
+                                <li>R = +1: Static load (no alternating component)</li>
+                            </ul>
+                        </div>
+                        <div class="callout-info">
+                            <strong>Convention:</strong> Standard S-N curves are generated at R = -1 (fully reversed loading).
+                            Any other R ratio introduces a mean stress that must be accounted for — that is exactly what the methods below do.
+                        </div>
+                    </div>
+
+                    <div id="bg-haigh" class="bg-section">
+                        <h3>2. The Haigh Diagram</h3>
+                        <p>
+                            The Haigh diagram (also called the Modified Goodman diagram) plots allowable alternating stress
+                            on the y-axis against mean stress on the x-axis. Any design point lying below and to the left of
+                            the envelope line is considered acceptable under the chosen criterion.
+                        </p>
+                        <p>
+                            The envelope always starts at the endurance limit S_e (or a finite-life equivalent) on the y-axis
+                            (zero mean stress) and terminates at the material's characteristic strength on the x-axis
+                            (S_ut for Goodman, S_y for Soderberg, or S_ut with a parabolic path for Gerber).
+                            The yield line &sigma;<sub>m</sub> + &sigma;<sub>a</sub> = S_y is also plotted as a practical upper bound.
+                        </p>
+                    </div>
+
+                    <div id="bg-methods" class="bg-section">
+                        <h3>3. Mean-Stress Correction Methods</h3>
+
+                        <h4>No Correction (R = -1 baseline)</h4>
+                        <p>
+                            The alternating stress is compared directly to the endurance limit or finite-life S-N curve
+                            without any mean-stress correction. This is appropriate only when the mean stress is negligible
+                            or for initial screening. The envelope is a horizontal line at S_e.
+                        </p>
+                        <div class="equation-card">
+                            <strong>No Correction</strong>
+                            <span class="equation-expression">$$\sigma_{a,eq} = \sigma_a$$</span>
+                            <ul>
+                                <li>Ignores mean stress entirely</li>
+                                <li>May be non-conservative for large tensile mean stresses</li>
+                            </ul>
+                        </div>
+
+                        <h4>Goodman (Modified Goodman)</h4>
+                        <p>
+                            The most widely used method in industry. It assumes a linear relationship between the
+                            endurance limit and the ultimate tensile strength on the Haigh diagram. Typically regarded
+                            as slightly conservative (safe) for steels.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Modified Goodman</strong>
+                            <span class="equation-expression">$$\frac{\sigma_a}{S_e} + \frac{\sigma_m}{S_{ut}} = 1 \quad \Longrightarrow \quad \sigma_{a,eq} = \frac{\sigma_a}{1 - \sigma_m / S_{ut}}$$</span>
+                            <ul>
+                                <li>&sigma;<sub>a</sub>: Applied alternating stress (MPa)</li>
+                                <li>&sigma;<sub>m</sub>: Applied mean stress (MPa)</li>
+                                <li>S_e: Modified endurance limit (MPa)</li>
+                                <li>S_ut: Ultimate tensile strength (MPa)</li>
+                            </ul>
+                        </div>
+
+                        <h4>Gerber Parabola</h4>
+                        <p>
+                            Uses a parabolic (quadratic) envelope that passes through the same endpoints as Goodman
+                            but curves upward. It tends to be less conservative than Goodman for steels with
+                            moderate-to-high mean stress ratios, and fits experimental data for ductile metals
+                            more closely on average.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Gerber Criterion</strong>
+                            <span class="equation-expression">$$\frac{\sigma_a}{S_e} + \left(\frac{\sigma_m}{S_{ut}}\right)^2 = 1 \quad \Longrightarrow \quad \sigma_{a,eq} = \frac{\sigma_a}{1 - (\sigma_m / S_{ut})^2}$$</span>
+                            <ul>
+                                <li>Parabolic envelope — less conservative than Goodman</li>
+                                <li>Better statistical fit to ductile metal test data</li>
+                                <li>Does not distinguish tensile vs compressive mean stress as clearly</li>
+                            </ul>
+                        </div>
+
+                        <h4>Soderberg</h4>
+                        <p>
+                            Replaces the ultimate strength with the yield strength as the x-intercept, producing the
+                            most conservative of the three methods. It simultaneously prevents yielding under the
+                            peak cycle stress. Rarely used in modern practice because it is overly penalizing
+                            for high-strength steels.
+                        </p>
+                        <div class="equation-card">
+                            <strong>Soderberg Criterion</strong>
+                            <span class="equation-expression">$$\frac{\sigma_a}{S_e} + \frac{\sigma_m}{S_y} = 1 \quad \Longrightarrow \quad \sigma_{a,eq} = \frac{\sigma_a}{1 - \sigma_m / S_y}$$</span>
+                            <ul>
+                                <li>&sigma;<sub>a</sub>: Applied alternating stress (MPa)</li>
+                                <li>S_y: Yield strength (MPa)</li>
+                                <li>Most conservative — effectively guarantees no yielding on peak half-cycle</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-tensile" class="bg-section">
+                        <h3>4. Why Tensile Mean Stress Hurts Fatigue Performance</h3>
+                        <p>
+                            A tensile mean stress holds a crack-tip open during the compressive half of a cycle,
+                            allowing fatigue crack growth to occur over a larger portion of each cycle.
+                            Empirically, all three classical methods predict a monotonically decreasing allowable
+                            alternating stress as mean stress increases toward S_ut (or S_y for Soderberg).
+                        </p>
+                        <p>
+                            In fracture-mechanics terms, the effective stress-intensity factor range &Delta;K depends
+                            on the applied stress ratio R — higher R (more tensile mean) increases &Delta;K for the
+                            same amplitude, accelerating fatigue crack growth per cycle.
+                        </p>
+                    </div>
+
+                    <div id="bg-compressive" class="bg-section">
+                        <h3>5. Compressive Mean Stress: Not a Free Design Credit</h3>
+                        <div class="callout-warning">
+                            <strong>Caution with compressive mean stress:</strong> Classical methods (Goodman, Gerber, Soderberg)
+                            may predict beneficially infinite allowable alternating stress for compressive mean stresses.
+                            This is not reliable in practice.
+                        </div>
+                        <p>
+                            Compressive residual stresses (from shot-peening, cold-rolling, etc.) do improve fatigue life in
+                            practice, but classical Haigh-diagram methods were not designed to quantify this reliably.
+                            Additional considerations include:
+                        </p>
+                        <ul style="padding-left: 20px; color: var(--text-light); margin-bottom: 1em;">
+                            <li>Relaxation of compressive residual stress under cyclic loading</li>
+                            <li>Surface contact and fretting fatigue interactions</li>
+                            <li>Multiaxial stress states near stress concentrations</li>
+                        </ul>
+                        <p>
+                            Treat predictions for &sigma;<sub>m</sub> &lt; 0 as upper-bound estimates only.
+                        </p>
+                    </div>
+
+                    <div id="bg-limitations" class="bg-section">
+                        <h3>6. When Not to Use This Tool</h3>
+                        <div class="callout-danger">
+                            <strong>Not for design sign-off:</strong> This tool is for education and exploratory comparison only.
+                            Do not use these results as the sole basis for a fatigue design decision.
+                        </div>
+                        <p>The classical mean-stress methods implemented here assume:</p>
+                        <ul style="padding-left: 20px; color: var(--text-light); margin-bottom: 1em;">
+                            <li>Uniaxial, fully sinusoidal, constant-amplitude loading</li>
+                            <li>Smooth, unnotched specimens (or that you have already applied a stress concentration factor to &sigma;<sub>a</sub>)</li>
+                            <li>Wrought, ductile metallic material with a well-defined endurance limit</li>
+                            <li>Room temperature, non-corrosive environment</li>
+                            <li>No residual stresses beyond what the modifying factors capture</li>
+                        </ul>
+                        <p>
+                            For variable-amplitude loading, use a damage-accumulation rule (Palmgren-Miner).
+                            For notched components, apply a fatigue stress concentration factor K_f.
+                            For multiaxial loading, use von Mises equivalent stress or a critical-plane approach.
+                        </p>
+                    </div>
+
+                    <div id="bg-example" class="bg-section">
+                        <h3>7. Worked Example</h3>
+                        <p>
+                            <strong>Material:</strong> SAE 1045 steel (S_ut = 625 MPa, S_y = 530 MPa)<br>
+                            <strong>Loading:</strong> &sigma;<sub>a</sub> = 180 MPa, &sigma;<sub>m</sub> = 120 MPa<br>
+                            <strong>Endurance limit ratio:</strong> 0.50 &rarr; S_e' = 312.5 MPa (before modifying factors)<br>
+                            <strong>Modifying factors:</strong> k_s = k_d = k_r = 1.0 (ideal specimen, S_e = 312.5 MPa)
+                        </p>
+
+                        <h4>Goodman equivalent stress</h4>
+                        <div class="equation-card">
+                            <strong>Calculation</strong>
+                            <span class="equation-expression">$$\sigma_{a,eq} = \frac{180}{1 - 120/625} = \frac{180}{0.808} \approx 222.8 \text{ MPa}$$</span>
+                            <ul>
+                                <li>Compare 222.8 MPa against S_e = 312.5 MPa</li>
+                                <li>Fatigue SF = 312.5 / 222.8 &asymp; 1.40</li>
+                                <li>The operating point lies inside the Goodman envelope</li>
+                            </ul>
+                        </div>
+
+                        <h4>Soderberg equivalent stress (most conservative)</h4>
+                        <div class="equation-card">
+                            <strong>Calculation</strong>
+                            <span class="equation-expression">$$\sigma_{a,eq} = \frac{180}{1 - 120/530} = \frac{180}{0.774} \approx 232.6 \text{ MPa}$$</span>
+                            <ul>
+                                <li>Higher equivalent stress because S_y &lt; S_ut</li>
+                                <li>Fatigue SF = 312.5 / 232.6 &asymp; 1.34</li>
+                            </ul>
+                        </div>
+
+                        <h4>Gerber equivalent stress (least conservative)</h4>
+                        <div class="equation-card">
+                            <strong>Calculation</strong>
+                            <span class="equation-expression">$$\sigma_{a,eq} = \frac{180}{1 - (120/625)^2} = \frac{180}{0.963} \approx 186.9 \text{ MPa}$$</span>
+                            <ul>
+                                <li>Parabolic denominator gives a much smaller penalty</li>
+                                <li>Fatigue SF = 312.5 / 186.9 &asymp; 1.67</li>
+                            </ul>
+                        </div>
+
+                        <p>
+                            The spread between Soderberg (most conservative) and Gerber (least conservative)
+                            is about 45 MPa equivalent stress and reflects genuine model uncertainty about how
+                            mean stress interacts with fatigue damage in this steel.
+                        </p>
+                    </div>
+
+                    <div id="bg-references" class="bg-section">
+                        <h3>8. References</h3>
+                        <ul style="padding-left: 20px; color: var(--text-light);">
+                            <li>Shigley, J.E., Mischke, C.R., Budynas, R.G. <em>Mechanical Engineering Design</em>, 8th ed. McGraw-Hill, 2006. &mdash; Chapter 6.</li>
+                            <li>Juvinall, R.C. &amp; Marshek, K.M. <em>Fundamentals of Machine Component Design</em>, 5th ed. Wiley, 2012. &mdash; Chapter 8.</li>
+                            <li>Dowling, N.E. <em>Mechanical Behavior of Materials</em>, 4th ed. Pearson, 2012. &mdash; Chapters 9 &amp; 14.</li>
+                            <li>Morrow, J.D. "Fatigue properties of metals," in <em>Fatigue Design Handbook</em>, SAE, 1968.</li>
+                            <li>Goodman, J. <em>Mechanics Applied to Engineering</em>, Longmans, Green &amp; Co., 1899.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        // =================================================================
+        // 0. GLOBAL STORE & CONFIG
+        // =================================================================
+        let pyUtils, pyToolModule;
+        let lastResults = null;
+        let materialPresets = {};
+        let openMethodRow = null;
+        let toolDocumentation = {};
+
+        const TOOL_MODULE_NAME = 'fatigue';
+        const TOOL_FUNCTION_NAME = 'explore_mean_stress_methods';
+        const PARAM_ORDER = [
+            'alternating_stress_mpa', 'mean_stress_mpa',
+            'ultimate_strength_mpa', 'yield_strength_mpa',
+            'endurance_limit_ratio', 'surface_factor', 'size_factor',
+            'reliability_factor', 'fatigue_strength_coeff_ratio',
+            'fatigue_strength_exponent', 'target_life_cycles',
+            'load_frequency_hz', 'reference_basis',
+            'sweep_min_mpa', 'sweep_max_mpa', 'n_sweep_points'
+        ];
+        const STORAGE_KEY = 'fatigue-mean-stress-explorer-settings';
+
+        const METHOD_COLORS = {
+            none: '#6b7280',
+            goodman: '#3b82f6',
+            gerber: '#22c55e',
+            soderberg: '#f59e0b'
+        };
+        const METHOD_LABELS = {
+            none: 'No Correction',
+            goodman: 'Goodman',
+            gerber: 'Gerber',
+            soderberg: 'Soderberg'
+        };
+
+        // Default settings
+        const defaultSettings = {
+            showDerivations: false,
+            theme: 'system',
+            density: 'comfortable',
+            precision: 3
+        };
+        let settings = { ...defaultSettings };
+
+        // =================================================================
+        // SETTINGS MANAGEMENT
+        // =================================================================
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) { settings = { ...defaultSettings }; return; }
+            try {
+                settings = { ...defaultSettings, ...JSON.parse(stored) };
+            } catch (e) {
+                settings = { ...defaultSettings };
+            }
+        }
+
+        function applySettings() {
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+            document.getElementById('setting-show-derivations').checked = settings.showDerivations;
+            setSegmentedActive('[data-theme]', settings.theme, 'theme');
+            setSegmentedActive('[data-density]', settings.density, 'density');
+            setSegmentedActive('[data-precision]', String(settings.precision), 'precision');
+            if (lastResults) displayResults(lastResults);
+        }
+
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(`.settings-panel ${selector}`).forEach(btn => {
+                const isActive = btn.dataset[dataAttr] === value;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        function handleSettingChange(key, value) {
+            settings[key] = value;
+            saveSettings();
+            applySettings();
+        }
+
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = open ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+            panel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        }
+
+        function bindSettingsControls() {
+            document.getElementById('setting-show-derivations').addEventListener('change', e => handleSettingChange('showDerivations', e.target.checked));
+            document.querySelectorAll('.settings-panel [data-theme]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('theme', btn.dataset.theme));
+            });
+            document.querySelectorAll('.settings-panel [data-density]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('density', btn.dataset.density));
+            });
+            document.querySelectorAll('.settings-panel [data-precision]').forEach(btn => {
+                btn.addEventListener('click', () => handleSettingChange('precision', Number(btn.dataset.precision)));
+            });
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+            });
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') toggleSettingsPanel(false);
+            });
+        }
+
+        // =================================================================
+        // FORMATTING HELPERS
+        // =================================================================
+        function formatNumber(value, dp = null) {
+            if (value === null || value === undefined) return '—';
+            if (!Number.isFinite(value)) return '—';
+            const precision = dp !== null ? dp : settings.precision;
+            return value.toFixed(precision);
+        }
+
+        function formatLife(cycles) {
+            if (cycles === null || cycles === undefined) return '—';
+            if (!Number.isFinite(cycles)) return '&#8734;';
+            if (cycles >= 1e6) return cycles.toExponential(2);
+            if (cycles >= 1000) return Math.round(cycles).toLocaleString();
+            return cycles.toFixed(0);
+        }
+
+        function formatLifeHours(hours) {
+            if (hours === null || hours === undefined) return '—';
+            if (!Number.isFinite(hours)) return '&#8734;';
+            if (hours >= 1e6) return hours.toExponential(2);
+            return hours.toFixed(1);
+        }
+
+        // =================================================================
+        // DEEP CONVERSION (Pyodide Map/PyProxy -> plain JS)
+        // =================================================================
+        function deepConvert(obj) {
+            if (obj instanceof Map) {
+                const result = {};
+                obj.forEach((v, k) => { result[k] = deepConvert(v); });
+                return result;
+            }
+            if (Array.isArray(obj)) return obj.map(deepConvert);
+            if (obj && typeof obj === 'object') {
+                const result = {};
+                Object.entries(obj).forEach(([k, v]) => { result[k] = deepConvert(v); });
+                return result;
+            }
+            return obj;
+        }
+
+        // =================================================================
+        // 1. TAB INTERFACE
+        // =================================================================
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            typesetMath();
+
+            // Trigger Plotly resize when switching to chart tabs
+            const chartMap = {
+                'tab-haigh': 'haigh-plot',
+                'tab-sn': 'sn-plot',
+                'tab-sweep': 'sweep-plot'
+            };
+            if (chartMap[tabName]) {
+                setTimeout(() => {
+                    const plotEl = document.getElementById(chartMap[tabName]);
+                    if (plotEl && plotEl.data) Plotly.Plots.resize(plotEl);
+                }, 100);
+            }
+        }
+
+        function typesetMath() {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        // =================================================================
+        // 2. PYODIDE INITIALIZATION
+        // =================================================================
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+
+            loadSettings();
+            applySettings();
+            bindSettingsControls();
+
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                let pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.loadPackage('micropip');
+
+                await pyodide.runPythonAsync(`
+import micropip
+from pyodide.http import pyfetch
+
+response_utils = await pyfetch('../../pycalcs/utils.py')
+with open('utils.py', 'w') as f:
+    f.write(await response_utils.string())
+
+response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+    f.write(await response_tool.string())
+
+import utils
+import ${TOOL_MODULE_NAME}
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                // Parse docstring for tooltips
+                loadingText.textContent = 'Parsing documentation...';
+                try {
+                    const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
+                    if (!docMap.has('error')) {
+                        toolDocumentation = Object.fromEntries(docMap);
+                        if (toolDocumentation.parameters) {
+                            toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
+                        }
+                        populateTooltips();
+                    }
+                } catch (e) {
+                    console.warn('Tooltip parsing failed:', e);
+                }
+
+                // Load material presets
+                loadingText.textContent = 'Loading material presets...';
+                const presetsProxy = pyToolModule.get_fatigue_material_presets();
+                const rawPresets = presetsProxy.toJs({ dict_converter: Object.fromEntries });
+                presetsProxy.destroy();
+                materialPresets = deepConvert(rawPresets);
+                populateMaterialPresets();
+
+                // Setup form handler
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+
+                // Preset change handler
+                document.getElementById('material_preset').addEventListener('change', onPresetChange);
+
+                // Hide loading overlay
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('calculate-btn').textContent = 'Calculate';
+                document.getElementById('calculate-btn').disabled = false;
+
+                // Auto-calculate with defaults
+                document.getElementById('calc-form').requestSubmit();
+
+            } catch (error) {
+                loadingText.textContent = 'Error loading: ' + error.message;
+                console.error(error);
+            }
+        }
+        main();
+
+        // =================================================================
+        // 3. TOOLTIPS FROM DOCSTRING
+        // =================================================================
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+            PARAM_ORDER.forEach(paramId => {
+                const tooltip = document.querySelector(
+                    `#${paramId} + .tooltip-trigger, .input-group:has(#${paramId}) .tooltip-trigger`
+                );
+                if (tooltip && toolDocumentation.parameters[paramId]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramId]);
+                }
+            });
+        }
+
+        // =================================================================
+        // 4. MATERIAL PRESETS
+        // =================================================================
+        function populateMaterialPresets() {
+            const select = document.getElementById('material_preset');
+            select.innerHTML = '';
+
+            // Metal presets
+            const metalPresets = materialPresets.metal || {};
+            const metalGroup = document.createElement('optgroup');
+            metalGroup.label = 'Metal';
+
+            Object.entries(metalPresets).forEach(([key, preset]) => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = preset.display_name || key;
+                if (key === 'steel_1045') opt.selected = true;
+                metalGroup.appendChild(opt);
+            });
+            select.appendChild(metalGroup);
+
+            // Apply the default preset values
+            onPresetChange();
+        }
+
+        function onPresetChange() {
+            const presetKey = document.getElementById('material_preset').value;
+            const metalPresets = materialPresets.metal || {};
+            const preset = metalPresets[presetKey];
+            if (!preset) return;
+
+            // Fill in material fields from preset
+            const fieldMap = {
+                'ultimate_strength_mpa': 'ultimate_strength_mpa',
+                'yield_strength_mpa': 'yield_strength_mpa',
+                'endurance_limit_ratio': 'endurance_limit_ratio',
+                'fatigue_strength_coeff_ratio': 'fatigue_strength_coeff_ratio',
+                'fatigue_strength_exponent': 'fatigue_strength_exponent'
+            };
+            Object.entries(fieldMap).forEach(([fieldId, presetKey]) => {
+                const el = document.getElementById(fieldId);
+                if (el && preset[presetKey] !== undefined) {
+                    el.value = preset[presetKey];
+                }
+            });
+        }
+
+        // =================================================================
+        // 5. CALCULATION HANDLER
+        // =================================================================
+        async function handleCalculate(event) {
+            event.preventDefault();
+
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Calculating...';
+            btn.disabled = true;
+
+            try {
+                // Gather inputs
+                const alternating_stress_mpa = parseFloat(document.getElementById('alternating_stress_mpa').value);
+                const mean_stress_mpa = parseFloat(document.getElementById('mean_stress_mpa').value);
+                const ultimate_strength_mpa = parseFloat(document.getElementById('ultimate_strength_mpa').value);
+                const yield_strength_mpa = parseFloat(document.getElementById('yield_strength_mpa').value);
+                const endurance_limit_ratio = parseFloat(document.getElementById('endurance_limit_ratio').value);
+                const surface_factor = parseFloat(document.getElementById('surface_factor').value);
+                const size_factor = parseFloat(document.getElementById('size_factor').value);
+                const reliability_factor = parseFloat(document.getElementById('reliability_factor').value);
+                const fatigue_strength_coeff_ratio = parseFloat(document.getElementById('fatigue_strength_coeff_ratio').value);
+                const fatigue_strength_exponent = parseFloat(document.getElementById('fatigue_strength_exponent').value);
+                const target_life_cycles = parseFloat(document.getElementById('target_life_cycles').value);
+                const load_frequency_hz = parseFloat(document.getElementById('load_frequency_hz').value);
+                const reference_basis = document.getElementById('reference_basis').value;
+                const sweep_min_mpa = parseFloat(document.getElementById('sweep_min_mpa').value);
+                const sweep_max_mpa = parseFloat(document.getElementById('sweep_max_mpa').value);
+                const n_sweep_points = parseInt(document.getElementById('n_sweep_points').value);
+                const material_preset = document.getElementById('material_preset').value;
+
+                // Build enabled_methods from checked checkboxes
+                const methodKeys = ['none', 'goodman', 'gerber', 'soderberg'];
+                const enabled = methodKeys.filter(k => document.getElementById('check-' + k).checked);
+                const enabled_methods = enabled.length > 0 ? enabled.join(',') : 'goodman';
+
+                // Call Python function
+                const resultProxy = pyToolModule.explore_mean_stress_methods(
+                    alternating_stress_mpa,
+                    mean_stress_mpa,
+                    ultimate_strength_mpa,
+                    yield_strength_mpa,
+                    endurance_limit_ratio,
+                    surface_factor,
+                    size_factor,
+                    reliability_factor,
+                    fatigue_strength_coeff_ratio,
+                    fatigue_strength_exponent,
+                    target_life_cycles,
+                    load_frequency_hz,
+                    'metal',
+                    material_preset,
+                    reference_basis,
+                    enabled_methods,
+                    sweep_min_mpa,
+                    sweep_max_mpa,
+                    n_sweep_points
+                );
+
+                const rawResult = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                resultProxy.destroy();
+
+                lastResults = deepConvert(rawResult);
+                displayResults(lastResults);
+
+            } catch (error) {
+                console.error('Calculation error:', error);
+                const placeholder = document.getElementById('results-placeholder');
+                placeholder.textContent = 'Error: ' + error.message;
+                placeholder.style.color = 'var(--danger-color)';
+                placeholder.style.display = 'block';
+            }
+
+            btn.textContent = 'Calculate';
+            btn.disabled = false;
+        }
+
+        // =================================================================
+        // 5. DISPLAY RESULTS
+        // =================================================================
+        function displayResults(results) {
+            // Hide placeholder
+            const placeholder = document.getElementById('results-placeholder');
+            placeholder.style.display = 'none';
+
+            // Summary banner
+            const banner = document.getElementById('spread-banner');
+            banner.style.display = 'flex';
+
+            const mostCons = results.most_conservative_method;
+            const leastCons = results.least_conservative_method;
+            document.getElementById('spread-most-conservative').textContent =
+                mostCons ? (METHOD_LABELS[mostCons] || mostCons) : '—';
+            document.getElementById('spread-least-conservative').textContent =
+                leastCons ? (METHOD_LABELS[leastCons] || leastCons) : '—';
+
+            const eqSpread = results.equivalent_stress_spread_pct;
+            document.getElementById('spread-eq-stress').textContent =
+                (eqSpread !== null && eqSpread !== undefined && Number.isFinite(eqSpread))
+                    ? eqSpread.toFixed(1) + '%' : '—';
+
+            const lifeSpread = results.life_spread_ratio;
+            document.getElementById('spread-life').textContent =
+                (lifeSpread !== null && lifeSpread !== undefined && Number.isFinite(lifeSpread))
+                    ? lifeSpread.toFixed(1) + '\u00d7' : '—';
+
+            // Derived stress state
+            const ssRow = document.getElementById('stress-state-row');
+            ssRow.style.display = 'flex';
+            document.getElementById('ss-sigma-max').textContent = formatNumber(results.sigma_max_mpa, 1);
+            document.getElementById('ss-sigma-min').textContent = formatNumber(results.sigma_min_mpa, 1);
+            document.getElementById('ss-r-ratio').textContent = formatNumber(results.stress_ratio, 3);
+            document.getElementById('ss-endurance').textContent = formatNumber(results.endurance_limit_mpa, 1);
+
+            // Comparison table
+            const tableContainer = document.getElementById('comparison-table-container');
+            tableContainer.style.display = 'block';
+            renderComparisonTable(results.comparison_table || []);
+
+            // Warnings
+            renderWarnings(results.warnings || []);
+
+            // Charts
+            plotHaighDiagram(results.haigh_diagram_data);
+            plotSNCurve(results.sn_plot_data);
+            plotSweep(results.sweep_data);
+
+            typesetMath();
+        }
+
+        // =================================================================
+        // 6. COMPARISON TABLE
+        // =================================================================
+        function renderComparisonTable(rows) {
+            const tbody = document.getElementById('comparison-tbody');
+            tbody.innerHTML = '';
+            openMethodRow = null;
+
+            rows.forEach((row, i) => {
+                const methodKey = row.method;
+                const color = METHOD_COLORS[methodKey] || '#6b7280';
+                const label = METHOD_LABELS[methodKey] || methodKey;
+
+                // Status badge
+                const validityState = row.validity_state || 'valid';
+                const badgeClass = validityState === 'valid' ? 'badge-valid' :
+                                   validityState === 'warning' ? 'badge-warning' : 'badge-invalid';
+
+                // Pass target life
+                const passTarget = row.pass_target_life;
+                const passIcon = passTarget
+                    ? '<span class="pass-icon">&#10003;</span>'
+                    : '<span class="fail-icon">&#10007;</span>';
+
+                // Data row
+                const tr = document.createElement('tr');
+                tr.id = 'method-row-' + methodKey;
+                tr.innerHTML = `
+                    <td><span class="method-name" style="color:${color};">${label}</span></td>
+                    <td>${formatNumber(row.equivalent_stress_mpa, 1)}</td>
+                    <td>${formatLife(row.estimated_life_cycles)}</td>
+                    <td>${formatLifeHours(row.estimated_life_hours)}</td>
+                    <td>${formatNumber(row.fatigue_safety_factor, 2)}</td>
+                    <td>${formatNumber(row.yield_safety_factor, 2)}</td>
+                    <td>${formatNumber(row.allowable_alternating_stress_mpa, 1)}</td>
+                    <td>${passIcon}</td>
+                    <td><span class="badge ${badgeClass}">${validityState}</span></td>
+                `;
+                tr.addEventListener('click', () => toggleMethodDerivation(methodKey, row));
+                tbody.appendChild(tr);
+
+                // Derivation row (hidden initially)
+                const derivTr = document.createElement('tr');
+                derivTr.id = 'deriv-row-' + methodKey;
+                derivTr.className = 'method-derivation-row';
+                const derivTd = document.createElement('td');
+                derivTd.colSpan = 9;
+
+                let derivHtml = '<div class="method-derivation-inner">';
+
+                // Equivalent stress derivation
+                if (row.subst_equivalent_stress_mpa) {
+                    derivHtml += `
+                        <div class="deriv-step">
+                            <div class="deriv-step-title">Equivalent Stress</div>
+                            <div class="equation">$$${row.subst_equivalent_stress_mpa}$$</div>
+                        </div>`;
+                }
+
+                // Estimated life derivation
+                if (row.subst_estimated_life_cycles) {
+                    derivHtml += `
+                        <div class="deriv-step">
+                            <div class="deriv-step-title">Estimated Life</div>
+                            <div class="equation">$$${row.subst_estimated_life_cycles}$$</div>
+                        </div>`;
+                }
+
+                // Yield SF derivation
+                if (row.subst_yield_safety_factor) {
+                    derivHtml += `
+                        <div class="deriv-step">
+                            <div class="deriv-step-title">Yield Safety Factor</div>
+                            <div class="equation">$$${row.subst_yield_safety_factor}$$</div>
+                        </div>`;
+                }
+
+                // Method-specific warnings
+                if (row.warnings && row.warnings.length > 0) {
+                    derivHtml += '<div class="callout-warning" style="margin: 8px 0 0 0;">';
+                    row.warnings.forEach(w => { derivHtml += `<p style="margin-bottom:4px;">${w}</p>`; });
+                    derivHtml += '</div>';
+                }
+
+                derivHtml += '</div>';
+                derivTd.innerHTML = derivHtml;
+                derivTr.appendChild(derivTd);
+                tbody.appendChild(derivTr);
+            });
+
+            // Auto-expand if setting is on
+            if (settings.showDerivations && rows.length > 0) {
+                const firstRow = rows[0];
+                if (firstRow) toggleMethodDerivation(firstRow.method, firstRow);
+            }
+        }
+
+        function toggleMethodDerivation(methodKey, row) {
+            const derivRow = document.getElementById('deriv-row-' + methodKey);
+            const dataRow = document.getElementById('method-row-' + methodKey);
+
+            // Close currently open row if different
+            if (openMethodRow && openMethodRow !== methodKey) {
+                const prevDeriv = document.getElementById('deriv-row-' + openMethodRow);
+                const prevData = document.getElementById('method-row-' + openMethodRow);
+                if (prevDeriv) prevDeriv.classList.remove('visible');
+                if (prevData) prevData.classList.remove('expanded');
+            }
+
+            if (derivRow.classList.contains('visible')) {
+                derivRow.classList.remove('visible');
+                dataRow.classList.remove('expanded');
+                openMethodRow = null;
+            } else {
+                derivRow.classList.add('visible');
+                dataRow.classList.add('expanded');
+                openMethodRow = methodKey;
+                typesetMath();
+            }
+        }
+
+        // =================================================================
+        // 7. WARNINGS
+        // =================================================================
+        function renderWarnings(warnings) {
+            const section = document.getElementById('warnings-section');
+            if (!warnings || warnings.length === 0) {
+                section.style.display = 'none';
+                section.innerHTML = '';
+                return;
+            }
+            section.style.display = 'block';
+            let html = '<div class="callout-warning"><strong>Warnings:</strong>';
+            warnings.forEach(w => { html += `<p style="margin-bottom:4px;margin-top:6px;">${w}</p>`; });
+            html += '</div>';
+            section.innerHTML = html;
+        }
+
+        // =================================================================
+        // 8. CHART THEME HELPER
+        // =================================================================
+        function getChartTheme() {
+            const computedStyle = getComputedStyle(document.body);
+            const bgColor = computedStyle.getPropertyValue('--bg-card').trim();
+            const textColor = computedStyle.getPropertyValue('--text-color').trim();
+            const gridColor = computedStyle.getPropertyValue('--border-color').trim();
+            return {
+                bgColor: bgColor || '#ffffff',
+                textColor: textColor || '#111827',
+                gridColor: gridColor || '#e5e7eb'
+            };
+        }
+
+        // =================================================================
+        // 9. HAIGH DIAGRAM
+        // =================================================================
+        function plotHaighDiagram(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const traces = [];
+
+            const meanX = data.mean_stress_mpa;
+            const envelopes = data.envelopes || {};
+
+            // Plot each method envelope (clip at y=0 with null gaps)
+            const methodOrder = ['none', 'goodman', 'gerber', 'soderberg'];
+            methodOrder.forEach(method => {
+                if (!envelopes[method]) return;
+                const rawY = envelopes[method];
+                // Clip: replace values < 0 with null to create gaps
+                const clippedY = rawY.map(v => (v !== null && v < 0) ? null : v);
+                traces.push({
+                    x: meanX,
+                    y: clippedY,
+                    name: METHOD_LABELS[method] || method,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: METHOD_COLORS[method] || '#888', width: 2 },
+                    connectgaps: false
+                });
+            });
+
+            // Yield line
+            if (data.yield_line_mean_mpa && data.yield_line_alt_mpa) {
+                traces.push({
+                    x: data.yield_line_mean_mpa,
+                    y: data.yield_line_alt_mpa,
+                    name: 'Yield Line',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#9ca3af', width: 1.5, dash: 'dash' }
+                });
+            }
+
+            // S_ut vertical dashed line
+            if (data.ultimate_strength_mpa) {
+                traces.push({
+                    x: [data.ultimate_strength_mpa, data.ultimate_strength_mpa],
+                    y: [0, data.y_max || 400],
+                    name: 'S_ut',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#ef4444', width: 1, dash: 'dot' },
+                    showlegend: true
+                });
+            }
+
+            // Operating point
+            traces.push({
+                x: [data.operating_mean_mpa],
+                y: [data.operating_alt_mpa],
+                name: 'Operating Point',
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: '#ef4444', size: 10, symbol: 'circle', line: { color: '#ffffff', width: 2 } }
+            });
+
+            const layout = {
+                xaxis: {
+                    title: 'Mean Stress \u03c3\u2098 (MPa)',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor,
+                    range: [data.x_min !== undefined ? data.x_min : -150, data.x_max !== undefined ? data.x_max : 700],
+                    zeroline: true, zerolinecolor: theme.gridColor
+                },
+                yaxis: {
+                    title: 'Alternating Stress \u03c3\u2090 (MPa)',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor,
+                    rangemode: 'tozero'
+                },
+                legend: { x: 0.01, y: 0.99, font: { color: theme.textColor }, bgcolor: 'rgba(0,0,0,0)' },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('haigh-plot', traces, layout, { responsive: true });
+        }
+
+        // =================================================================
+        // 10. S-N CURVE
+        // =================================================================
+        function plotSNCurve(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const traces = [];
+
+            const snCurve = data.sn_curve;
+            if (snCurve && snCurve.cycles && snCurve.stress_amplitude_mpa) {
+                traces.push({
+                    x: snCurve.cycles,
+                    y: snCurve.stress_amplitude_mpa,
+                    name: 'S-N Curve',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: theme.textColor, width: 2 }
+                });
+            }
+
+            // Operating points per method
+            const opPoints = data.operating_points || {};
+            Object.entries(opPoints).forEach(([method, pt]) => {
+                if (!pt) return;
+                const life = pt.estimated_life_cycles;
+                const stress = pt.equivalent_stress_mpa;
+                // Skip infinite life points
+                if (!life || !Number.isFinite(life) || !stress) return;
+                traces.push({
+                    x: [life],
+                    y: [stress],
+                    name: METHOD_LABELS[method] || method,
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: {
+                        color: METHOD_COLORS[method] || '#888',
+                        size: 10,
+                        symbol: 'circle',
+                        line: { color: '#ffffff', width: 2 }
+                    }
+                });
+            });
+
+            // Target life vertical dashed
+            if (data.target_life_cycles && Number.isFinite(data.target_life_cycles)) {
+                const yMax = snCurve && snCurve.stress_amplitude_mpa
+                    ? Math.max(...snCurve.stress_amplitude_mpa.filter(Number.isFinite))
+                    : 600;
+                traces.push({
+                    x: [data.target_life_cycles, data.target_life_cycles],
+                    y: [0, yMax],
+                    name: 'Target Life',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#6b7280', width: 1.5, dash: 'dash' }
+                });
+            }
+
+            // Endurance limit horizontal dashed
+            if (data.has_endurance_limit && data.endurance_limit_mpa) {
+                const xMin = snCurve && snCurve.cycles ? Math.min(...snCurve.cycles.filter(Number.isFinite)) : 1e3;
+                const xMax = snCurve && snCurve.cycles ? Math.max(...snCurve.cycles.filter(Number.isFinite)) : 1e8;
+                traces.push({
+                    x: [xMin, xMax * 10],
+                    y: [data.endurance_limit_mpa, data.endurance_limit_mpa],
+                    name: 'Endurance Limit',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#22c55e', width: 1.5, dash: 'dash' }
+                });
+            }
+
+            const layout = {
+                xaxis: {
+                    title: 'Life (cycles)',
+                    type: 'log',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                yaxis: {
+                    title: 'Stress Amplitude (MPa)',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                legend: { x: 0.7, y: 0.99, font: { color: theme.textColor }, bgcolor: 'rgba(0,0,0,0)' },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('sn-plot', traces, layout, { responsive: true });
+        }
+
+        // =================================================================
+        // 11. SWEEP PLOT
+        // =================================================================
+        function plotSweep(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const traces = [];
+
+            const meanX = data.mean_stress_mpa;
+            const lifeCycles = data.life_cycles || {};
+
+            Object.entries(lifeCycles).forEach(([method, values]) => {
+                if (!values) return;
+                traces.push({
+                    x: meanX,
+                    y: values,
+                    name: METHOD_LABELS[method] || method,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: METHOD_COLORS[method] || '#888', width: 2 },
+                    connectgaps: false
+                });
+            });
+
+            // Operating mean stress vertical dashed line
+            if (lastResults && lastResults.mean_stress_mpa !== undefined) {
+                traces.push({
+                    x: [lastResults.mean_stress_mpa, lastResults.mean_stress_mpa],
+                    y: [1, 1e12],
+                    name: 'Operating \u03c3\u2098',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#ef4444', width: 1.5, dash: 'dash' }
+                });
+            }
+
+            // Target life horizontal dashed line
+            if (lastResults && lastResults.sn_plot_data && lastResults.sn_plot_data.target_life_cycles) {
+                const tl = lastResults.sn_plot_data.target_life_cycles;
+                const xMin = meanX && meanX.length > 0 ? meanX[0] : -200;
+                const xMax = meanX && meanX.length > 0 ? meanX[meanX.length - 1] : 500;
+                traces.push({
+                    x: [xMin, xMax],
+                    y: [tl, tl],
+                    name: 'Target Life',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#6b7280', width: 1.5, dash: 'dash' }
+                });
+            }
+
+            const layout = {
+                xaxis: {
+                    title: 'Mean Stress \u03c3\u2098 (MPa)',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                yaxis: {
+                    title: 'Life (cycles)',
+                    type: 'log',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                legend: { x: 0.01, y: 0.99, font: { color: theme.textColor }, bgcolor: 'rgba(0,0,0,0)' },
+                margin: { t: 20, r: 20 },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor }
+            };
+
+            Plotly.newPlot('sweep-plot', traces, layout, { responsive: true });
+        }
+    </script>
+</body>
+</html>

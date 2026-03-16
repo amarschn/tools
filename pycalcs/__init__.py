@@ -7,6 +7,7 @@ from . import controls  # noqa: F401
 from . import circle_basics  # noqa: F401
 from . import example  # noqa: F401
 from . import fits  # noqa: F401
+from . import interference_fits  # noqa: F401
 from . import snapfits  # noqa: F401
 from . import materials  # noqa: F401
 from . import gases  # noqa: F401

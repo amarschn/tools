@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Vibration Severity &amp; Fault Triage — ISO 20816 / VDI 3839</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* =================================================================
+           1. CSS VARIABLES & RESET
+           ================================================================= */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #111827;
+            --tooltip-text: #ffffff;
+            --callout-info-bg: #dbeafe;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #fef3c7;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #fef2f2;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #d1fae5;
+            --callout-success-border: #22c55e;
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0,0,0,0.45);
+            --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #1f2937;
+            --tooltip-text: #f9fafb;
+            --callout-info-bg: #1e3a5f;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #422006;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #450a0a;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #052e16;
+            --callout-success-border: #22c55e;
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb; --primary-light: #1f2937; --secondary-color: #9ca3af;
+                --accent-color: #f9fafb; --success-color: #34d399; --warning-color: #fbbf24;
+                --danger-color: #f87171; --text-color: #f9fafb; --text-light: #9ca3af;
+                --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+                --btn-primary-bg: #3b82f6; --btn-primary-text: #ffffff;
+                --tooltip-bg: #1f2937; --tooltip-text: #f9fafb;
+                --callout-info-bg: #1e3a5f; --callout-info-border: #3b82f6;
+                --callout-warning-bg: #422006; --callout-warning-border: #f59e0b;
+                --callout-danger-bg: #450a0a; --callout-danger-border: #ef4444;
+                --callout-success-bg: #052e16; --callout-success-border: #22c55e;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* =================================================================
+           2. LOADING OVERLAY
+           ================================================================= */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 2000;
+            transition: background-color 0.2s ease;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border-color); border-top-color: var(--accent-color);
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; color: var(--text-color); }
+
+        /* =================================================================
+           3. LAYOUT
+           ================================================================= */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-color);
+            font-weight: 600; font-size: 0.85rem; padding: 8px 14px;
+            border-radius: 999px; cursor: pointer; transition: background-color 0.15s ease;
+        }
+        .settings-button:hover { background: var(--primary-light); }
+        main.container { flex-grow: 1; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
+        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
+        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
+        p { margin-bottom: 1em; color: var(--text-light); }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
+            gap: 28px; align-items: start;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        /* =================================================================
+           4. PURPOSE SECTION
+           ================================================================= */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
+        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
+        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content { padding: 0 24px 24px; border-top: 1px solid var(--border-color); }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+
+        /* =================================================================
+           5. INPUTS
+           ================================================================= */
+        .tool-inputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
+        .input-group input[type="number"],
+        .input-group select {
+            width: 100%; padding: 11px 14px;
+            border: 1px solid var(--border-color); border-radius: var(--border-radius);
+            font-size: 0.95rem; font-family: var(--font-sans);
+            background: var(--bg-card); color: var(--text-color);
+            transition: border-color 0.15s ease;
+        }
+        .input-group input:focus, .input-group select:focus { outline: none; border-color: var(--text-color); }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .input-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .tooltip-trigger {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px;
+            background-color: var(--primary-light); border: 1px solid var(--border-color);
+            color: var(--text-light); border-radius: 50%;
+            font-size: 11px; font-weight: bold; cursor: help;
+            position: absolute; right: 10px; top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background-color: var(--tooltip-bg); color: var(--tooltip-text);
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 12px; font-weight: 400; line-height: 1.5;
+            white-space: normal; width: 240px;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10; box-shadow: var(--shadow-lg);
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+        .section-divider { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); margin: 20px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); }
+        .expert-mode-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; background: var(--primary-light);
+            border: 1px solid var(--border-color); border-radius: var(--border-radius);
+            margin-bottom: 16px;
+        }
+        .expert-mode-label { font-size: 0.9rem; font-weight: 600; color: var(--text-color); }
+        .expert-mode-hint { font-size: 0.8rem; color: var(--text-light); margin-left: 8px; font-weight: 400; }
+        .expert-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .expert-toggle input {
+            width: 40px; height: 22px; appearance: none; -webkit-appearance: none;
+            background: var(--border-color); border-radius: 999px;
+            position: relative; cursor: pointer; transition: background-color 0.2s ease;
+        }
+        .expert-toggle input::before {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            background: var(--bg-card); border-radius: 50%;
+            top: 3px; left: 3px; transition: transform 0.2s ease; box-shadow: var(--shadow);
+        }
+        .expert-toggle input:checked { background: var(--success-color); }
+        .expert-toggle input:checked::before { transform: translateX(18px); }
+        .expert-toggle-label { font-size: 0.85rem; font-weight: 600; color: var(--text-color); }
+        .advanced-section { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color); }
+        body.expert-mode .advanced-section { display: block; }
+        .iso-limits-note {
+            font-size: 0.8rem; color: var(--warning-color); background: var(--callout-warning-bg);
+            border: 1px solid var(--callout-warning-border); border-radius: 6px;
+            padding: 8px 12px; margin-bottom: 12px;
+        }
+
+        /* =================================================================
+           6. BUTTONS
+           ================================================================= */
+        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s, opacity 0.15s; }
+        .btn-primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); width: 100%; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--primary-light); }
+        .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
+
+        /* =================================================================
+           7. TABS
+           ================================================================= */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
+        .tab-link {
+            padding: 12px 16px; cursor: pointer;
+            background-color: transparent; border: none;
+            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-light); border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: color 0.2s ease;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* =================================================================
+           8. ZONE DISPLAY
+           ================================================================= */
+        .zone-banner {
+            padding: 20px 24px; border-radius: var(--border-radius);
+            margin-bottom: 20px; display: flex; align-items: center; gap: 20px;
+        }
+        .zone-badge {
+            font-size: 2.5rem; font-weight: 700; font-family: var(--font-mono);
+            min-width: 60px; text-align: center;
+        }
+        .zone-content { flex: 1; }
+        .zone-content h4 { margin-bottom: 4px; font-size: 1.05rem; }
+        .zone-content p { margin-bottom: 4px; font-size: 0.9rem; }
+        .zone-action { font-size: 0.85rem; font-weight: 600; margin-bottom: 0 !important; }
+        .zone-banner.success { background: var(--callout-success-bg); border: 2px solid var(--callout-success-border); }
+        .zone-banner.success .zone-badge { color: var(--success-color); }
+        .zone-banner.success h4 { color: var(--success-color); }
+        .zone-banner.warning { background: var(--callout-warning-bg); border: 2px solid var(--callout-warning-border); }
+        .zone-banner.warning .zone-badge { color: var(--warning-color); }
+        .zone-banner.warning h4 { color: var(--warning-color); }
+        .zone-banner.danger { background: var(--callout-danger-bg); border: 2px solid var(--callout-danger-border); }
+        .zone-banner.danger .zone-badge { color: var(--danger-color); }
+        .zone-banner.danger h4 { color: var(--danger-color); }
+
+        /* Zone bar */
+        .zone-bar-container { position: relative; margin-bottom: 20px; }
+        .zone-bar-track {
+            display: flex; height: 28px; border-radius: 6px; overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .zone-segment {
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700; color: white;
+            transition: flex 0.4s ease;
+        }
+        .zone-a { background: #0f766e; }
+        .zone-b { background: #15803d; }
+        .zone-c { background: #b45309; }
+        .zone-d { background: #b91c1c; }
+        .zone-needle {
+            position: absolute; top: -6px;
+            width: 0; height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 10px solid var(--text-color);
+            transition: left 0.4s ease;
+        }
+        .zone-bar-labels {
+            display: flex; justify-content: space-between;
+            font-size: 0.75rem; color: var(--text-light); margin-top: 6px;
+        }
+        .zone-bar-value-label {
+            text-align: center; font-size: 0.8rem; font-weight: 600;
+            color: var(--text-color); margin-top: 2px;
+        }
+
+        /* Delta cards */
+        .delta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .delta-card {
+            background: var(--bg-color); border: 1px solid var(--border-color);
+            border-radius: var(--border-radius); padding: 12px 16px;
+        }
+        .delta-label { font-size: 0.78rem; color: var(--text-light); margin-bottom: 2px; }
+        .delta-value { font-size: 1.1rem; font-weight: 600; font-family: var(--font-mono); }
+        .delta-value.positive { color: var(--danger-color); }
+        .delta-value.negative { color: var(--success-color); }
+        .delta-value.neutral { color: var(--text-light); }
+        .trend-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; margin-top: 4px;
+        }
+        .trend-increasing { background: var(--callout-danger-bg); color: var(--danger-color); }
+        .trend-decreasing { background: var(--callout-success-bg); color: var(--success-color); }
+        .trend-stable { background: var(--callout-info-bg); color: #1d4ed8; }
+
+        /* =================================================================
+           9. FAULT CARDS
+           ================================================================= */
+        .fault-card {
+            border: 1px solid var(--border-color); border-radius: var(--border-radius);
+            background: var(--bg-card); margin-bottom: 12px; overflow: hidden;
+        }
+        .fault-card-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .fault-card-header:hover { background: var(--primary-light); }
+        .fault-rank {
+            font-size: 1rem; font-weight: 700; font-family: var(--font-mono);
+            color: var(--text-light); min-width: 28px;
+        }
+        .fault-info { flex: 1; }
+        .fault-name { font-weight: 600; font-size: 0.95rem; color: var(--text-color); }
+        .fault-ref { font-size: 0.78rem; color: var(--text-light); }
+        .confidence-badge {
+            font-size: 0.75rem; font-weight: 700; padding: 3px 10px;
+            border-radius: 999px; white-space: nowrap;
+        }
+        .conf-High { background: var(--callout-success-bg); color: var(--success-color); }
+        .conf-Medium { background: var(--callout-info-bg); color: #1d4ed8; }
+        .conf-Low { background: var(--callout-warning-bg); color: var(--warning-color); }
+        .conf-Possible { background: var(--primary-light); color: var(--text-light); }
+        .fault-expand-icon { font-size: 0.8rem; color: var(--text-light); transition: transform 0.2s; }
+        .fault-card.open .fault-expand-icon { transform: rotate(180deg); }
+        .fault-card-body {
+            display: none; padding: 0 16px 16px; border-top: 1px solid var(--border-color);
+        }
+        .fault-card.open .fault-card-body { display: block; }
+        .fault-detail-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; margin-top: 10px; font-size: 0.85rem; }
+        .fault-detail-key { color: var(--text-light); font-weight: 500; }
+        .fault-detail-val { color: var(--text-color); }
+        .fault-indicators { margin-top: 12px; }
+        .fault-indicators h5 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 6px; }
+        .indicator-list { list-style: none; padding: 0; }
+        .indicator-list li { font-size: 0.85rem; padding: 4px 0 4px 20px; position: relative; color: var(--text-color); }
+        .indicator-list.matched li::before { content: '✓'; position: absolute; left: 0; color: var(--success-color); }
+        .indicator-list.contra li::before { content: '×'; position: absolute; left: 0; color: var(--warning-color); }
+        .follow-up-list { margin-top: 10px; }
+        .follow-up-list h5 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 6px; }
+        .follow-up-list ol { padding-left: 20px; }
+        .follow-up-list li { font-size: 0.85rem; color: var(--text-color); margin-bottom: 4px; }
+
+        /* =================================================================
+           10. BEARING FREQUENCIES TABLE
+           ================================================================= */
+        .freq-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
+        .freq-table th { text-align: left; padding: 8px 12px; background: var(--primary-light); border-bottom: 1px solid var(--border-color); font-weight: 600; }
+        .freq-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-family: var(--font-mono); }
+        .freq-table tr:last-child td { border-bottom: none; }
+
+        /* =================================================================
+           11. NEXT STEPS
+           ================================================================= */
+        .steps-list { list-style: none; padding: 0; }
+        .step-item {
+            display: flex; gap: 12px; padding: 14px 16px; margin-bottom: 10px;
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+        .step-num {
+            font-size: 0.8rem; font-weight: 700; font-family: var(--font-mono);
+            color: var(--text-light); min-width: 24px; padding-top: 2px;
+        }
+        .step-text { font-size: 0.9rem; color: var(--text-color); }
+        .step-item.urgent { border-left: 4px solid var(--danger-color); }
+        .step-item.urgent .step-text { font-weight: 600; }
+
+        /* =================================================================
+           12. REPORT TAB
+           ================================================================= */
+        .report-text {
+            font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.7;
+            white-space: pre-wrap; background: var(--primary-light);
+            padding: 20px; border-radius: var(--border-radius);
+            border: 1px solid var(--border-color); color: var(--text-color);
+        }
+        .report-actions { display: flex; gap: 10px; margin-bottom: 16px; }
+
+        /* =================================================================
+           13. SCOPE WARNINGS
+           ================================================================= */
+        .scope-warning {
+            background: var(--callout-warning-bg); border-left: 4px solid var(--callout-warning-border);
+            padding: 10px 14px; margin-bottom: 10px; border-radius: 0 6px 6px 0;
+            font-size: 0.85rem; color: var(--text-color);
+        }
+
+        /* =================================================================
+           14. SETTINGS PANEL
+           ================================================================= */
+        .settings-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.2);
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease; z-index: 1000;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed; top: 0; right: 0; width: 360px; height: 100vh;
+            background: var(--bg-card); border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg); transform: translateX(100%);
+            transition: transform 0.25s ease; z-index: 1001; display: flex; flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px 24px; border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; font-size: 1.1rem; }
+        .settings-close { background: none; border: none; font-size: 0.9rem; font-weight: 600; color: var(--text-light); cursor: pointer; }
+        .settings-close:hover { color: var(--text-color); }
+        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
+        .segmented {
+            display: inline-flex; gap: 4px; background: var(--primary-light);
+            border: 1px solid var(--border-color); border-radius: 999px; padding: 4px;
+        }
+        .segmented button {
+            border: none; background: transparent; color: var(--text-light);
+            font-size: 0.8rem; font-weight: 600; padding: 6px 10px; border-radius: 999px;
+            cursor: pointer; transition: all 0.15s ease;
+        }
+        .segmented button:hover { color: var(--text-color); }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
+
+        /* =================================================================
+           15. PLACEHOLDER
+           ================================================================= */
+        #results-placeholder { color: var(--text-light); font-size: 0.95rem; margin: 40px 0; text-align: center; }
+        .error-message {
+            background: var(--callout-danger-bg); border: 1px solid var(--callout-danger-border);
+            color: var(--danger-color); padding: 12px 16px; border-radius: var(--border-radius);
+            font-size: 0.9rem; margin-bottom: 16px;
+        }
+
+        /* =================================================================
+           16. BACKGROUND TAB
+           ================================================================= */
+        .toc-card { background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px; }
+        .toc-card strong { color: var(--primary-color); }
+        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
+        .toc-card a { color: var(--accent-color); }
+        .bg-section { margin-bottom: 32px; }
+        .bg-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-bottom: 16px; }
+        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin: 16px 0; }
+        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
+        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
+        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
+        .callout-info { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+        .callout-warning { background: var(--callout-warning-bg); border-left: 4px solid var(--callout-warning-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
+
+        /* =================================================================
+           17. FOOTER & RESPONSIVE
+           ================================================================= */
+        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
+        .support-link { color: inherit; font-weight: 600; text-decoration: none; }
+        .support-link:hover { text-decoration: underline; }
+        @media (max-width: 1000px) { .tool-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 720px) { .settings-panel { width: 100%; } }
+        @media (max-width: 600px) {
+            .input-row { grid-template-columns: 1fr; }
+            .input-row-3 { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+            .delta-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Compact density */
+        body[data-density="compact"] .container { padding: 16px 0; }
+        body[data-density="compact"] .card { padding: 12px; }
+        body[data-density="compact"] .input-group { margin-bottom: 10px; }
+        body[data-density="compact"] .input-group input, body[data-density="compact"] .input-group select { padding: 6px 10px; font-size: 0.85rem; }
+        body[data-density="compact"] h1 { font-size: 1.7rem; }
+    </style>
+</head>
+
+<body data-theme="system" data-density="comfortable">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Settings Overlay & Panel -->
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Vibration Severity &amp; Fault Triage</h1>
+        <p class="tool-description">
+            Classify vibration severity per <strong>ISO 20816-3</strong> and identify probable fault causes using
+            <strong>VDI 3839</strong> fault signature patterns — in a single workflow.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose &amp; README</summary>
+            <div class="purpose-content">
+                <h3>What this tool does</h3>
+                <p>Enter your machine parameters, measurement context, and vibration reading. The tool returns:</p>
+                <ul>
+                    <li><strong>Zone classification</strong> (A/B/C/D) per ISO 20816-3, with delta-from-baseline logic</li>
+                    <li><strong>Ranked fault signature matches</strong> based on VDI 3839 pattern rules</li>
+                    <li><strong>Follow-up measurement recommendations</strong> for each probable fault</li>
+                    <li><strong>Printable evaluation report</strong></li>
+                </ul>
+                <h3>Standards scope</h3>
+                <ul>
+                    <li><strong>ISO 20816-3</strong>: Industrial machines, nominal power &gt; 15 kW, 120–15,000 RPM</li>
+                    <li><strong>VDI 3839</strong>: Fault signatures for unbalance, misalignment, looseness, and bearing defects</li>
+                </ul>
+                <h3>Copyright note</h3>
+                <p>
+                    ISO zone threshold tables are copyright ISO. This tool does not republish them.
+                    You must enter zone boundary values from your own copy of ISO 20816-3 Table 1.
+                    Placeholder default values are shown for orientation only — always verify against your standard.
+                </p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <!-- ============== INPUTS ============== -->
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+
+                <div class="expert-mode-bar">
+                    <div>
+                        <span class="expert-mode-label">Expert Mode</span>
+                        <span class="expert-mode-hint">Bearing geometry &amp; history</span>
+                    </div>
+                    <label class="expert-toggle">
+                        <input type="checkbox" id="expert-mode-toggle" onchange="toggleExpertMode()">
+                        <span class="expert-toggle-label" id="expert-mode-status">Off</span>
+                    </label>
+                </div>
+
+                <form id="calc-form" onsubmit="return false;">
+
+                    <!-- Machine Description -->
+                    <div class="section-divider">Machine Description</div>
+
+                    <div class="input-group">
+                        <label for="machine_type">Machine Type</label>
+                        <select id="machine_type" name="machine_type">
+                            <option value="motor_medium">Electric Motor (15–300 kW)</option>
+                            <option value="motor_large">Electric Motor (&gt; 300 kW)</option>
+                            <option value="pump" selected>Centrifugal Pump</option>
+                            <option value="fan">Centrifugal Fan / Blower</option>
+                            <option value="compressor_centrifugal">Centrifugal Compressor</option>
+                            <option value="compressor_reciprocating">Reciprocating Compressor</option>
+                            <option value="generator">Generator</option>
+                            <option value="gearbox">Gearbox / Gear Unit</option>
+                            <option value="general">General Industrial Machine</option>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Machine category determines the applicable ISO 20816 part and machine group.">?</span>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="nominal_power_kw">Nominal Power (kW)</label>
+                            <input type="number" id="nominal_power_kw" name="nominal_power_kw" value="75" step="1" min="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Rated motor/machine power in kW. ISO 20816-3 applies above 15 kW.">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="rated_rpm">Rated Speed (RPM)</label>
+                            <input type="number" id="rated_rpm" name="rated_rpm" value="1480" step="1" min="1">
+                            <span class="tooltip-trigger" data-tooltip="Nameplate rated speed. ISO 20816-3 scope: 120–15,000 RPM.">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="bearing_type_de">Drive-End Bearing Type</label>
+                            <select id="bearing_type_de" name="bearing_type_de">
+                                <option value="rolling_element" selected>Rolling Element</option>
+                                <option value="fluid_film">Fluid Film (Journal)</option>
+                                <option value="unknown">Unknown</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="mounting">Foundation / Mounting</label>
+                            <select id="mounting" name="mounting">
+                                <option value="rigid" selected>Rigid (concrete/steel)</option>
+                                <option value="flexible">Flexible (spring-isolated)</option>
+                                <option value="skid">Skid-mounted</option>
+                                <option value="unknown">Unknown</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Measurement Context -->
+                    <div class="section-divider">Measurement</div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="operating_rpm">Operating Speed (RPM)</label>
+                            <input type="number" id="operating_rpm" name="operating_rpm" value="1480" step="1" min="1">
+                            <span class="tooltip-trigger" data-tooltip="Actual shaft speed during measurement. Used for unit conversion and fault frequency calculations.">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="measurement_direction">Measurement Direction</label>
+                            <select id="measurement_direction" name="measurement_direction">
+                                <option value="radial_h" selected>Radial — Horizontal</option>
+                                <option value="radial_v">Radial — Vertical</option>
+                                <option value="axial">Axial</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="vibration_quantity">Vibration Quantity</label>
+                            <select id="vibration_quantity" name="vibration_quantity" onchange="updateUnitsLabel()">
+                                <option value="velocity_rms" selected>Velocity RMS (mm/s)</option>
+                                <option value="displacement_pp">Displacement pk-pk (µm)</option>
+                                <option value="accel_rms">Acceleration RMS (m/s²)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="measured_value" id="measured-value-label">Measured Value (mm/s)</label>
+                            <input type="number" id="measured_value" name="measured_value" value="3.2" step="any" min="0.001">
+                            <span class="tooltip-trigger" data-tooltip="Measured vibration amplitude in the units specified. ISO 20816-3 is defined in velocity RMS (mm/s); other quantities will be converted.">?</span>
+                        </div>
+                    </div>
+
+                    <!-- ISO Limits -->
+                    <div class="section-divider">ISO 20816-3 Zone Limits</div>
+
+                    <div class="iso-limits-note">
+                        Enter zone boundary values from your copy of ISO 20816-3 Table 1.
+                        Defaults shown are indicative — verify against your standard.
+                    </div>
+
+                    <div class="input-group">
+                        <label for="machine_group">Machine Group (ISO 20816-3)</label>
+                        <select id="machine_group" name="machine_group" onchange="updateDefaultLimits()">
+                            <option value="1">Group 1 — Large machines, rigid foundation (&gt; 300 kW)</option>
+                            <option value="2" selected>Group 2 — Medium machines or flexible foundation</option>
+                            <option value="3">Group 3 — Pumps &amp; fans with separate driver</option>
+                        </select>
+                    </div>
+
+                    <div class="input-row-3">
+                        <div class="input-group">
+                            <label for="zone_ab">A/B Boundary (mm/s)</label>
+                            <input type="number" id="zone_ab" name="zone_ab" value="3.5" step="0.1" min="0.01">
+                        </div>
+                        <div class="input-group">
+                            <label for="zone_bc">B/C Boundary (mm/s)</label>
+                            <input type="number" id="zone_bc" name="zone_bc" value="7.1" step="0.1" min="0.01">
+                        </div>
+                        <div class="input-group">
+                            <label for="zone_cd">C/D Boundary (mm/s)</label>
+                            <input type="number" id="zone_cd" name="zone_cd" value="11.2" step="0.1" min="0.01">
+                        </div>
+                    </div>
+
+                    <!-- Advanced: History & Bearing Geometry -->
+                    <div class="advanced-section" id="advanced-inputs">
+                        <div class="section-divider">Baseline &amp; History</div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="baseline_value">Baseline Value (same units)</label>
+                                <input type="number" id="baseline_value" name="baseline_value" value="0" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Previous known-good measurement at this location in the same units. Leave 0 if not available.">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="previous_value">Previous Measurement</label>
+                                <input type="number" id="previous_value" name="previous_value" value="0" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Most recent prior measurement at same location for trend assessment. Leave 0 if not available.">?</span>
+                            </div>
+                        </div>
+
+                        <div class="section-divider">Bearing Geometry (for BPFO/BPFI/BSF/FTF)</div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="bearing_roller_count">Number of Rolling Elements</label>
+                                <input type="number" id="bearing_roller_count" name="bearing_roller_count" value="0" step="1" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Number of balls or rollers. Leave 0 to skip bearing frequency calculation.">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="bearing_contact_angle_deg">Contact Angle (°)</label>
+                                <input type="number" id="bearing_contact_angle_deg" name="bearing_contact_angle_deg" value="0" step="1" min="0" max="45">
+                                <span class="tooltip-trigger" data-tooltip="Bearing contact angle in degrees. 0° for radial bearings, 15–25° for angular contact bearings.">?</span>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="bearing_pitch_dia_mm">Pitch Circle Diameter (mm)</label>
+                                <input type="number" id="bearing_pitch_dia_mm" name="bearing_pitch_dia_mm" value="0" step="0.1" min="0">
+                            </div>
+                            <div class="input-group">
+                                <label for="bearing_roller_dia_mm">Rolling Element Diameter (mm)</label>
+                                <input type="number" id="bearing_roller_dia_mm" name="bearing_roller_dia_mm" value="0" step="0.1" min="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" style="margin-top: 20px;" onclick="runCalculation()">
+                        Evaluate Vibration
+                    </button>
+                </form>
+            </section>
+
+            <!-- ============== OUTPUTS ============== -->
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'tab-zone')">Zone Classification</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-faults')">Fault Triage</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-steps')">Next Steps</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-report')">Report</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-background')">Background</button>
+                </div>
+
+                <!-- Placeholder -->
+                <p id="results-placeholder">Enter machine parameters and press <strong>Evaluate Vibration</strong> to see results.</p>
+                <div id="error-display" class="error-message" style="display: none;"></div>
+
+                <!-- Zone Classification Tab -->
+                <div id="tab-zone" class="tab-content">
+                    <div id="scope-warnings" style="display:none;"></div>
+
+                    <div id="zone-banner" class="zone-banner" style="display:none;">
+                        <div class="zone-badge" id="zone-badge">—</div>
+                        <div class="zone-content">
+                            <h4 id="zone-label">—</h4>
+                            <p id="zone-detail">—</p>
+                            <p class="zone-action" id="zone-action">—</p>
+                        </div>
+                    </div>
+
+                    <div id="zone-bar-section" style="display:none;">
+                        <div class="zone-bar-container">
+                            <div class="zone-bar-track">
+                                <div class="zone-segment zone-a" id="seg-a">A</div>
+                                <div class="zone-segment zone-b" id="seg-b">B</div>
+                                <div class="zone-segment zone-c" id="seg-c">C</div>
+                                <div class="zone-segment zone-d" id="seg-d">D</div>
+                            </div>
+                            <div class="zone-needle" id="zone-needle"></div>
+                            <div class="zone-bar-labels">
+                                <span>0</span>
+                                <span id="bar-ab-label">—</span>
+                                <span id="bar-bc-label">—</span>
+                                <span id="bar-cd-label">—</span>
+                                <span id="bar-max-label">—</span>
+                            </div>
+                        </div>
+                        <div class="zone-bar-value-label" id="zone-value-label">—</div>
+                    </div>
+
+                    <div id="standard-info" style="margin-bottom: 16px; display:none;">
+                        <p style="font-size: 0.85rem; margin-bottom: 4px;">
+                            <strong>Standard:</strong> <span id="applicable-standard">—</span>
+                        </p>
+                        <p style="font-size: 0.85rem; margin-bottom: 0;">
+                            <strong>Machine Group:</strong> <span id="machine-group-desc">—</span>
+                        </p>
+                    </div>
+
+                    <div id="delta-grid" class="delta-grid" style="display:none;">
+                        <div class="delta-card">
+                            <div class="delta-label">vs Baseline</div>
+                            <div class="delta-value" id="delta-baseline">N/A</div>
+                            <div id="delta-baseline-trend" style="display:none;"></div>
+                        </div>
+                        <div class="delta-card">
+                            <div class="delta-label">Trend (vs Previous)</div>
+                            <div class="delta-value" id="delta-previous">N/A</div>
+                            <div id="trend-badge-container"></div>
+                        </div>
+                    </div>
+
+                    <div id="conversion-note-box" style="display:none; font-size: 0.82rem; color: var(--text-light); padding: 8px 12px; background: var(--primary-light); border-radius: 6px; margin-top: 8px;"></div>
+                </div>
+
+                <!-- Fault Triage Tab -->
+                <div id="tab-faults" class="tab-content">
+                    <h3 style="margin-bottom: 4px;">Probable Fault Candidates</h3>
+                    <p style="font-size: 0.85rem; margin-bottom: 16px;">
+                        Ranked by pattern match score. Expand each card for frequency indicators and follow-up actions.
+                    </p>
+                    <div id="fault-cards-container">
+                        <p style="color: var(--text-light);">Run evaluation to see fault triage results.</p>
+                    </div>
+
+                    <div id="bearing-freqs-section" style="display:none; margin-top: 20px;">
+                        <h4 style="margin-bottom: 8px;">Bearing Defect Frequencies</h4>
+                        <table class="freq-table" id="bearing-freq-table">
+                            <thead>
+                                <tr>
+                                    <th>Frequency</th>
+                                    <th>Name</th>
+                                    <th>Hz</th>
+                                    <th>× Shaft</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bearing-freq-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Next Steps Tab -->
+                <div id="tab-steps" class="tab-content">
+                    <h3 style="margin-bottom: 12px;">Prioritised Next Steps</h3>
+                    <ol class="steps-list" id="steps-list">
+                        <p style="color: var(--text-light);">Run evaluation to see recommended actions.</p>
+                    </ol>
+                </div>
+
+                <!-- Report Tab -->
+                <div id="tab-report" class="tab-content">
+                    <div class="report-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="copyReport()">Copy to Clipboard</button>
+                        <button class="btn btn-secondary btn-sm" onclick="printReport()">Print</button>
+                    </div>
+                    <pre class="report-text" id="report-text">Run evaluation to generate report.</pre>
+                </div>
+
+                <!-- Background Tab -->
+                <div id="tab-background" class="tab-content">
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-overview">Overview</a></li>
+                            <li><a href="#bg-iso">ISO 20816 Zone System</a></li>
+                            <li><a href="#bg-vdi">VDI 3839 Fault Signatures</a></li>
+                            <li><a href="#bg-bearing">Bearing Defect Frequencies</a></li>
+                            <li><a href="#bg-limits">Limitations</a></li>
+                            <li><a href="#bg-references">References</a></li>
+                        </ol>
+                    </div>
+
+                    <div id="bg-overview" class="bg-section">
+                        <h3>1. Overview</h3>
+                        <p>
+                            Vibration monitoring of rotating machinery requires answering two questions sequentially:
+                            <em>Is the vibration level acceptable?</em> and <em>Why is it this high?</em>
+                            ISO 20816 answers the first; VDI 3839 answers the second.
+                        </p>
+                        <div class="callout-info">
+                            <strong>ISO 20816</strong> classifies severity into zones A–D based on broadband velocity RMS.
+                            <strong>VDI 3839</strong> maps vibration patterns (frequency, direction, amplitude) to root causes.
+                        </div>
+                    </div>
+
+                    <div id="bg-iso" class="bg-section">
+                        <h3>2. ISO 20816 Zone System</h3>
+                        <p>ISO 20816-3 defines four evaluation zones for broadband vibration velocity RMS (mm/s):</p>
+                        <ul style="padding-left: 20px; margin-bottom: 1em;">
+                            <li><strong>Zone A:</strong> New or recently serviced machinery — normal baseline condition.</li>
+                            <li><strong>Zone B:</strong> Acceptable for unrestricted long-term continuous operation.</li>
+                            <li><strong>Zone C:</strong> Unsatisfactory for continuous operation — short-term acceptable; investigate.</li>
+                            <li><strong>Zone D:</strong> Vibration severe enough to cause damage — immediate action required.</li>
+                        </ul>
+                        <div class="callout-warning">
+                            <strong>Important:</strong> Zone boundaries depend on machine group and foundation type.
+                            Always use values from your own copy of ISO 20816-3 Table 1.
+                            This tool does not republish copyrighted threshold tables.
+                        </div>
+                    </div>
+
+                    <div id="bg-vdi" class="bg-section">
+                        <h3>3. VDI 3839 Fault Signatures</h3>
+                        <p>VDI 3839 provides diagnostic guidelines mapping vibration patterns to fault types:</p>
+                        <ul style="padding-left: 20px; margin-bottom: 1em;">
+                            <li><strong>VDI 3839-2 (Unbalance):</strong> Dominant 1× RPM in radial direction; amplitude proportional to speed².</li>
+                            <li><strong>VDI 3839-3 (Misalignment):</strong> Angular: high axial at 1× and 2×. Parallel: radial 2× dominant. Phase 180° across coupling.</li>
+                            <li><strong>VDI 3839-4 (Looseness):</strong> Sub-harmonics (0.5×) and/or many harmonics; unstable phase.</li>
+                            <li><strong>VDI 3839-5 (Bearing Defects):</strong> BPFO, BPFI, BSF, FTF frequencies; high-frequency acceleration elevated.</li>
+                        </ul>
+                        <div class="callout-info">
+                            <strong>Single measurement limitation:</strong> Fault differentiation improves significantly with measurements in all three directions (H, V, axial) and phase data. A single broadband value provides plausibility ranking only.
+                        </div>
+                    </div>
+
+                    <div id="bg-bearing" class="bg-section">
+                        <h3>4. Bearing Defect Frequencies</h3>
+                        <p>Rolling element bearing defect frequencies can be calculated from bearing geometry:</p>
+
+                        <div class="equation-card">
+                            <strong>Ball Pass Frequency — Outer Race (BPFO)</strong>
+                            <span class="equation-expression">$$ BPFO = \frac{N_r}{2} \cdot f_s \left(1 - \frac{d_r}{d_p}\cos\alpha\right) $$</span>
+                            <ul>
+                                <li>\(N_r\): Number of rolling elements</li>
+                                <li>\(f_s\): Shaft frequency (Hz) = RPM / 60</li>
+                                <li>\(d_r\): Rolling element diameter (mm)</li>
+                                <li>\(d_p\): Pitch circle diameter (mm)</li>
+                                <li>\(\alpha\): Contact angle (degrees)</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Ball Pass Frequency — Inner Race (BPFI)</strong>
+                            <span class="equation-expression">$$ BPFI = \frac{N_r}{2} \cdot f_s \left(1 + \frac{d_r}{d_p}\cos\alpha\right) $$</span>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Ball Spin Frequency (BSF)</strong>
+                            <span class="equation-expression">$$ BSF = \frac{d_p}{2 d_r} \cdot f_s \left[1 - \left(\frac{d_r}{d_p}\right)^2 \cos^2\alpha\right] $$</span>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Fundamental Train (Cage) Frequency (FTF)</strong>
+                            <span class="equation-expression">$$ FTF = \frac{f_s}{2} \left(1 - \frac{d_r}{d_p}\cos\alpha\right) $$</span>
+                        </div>
+                    </div>
+
+                    <div id="bg-limits" class="bg-section">
+                        <h3>5. Limitations</h3>
+                        <ul style="padding-left: 20px;">
+                            <li>Fault scoring is based on measurement direction and bearing type only — it is a <em>plausibility ranking</em>, not a diagnosis. Confirmation requires spectrum analysis, phase measurement, and multiple measurement points.</li>
+                            <li>Zone classification uses broadband velocity RMS. ISO 20816-3 may specify narrower frequency bands for specific machine types.</li>
+                            <li>Unit conversions (displacement → velocity, acceleration → velocity) are approximate single-frequency conversions and introduce error for broadband signals.</li>
+                            <li>ISO 20816-9 (gear units) and ISO 20816-8 (reciprocating compressors) have their own scope and limits — this tool applies ISO 20816-3 heuristics only for those machine types.</li>
+                        </ul>
+                    </div>
+
+                    <div id="bg-references" class="bg-section">
+                        <h3>6. References</h3>
+                        <ul style="padding-left: 20px;">
+                            <li>ISO 20816-3: Mechanical vibration — Measurement and evaluation of machine vibration, Part 3: Industrial machines with nominal power above 15 kW and nominal speeds between 120 r/min and 15 000 r/min.</li>
+                            <li>VDI 3839-2: Instructions for measuring and interpreting vibration on machines — Unbalance.</li>
+                            <li>VDI 3839-3: Instructions for measuring and interpreting vibration on machines — Misalignment.</li>
+                            <li>VDI 3839-4: Instructions for measuring and interpreting vibration on machines — Looseness.</li>
+                            <li>VDI 3839-5: Instructions for measuring and interpreting vibration on machines — Rolling element bearings.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        // =================================================================
+        // CONFIG
+        // =================================================================
+        const TOOL_MODULE_NAME = 'vibration_severity';
+        const STORAGE_KEY = 'vibration-severity-triage-settings';
+
+        const DEFAULT_LIMITS = {
+            '1': { ab: 2.3, bc: 4.5, cd: 7.1 },
+            '2': { ab: 3.5, bc: 7.1, cd: 11.2 },
+            '3': { ab: 3.5, bc: 7.1, cd: 11.2 },
+        };
+
+        const QUANTITY_UNITS = {
+            velocity_rms: 'mm/s RMS',
+            displacement_pp: 'µm pk-pk',
+            accel_rms: 'm/s² RMS',
+        };
+
+        let pyodide = null;
+        let lastResults = null;
+
+        const defaultSettings = { theme: 'system', density: 'comfortable', expertMode: false };
+        let settings = { ...defaultSettings };
+
+        // =================================================================
+        // SETTINGS
+        // =================================================================
+        function saveSettings() { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); }
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) { try { settings = { ...defaultSettings, ...JSON.parse(stored) }; } catch(e) {} }
+        }
+        function applySettings() {
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+            setSegmentedActive('[data-theme]', settings.theme, 'theme');
+            setSegmentedActive('[data-density]', settings.density, 'density');
+            applyExpertMode();
+        }
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(`.settings-panel ${selector}`).forEach(btn => {
+                btn.classList.toggle('active', btn.dataset[dataAttr] === value);
+            });
+        }
+        function toggleSettingsPanel(open) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = open ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+        }
+        function bindSettingsControls() {
+            document.querySelectorAll('.settings-panel [data-theme]').forEach(btn =>
+                btn.addEventListener('click', () => { settings.theme = btn.dataset.theme; saveSettings(); applySettings(); }));
+            document.querySelectorAll('.settings-panel [data-density]').forEach(btn =>
+                btn.addEventListener('click', () => { settings.density = btn.dataset.density; saveSettings(); applySettings(); }));
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings }; saveSettings(); applySettings();
+            });
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleSettingsPanel(false); });
+        }
+
+        // =================================================================
+        // UI HELPERS
+        // =================================================================
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            if (window.MathJax && window.MathJax.typesetPromise) MathJax.typesetPromise();
+        }
+
+        function toggleExpertMode() {
+            const toggle = document.getElementById('expert-mode-toggle');
+            settings.expertMode = toggle.checked;
+            saveSettings();
+            applyExpertMode();
+        }
+        function applyExpertMode() {
+            const toggle = document.getElementById('expert-mode-toggle');
+            const status = document.getElementById('expert-mode-status');
+            toggle.checked = settings.expertMode;
+            status.textContent = settings.expertMode ? 'On' : 'Off';
+            document.body.classList.toggle('expert-mode', settings.expertMode);
+        }
+
+        function updateUnitsLabel() {
+            const qty = document.getElementById('vibration_quantity').value;
+            document.getElementById('measured-value-label').textContent =
+                `Measured Value (${QUANTITY_UNITS[qty] || qty})`;
+        }
+
+        function updateDefaultLimits() {
+            const group = document.getElementById('machine_group').value;
+            const limits = DEFAULT_LIMITS[group] || DEFAULT_LIMITS['2'];
+            document.getElementById('zone_ab').value = limits.ab;
+            document.getElementById('zone_bc').value = limits.bc;
+            document.getElementById('zone_cd').value = limits.cd;
+        }
+
+        function toggleFaultCard(id) {
+            const card = document.getElementById('fault-card-' + id);
+            card.classList.toggle('open');
+        }
+
+        // =================================================================
+        // PYODIDE INIT
+        // =================================================================
+        async function main() {
+            loadSettings();
+            applySettings();
+            bindSettingsControls();
+
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.loadPackage('micropip');
+
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import ${TOOL_MODULE_NAME}
+                `);
+
+                document.getElementById('loading-overlay').classList.add('hidden');
+            } catch (err) {
+                loadingText.textContent = 'Error loading: ' + err.message;
+                console.error(err);
+            }
+        }
+
+        // =================================================================
+        // CALCULATION
+        // =================================================================
+        async function runCalculation() {
+            if (!pyodide) { alert('Pyodide not loaded yet. Please wait.'); return; }
+
+            const btn = document.getElementById('calculate-btn');
+            btn.disabled = true;
+            btn.textContent = 'Evaluating...';
+
+            document.getElementById('error-display').style.display = 'none';
+            document.getElementById('results-placeholder').style.display = 'none';
+
+            try {
+                const params = {
+                    machine_type: document.getElementById('machine_type').value,
+                    nominal_power_kw: parseFloat(document.getElementById('nominal_power_kw').value),
+                    rated_rpm: parseFloat(document.getElementById('rated_rpm').value),
+                    operating_rpm: parseFloat(document.getElementById('operating_rpm').value),
+                    bearing_type_de: document.getElementById('bearing_type_de').value,
+                    mounting: document.getElementById('mounting').value,
+                    measurement_direction: document.getElementById('measurement_direction').value,
+                    vibration_quantity: document.getElementById('vibration_quantity').value,
+                    measured_value: parseFloat(document.getElementById('measured_value').value),
+                    machine_group: document.getElementById('machine_group').value,
+                    zone_ab: parseFloat(document.getElementById('zone_ab').value),
+                    zone_bc: parseFloat(document.getElementById('zone_bc').value),
+                    zone_cd: parseFloat(document.getElementById('zone_cd').value),
+                    baseline_value: parseFloat(document.getElementById('baseline_value').value) || 0,
+                    previous_value: parseFloat(document.getElementById('previous_value').value) || 0,
+                    bearing_roller_count: parseFloat(document.getElementById('bearing_roller_count').value) || 0,
+                    bearing_pitch_dia_mm: parseFloat(document.getElementById('bearing_pitch_dia_mm').value) || 0,
+                    bearing_roller_dia_mm: parseFloat(document.getElementById('bearing_roller_dia_mm').value) || 0,
+                    bearing_contact_angle_deg: parseFloat(document.getElementById('bearing_contact_angle_deg').value) || 0,
+                };
+
+                // Build Python call
+                const pyCall = `
+import json
+result = vibration_severity.evaluate_vibration(
+    machine_type="${params.machine_type}",
+    nominal_power_kw=${params.nominal_power_kw},
+    rated_rpm=${params.rated_rpm},
+    operating_rpm=${params.operating_rpm},
+    bearing_type_de="${params.bearing_type_de}",
+    mounting="${params.mounting}",
+    measurement_direction="${params.measurement_direction}",
+    vibration_quantity="${params.vibration_quantity}",
+    measured_value=${params.measured_value},
+    machine_group="${params.machine_group}",
+    zone_ab=${params.zone_ab},
+    zone_bc=${params.zone_bc},
+    zone_cd=${params.zone_cd},
+    baseline_value=${params.baseline_value},
+    previous_value=${params.previous_value},
+    bearing_roller_count=${params.bearing_roller_count},
+    bearing_pitch_dia_mm=${params.bearing_pitch_dia_mm},
+    bearing_roller_dia_mm=${params.bearing_roller_dia_mm},
+    bearing_contact_angle_deg=${params.bearing_contact_angle_deg},
+)
+json.dumps(result)
+                `;
+
+                const resultJson = await pyodide.runPythonAsync(pyCall);
+                const results = JSON.parse(resultJson);
+                lastResults = { results, params };
+                displayResults(results, params);
+
+            } catch (err) {
+                const errEl = document.getElementById('error-display');
+                errEl.textContent = 'Error: ' + (err.message || String(err));
+                errEl.style.display = 'block';
+                document.getElementById('results-placeholder').style.display = 'block';
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Evaluate Vibration';
+            }
+        }
+
+        // =================================================================
+        // DISPLAY RESULTS
+        // =================================================================
+        function displayResults(r, params) {
+            // Switch to zone tab and show it
+            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+            document.getElementById('tab-zone').style.display = 'block';
+            document.querySelector('[onclick*="tab-zone"]').classList.add('active');
+
+            // --- Zone Banner ---
+            const banner = document.getElementById('zone-banner');
+            const cssClass = r.zone_css_class;
+            banner.className = `zone-banner ${cssClass}`;
+            document.getElementById('zone-badge').textContent = r.zone;
+            document.getElementById('zone-label').textContent = r.zone_label;
+            document.getElementById('zone-detail').textContent = r.zone_detail;
+            document.getElementById('zone-action').textContent = r.zone_action;
+            banner.style.display = 'flex';
+
+            // --- Standard info ---
+            document.getElementById('applicable-standard').textContent = r.applicable_standard;
+            document.getElementById('machine-group-desc').textContent = r.machine_group_description;
+            document.getElementById('standard-info').style.display = 'block';
+
+            // --- Zone bar ---
+            const ab = params.zone_ab, bc = params.zone_bc, cd = params.zone_cd;
+            const maxVal = cd * 1.5;
+            const totalWidth = maxVal;
+            document.getElementById('seg-a').style.flex = String(ab / totalWidth);
+            document.getElementById('seg-b').style.flex = String((bc - ab) / totalWidth);
+            document.getElementById('seg-c').style.flex = String((cd - bc) / totalWidth);
+            document.getElementById('seg-d').style.flex = String((maxVal - cd) / totalWidth);
+            document.getElementById('bar-ab-label').textContent = ab.toFixed(1);
+            document.getElementById('bar-bc-label').textContent = bc.toFixed(1);
+            document.getElementById('bar-cd-label').textContent = cd.toFixed(1);
+            document.getElementById('bar-max-label').textContent = maxVal.toFixed(1) + ' mm/s';
+
+            const needlePct = Math.min(100, (r.value_for_comparison / maxVal) * 100);
+            document.getElementById('zone-needle').style.left = `calc(${needlePct}% - 8px)`;
+            document.getElementById('zone-value-label').textContent =
+                `Measured: ${r.value_for_comparison.toFixed(3)} mm/s RMS (velocity equivalent)`;
+            document.getElementById('zone-bar-section').style.display = 'block';
+
+            // --- Conversion note ---
+            const convBox = document.getElementById('conversion-note-box');
+            if (r.conversion_note) {
+                convBox.textContent = 'Unit conversion: ' + r.conversion_note;
+                convBox.style.display = 'block';
+            } else {
+                convBox.style.display = 'none';
+            }
+
+            // --- Scope warnings ---
+            const scopeWarnings = JSON.parse(r.scope_warnings_json);
+            const warnContainer = document.getElementById('scope-warnings');
+            if (scopeWarnings.length > 0) {
+                warnContainer.innerHTML = scopeWarnings.map(w =>
+                    `<div class="scope-warning">${escHtml(w)}</div>`
+                ).join('');
+                warnContainer.style.display = 'block';
+            } else {
+                warnContainer.style.display = 'none';
+            }
+
+            // --- Delta cards ---
+            const deltaGrid = document.getElementById('delta-grid');
+            const deltaBaseline = document.getElementById('delta-baseline');
+            const deltaPrev = document.getElementById('delta-previous');
+            const trendBadge = document.getElementById('trend-badge-container');
+
+            if (params.baseline_value > 0) {
+                const sign = r.delta_baseline_abs >= 0 ? '+' : '';
+                deltaBaseline.textContent = `${sign}${r.delta_baseline_abs.toFixed(3)} mm/s (${sign}${r.delta_baseline_pct.toFixed(1)}%)`;
+                deltaBaseline.className = `delta-value ${r.delta_baseline_abs > 0 ? 'positive' : r.delta_baseline_abs < 0 ? 'negative' : 'neutral'}`;
+            } else {
+                deltaBaseline.textContent = 'No baseline set';
+                deltaBaseline.className = 'delta-value neutral';
+            }
+
+            if (params.previous_value > 0) {
+                const sign = r.delta_previous_abs >= 0 ? '+' : '';
+                deltaPrev.textContent = `${sign}${r.delta_previous_abs.toFixed(3)} mm/s (${sign}${r.delta_previous_pct.toFixed(1)}%)`;
+                deltaPrev.className = `delta-value ${r.delta_previous_abs > 0 ? 'positive' : r.delta_previous_abs < 0 ? 'negative' : 'neutral'}`;
+                const trendClass = { increasing: 'trend-increasing', decreasing: 'trend-decreasing', stable: 'trend-stable' }[r.trend] || '';
+                trendBadge.innerHTML = trendClass ? `<span class="trend-badge ${trendClass}">${r.trend}</span>` : '';
+            } else {
+                deltaPrev.textContent = 'No previous measurement';
+                deltaPrev.className = 'delta-value neutral';
+                trendBadge.innerHTML = '';
+            }
+            deltaGrid.style.display = 'grid';
+
+            // --- Fault Cards ---
+            const faultMatches = JSON.parse(r.fault_matches_json);
+            const container = document.getElementById('fault-cards-container');
+            if (faultMatches.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-light);">No fault signatures matched the input criteria.</p>';
+            } else {
+                container.innerHTML = faultMatches.map(fm => buildFaultCard(fm)).join('');
+            }
+
+            // --- Bearing frequencies ---
+            const bearingFreqs = r.bearing_freqs_json ? JSON.parse(r.bearing_freqs_json) : {};
+            const bearingSection = document.getElementById('bearing-freqs-section');
+            if (Object.keys(bearingFreqs).length > 0) {
+                const shaftHz = bearingFreqs.shaft_hz;
+                const rows = [
+                    ['Shaft (1×)', bearingFreqs.shaft_hz],
+                    ['BPFO', bearingFreqs.bpfo_hz],
+                    ['BPFI', bearingFreqs.bpfi_hz],
+                    ['BSF', bearingFreqs.bsf_hz],
+                    ['FTF (Cage)', bearingFreqs.ftf_hz],
+                ];
+                document.getElementById('bearing-freq-body').innerHTML = rows.map(([name, hz]) =>
+                    `<tr><td>${escHtml(name)}</td><td>${name}</td><td>${hz.toFixed(2)}</td><td>${(hz / shaftHz).toFixed(2)}×</td></tr>`
+                ).join('');
+                bearingSection.style.display = 'block';
+            } else {
+                bearingSection.style.display = 'none';
+            }
+
+            // --- Next Steps ---
+            const nextSteps = JSON.parse(r.next_steps_json);
+            const stepsList = document.getElementById('steps-list');
+            const isUrgent = r.zone === 'D';
+            const isWarning = r.zone === 'C';
+            stepsList.innerHTML = nextSteps.map((step, i) => {
+                const urgent = (i === 0 && isUrgent) ? ' urgent' : '';
+                return `<li class="step-item${urgent}"><span class="step-num">${String(i + 1).padStart(2, '0')}</span><span class="step-text">${escHtml(step)}</span></li>`;
+            }).join('');
+
+            // --- Report ---
+            document.getElementById('report-text').textContent = r.report_text;
+        }
+
+        function buildFaultCard(fm) {
+            const matchedHtml = fm.matched_indicators.map(m =>
+                `<li>${escHtml(m)}</li>`).join('');
+            const contraHtml = fm.contra_indicators.length > 0 ?
+                `<div class="fault-indicators">
+                    <h5>Contra-indicators</h5>
+                    <ul class="indicator-list contra">${fm.contra_indicators.map(c => `<li>${escHtml(c)}</li>`).join('')}</ul>
+                </div>` : '';
+            const followUpHtml = fm.follow_up.map((a, i) =>
+                `<li>${escHtml(a)}</li>`).join('');
+
+            return `
+            <div class="fault-card" id="fault-card-${fm.fault_id}">
+                <div class="fault-card-header" onclick="toggleFaultCard('${fm.fault_id}')">
+                    <div class="fault-rank">#${fm.rank}</div>
+                    <div class="fault-info">
+                        <div class="fault-name">${escHtml(fm.display_name)}</div>
+                        <div class="fault-ref">${escHtml(fm.vdi_reference)}</div>
+                    </div>
+                    <span class="confidence-badge conf-${fm.confidence}">${fm.confidence}</span>
+                    <span class="fault-expand-icon">▼</span>
+                </div>
+                <div class="fault-card-body">
+                    <div class="fault-detail-row">
+                        <span class="fault-detail-key">Description</span>
+                        <span class="fault-detail-val">${escHtml(fm.short_description)}</span>
+                    </div>
+                    <div class="fault-detail-row">
+                        <span class="fault-detail-key">Key Frequencies</span>
+                        <span class="fault-detail-val">${escHtml(fm.primary_freq)}</span>
+                    </div>
+                    <div class="fault-detail-row">
+                        <span class="fault-detail-key">Direction Pattern</span>
+                        <span class="fault-detail-val">${escHtml(fm.direction_pattern)}</span>
+                    </div>
+                    <div class="fault-detail-row">
+                        <span class="fault-detail-key">Speed Dependency</span>
+                        <span class="fault-detail-val">${escHtml(fm.speed_dependency)}</span>
+                    </div>
+                    <div class="fault-indicators">
+                        <h5>Supporting Evidence</h5>
+                        <ul class="indicator-list matched">${matchedHtml}</ul>
+                    </div>
+                    ${contraHtml}
+                    <div class="follow-up-list">
+                        <h5>Recommended Follow-Up Measurements</h5>
+                        <ol>${followUpHtml}</ol>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function escHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // =================================================================
+        // REPORT ACTIONS
+        // =================================================================
+        function copyReport() {
+            const text = document.getElementById('report-text').textContent;
+            navigator.clipboard.writeText(text).then(() => alert('Report copied to clipboard.'));
+        }
+
+        function printReport() {
+            const text = document.getElementById('report-text').textContent;
+            const win = window.open('', '_blank');
+            win.document.write(`<html><head><title>Vibration Evaluation Report</title>
+                <style>body{font-family:monospace;font-size:12px;padding:20px;white-space:pre-wrap;}</style>
+                </head><body>${escHtml(text)}</body></html>`);
+            win.document.close();
+            win.print();
+        }
+
+        // =================================================================
+        // INIT
+        // =================================================================
+        main();
+    </script>
+</body>
+</html>

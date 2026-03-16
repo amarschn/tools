@@ -368,6 +368,20 @@ def _cycles_to_hours(cycles: float, load_frequency_hz: float) -> float:
     return cycles / (load_frequency_hz * 3600.0)
 
 
+def _compute_life_cycles(
+    equivalent_stress_mpa: float,
+    fatigue_strength_coeff_mpa: float,
+    fatigue_strength_exponent: float,
+    endurance_limit_mpa: float,
+    has_endurance_limit: bool,
+) -> float:
+    if has_endurance_limit and equivalent_stress_mpa <= endurance_limit_mpa:
+        return float("inf")
+    return 0.5 * (equivalent_stress_mpa / fatigue_strength_coeff_mpa) ** (
+        1.0 / fatigue_strength_exponent
+    )
+
+
 def _evaluate_single_case(
     max_stress_mpa: float,
     min_stress_mpa: float,
@@ -977,3 +991,629 @@ def estimate_fatigue_life(
     }
 
     return output
+
+def explore_mean_stress_methods(
+    alternating_stress_mpa: float,
+    mean_stress_mpa: float,
+    ultimate_strength_mpa: float,
+    yield_strength_mpa: float,
+    endurance_limit_ratio: float = 0.5,
+    surface_factor: float = 1.0,
+    size_factor: float = 1.0,
+    reliability_factor: float = 1.0,
+    fatigue_strength_coeff_ratio: float = 1.55,
+    fatigue_strength_exponent: float = -0.090,
+    target_life_cycles: float = 1e6,
+    load_frequency_hz: float = 2.0,
+    material_family: str = "metal",
+    material_preset: str = "steel_1045",
+    reference_basis: str = "target_life",
+    enabled_methods: str = "none,goodman,gerber,soderberg",
+    sweep_min_mpa: float = -100.0,
+    sweep_max_mpa: float = 400.0,
+    n_sweep_points: int = 81,
+) -> Dict[str, Any]:
+    r"""
+    Compare Goodman, Gerber, Soderberg, and no-correction mean-stress methods
+    for a single uniaxial constant-amplitude operating point.
+
+    Returns a complete dict including a comparison table, Haigh diagram data,
+    S-N plot data, sweep data, and spread metrics for all enabled methods.
+
+    ---Parameters---
+    alternating_stress_mpa : float
+        Stress amplitude sigma_a in MPa (half the cyclic stress range). Must be > 0.
+    mean_stress_mpa : float
+        Mean stress sigma_m in MPa. Positive = tensile mean stress.
+    ultimate_strength_mpa : float
+        Ultimate tensile strength S_ut in MPa.
+    yield_strength_mpa : float
+        Yield strength S_y in MPa.
+    endurance_limit_ratio : float
+        Ratio S_e' / S_ut before modifying factors.
+    surface_factor : float
+        Surface finish factor k_s (dimensionless, <= 1.0 typical).
+    size_factor : float
+        Size factor k_d (dimensionless, <= 1.0 typical).
+    reliability_factor : float
+        Reliability factor k_r (dimensionless, <= 1.0 typical).
+    fatigue_strength_coeff_ratio : float
+        Basquin coefficient ratio sigma_f' / S_ut.
+    fatigue_strength_exponent : float
+        Basquin exponent b (must be negative).
+    target_life_cycles : float
+        Target life in cycles for pass/fail assessment.
+    load_frequency_hz : float
+        Cyclic loading frequency in Hz for hours conversion.
+    material_family : str
+        Material family: metal or polymer (metal for v1).
+    material_preset : str
+        Preset key or custom. Controls supports_endurance_limit and display name.
+    reference_basis : str
+        Stress basis for Haigh diagram envelopes and fatigue safety factor:
+        target_life or endurance_limit.
+    enabled_methods : str
+        Comma-separated list of methods to compare. Valid values:
+        none, goodman, gerber, soderberg.
+    sweep_min_mpa : float
+        Minimum mean stress for the Haigh diagram x-axis and sweep arrays.
+    sweep_max_mpa : float
+        Maximum mean stress for the Haigh diagram x-axis and sweep arrays.
+    n_sweep_points : int
+        Number of points in sweep and Haigh envelope arrays (>= 2).
+
+    ---Returns---
+    sigma_max_mpa : float
+        Maximum stress sigma_max = sigma_m + sigma_a.
+    sigma_min_mpa : float
+        Minimum stress sigma_min = sigma_m - sigma_a.
+    alternating_stress_mpa : float
+        Input alternating stress amplitude.
+    mean_stress_mpa : float
+        Input mean stress.
+    stress_ratio : float
+        Stress ratio R = sigma_min / sigma_max.
+    ultimate_strength_mpa : float
+        Resolved ultimate tensile strength.
+    yield_strength_mpa : float
+        Resolved yield strength.
+    endurance_limit_mpa : float
+        Modified endurance limit S_e = S_e' * k_s * k_d * k_r.
+    fatigue_strength_coeff_mpa : float
+        Basquin fatigue strength coefficient sigma_f' in MPa.
+    reference_basis : str
+        Actual reference basis used (may differ from requested if fallback needed).
+    reference_stress_mpa : float
+        Reference alternating stress shared by all method envelope curves.
+    comparison_table : list
+        One row per enabled method with equivalent stress, life, safety factors, validity.
+    haigh_diagram_data : dict
+        Shared x-axis and per-method envelope arrays for the Haigh diagram.
+    sn_plot_data : dict
+        S-N curve and per-method operating points.
+    sweep_data : dict
+        Life, allowable, and equivalent stress arrays vs. mean stress sweep.
+    most_conservative_method : str
+        Method with highest equivalent stress among valid methods.
+    least_conservative_method : str
+        Method with lowest equivalent stress among valid methods.
+    life_spread_ratio : float
+        max(finite_lives) / min(finite_lives) among valid methods (1.0 if uniform).
+    equivalent_stress_spread_pct : float
+        Percent spread in equivalent stress among valid methods.
+    warnings : list
+        Global warnings about the operating point or material inputs.
+    subst_sigma_max_mpa : str
+        Substituted equation for sigma_max.
+    subst_stress_ratio : str
+        Substituted equation for stress ratio R.
+    subst_reference_stress_mpa : str
+        Substituted equation for the reference stress.
+
+    ---LaTeX---
+    \sigma_{max} = \sigma_m + \sigma_a
+    \sigma_{min} = \sigma_m - \sigma_a
+    R = \sigma_{min} / \sigma_{max}
+    S_e = S_e' \cdot k_s \cdot k_d \cdot k_r
+    \sigma_{a,eq} = \frac{\sigma_a}{1 - \sigma_m / S_{ut}}
+    \sigma_{a,eq} = \frac{\sigma_a}{1 - (\sigma_m / S_{ut})^2}
+    \sigma_{a,eq} = \frac{\sigma_a}{1 - \sigma_m / S_y}
+    N = \frac{1}{2} \left( \frac{\sigma_{a,eq}}{\sigma_f'} \right)^{1/b}
+    """
+    # --- 1. Parse and validate enabled_methods ---
+    VALID_METHODS = {"none", "goodman", "gerber", "soderberg"}
+    raw_methods = [m.strip().lower() for m in enabled_methods.split(",") if m.strip()]
+    if not raw_methods:
+        raise ValueError("enabled_methods must include at least one method.")
+    unknown = set(raw_methods) - VALID_METHODS
+    if unknown:
+        raise ValueError(
+            f"Unknown method(s): {', '.join(sorted(unknown))}. "
+            f"Valid options: {', '.join(sorted(VALID_METHODS))}."
+        )
+    seen: set = set()
+    methods: List[str] = [m for m in raw_methods if not (m in seen or seen.add(m))]  # type: ignore[func-returns-value]
+
+    # --- 2. Validate global inputs ---
+    if alternating_stress_mpa <= 0:
+        raise ValueError("alternating_stress_mpa must be > 0.")
+    if fatigue_strength_exponent >= 0.0:
+        raise ValueError("fatigue_strength_exponent must be negative.")
+    if target_life_cycles <= 0:
+        raise ValueError("target_life_cycles must be > 0.")
+    if n_sweep_points < 2:
+        raise ValueError("n_sweep_points must be >= 2.")
+    if sweep_max_mpa <= sweep_min_mpa:
+        raise ValueError("sweep_max_mpa must be > sweep_min_mpa.")
+    _validate_positive("ultimate_strength_mpa", ultimate_strength_mpa)
+    _validate_positive("yield_strength_mpa", yield_strength_mpa)
+    _validate_positive("surface_factor", surface_factor)
+    _validate_positive("size_factor", size_factor)
+    _validate_positive("reliability_factor", reliability_factor)
+    _validate_positive("fatigue_strength_coeff_ratio", fatigue_strength_coeff_ratio)
+    _validate_positive("load_frequency_hz", load_frequency_hz)
+
+    reference_basis_clean = reference_basis.strip().lower()
+    if reference_basis_clean not in {"target_life", "endurance_limit"}:
+        raise ValueError("reference_basis must be 'target_life' or 'endurance_limit'.")
+
+    # --- 3. Resolve material ---
+    resolved = _resolve_material_properties(
+        material_family=material_family,
+        material_preset=material_preset,
+        ultimate_strength_mpa=ultimate_strength_mpa,
+        yield_strength_mpa=yield_strength_mpa,
+        endurance_limit_ratio=endurance_limit_ratio,
+        surface_factor=surface_factor,
+        size_factor=size_factor,
+        reliability_factor=reliability_factor,
+        fatigue_strength_coeff_ratio=fatigue_strength_coeff_ratio,
+        fatigue_strength_exponent=fatigue_strength_exponent,
+    )
+
+    S_ut = float(resolved["ultimate_strength_mpa"])
+    S_y = float(resolved["yield_strength_mpa"])
+    b = float(resolved["fatigue_strength_exponent"])
+
+    # --- 4. Derived material quantities ---
+    endurance_limit_mpa = (
+        float(resolved["endurance_limit_ratio"])
+        * S_ut
+        * float(resolved["surface_factor"])
+        * float(resolved["size_factor"])
+        * float(resolved["reliability_factor"])
+    )
+    fatigue_strength_coeff_mpa = float(resolved["fatigue_strength_coeff_ratio"]) * S_ut
+
+    supports_endurance_limit = bool(resolved["supports_endurance_limit"])
+    if not supports_endurance_limit:
+        endurance_limit_mpa = 0.0
+    has_endurance_limit = supports_endurance_limit and endurance_limit_mpa > 0.0
+
+    # --- 5. Stress state ---
+    sigma_a = alternating_stress_mpa
+    sigma_m = mean_stress_mpa
+    sigma_max = sigma_m + sigma_a
+    sigma_min = sigma_m - sigma_a
+    stress_ratio = sigma_min / sigma_max if sigma_max != 0.0 else float("nan")
+
+    # --- 6. Reference stress ---
+    global_warnings: List[str] = []
+
+    if reference_basis_clean == "endurance_limit":
+        if has_endurance_limit:
+            reference_stress_mpa = endurance_limit_mpa
+            actual_reference_basis = "endurance_limit"
+        else:
+            global_warnings.append(
+                "Reference basis 'endurance_limit' requested but this material does not "
+                "support an endurance limit. Using 'target_life' basis instead."
+            )
+            reference_stress_mpa = fatigue_strength_coeff_mpa * (2.0 * target_life_cycles) ** b
+            actual_reference_basis = "target_life"
+    else:
+        reference_stress_mpa = fatigue_strength_coeff_mpa * (2.0 * target_life_cycles) ** b
+        actual_reference_basis = "target_life"
+
+    # --- 7. Global operating-point warnings ---
+    sy_gt_sut = S_y > S_ut
+    if sy_gt_sut:
+        global_warnings.append(
+            f"yield_strength_mpa ({S_y:.0f} MPa) > ultimate_strength_mpa ({S_ut:.0f} MPa). "
+            "This is non-physical for standard metals. Review material inputs."
+        )
+
+    if sigma_m < 0.0:
+        global_warnings.append(
+            "Compressive mean stress benefit is model-sensitive and may be over-predicted "
+            "by classical correction formulas. Do not claim fatigue credit without "
+            "material-specific validation."
+        )
+
+    sigma_max_abs = max(abs(sigma_max), abs(sigma_min))
+    if sigma_max_abs >= S_ut:
+        global_warnings.append(
+            f"Peak stress ({sigma_max_abs:.0f} MPa) meets or exceeds ultimate strength "
+            f"({S_ut:.0f} MPa). Static fracture is predicted; fatigue analysis is not applicable."
+        )
+    elif sigma_max > S_y:
+        global_warnings.append(
+            f"sigma_max ({sigma_max:.0f} MPa) exceeds yield strength ({S_y:.0f} MPa). "
+            "Static yielding is likely on first cycle."
+        )
+
+    yield_safety_factor = S_y / sigma_max_abs if sigma_max_abs > 0.0 else float("inf")
+    subst_yield_sf = (
+        f"SF_y = \\frac{{S_y}}{{\\sigma_{{peak}}}}"
+        f" = \\frac{{{S_y:.1f}}}{{{sigma_max_abs:.1f}}}"
+        f" = {yield_safety_factor:.2f}"
+    )
+
+    # --- 8. Per-method comparison ---
+    comparison_table: List[Dict[str, Any]] = []
+    valid_rows: List[Dict[str, Any]] = []
+
+    for method in methods:
+        row_warnings: List[str] = []
+        validity_state = "valid"
+
+        # Compute denominator
+        if method == "none":
+            denom = 1.0
+        elif method == "goodman":
+            denom = 1.0 - sigma_m / S_ut
+        elif method == "gerber":
+            denom = 1.0 - (sigma_m / S_ut) ** 2
+        else:  # soderberg
+            denom = 1.0 - sigma_m / S_y
+
+        if denom <= 0.0:
+            validity_state = "invalid"
+            if method == "goodman":
+                row_warnings.append(
+                    f"Goodman denominator \u2264 0 (sigma_m \u2265 S_ut = {S_ut:.0f} MPa). "
+                    "Operating point is outside the valid Goodman envelope."
+                )
+            elif method == "gerber":
+                row_warnings.append(
+                    f"Gerber denominator \u2264 0 (|sigma_m| \u2265 S_ut = {S_ut:.0f} MPa). "
+                    "Operating point is outside the valid Gerber envelope."
+                )
+            else:  # soderberg
+                row_warnings.append(
+                    f"Soderberg denominator \u2264 0 (sigma_m \u2265 S_y = {S_y:.0f} MPa). "
+                    "Operating point is outside the valid Soderberg envelope."
+                )
+            comparison_table.append({
+                "method": method,
+                "equivalent_stress_mpa": None,
+                "estimated_life_cycles": None,
+                "estimated_life_hours": None,
+                "fatigue_safety_factor": None,
+                "yield_safety_factor": yield_safety_factor,
+                "allowable_alternating_stress_mpa": None,
+                "pass_target_life": False,
+                "validity_state": validity_state,
+                "warnings": row_warnings,
+                "subst_equivalent_stress_mpa": "\\text{Invalid: denominator} \\le 0",
+                "subst_estimated_life_cycles": "\\text{Invalid}",
+                "subst_yield_safety_factor": subst_yield_sf,
+            })
+            continue
+
+        # Method-level warnings for valid rows
+        if method == "soderberg" and sy_gt_sut:
+            validity_state = "warning"
+            row_warnings.append(
+                f"Soderberg uses S_y ({S_y:.0f} MPa) as the mean-stress limit. "
+                f"Since S_y > S_ut here, Soderberg is less conservative than Goodman, "
+                "which is non-physical for standard metals."
+            )
+
+        if sigma_m < 0.0 and validity_state == "valid":
+            validity_state = "warning"
+
+        if sigma_max_abs >= S_ut and validity_state == "valid":
+            validity_state = "warning"
+
+        # Equivalent stress
+        equiv_stress = sigma_a / denom
+
+        # Life
+        life = _compute_life_cycles(
+            equiv_stress, fatigue_strength_coeff_mpa, b, endurance_limit_mpa, has_endurance_limit
+        )
+
+        # Fatigue safety factor
+        fat_sf = reference_stress_mpa / equiv_stress if equiv_stress > 0.0 else float("inf")
+
+        # Allowable alternating stress at operating mean stress
+        if method == "none":
+            allow_alt = reference_stress_mpa
+        elif method == "goodman":
+            allow_alt = reference_stress_mpa * (1.0 - sigma_m / S_ut)
+        elif method == "gerber":
+            allow_alt = reference_stress_mpa * (1.0 - (sigma_m / S_ut) ** 2)
+        else:  # soderberg
+            allow_alt = reference_stress_mpa * (1.0 - sigma_m / S_y)
+
+        pass_life = math.isinf(life) or life >= target_life_cycles
+
+        # Substituted equations
+        if method == "none":
+            subst_eq = (
+                f"\\sigma_{{a,eq}} = \\sigma_a = {sigma_a:.1f}\\,\\text{{MPa}}"
+            )
+        elif method == "goodman":
+            subst_eq = (
+                f"\\sigma_{{a,eq}} = \\frac{{\\sigma_a}}{{1 - \\sigma_m/S_{{ut}}}}"
+                f" = \\frac{{{sigma_a:.1f}}}{{1 - {sigma_m:.1f}/{S_ut:.1f}}}"
+                f" = {equiv_stress:.1f}\\,\\text{{MPa}}"
+            )
+        elif method == "gerber":
+            subst_eq = (
+                f"\\sigma_{{a,eq}} = \\frac{{\\sigma_a}}{{1 - (\\sigma_m/S_{{ut}})^2}}"
+                f" = \\frac{{{sigma_a:.1f}}}{{1 - ({sigma_m:.1f}/{S_ut:.1f})^2}}"
+                f" = {equiv_stress:.1f}\\,\\text{{MPa}}"
+            )
+        else:  # soderberg
+            subst_eq = (
+                f"\\sigma_{{a,eq}} = \\frac{{\\sigma_a}}{{1 - \\sigma_m/S_{{y}}}}"
+                f" = \\frac{{{sigma_a:.1f}}}{{1 - {sigma_m:.1f}/{S_y:.1f}}}"
+                f" = {equiv_stress:.1f}\\,\\text{{MPa}}"
+            )
+
+        if math.isinf(life):
+            subst_life = "\\sigma_{a,eq} \\le S_e \\Rightarrow N_f \\to \\infty"
+        else:
+            exp_inv = 1.0 / b
+            subst_life = (
+                f"N = 0.5 \\left(\\frac{{\\sigma_{{a,eq}}}}{{\\sigma_f'}}\\right)^{{1/b}}"
+                f" = 0.5 \\left(\\frac{{{equiv_stress:.1f}}}{{{fatigue_strength_coeff_mpa:.1f}}}"
+                f"\\right)^{{{exp_inv:.3f}}}"
+                f" = {life:.3e}"
+            )
+
+        row: Dict[str, Any] = {
+            "method": method,
+            "equivalent_stress_mpa": equiv_stress,
+            "estimated_life_cycles": life,
+            "estimated_life_hours": _cycles_to_hours(life, load_frequency_hz),
+            "fatigue_safety_factor": fat_sf,
+            "yield_safety_factor": yield_safety_factor,
+            "allowable_alternating_stress_mpa": allow_alt,
+            "pass_target_life": pass_life,
+            "validity_state": validity_state,
+            "warnings": row_warnings,
+            "subst_equivalent_stress_mpa": subst_eq,
+            "subst_estimated_life_cycles": subst_life,
+            "subst_yield_safety_factor": subst_yield_sf,
+        }
+        comparison_table.append(row)
+        valid_rows.append(row)
+
+    # --- 9. Spread metrics ---
+    if valid_rows:
+        max_eq_row = max(valid_rows, key=lambda r: r["equivalent_stress_mpa"])
+        min_eq_row = min(valid_rows, key=lambda r: r["equivalent_stress_mpa"])
+        most_conservative_method: Any = max_eq_row["method"]
+        least_conservative_method: Any = min_eq_row["method"]
+
+        if len(valid_rows) >= 2 and min_eq_row["equivalent_stress_mpa"] > 0.0:
+            equiv_spread_pct = (
+                (max_eq_row["equivalent_stress_mpa"] - min_eq_row["equivalent_stress_mpa"])
+                / min_eq_row["equivalent_stress_mpa"]
+                * 100.0
+            )
+        else:
+            equiv_spread_pct = 0.0
+
+        finite_lives = [
+            r["estimated_life_cycles"]
+            for r in valid_rows
+            if r["estimated_life_cycles"] is not None
+            and not math.isinf(r["estimated_life_cycles"])
+        ]
+        if len(finite_lives) >= 2:
+            life_spread_ratio = max(finite_lives) / min(finite_lives)
+        else:
+            life_spread_ratio = 1.0
+    else:
+        most_conservative_method = None
+        least_conservative_method = None
+        equiv_spread_pct = 0.0
+        life_spread_ratio = 1.0
+
+    # --- 10. Haigh diagram data ---
+    # Shared x-axis: sweep_min_mpa to min(0.99 * S_ut, sweep_max_mpa)
+    haigh_x_min = sweep_min_mpa
+    haigh_x_max = min(0.99 * S_ut, sweep_max_mpa)
+    if haigh_x_max <= haigh_x_min:
+        haigh_x_max = haigh_x_min + S_ut
+
+    haigh_mean_mpa: List[float] = [
+        haigh_x_min + i * (haigh_x_max - haigh_x_min) / (n_sweep_points - 1)
+        for i in range(n_sweep_points)
+    ]
+
+    haigh_envelopes: Dict[str, List[float]] = {}
+    for method in methods:
+        envelope: List[float] = []
+        for sm in haigh_mean_mpa:
+            if method == "none":
+                val = reference_stress_mpa
+            elif method == "goodman":
+                val = reference_stress_mpa * (1.0 - sm / S_ut)
+            elif method == "gerber":
+                val = reference_stress_mpa * (1.0 - (sm / S_ut) ** 2)
+            else:  # soderberg
+                val = reference_stress_mpa * (1.0 - sm / S_y)
+            envelope.append(val)
+        haigh_envelopes[method] = envelope
+
+    # Yield line: sigma_a = S_y - sigma_m (static yield boundary, tensile region only)
+    yield_line_mean: List[float] = []
+    yield_line_alt: List[float] = []
+    for sm in haigh_mean_mpa:
+        if 0.0 <= sm <= S_y:
+            yield_line_mean.append(sm)
+            yield_line_alt.append(max(0.0, S_y - sm))
+
+    all_env_vals = [v for env in haigh_envelopes.values() for v in env]
+    haigh_y_max = max(
+        max(all_env_vals, default=sigma_a) * 1.1,
+        S_y * 0.5,
+        sigma_a * 1.2,
+    )
+
+    haigh_diagram_data: Dict[str, Any] = {
+        "mean_stress_mpa": haigh_mean_mpa,
+        "envelopes": haigh_envelopes,
+        "yield_line_mean_mpa": yield_line_mean,
+        "yield_line_alt_mpa": yield_line_alt,
+        "operating_mean_mpa": sigma_m,
+        "operating_alt_mpa": sigma_a,
+        "reference_stress_mpa": reference_stress_mpa,
+        "ultimate_strength_mpa": S_ut,
+        "yield_strength_mpa": S_y,
+        "x_min": haigh_x_min,
+        "x_max": haigh_x_max,
+        "y_max": haigh_y_max,
+    }
+
+    # --- 11. S-N plot data ---
+    sn_curve = _generate_sn_curve(
+        fatigue_strength_coeff_mpa=fatigue_strength_coeff_mpa,
+        fatigue_strength_exponent=b,
+        endurance_limit_mpa=endurance_limit_mpa,
+        has_endurance_limit=has_endurance_limit,
+    )
+
+    sn_operating_points: Dict[str, Dict[str, Any]] = {}
+    for row in valid_rows:
+        life = row["estimated_life_cycles"]
+        sn_operating_points[row["method"]] = {
+            "equivalent_stress_mpa": row["equivalent_stress_mpa"],
+            "estimated_life_cycles": life,
+        }
+
+    sn_plot_data: Dict[str, Any] = {
+        "sn_curve": sn_curve,
+        "operating_points": sn_operating_points,
+        "target_life_cycles": target_life_cycles,
+        "endurance_limit_mpa": endurance_limit_mpa,
+        "has_endurance_limit": has_endurance_limit,
+        "reference_stress_mpa": reference_stress_mpa,
+        "reference_basis": actual_reference_basis,
+    }
+
+    # --- 12. Sweep data (mean stress sweep at fixed sigma_a) ---
+    sweep_mean_mpa: List[float] = [
+        sweep_min_mpa + i * (sweep_max_mpa - sweep_min_mpa) / (n_sweep_points - 1)
+        for i in range(n_sweep_points)
+    ]
+
+    sweep_life_data: Dict[str, List[Any]] = {}
+    sweep_allowable_data: Dict[str, List[Any]] = {}
+    sweep_equiv_data: Dict[str, List[Any]] = {}
+
+    for method in methods:
+        lives_arr: List[Any] = []
+        allow_arr: List[Any] = []
+        equiv_arr: List[Any] = []
+        for sm in sweep_mean_mpa:
+            if method == "none":
+                denom_i = 1.0
+            elif method == "goodman":
+                denom_i = 1.0 - sm / S_ut
+            elif method == "gerber":
+                denom_i = 1.0 - (sm / S_ut) ** 2
+            else:  # soderberg
+                denom_i = 1.0 - sm / S_y
+
+            if denom_i <= 0.0:
+                equiv_arr.append(None)
+                lives_arr.append(None)
+                allow_arr.append(None)
+                continue
+
+            eq_i = sigma_a / denom_i
+            life_i = _compute_life_cycles(
+                eq_i, fatigue_strength_coeff_mpa, b, endurance_limit_mpa, has_endurance_limit
+            )
+            if method == "none":
+                allow_i = reference_stress_mpa
+            elif method == "goodman":
+                allow_i = reference_stress_mpa * (1.0 - sm / S_ut)
+            elif method == "gerber":
+                allow_i = reference_stress_mpa * (1.0 - (sm / S_ut) ** 2)
+            else:
+                allow_i = reference_stress_mpa * (1.0 - sm / S_y)
+
+            equiv_arr.append(eq_i)
+            lives_arr.append(life_i if not math.isinf(life_i) else None)
+            allow_arr.append(allow_i)
+
+        sweep_life_data[method] = lives_arr
+        sweep_allowable_data[method] = allow_arr
+        sweep_equiv_data[method] = equiv_arr
+
+    sweep_data: Dict[str, Any] = {
+        "mean_stress_mpa": sweep_mean_mpa,
+        "life_cycles": sweep_life_data,
+        "allowable_alternating_mpa": sweep_allowable_data,
+        "equivalent_stress_mpa": sweep_equiv_data,
+    }
+
+    # --- 13. Top-level substituted strings ---
+    subst_sigma_max = (
+        f"\\sigma_{{max}} = \\sigma_m + \\sigma_a"
+        f" = {sigma_m:.1f} + {sigma_a:.1f} = {sigma_max:.1f}\\,\\text{{MPa}}"
+    )
+    if sigma_max != 0.0:
+        subst_stress_ratio = (
+            f"R = \\frac{{\\sigma_{{min}}}}{{\\sigma_{{max}}}}"
+            f" = \\frac{{{sigma_min:.1f}}}{{{sigma_max:.1f}}}"
+            f" = {stress_ratio:.3f}"
+        )
+    else:
+        subst_stress_ratio = "R = \\text{undefined} \\;(\\sigma_{max} = 0)"
+
+    if actual_reference_basis == "endurance_limit":
+        subst_ref = (
+            f"S_e = S_e' \\cdot k_s \\cdot k_d \\cdot k_r"
+            f" = {reference_stress_mpa:.1f}\\,\\text{{MPa}}"
+        )
+    else:
+        subst_ref = (
+            f"\\sigma_{{a,ref}} = \\sigma_f' (2N_{{target}})^b"
+            f" = {fatigue_strength_coeff_mpa:.1f}"
+            f" \\cdot (2 \\times {target_life_cycles:.0e})^{{{b:.3f}}}"
+            f" = {reference_stress_mpa:.1f}\\,\\text{{MPa}}"
+        )
+
+    return {
+        "sigma_max_mpa": sigma_max,
+        "sigma_min_mpa": sigma_min,
+        "alternating_stress_mpa": sigma_a,
+        "mean_stress_mpa": sigma_m,
+        "stress_ratio": stress_ratio,
+        "ultimate_strength_mpa": S_ut,
+        "yield_strength_mpa": S_y,
+        "endurance_limit_mpa": endurance_limit_mpa,
+        "fatigue_strength_coeff_mpa": fatigue_strength_coeff_mpa,
+        "reference_basis": actual_reference_basis,
+        "reference_stress_mpa": reference_stress_mpa,
+        "comparison_table": comparison_table,
+        "haigh_diagram_data": haigh_diagram_data,
+        "sn_plot_data": sn_plot_data,
+        "sweep_data": sweep_data,
+        "most_conservative_method": most_conservative_method,
+        "least_conservative_method": least_conservative_method,
+        "life_spread_ratio": life_spread_ratio,
+        "equivalent_stress_spread_pct": equiv_spread_pct,
+        "warnings": global_warnings,
+        "subst_sigma_max_mpa": subst_sigma_max,
+        "subst_stress_ratio": subst_stress_ratio,
+        "subst_reference_stress_mpa": subst_ref,
+    }
