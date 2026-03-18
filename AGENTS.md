@@ -133,6 +133,26 @@ Use this when a tool-local reference becomes relevant to multiple tools:
 We welcome contributions! To ensure a smooth process, please follow these guidelines.
 For the day-to-day workflow and release process, see `CONTRIBUTING.md` and `docs/RELEASE.md`.
 
+### Plans Folder Conventions
+
+Files in the repository-level `/plans/` directory must include the creation date in two places:
+
+1. In the filename, using the format `YYYY-MM-DD_short_slug.md`
+2. In the document header, using a `Date: YYYY-MM-DD` line immediately below the H1 title
+
+The filename date and the in-document date must match. Use ISO 8601 dates so plan files sort correctly in file listings.
+
+Recommended opening structure:
+
+```md
+# Plan Title
+
+Date: 2026-03-18
+Status: Proposed plan for critique before implementation
+```
+
+When retroactively normalizing an older plan, preserve an existing stated date when present; otherwise use the best-supported original date from git history.
+
 ### Branching Strategy
 
 * The `main` branch is for the live, deployed version of the tools.
@@ -1111,6 +1131,7 @@ Some tools include a tool-local `ROADMAP.md` under `tools/<tool>/`. Treat this f
 * Keep entries concise and actionable.
 * Update the roadmap when completing significant items or when new gaps are discovered.
 * Review the roadmap before large changes to ensure alignment with outstanding work.
+* Do not use the repository-level `/plans/` filename convention for tool-local `ROADMAP.md` files; the dated `YYYY-MM-DD_short_slug.md` rule applies only to documents stored in `/plans/`.
 
 ---
 

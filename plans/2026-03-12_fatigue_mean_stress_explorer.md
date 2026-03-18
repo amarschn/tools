@@ -600,7 +600,7 @@ Manual browser checks:
 
 Planned files:
 
-- `plans/fatigue_mean_stress_explorer.md`
+- `plans/2026-03-12_fatigue_mean_stress_explorer.md`
 - `tools/fatigue-mean-stress-explorer/index.html`
 - `tools/fatigue-mean-stress-explorer/README.md`
 - `pycalcs/fatigue.py` updates

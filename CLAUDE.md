@@ -13,6 +13,10 @@ For comprehensive guidance on:
 
 **Please refer to [AGENTS.md](AGENTS.md)** - this file contains all essential information for working in this repository.
 
+## Plans Folder Rule
+
+Repository-level plan documents in `/plans/` must use `YYYY-MM-DD_short_slug.md` filenames and include a matching `Date: YYYY-MM-DD` line immediately below the H1 title. Use ISO dates so plans sort chronologically.
+
 ## Essential Commands
 
 ### Local Development

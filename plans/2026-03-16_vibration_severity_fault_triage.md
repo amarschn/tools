@@ -1,4 +1,7 @@
 # Vibration Severity & Fault Triage Tool
+
+Date: 2026-03-16
+
 ## ISO 20816 Severity Evaluator + VDI 3839 Fault Signature Matcher
 
 ---

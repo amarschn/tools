@@ -1,5 +1,7 @@
 # Beam Bending Calculator — Improvement Plan
 
+Date: 2026-02-27
+
 ## High Priority (Safety & Core Usability)
 
 ### 1. Lateral-Torsional Buckling (LTB) Check

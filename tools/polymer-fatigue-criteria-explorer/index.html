@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Polymer Fatigue Criteria Explorer - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #111827;
+            --tooltip-text: #ffffff;
+        }
+
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+            --tooltip-bg: #1f2937;
+            --tooltip-text: #f9fafb;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+                --tooltip-bg: #1f2937;
+                --tooltip-text: #f9fafb;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 52px;
+            height: 52px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 5%;
+        }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .nav-brand {
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: var(--text-color);
+            text-decoration: none;
+        }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .settings-button {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+
+        .container {
+            width: 92%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 0;
+        }
+
+        main.container { flex-grow: 1; }
+        h1 {
+            font-size: 2.25rem;
+            letter-spacing: -0.02em;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.375rem;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 1rem;
+        }
+        h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--secondary-color);
+            margin-bottom: 0.75rem;
+        }
+        h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+        p { color: var(--text-light); margin-bottom: 1em; }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .tool-description {
+            font-size: 1.05rem;
+            max-width: 84ch;
+            margin-bottom: 1.5rem;
+        }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.92fr) minmax(520px, 1.08fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section {
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+        .purpose-section summary {
+            padding: 16px 24px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+        .purpose-section summary::after {
+            content: '[Expand]';
+            float: right;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content {
+            padding: 0 24px 24px 24px;
+            border-top: 1px solid var(--border-color);
+        }
+        .purpose-content h3 { margin-top: 1rem; }
+        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
+        .purpose-content li { margin-bottom: 0.5rem; color: var(--text-light); }
+
+        .tool-inputs h2, .tool-outputs h2 { margin-top: 0; }
+        .input-group { margin-bottom: 1.1rem; position: relative; }
+        .input-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            font-size: 0.875rem;
+            color: var(--text-color);
+        }
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-group input[type="number"]::-webkit-inner-spin-button,
+        .input-group input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+        }
+        .input-group input[type="number"] { -moz-appearance: textfield; }
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .field-help {
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: var(--text-light);
+        }
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: help;
+            position: absolute;
+            right: 10px;
+            top: 36px;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 10px);
+            top: -6px;
+            width: 260px;
+            background: var(--tooltip-bg);
+            color: var(--tooltip-text);
+            padding: 10px 12px;
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            font-size: 0.78rem;
+            line-height: 1.4;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 30;
+        }
+        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+
+        .expert-mode-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+            padding: 14px 16px;
+            margin-bottom: 18px;
+        }
+        .expert-mode-label {
+            display: block;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .expert-mode-hint {
+            display: block;
+            font-size: 0.82rem;
+            color: var(--text-light);
+        }
+        .expert-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+        .expert-toggle input { accent-color: var(--accent-color); }
+        .expert-toggle-label {
+            font-weight: 600;
+            color: var(--text-color);
+            min-width: 24px;
+        }
+
+        .section-note,
+        .inline-note {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--primary-light);
+            color: var(--text-light);
+            font-size: 0.86rem;
+        }
+        .section-note strong,
+        .inline-note strong { color: var(--text-color); }
+        .section-note ul,
+        .inline-note ul {
+            padding-left: 18px;
+            margin-top: 0.45rem;
+            color: var(--text-light);
+        }
+        .section-note li,
+        .inline-note li { margin-bottom: 0.35rem; }
+        .warning-box {
+            display: none;
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--warning-color);
+            background: rgba(180, 83, 9, 0.08);
+        }
+        .warning-box ul { padding-left: 18px; color: var(--text-light); }
+        .warning-box li { margin-bottom: 0.35rem; }
+
+        .advanced-section { display: none; }
+        .advanced-section.active { display: block; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            padding: 11px 16px;
+            font-weight: 600;
+            font-size: 0.92rem;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+            border-color: transparent;
+        }
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+        .tab-link {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .tab-link.active {
+            background: var(--primary-color);
+            color: var(--bg-card);
+            border-color: transparent;
+        }
+        .tab-content { display: none; }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+        .summary-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            background: var(--bg-card);
+        }
+        .summary-card .label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+        .summary-card .value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        .summary-card .subvalue {
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: var(--text-light);
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .chip {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            color: var(--text-light);
+            background: var(--primary-light);
+        }
+        .chip strong { color: var(--text-color); }
+
+        .comparison-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 16px;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+        .comparison-table th {
+            background: var(--primary-light);
+            color: var(--text-color);
+            font-weight: 600;
+        }
+        .comparison-table tr.clickable { cursor: pointer; }
+        .comparison-table tr.clickable:hover { background: var(--primary-light); }
+        .comparison-table tr.selected { background: rgba(17, 24, 39, 0.06); }
+        .state-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .state-pill.valid { background: rgba(15, 118, 110, 0.12); color: var(--success-color); }
+        .state-pill.warning { background: rgba(180, 83, 9, 0.12); color: var(--warning-color); }
+        .state-pill.invalid { background: rgba(185, 28, 28, 0.12); color: var(--danger-color); }
+
+        .derivation-panel {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        .derivation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .derivation-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        .derivation-step {
+            padding: 12px 0;
+            border-top: 1px solid var(--border-color);
+        }
+        .derivation-step:first-of-type { border-top: 0; padding-top: 0; }
+        .step-title {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            margin-bottom: 8px;
+        }
+        .equation {
+            overflow-x: auto;
+            color: var(--text-color);
+        }
+
+        .status-banner {
+            padding: 18px 20px;
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .status-banner .icon { font-size: 1.2rem; }
+        .status-banner .content h4 { margin-bottom: 4px; }
+        .status-banner .content p { margin-bottom: 0.5rem; }
+        .status-banner.acceptable {
+            background: rgba(15, 118, 110, 0.08);
+            border: 1px solid var(--success-color);
+        }
+        .status-banner.marginal {
+            background: rgba(180, 83, 9, 0.08);
+            border: 1px solid var(--warning-color);
+        }
+        .status-banner.unacceptable {
+            background: rgba(185, 28, 28, 0.08);
+            border: 1px solid var(--danger-color);
+        }
+        .recommendations { padding-left: 18px; color: var(--text-light); }
+        .recommendations li { margin-bottom: 0.35rem; }
+
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        .chart-plot { width: 100%; min-height: 350px; height: 350px; }
+        .chart-explanation {
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+            line-height: 1.5;
+            padding: 10px;
+            background: var(--primary-light);
+            border-radius: 6px;
+        }
+        .chart-explanation strong { color: var(--text-color); }
+
+        .toc-card {
+            background: var(--primary-light);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+        .toc-card ol { padding-left: 20px; color: var(--text-light); }
+        .toc-card li { margin-bottom: 0.4rem; }
+        .bg-section { margin-bottom: 28px; }
+        .bg-section ul { padding-left: 20px; color: var(--text-light); }
+        .bg-section li { margin-bottom: 0.5rem; }
+        .equation-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-bottom: 16px;
+            background: var(--bg-card);
+        }
+        .equation-expression {
+            display: block;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: var(--primary-light);
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+        .callout-warning,
+        .callout-info {
+            border-radius: var(--border-radius);
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+        .callout-info {
+            border: 1px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.08);
+        }
+        .callout-warning {
+            border: 1px solid var(--warning-color);
+            background: rgba(180, 83, 9, 0.08);
+        }
+
+        .settings-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease;
+            z-index: 1400;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 360px;
+            height: 100%;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(100%);
+            transition: transform 0.2s ease;
+            z-index: 1500;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header,
+        .settings-footer {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 0;
+        }
+        .settings-content {
+            padding: 18px 20px;
+            overflow-y: auto;
+        }
+        .settings-section { margin-bottom: 18px; }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .setting-row:last-child { border-bottom: 0; }
+        .setting-label { font-weight: 600; color: var(--text-color); }
+        .setting-help { font-size: 0.8rem; color: var(--text-light); }
+        .switch { position: relative; display: inline-flex; align-items: center; }
+        .switch input { display: none; }
+        .slider-toggle {
+            width: 42px;
+            height: 24px;
+            background: var(--border-color);
+            border-radius: 999px;
+            position: relative;
+        }
+        .slider-toggle::before {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            transition: transform 0.2s ease;
+        }
+        .switch input:checked + .slider-toggle {
+            background: var(--accent-color);
+        }
+        .switch input:checked + .slider-toggle::before {
+            transform: translateX(18px);
+        }
+        .segmented {
+            display: inline-flex;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .segmented button {
+            border: 0;
+            background: var(--bg-card);
+            color: var(--text-color);
+            padding: 7px 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.82rem;
+        }
+        .segmented button.active {
+            background: var(--accent-color);
+            color: #fff;
+        }
+        .settings-close {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .footer {
+            padding: 24px 0 32px;
+            text-align: center;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        .support-link {
+            color: inherit;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .support-link:hover { text-decoration: underline; }
+
+        body[data-density="compact"] .card { padding: 18px; }
+        body[data-density="compact"] .input-group { margin-bottom: 0.9rem; }
+        body[data-density="compact"] .summary-card { padding: 12px; }
+        body[data-density="compact"] .comparison-table th,
+        body[data-density="compact"] .comparison-table td { padding: 10px 12px; }
+
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .settings-panel { width: 100%; }
+            .summary-grid,
+            .input-row { grid-template-columns: 1fr; }
+            .tabs { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+
+<body data-theme="system" data-density="comfortable">
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show derivations by default</div>
+                        <div class="setting-help">Open the governing criterion detail panel after each calculation.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-show-derivations">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or system default.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Theme">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system">System</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Density</div>
+                        <div class="setting-help">Adjust spacing and sizing.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Density">
+                        <button type="button" data-density="comfortable">Comfort</button>
+                        <button type="button" data-density="compact">Compact</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Precision</div>
+                        <div class="setting-help">Decimal places in numeric outputs.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Precision">
+                        <button type="button" data-precision="2">2 dp</button>
+                        <button type="button" data-precision="3">3 dp</button>
+                        <button type="button" data-precision="4">4 dp</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button" style="width: 100%;">Reset to Defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Polymer Fatigue Criteria Explorer</h1>
+        <p class="tool-description">
+            Compare a reference stress-life relation against hysteresis dissipated energy,
+            cyclic creep strain-rate, and a hybrid energy + creep criterion for a single
+            polymer operating point. This is an exploratory comparison tool, not a sign-off calculator.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & README</summary>
+            <div class="purpose-content">
+                <h3>What this tool does</h3>
+                <p>
+                    This explorer compares multiple polymer-fatigue criteria side by side and keeps
+                    the model assumptions visible. It is built for the case where classical S-N logic
+                    is not enough and loop observables matter.
+                </p>
+                <ul>
+                    <li><strong>Preset load-case mode:</strong> estimates loop energy and cyclic creep from the selected preset and operating point.</li>
+                    <li><strong>Measured-loop mode:</strong> uses stabilized hysteresis energy and cyclic creep rate directly.</li>
+                    <li><strong>Comparison first:</strong> shows model spread, governing criterion, regime labels, and range warnings together.</li>
+                    <li><strong>Progressive disclosure:</strong> click a criterion row to inspect its substituted equation and current observables.</li>
+                </ul>
+                <p>
+                    The default presets are literature-inspired and intentionally limited. If you have measured
+                    loop data, measured-loop mode is the more trustworthy comparison path.
+                </p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="tool-inputs card">
+                <h2>Inputs</h2>
+
+                <div class="expert-mode-bar">
+                    <div>
+                        <span class="expert-mode-label">Expert Mode</span>
+                        <span class="expert-mode-hint">Show custom calibration inputs</span>
+                    </div>
+                    <label class="expert-toggle">
+                        <input type="checkbox" id="expert-mode-toggle">
+                        <span class="expert-toggle-label" id="expert-mode-status">Off</span>
+                    </label>
+                </div>
+
+                <div class="section-note" id="preset-summary">
+                    <strong>Loading presets...</strong>
+                </div>
+
+                <form id="calc-form">
+                    <div class="input-group">
+                        <label for="material_preset">Material Preset</label>
+                        <select id="material_preset" name="material_preset"></select>
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="workflow_mode">Workflow</label>
+                        <select id="workflow_mode" name="workflow_mode">
+                            <option value="preset_load_case">Preset load case</option>
+                            <option value="measured_loop">Measured stabilized loop</option>
+                        </select>
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="orientation_bucket">Orientation</label>
+                            <select id="orientation_bucket" name="orientation_bucket"></select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="moisture_state">Conditioning / Moisture</label>
+                            <select id="moisture_state" name="moisture_state"></select>
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="stress_amplitude_mpa">Stress Amplitude (MPa)</label>
+                            <input type="number" id="stress_amplitude_mpa" name="stress_amplitude_mpa" value="42" step="any" min="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="load_ratio">Load Ratio R = sigma<sub>min</sub> / sigma<sub>max</sub></label>
+                            <input type="number" id="load_ratio" name="load_ratio" value="0.1" step="any" min="-1" max="0.95">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="temperature_c">Temperature (deg C)</label>
+                            <input type="number" id="temperature_c" name="temperature_c" value="23" step="any">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="load_frequency_hz">Frequency (Hz)</label>
+                            <input type="number" id="load_frequency_hz" name="load_frequency_hz" value="2" step="any" min="0.1">
+                            <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="target_life_cycles">Target Life (cycles)</label>
+                        <input type="number" id="target_life_cycles" name="target_life_cycles" value="1000000" step="any" min="1">
+                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                    </div>
+
+                    <div class="section-note" id="workflow-note">
+                        <strong>Preset load case:</strong> the tool will estimate loop energy and cyclic creep rate from the selected preset and operating point.
+                    </div>
+
+                    <div id="measured-loop-section">
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="direct_loop_energy_mj_per_m3">Loop Energy (MJ/m^3)</label>
+                                <input type="number" id="direct_loop_energy_mj_per_m3" name="direct_loop_energy_mj_per_m3" value="0.95" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="direct_cyclic_creep_rate_per_cycle">Cyclic Creep Rate (/cycle)</label>
+                                <input type="number" id="direct_cyclic_creep_rate_per_cycle" name="direct_cyclic_creep_rate_per_cycle" value="9e-7" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="advanced-section" id="custom-calibration-section">
+                        <h4>Custom Calibration Inputs</h4>
+                        <div class="field-help" style="margin-bottom: 12px;">
+                            These fields matter when <code>Custom calibrated polymer</code> is selected.
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="ultimate_strength_mpa">Ultimate Strength (MPa)</label>
+                                <input type="number" id="ultimate_strength_mpa" name="ultimate_strength_mpa" value="140" step="any" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="yield_strength_mpa">Static Strength (MPa)</label>
+                                <input type="number" id="yield_strength_mpa" name="yield_strength_mpa" value="110" step="any" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="reference_strength_coeff_mpa">Reference Strength Coeff (MPa)</label>
+                                <input type="number" id="reference_strength_coeff_mpa" name="reference_strength_coeff_mpa" value="240" step="any" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="reference_exponent">Reference Exponent</label>
+                                <input type="number" id="reference_exponent" name="reference_exponent" value="-0.12" step="any">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="energy_life_constant">Energy-Life Constant</label>
+                                <input type="number" id="energy_life_constant" name="energy_life_constant" value="1200000" step="any" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="energy_life_exponent">Energy-Life Exponent</label>
+                                <input type="number" id="energy_life_exponent" name="energy_life_exponent" value="1.45" step="any" min="0.01">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="creep_life_constant">Creep-Life Constant</label>
+                                <input type="number" id="creep_life_constant" name="creep_life_constant" value="0.95" step="any" min="0.001">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="creep_life_exponent">Creep-Life Exponent</label>
+                                <input type="number" id="creep_life_exponent" name="creep_life_exponent" value="0.90" step="any" min="0.01">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="energy_surrogate_coeff">Energy Surrogate Coeff</label>
+                                <input type="number" id="energy_surrogate_coeff" name="energy_surrogate_coeff" value="0.0004" step="any" min="0.000000001">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="energy_surrogate_exponent">Energy Surrogate Exponent</label>
+                                <input type="number" id="energy_surrogate_exponent" name="energy_surrogate_exponent" value="2.0" step="any" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="creep_surrogate_coeff">Creep Surrogate Coeff</label>
+                                <input type="number" id="creep_surrogate_coeff" name="creep_surrogate_coeff" value="1.5e-13" step="any" min="0.0000000000000001">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="creep_surrogate_exponent">Creep Surrogate Exponent</label>
+                                <input type="number" id="creep_surrogate_exponent" name="creep_surrogate_exponent" value="4.1" step="any" min="0.1">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="hybrid_creep_weight">Hybrid Creep Weight</label>
+                                <input type="number" id="hybrid_creep_weight" name="hybrid_creep_weight" value="0.6" step="any" min="0.1" max="0.9">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="mean_stress_sensitivity">Mean-Stress Sensitivity</label>
+                                <input type="number" id="mean_stress_sensitivity" name="mean_stress_sensitivity" value="0.32" step="any" min="0">
+                                <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" style="margin-top: 16px;" disabled>Calculate</button>
+                </form>
+            </section>
+
+            <section class="tool-outputs card">
+                <div class="tabs">
+                    <button class="tab-link active" onclick="openTab(event, 'results-tab')">Results</button>
+                    <button class="tab-link" onclick="openTab(event, 'charts-tab')">Charts</button>
+                    <button class="tab-link" onclick="openTab(event, 'background-tab')">Background</button>
+                </div>
+
+                <div id="results-tab" class="tab-content" style="display: block;">
+                    <p id="results-placeholder">Load the default example or modify the operating point, then press Calculate.</p>
+
+                    <div id="results-shell" style="display: none;">
+                        <div class="summary-grid">
+                            <div class="summary-card">
+                                <div class="label">Governing Model</div>
+                                <div class="value" id="summary-governing-model">--</div>
+                                <div class="subvalue" id="summary-governing-life">--</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="label">Life Spread Ratio</div>
+                                <div class="value" id="summary-life-spread">--</div>
+                                <div class="subvalue">Largest valid life / smallest valid life</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="label">Cycle Band</div>
+                                <div class="value" id="summary-regime">--</div>
+                                <div class="subvalue" id="summary-mechanism">--</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="label">Current Loop Metrics</div>
+                                <div class="value" id="summary-loop-energy">--</div>
+                                <div class="subvalue" id="summary-creep-rate">--</div>
+                            </div>
+                        </div>
+
+                        <div class="chip-row" id="chip-row"></div>
+
+                        <div class="chart-container">
+                            <h4>Stress Waveform</h4>
+                            <div id="waveform-plot" class="chart-plot"></div>
+                            <div class="chart-explanation">
+                                <strong>What this shows:</strong> one cycle of the applied stress signal derived from your stress amplitude and load ratio inputs.
+                                Horizontal lines mark &sigma;<sub>max</sub>, &sigma;<sub>min</sub>, and &sigma;<sub>mean</sub>.
+                            </div>
+                        </div>
+
+                        <div class="section-note" id="frequency-guidance-box" style="display: none;"></div>
+
+                        <div class="warning-box" id="range-warning-box">
+                            <strong>Range and validity notes</strong>
+                            <ul id="range-warning-list"></ul>
+                        </div>
+
+                        <div class="comparison-table-wrap">
+                            <table class="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>Criterion</th>
+                                        <th>Predicted Life</th>
+                                        <th>Hours</th>
+                                        <th>Target Ratio</th>
+                                        <th>State</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comparison-table-body"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="derivation-panel" id="derivation-panel" style="display: none;">
+                            <div class="derivation-header">
+                                <span class="derivation-title" id="deriv-title">Criterion Detail</span>
+                            </div>
+                            <div class="derivation-step">
+                                <div class="step-title">Criterion Calculation</div>
+                                <div class="equation" id="deriv-equation"></div>
+                            </div>
+                            <div class="derivation-step">
+                                <div class="step-title">Current Loop Observables</div>
+                                <div class="equation" id="deriv-observables"></div>
+                            </div>
+                            <div class="derivation-step">
+                                <div class="step-title">Applicability Notes</div>
+                                <div class="equation" id="deriv-notes"></div>
+                            </div>
+                        </div>
+
+                        <div class="status-banner" id="status-banner">
+                            <div class="icon" id="status-icon">&#10003;</div>
+                            <div class="content">
+                                <h4 id="status-title">Comparison Status</h4>
+                                <p id="status-message"></p>
+                                <ul class="recommendations" id="recommendations-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="charts-tab" class="tab-content">
+                    <div class="chart-container">
+                        <h4>Life By Criterion</h4>
+                        <div id="criterion-plot" class="chart-plot"></div>
+                        <div class="chart-explanation" id="criterion-chart-explanation">
+                            <strong>What this shows:</strong> side-by-side predicted life from each enabled criterion.
+                            <strong>Key insight:</strong> the gap between bars is often more important than any single absolute number.
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h4>Comparison Sweep</h4>
+                        <div id="sweep-plot" class="chart-plot"></div>
+                        <div class="chart-explanation" id="sweep-chart-explanation">
+                            <strong>What this shows:</strong> how the compared criteria diverge as the operating point severity changes.
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h4>Calibration Envelope</h4>
+                        <div id="calibration-plot" class="chart-plot"></div>
+                        <div class="chart-explanation" id="calibration-chart-explanation">
+                            <strong>What this shows:</strong> the current loop-energy / cyclic-creep point against the preset envelope.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="background-tab" class="tab-content">
+                    <div class="toc-card">
+                        <strong>Contents</strong>
+                        <ol>
+                            <li><a href="#bg-overview">Overview</a></li>
+                            <li><a href="#bg-workflows">Workflows</a></li>
+                            <li><a href="#bg-load-ratio">Load Ratio R</a></li>
+                            <li><a href="#bg-models">Compared Criteria</a></li>
+                            <li><a href="#bg-regimes">LCF, HCF, and mechanism labels</a></li>
+                            <li><a href="#bg-limitations">Limitations</a></li>
+                            <li><a href="#bg-references">References</a></li>
+                        </ol>
+                    </div>
+
+                    <div id="bg-overview" class="bg-section">
+                        <h3>1. Overview</h3>
+                        <p>
+                            Polymer fatigue often depends on time-dependent loop evolution, not just a single stress amplitude.
+                            This tool keeps a classical reference model in view, but it is intentionally not the only story.
+                        </p>
+                        <div class="callout-info">
+                            <strong>Design intent:</strong> comparison and intuition building. If measured stabilized loop data are available,
+                            use the measured-loop workflow instead of relying on preset-side surrogates.
+                        </div>
+                    </div>
+
+                    <div id="bg-workflows" class="bg-section">
+                        <h3>2. Workflows</h3>
+                        <div class="equation-card">
+                            <strong>Preset load case</strong>
+                            <p>
+                                Uses the preset to estimate stabilized loop energy and cyclic creep rate from stress amplitude,
+                                load ratio, conditioning, orientation, temperature, and frequency. This is fast and useful for trend
+                                exploration, but the inferred loop observables are still model-dependent.
+                            </p>
+                        </div>
+                        <div class="equation-card">
+                            <strong>Measured stabilized loop</strong>
+                            <p>
+                                Uses direct loop energy and cyclic creep rate values. This is the preferred path when you have
+                                test or simulation outputs and want the comparison to rest on measured observables.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="bg-load-ratio" class="bg-section">
+                        <h3>3. Load Ratio R</h3>
+                        <p>
+                            The load ratio is the standard fatigue shorthand
+                            <strong>R = sigma_min / sigma_max</strong>. It tells the tool whether the cycle is fully
+                            reversed, tension-compression, or mostly tension-tension.
+                        </p>
+
+                        <div class="equation-card">
+                            <strong>Definition used by this tool</strong>
+                            <span class="equation-expression">$$ R = \frac{\sigma_{min}}{\sigma_{max}}, \quad \sigma_{max} = \frac{2 \sigma_a}{1 - R}, \quad \sigma_{min} = R \sigma_{max} $$</span>
+                            <ul>
+                                <li><strong>sigma_a:</strong> stress amplitude entered by the user</li>
+                                <li><strong>sigma_max, sigma_min:</strong> peak and valley stress in the fatigue cycle</li>
+                                <li><strong>Why it matters:</strong> changing R changes mean stress, which changes creep tendency and fatigue response in polymers</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Common examples</strong>
+                            <ul>
+                                <li><strong>R = -1:</strong> fully reversed loading, for example +50 MPa to -50 MPa</li>
+                                <li><strong>R = 0:</strong> pulsating tension, for example 0 MPa to +100 MPa</li>
+                                <li><strong>R = 0.1:</strong> tension-tension loading, for example +10 MPa to +100 MPa</li>
+                                <li><strong>Larger positive R:</strong> more positive mean stress, usually more important for cyclic creep and mean-stress sensitivity</li>
+                            </ul>
+                        </div>
+
+                        <div class="callout-info">
+                            <strong>If you know your peak and valley stress already:</strong>
+                            compute <code>R = sigma_min / sigma_max</code> and enter that value here. The tool then
+                            reconstructs the cycle from your stress amplitude and <code>R</code>.
+                        </div>
+                    </div>
+
+                    <div id="bg-models" class="bg-section">
+                        <h3>4. Compared Criteria</h3>
+
+                        <div class="equation-card">
+                            <strong>Equation (1) Reference stress-life</strong>
+                            <span class="equation-expression">$$ \sigma_{max} = \frac{2 \sigma_a}{1 - R}, \quad \sigma_m = \frac{\sigma_{max} + \sigma_{min}}{2} $$</span>
+                            <span class="equation-expression">$$ \sigma_{a,ref} = \sigma_a \left(1 + k_m \frac{\max(\sigma_m, 0)}{S_{ut}} \right), \quad N_f = \frac{1}{2}\left(\frac{\sigma_{a,ref}}{\sigma_f'}\right)^{1/b} $$</span>
+                            <ul>
+                                <li><strong>sigma_a:</strong> stress amplitude</li>
+                                <li><strong>R:</strong> load ratio</li>
+                                <li><strong>k_m:</strong> mean-stress sensitivity used only in the reference layer</li>
+                                <li><strong>sigma_f', b:</strong> reference stress-life coefficients</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Equation (2) Hysteresis dissipated energy</strong>
+                            <span class="equation-expression">$$ W_d = \oint \sigma \, d\varepsilon, \quad \log N_f = A + B \log W_d $$</span>
+                            <ul>
+                                <li><strong>W_d:</strong> stabilized hysteresis energy per cycle</li>
+                                <li><strong>A, B:</strong> preset or custom calibration constants</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Equation (3) Cyclic creep strain rate</strong>
+                            <span class="equation-expression">$$ \log N_f = C + D \log \left( d\varepsilon_{max}/dN \right) $$</span>
+                            <ul>
+                                <li><strong>d epsilon_max / dN:</strong> stabilized maximum-strain evolution metric per cycle</li>
+                                <li><strong>C, D:</strong> preset or custom calibration constants</li>
+                            </ul>
+                        </div>
+
+                        <div class="equation-card">
+                            <strong>Equation (4) Hybrid energy + creep</strong>
+                            <span class="equation-expression">$$ \frac{1}{N_{hybrid}} = \frac{w_c}{N_{creep}} + \frac{1 - w_c}{N_{energy}} $$</span>
+                            <ul>
+                                <li><strong>w_c:</strong> creep-side weighting used by the hybrid criterion</li>
+                                <li><strong>N_creep, N_energy:</strong> life predictions from the two component criteria</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="bg-regimes" class="bg-section">
+                        <h3>5. LCF, HCF, and mechanism labels</h3>
+                        <p>
+                            The <strong>cycle-band label</strong> is only a guide. The <strong>mechanism label</strong> is often more informative
+                            because it indicates whether the current point is being organized more strongly by dissipation, by cyclic creep,
+                            or by neither alone.
+                        </p>
+                        <div class="callout-warning">
+                            <strong>Do not over-interpret compressive benefit or a single spread-free prediction.</strong>
+                            Polymer fatigue remains sensitive to conditioning, frequency, test protocol, and the exact loop metric definition.
+                        </div>
+                    </div>
+
+                    <div id="bg-limitations" class="bg-section">
+                        <h3>6. Limitations</h3>
+                        <ul>
+                            <li>Constant-amplitude, uniaxial loading only.</li>
+                            <li>No rainflow counting, dwell-fatigue sequencing, or Miner damage.</li>
+                            <li>No multiaxial or notch-root modeling.</li>
+                            <li>Preset load-case mode uses explicit surrogate relations. It is exploratory by design.</li>
+                            <li>Results outside preset range are still shown, but confidence is intentionally downgraded.</li>
+                        </ul>
+                    </div>
+
+                    <div id="bg-references" class="bg-section">
+                        <h3>7. References</h3>
+                        <ul>
+                            <li><a href="https://www.mdpi.com/2504-477X/7/12/484" target="_blank" rel="noopener">Bogdanov, Panin, and Kosmachev, 2023 review of short-fiber reinforced polymer fatigue models</a></li>
+                            <li><a href="https://doi.org/10.1016/j.ijfatigue.2019.06.003" target="_blank" rel="noopener">Mixed strain-rate and energy-based fatigue criterion, International Journal of Fatigue, 2019</a></li>
+                            <li><a href="https://doi.org/10.1016/j.ijfatigue.2020.105574" target="_blank" rel="noopener">Validation across orientation, load ratio, and environment, International Journal of Fatigue, 2020</a></li>
+                            <li><a href="https://doi.org/10.1016/j.ijfatigue.2024.108257" target="_blank" rel="noopener">Cyclic creep strain-rate validation across wide load ratios, International Journal of Fatigue, 2024</a></li>
+                            <li><a href="https://doi.org/10.1016/j.ijfatigue.2006.02.031" target="_blank" rel="noopener">Bellenger et al., PA66/GF thermal-mechanical fatigue transition at 2 and 10 Hz, International Journal of Fatigue, 2006</a></li>
+                            <li><a href="https://doi.org/10.1002/pc.22185" target="_blank" rel="noopener">Esmaeillou et al., PA66/GF fatigue data spanning 2-60 Hz under multiple load modes, Polymer Composites, 2012</a></li>
+                            <li><a href="https://doi.org/10.1016/S0032-3861(00)00897-1" target="_blank" rel="noopener">Noda et al., short glass-fiber reinforced Nylon 66 fatigue behavior at 20 Hz, Polymer, 2001</a></li>
+                            <li><a href="https://doi.org/10.1016/j.compscitech.2019.05.021" target="_blank" rel="noopener">Lee et al., PA66-GF30 conventional 3 Hz and ultrasonic 20 kHz VHCF comparison, Composites Science and Technology, 2019</a></li>
+                            <li><a href="https://doi.org/10.1016/j.compositesb.2010.12.002" target="_blank" rel="noopener">Specific heat dissipation based fatigue assessment, Composites Part B, 2011</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Engineering Tools. All tools are for educational purposes. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        let pyUtils;
+        let pyToolModule;
+        let pyCompareCaller;
+        let toolDocumentation = {};
+        let materialPresets = {};
+        let lastResults = null;
+        let selectedModel = null;
+
+        const TOOL_MODULE_NAME = 'polymer_fatigue';
+        const TOOL_FUNCTION_NAME = 'compare_polymer_fatigue_criteria';
+        const PARAM_ORDER = [
+            'material_preset', 'workflow_mode', 'orientation_bucket', 'moisture_state',
+            'load_ratio', 'stress_amplitude_mpa', 'temperature_c', 'load_frequency_hz',
+            'target_life_cycles', 'direct_loop_energy_mj_per_m3', 'direct_cyclic_creep_rate_per_cycle',
+            'ultimate_strength_mpa', 'yield_strength_mpa', 'reference_strength_coeff_mpa',
+            'reference_exponent', 'energy_surrogate_coeff', 'energy_surrogate_exponent',
+            'energy_life_constant', 'energy_life_exponent', 'creep_surrogate_coeff',
+            'creep_surrogate_exponent', 'creep_life_constant', 'creep_life_exponent',
+            'hybrid_creep_weight', 'mean_stress_sensitivity'
+        ];
+        const STORAGE_KEY = 'polymer-fatigue-criteria-explorer-settings';
+
+        const defaultSettings = {
+            expertMode: false,
+            showDerivations: true,
+            theme: 'system',
+            density: 'comfortable',
+            precision: 3
+        };
+        let settings = { ...defaultSettings };
+
+        function toPlainObject(value) {
+            if (value instanceof Map) {
+                const obj = {};
+                value.forEach((v, k) => {
+                    obj[k] = toPlainObject(v);
+                });
+                return obj;
+            }
+            if (Array.isArray(value)) {
+                return value.map((item) => toPlainObject(item));
+            }
+            if (value && typeof value === 'object') {
+                const obj = {};
+                Object.entries(value).forEach(([k, v]) => {
+                    obj[k] = toPlainObject(v);
+                });
+                return obj;
+            }
+            return value;
+        }
+
+        function saveSettings() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                settings = { ...defaultSettings };
+                return;
+            }
+            try {
+                settings = { ...defaultSettings, ...JSON.parse(stored) };
+            } catch {
+                settings = { ...defaultSettings };
+            }
+        }
+
+        function setSegmentedActive(selector, value, dataAttr) {
+            document.querySelectorAll(`.settings-panel ${selector}`).forEach((btn) => {
+                const isActive = btn.dataset[dataAttr] === value;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        function applyExpertMode() {
+            const toggle = document.getElementById('expert-mode-toggle');
+            const status = document.getElementById('expert-mode-status');
+            toggle.checked = settings.expertMode;
+            status.textContent = settings.expertMode ? 'On' : 'Off';
+            updateAdvancedVisibility();
+        }
+
+        function applySettings() {
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+            document.getElementById('setting-show-derivations').checked = settings.showDerivations;
+            setSegmentedActive('[data-theme]', settings.theme, 'theme');
+            setSegmentedActive('[data-density]', settings.density, 'density');
+            setSegmentedActive('[data-precision]', String(settings.precision), 'precision');
+            applyExpertMode();
+            if (lastResults) {
+                displayResults(lastResults);
+            }
+        }
+
+        function handleSettingChange(key, value) {
+            settings[key] = value;
+            saveSettings();
+            applySettings();
+        }
+
+        function toggleSettingsPanel(forceOpen) {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = forceOpen ?? !panel.classList.contains('open');
+            panel.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+            panel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        }
+
+        function bindSettingsControls() {
+            document.getElementById('setting-show-derivations').addEventListener('change', (event) => {
+                handleSettingChange('showDerivations', event.target.checked);
+            });
+            document.querySelectorAll('.settings-panel [data-theme]').forEach((btn) => {
+                btn.addEventListener('click', () => handleSettingChange('theme', btn.dataset.theme));
+            });
+            document.querySelectorAll('.settings-panel [data-density]').forEach((btn) => {
+                btn.addEventListener('click', () => handleSettingChange('density', btn.dataset.density));
+            });
+            document.querySelectorAll('.settings-panel [data-precision]').forEach((btn) => {
+                btn.addEventListener('click', () => handleSettingChange('precision', Number(btn.dataset.precision)));
+            });
+            document.getElementById('settings-reset').addEventListener('click', () => {
+                settings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+            });
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsPanel(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettingsPanel(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettingsPanel(false));
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    toggleSettingsPanel(false);
+                }
+            });
+        }
+
+        function openTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach((tab) => {
+                tab.style.display = 'none';
+            });
+            document.querySelectorAll('.tab-link').forEach((btn) => btn.classList.remove('active'));
+            document.getElementById(tabName).style.display = 'block';
+            event.currentTarget.classList.add('active');
+            if (tabName === 'charts-tab') {
+                setTimeout(() => {
+                    ['waveform-plot', 'criterion-plot', 'sweep-plot', 'calibration-plot'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el && el.data) {
+                            Plotly.Plots.resize(el);
+                        }
+                    });
+                }, 120);
+            }
+            typesetMath();
+        }
+
+        function typesetMath() {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        function formatNumber(value, precisionOverride = null) {
+            if (value === null || value === undefined || !Number.isFinite(value)) return 'N/A';
+            const precision = precisionOverride ?? settings.precision;
+            return Number(value).toFixed(precision);
+        }
+
+        function formatCycles(value) {
+            if (value === null || value === undefined || !Number.isFinite(value)) return 'N/A';
+            if (value >= 1e5 || value < 1e-2) {
+                return Number(value).toExponential(2);
+            }
+            return Number(value).toFixed(2);
+        }
+
+        function formatScientific(value, digits = 2) {
+            if (value === null || value === undefined || !Number.isFinite(value)) return 'N/A';
+            return Number(value).toExponential(digits);
+        }
+
+        function formatHours(value) {
+            if (value === null || value === undefined || !Number.isFinite(value)) return 'N/A';
+            if (value >= 1e4 || value < 1e-2) {
+                return Number(value).toExponential(2);
+            }
+            return Number(value).toFixed(2);
+        }
+
+        function formatFrequency(value) {
+            if (value === null || value === undefined || !Number.isFinite(value)) return 'N/A';
+            if (value >= 1000) {
+                const khz = value / 1000;
+                return Number.isInteger(khz) ? `${khz.toFixed(0)} kHz` : `${khz.toFixed(1)} kHz`;
+            }
+            if (value >= 10) return `${value.toFixed(0)} Hz`;
+            if (value >= 1) return `${value.toFixed(1)} Hz`;
+            return `${value.toPrecision(3)} Hz`;
+        }
+
+        function getStateColor(state) {
+            if (state === 'valid') return getComputedStyle(document.body).getPropertyValue('--success-color').trim();
+            if (state === 'warning') return getComputedStyle(document.body).getPropertyValue('--warning-color').trim();
+            return getComputedStyle(document.body).getPropertyValue('--danger-color').trim();
+        }
+
+        function populateTooltips() {
+            if (!toolDocumentation.parameters) return;
+            PARAM_ORDER.forEach((paramId) => {
+                const tooltip = document.querySelector(`#${paramId} + .tooltip-trigger, .input-group:has(#${paramId}) .tooltip-trigger`);
+                if (tooltip && toolDocumentation.parameters[paramId]) {
+                    tooltip.setAttribute('data-tooltip', toolDocumentation.parameters[paramId]);
+                }
+            });
+        }
+
+        function populatePresetSelect() {
+            const select = document.getElementById('material_preset');
+            select.innerHTML = '';
+            Object.entries(materialPresets).forEach(([key, preset]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = preset.display_name;
+                select.appendChild(option);
+            });
+            select.value = 'pa66_gf50';
+        }
+
+        function populateOptions(selectId, values, selectedValue = null) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '';
+            values.forEach((value) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value.replaceAll('_', ' ');
+                select.appendChild(option);
+            });
+            if (selectedValue && values.includes(selectedValue)) {
+                select.value = selectedValue;
+            }
+        }
+
+        function setInputValue(id, value) {
+            const input = document.getElementById(id);
+            if (!input || value === undefined || value === null || value === '') return;
+            input.value = String(value);
+        }
+
+        function updatePresetSummary() {
+            const presetKey = document.getElementById('material_preset').value;
+            const preset = materialPresets[presetKey];
+            if (!preset) return;
+
+            populateOptions('orientation_bucket', preset.orientation_options || ['0_deg'], document.getElementById('orientation_bucket').value);
+            populateOptions('moisture_state', preset.supported_moisture_states || ['dry_as_molded'], document.getElementById('moisture_state').value);
+
+            const frequencyEvidenceHtml = (preset.frequency_evidence || []).length
+                ? `
+                    <div style="margin-top: 10px;">
+                        <strong>Published frequency evidence</strong>
+                        <ul>
+                            ${(preset.frequency_evidence || []).map((record) => `
+                                <li>
+                                    <a href="${record.source_url}" target="_blank" rel="noopener">${record.frequency_text}</a>
+                                    (${record.material_match}, ${record.test_method})<br>
+                                    ${record.summary}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `
+                : '';
+
+            document.getElementById('preset-summary').innerHTML = `
+                <strong>${preset.display_name}</strong><br>
+                ${preset.matrix || ''} ${preset.reinforcement ? ' / ' + preset.reinforcement : ''}<br>
+                Current criterion-fit window: R ${formatNumber(preset.supported_load_ratio_min, 2)} to ${formatNumber(preset.supported_load_ratio_max, 2)},
+                ${formatNumber(preset.supported_temperature_min_c, 0)} to ${formatNumber(preset.supported_temperature_max_c, 0)} deg C,
+                ${formatFrequency(preset.supported_frequency_min_hz)} to ${formatFrequency(preset.supported_frequency_max_hz)}.
+                ${frequencyEvidenceHtml}
+            `;
+
+            setInputValue('ultimate_strength_mpa', preset.ultimate_strength_mpa);
+            setInputValue('yield_strength_mpa', preset.yield_strength_mpa);
+            setInputValue('reference_strength_coeff_mpa', preset.reference_strength_coeff_mpa);
+            setInputValue('reference_exponent', preset.reference_exponent);
+            setInputValue('energy_surrogate_coeff', preset.energy_surrogate_coeff);
+            setInputValue('energy_surrogate_exponent', preset.energy_surrogate_exponent);
+            setInputValue('energy_life_constant', preset.energy_life_constant);
+            setInputValue('energy_life_exponent', preset.energy_life_exponent);
+            setInputValue('creep_surrogate_coeff', preset.creep_surrogate_coeff);
+            setInputValue('creep_surrogate_exponent', preset.creep_surrogate_exponent);
+            setInputValue('creep_life_constant', preset.creep_life_constant);
+            setInputValue('creep_life_exponent', preset.creep_life_exponent);
+            setInputValue('hybrid_creep_weight', preset.hybrid_creep_weight);
+            setInputValue('mean_stress_sensitivity', preset.mean_stress_sensitivity);
+
+            if (preset.representative_energy_mj_per_m3 !== undefined) {
+                setInputValue('direct_loop_energy_mj_per_m3', preset.representative_energy_mj_per_m3);
+            }
+            if (preset.representative_creep_rate_per_cycle !== undefined) {
+                setInputValue('direct_cyclic_creep_rate_per_cycle', preset.representative_creep_rate_per_cycle);
+            }
+
+            updateAdvancedVisibility();
+        }
+
+        function updateWorkflowVisibility() {
+            const mode = document.getElementById('workflow_mode').value;
+            const note = document.getElementById('workflow-note');
+            const section = document.getElementById('measured-loop-section');
+            if (mode === 'measured_loop') {
+                section.style.display = 'block';
+                note.innerHTML = '<strong>Measured stabilized loop:</strong> the tool will use your direct loop-energy and cyclic-creep inputs for the energy, creep, and hybrid criteria.';
+            } else {
+                section.style.display = 'none';
+                note.innerHTML = '<strong>Preset load case:</strong> the tool will estimate loop energy and cyclic creep rate from the selected preset and operating point.';
+            }
+        }
+
+        function updateAdvancedVisibility() {
+            const presetKey = document.getElementById('material_preset').value;
+            const showCustom = settings.expertMode || presetKey === 'custom_calibrated';
+            document.getElementById('custom-calibration-section').classList.toggle('active', showCustom);
+            document.getElementById('expert-mode-status').textContent = settings.expertMode ? 'On' : 'Off';
+        }
+
+        function bindFormControls() {
+            document.getElementById('material_preset').addEventListener('change', updatePresetSummary);
+            document.getElementById('workflow_mode').addEventListener('change', updateWorkflowVisibility);
+            document.getElementById('expert-mode-toggle').addEventListener('change', (event) => {
+                settings.expertMode = event.target.checked;
+                saveSettings();
+                applySettings();
+            });
+        }
+
+        function getChartTheme() {
+            const style = getComputedStyle(document.body);
+            return {
+                bgColor: style.getPropertyValue('--bg-card').trim(),
+                textColor: style.getPropertyValue('--text-color').trim(),
+                gridColor: style.getPropertyValue('--border-color').trim(),
+                accentColor: style.getPropertyValue('--accent-color').trim(),
+                successColor: style.getPropertyValue('--success-color').trim(),
+                warningColor: style.getPropertyValue('--warning-color').trim(),
+                dangerColor: style.getPropertyValue('--danger-color').trim()
+            };
+        }
+
+        function plotStressWaveform(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const waveTrace = {
+                x: data.time_values,
+                y: data.stress_values,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: theme.accentColor, width: 2.5 },
+                name: 'σ(t)',
+                hovertemplate: 't/T = %{x:.2f}<br>σ = %{y:.1f} MPa<extra></extra>'
+            };
+            const shapes = [
+                { y: data.sigma_max_mpa, label: 'σ_max', color: theme.dangerColor },
+                { y: data.sigma_mean_mpa, label: 'σ_mean', color: theme.warningColor },
+                { y: data.sigma_min_mpa, label: 'σ_min', color: theme.successColor }
+            ].map((s) => ({
+                type: 'line', x0: 0, x1: 1, y0: s.y, y1: s.y,
+                line: { color: s.color, width: 1.5, dash: 'dash' }
+            }));
+            const annotations = [
+                { y: data.sigma_max_mpa, text: `σ<sub>max</sub> = ${data.sigma_max_mpa.toFixed(1)}`, color: theme.dangerColor },
+                { y: data.sigma_mean_mpa, text: `σ<sub>mean</sub> = ${data.sigma_mean_mpa.toFixed(1)}`, color: theme.warningColor },
+                { y: data.sigma_min_mpa, text: `σ<sub>min</sub> = ${data.sigma_min_mpa.toFixed(1)}`, color: theme.successColor }
+            ].map((a) => ({
+                x: 1.0, y: a.y, xanchor: 'left', yanchor: 'middle',
+                text: a.text, showarrow: false,
+                font: { color: a.color, size: 12 },
+                xref: 'paper', yref: 'y',
+                xshift: 6
+            }));
+            // Add sigma_a bracket annotation at the peak
+            const midY = data.sigma_mean_mpa + data.stress_amplitude_mpa / 2;
+            annotations.push({
+                x: 0.25, y: midY, xanchor: 'left',
+                text: `σ<sub>a</sub> = ${data.stress_amplitude_mpa.toFixed(1)}`,
+                showarrow: false,
+                font: { color: theme.textColor, size: 12 },
+                xshift: 8
+            });
+            // Vertical line showing amplitude span
+            shapes.push({
+                type: 'line', x0: 0.25, x1: 0.25,
+                y0: data.sigma_mean_mpa, y1: data.sigma_max_mpa,
+                line: { color: theme.textColor, width: 1.5 }
+            });
+            // Small tick marks on the amplitude span line
+            shapes.push({
+                type: 'line', x0: 0.24, x1: 0.26,
+                y0: data.sigma_mean_mpa, y1: data.sigma_mean_mpa,
+                line: { color: theme.textColor, width: 1.5 }
+            });
+            shapes.push({
+                type: 'line', x0: 0.24, x1: 0.26,
+                y0: data.sigma_max_mpa, y1: data.sigma_max_mpa,
+                line: { color: theme.textColor, width: 1.5 }
+            });
+            Plotly.newPlot('waveform-plot', [waveTrace], {
+                margin: { t: 20, r: 100, l: 60, b: 50 },
+                xaxis: {
+                    title: 'Normalised time  (t / T)',
+                    range: [-0.02, 1.02],
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                yaxis: {
+                    title: 'Stress (MPa)',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                shapes: shapes,
+                annotations: annotations,
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor },
+                showlegend: false
+            }, { responsive: true });
+        }
+
+        function plotCriterionComparison(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const colors = data.applicability_states.map((state) => getStateColor(state));
+            const trace = {
+                x: data.labels,
+                y: data.life_cycles,
+                type: 'bar',
+                marker: { color: colors },
+                hovertemplate: '%{x}<br>Nf=%{y:.3e}<extra></extra>'
+            };
+            const targetTrace = {
+                x: data.labels,
+                y: data.labels.map(() => data.target_life_cycles),
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: theme.warningColor, dash: 'dash', width: 2 },
+                name: 'Target life'
+            };
+            Plotly.newPlot('criterion-plot', [trace, targetTrace], {
+                barmode: 'group',
+                margin: { t: 20, r: 20, l: 60, b: 60 },
+                yaxis: {
+                    title: 'Predicted life (cycles)',
+                    type: 'log',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                xaxis: {
+                    tickangle: -18,
+                    color: theme.textColor
+                },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor },
+                legend: { font: { color: theme.textColor } }
+            }, { responsive: true });
+        }
+
+        function makeSweepTrace(xValues, yValues, name, color) {
+            const points = [];
+            xValues.forEach((x, index) => {
+                const y = yValues[index];
+                if (Number.isFinite(y)) {
+                    points.push({ x, y });
+                }
+            });
+            return {
+                x: points.map((item) => item.x),
+                y: points.map((item) => item.y),
+                type: 'scatter',
+                mode: 'lines',
+                name,
+                line: { color, width: 2 }
+            };
+        }
+
+        function plotSweep(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const traces = [
+                makeSweepTrace(data.x_values, data.reference_cycles, 'Reference', theme.accentColor),
+                makeSweepTrace(data.x_values, data.energy_cycles, 'Energy', theme.successColor),
+                makeSweepTrace(data.x_values, data.creep_cycles, 'Cyclic creep', theme.warningColor),
+                makeSweepTrace(data.x_values, data.hybrid_cycles, 'Hybrid', theme.dangerColor)
+            ];
+            Plotly.newPlot('sweep-plot', traces, {
+                margin: { t: 20, r: 20, l: 60, b: 50 },
+                xaxis: {
+                    title: data.x_label,
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                yaxis: {
+                    title: 'Predicted life (cycles)',
+                    type: 'log',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor },
+                legend: { font: { color: theme.textColor } }
+            }, { responsive: true });
+        }
+
+        function plotCalibration(data) {
+            if (!data) return;
+            const theme = getChartTheme();
+            const envelope = {
+                x: data.energy_bounds,
+                y: data.creep_bounds,
+                type: 'scatter',
+                mode: 'lines',
+                fill: 'toself',
+                fillcolor: 'rgba(59,130,246,0.12)',
+                line: { color: theme.accentColor, width: 2 },
+                name: 'Preset envelope'
+            };
+            const representative = {
+                x: [data.representative_energy_mj_per_m3],
+                y: [data.representative_creep_rate_per_cycle],
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: theme.warningColor, size: 10, symbol: 'diamond' },
+                name: 'Representative point'
+            };
+            const current = {
+                x: [data.current_energy_mj_per_m3],
+                y: [data.current_creep_rate_per_cycle],
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: theme.dangerColor, size: 12 },
+                name: 'Current point'
+            };
+            Plotly.newPlot('calibration-plot', [envelope, representative, current], {
+                margin: { t: 20, r: 20, l: 70, b: 60 },
+                xaxis: {
+                    title: 'Loop energy (MJ/m^3)',
+                    type: 'log',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                yaxis: {
+                    title: 'Cyclic creep rate (/cycle)',
+                    type: 'log',
+                    gridcolor: theme.gridColor,
+                    color: theme.textColor
+                },
+                paper_bgcolor: theme.bgColor,
+                plot_bgcolor: theme.bgColor,
+                font: { family: 'Helvetica Neue, sans-serif', color: theme.textColor },
+                legend: { font: { color: theme.textColor } }
+            }, { responsive: true });
+        }
+
+        function showDerivationForRow(row) {
+            selectedModel = row.model;
+            document.querySelectorAll('#comparison-table-body tr').forEach((tr) => {
+                tr.classList.toggle('selected', tr.dataset.model === row.model);
+            });
+
+            document.getElementById('derivation-panel').style.display = 'block';
+            document.getElementById('deriv-title').textContent = row.display_name;
+            document.getElementById('deriv-equation').innerHTML = '$$' + row.subst_estimated_life_cycles + '$$';
+            document.getElementById('deriv-observables').innerHTML =
+                '$$' + (lastResults?.subst_loop_energy || '') + '$$' +
+                '$$' + (lastResults?.subst_cyclic_creep_rate || '') + '$$';
+            const notes = [];
+            if (row.source_title) {
+                notes.push(`<strong>Source:</strong> ${row.source_title}`);
+            }
+            if (row.source_url) {
+                notes.push(`<a href="${row.source_url}" target="_blank" rel="noopener">${row.source_url}</a>`);
+            }
+            if (row.warning_messages && row.warning_messages.length) {
+                notes.push(row.warning_messages.join('<br>'));
+            } else {
+                notes.push('No additional applicability notes for this row.');
+            }
+            document.getElementById('deriv-notes').innerHTML = notes.join('<br><br>');
+            typesetMath();
+        }
+
+        function renderComparisonTable(rows) {
+            const body = document.getElementById('comparison-table-body');
+            body.innerHTML = '';
+            rows.forEach((row) => {
+                const tr = document.createElement('tr');
+                tr.className = 'clickable';
+                tr.dataset.model = row.model;
+                tr.innerHTML = `
+                    <td>${row.display_name}</td>
+                    <td>${formatCycles(row.estimated_life_cycles)}</td>
+                    <td>${formatHours(row.estimated_life_hours)}</td>
+                    <td>${row.life_ratio_to_target !== null && Number.isFinite(row.life_ratio_to_target) ? formatNumber(row.life_ratio_to_target, 2) + 'x' : 'N/A'}</td>
+                    <td><span class="state-pill ${row.applicability_state}">${row.applicability_state}</span></td>
+                `;
+                tr.addEventListener('click', () => showDerivationForRow(row));
+                body.appendChild(tr);
+            });
+        }
+
+        function displayResults(results) {
+            lastResults = results;
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-shell').style.display = 'block';
+
+            document.getElementById('summary-governing-model').textContent = results.governing_model;
+            document.getElementById('summary-governing-life').textContent =
+                `${formatCycles(Math.min(...results.comparison_table.filter((row) => Number.isFinite(row.estimated_life_cycles)).map((row) => row.estimated_life_cycles)))} cycles`;
+            document.getElementById('summary-life-spread').textContent = `${formatNumber(results.life_spread_ratio, 2)}x`;
+            document.getElementById('summary-regime').textContent = results.lcf_hcf_regime;
+            document.getElementById('summary-mechanism').textContent = results.mechanism_regime;
+            document.getElementById('summary-loop-energy').textContent =
+                `${formatNumber(results.loop_energy_mj_per_m3, 3)} MJ/m^3`;
+            document.getElementById('summary-creep-rate').textContent =
+                `${formatScientific(results.cyclic_creep_rate_per_cycle, 2)} /cycle`;
+
+            const chipRow = document.getElementById('chip-row');
+            chipRow.innerHTML = '';
+            [
+                `<strong>Workflow:</strong> ${results.workflow_mode_resolved.replaceAll('_', ' ')}`,
+                `<strong>R:</strong> ${formatNumber(results.load_ratio, 2)}`,
+                `<strong>sigma max:</strong> ${formatNumber(results.sigma_max_mpa, 1)} MPa`,
+                `<strong>sigma mean:</strong> ${formatNumber(results.sigma_mean_mpa, 1)} MPa`,
+                `<strong>Temp:</strong> ${formatNumber(results.temperature_c, 1)} deg C`,
+                `<strong>Frequency:</strong> ${formatNumber(results.load_frequency_hz, 2)} Hz`
+            ].forEach((html) => {
+                const chip = document.createElement('div');
+                chip.className = 'chip';
+                chip.innerHTML = html;
+                chipRow.appendChild(chip);
+            });
+
+            const guidanceBox = document.getElementById('frequency-guidance-box');
+            const guidance = results.frequency_guidance;
+            if (guidance) {
+                const guidanceLines = [
+                    `<strong>Frequency guidance</strong><br>Current criterion-fit window: ${guidance.criterion_fit_text}.`,
+                    guidance.highest_continuous_frequency_text
+                        ? `Published conventional evidence reaches ${guidance.highest_continuous_frequency_text}.`
+                        : '',
+                    guidance.highest_any_frequency_text
+                        && guidance.highest_any_frequency_text !== guidance.highest_continuous_frequency_text
+                        ? `Separate high-frequency evidence reaches ${guidance.highest_any_frequency_text}.`
+                        : '',
+                    guidance.within_fit_range
+                        ? 'Current point is inside the criterion-fit window.'
+                        : 'Current point is outside the criterion-fit window, so the frequency dependence is an extrapolation.'
+                ].filter(Boolean);
+                const evidenceItems = (guidance.evidence_records || []).map((record) => `
+                    <li>
+                        <a href="${record.source_url}" target="_blank" rel="noopener">${record.frequency_text}</a>
+                        (${record.material_match}, ${record.test_method})<br>
+                        ${record.summary}
+                    </li>
+                `).join('');
+                guidanceBox.innerHTML = `
+                    ${guidanceLines.join('<br>')}
+                    ${evidenceItems ? `<ul>${evidenceItems}</ul>` : ''}
+                `;
+                guidanceBox.style.display = 'block';
+            } else {
+                guidanceBox.style.display = 'none';
+                guidanceBox.innerHTML = '';
+            }
+
+            const warningBox = document.getElementById('range-warning-box');
+            const warningList = document.getElementById('range-warning-list');
+            warningList.innerHTML = '';
+            if (results.warnings && results.warnings.length) {
+                warningBox.style.display = 'block';
+                results.warnings.forEach((warning) => {
+                    const li = document.createElement('li');
+                    li.textContent = warning;
+                    warningList.appendChild(li);
+                });
+            } else {
+                warningBox.style.display = 'none';
+            }
+
+            renderComparisonTable(results.comparison_table);
+
+            const statusBanner = document.getElementById('status-banner');
+            statusBanner.className = `status-banner ${results.status}`;
+            const statusTitles = {
+                acceptable: 'Compared models are aligned above target life',
+                marginal: 'Compared models are near or split around target life',
+                unacceptable: 'The governing compared model falls below target life'
+            };
+            const statusMessages = {
+                acceptable: 'The current point is comfortably above the target life for the governing valid criterion, with moderate model spread.',
+                marginal: 'The comparison is close to the target or the compared criteria spread materially. Treat this as a review point, not a green light.',
+                unacceptable: 'At least one valid criterion predicts life below the target. Reduce severity or switch to measured-loop data before drawing conclusions.'
+            };
+            const statusIcons = {
+                acceptable: '&#10003;',
+                marginal: '&#9888;',
+                unacceptable: '&#10007;'
+            };
+            document.getElementById('status-icon').innerHTML = statusIcons[results.status];
+            document.getElementById('status-title').textContent = statusTitles[results.status];
+            document.getElementById('status-message').textContent = statusMessages[results.status];
+            const recommendationList = document.getElementById('recommendations-list');
+            recommendationList.innerHTML = '';
+            (results.recommendations || []).forEach((recommendation) => {
+                const li = document.createElement('li');
+                li.textContent = recommendation;
+                recommendationList.appendChild(li);
+            });
+
+            plotStressWaveform(results.stress_waveform_plot_data);
+            plotCriterionComparison(results.criterion_plot_data);
+            plotSweep(results.sweep_plot_data);
+            plotCalibration(results.calibration_plot_data);
+
+            if (settings.showDerivations) {
+                const targetRow = results.comparison_table.find((row) => row.display_name === results.governing_model)
+                    || results.comparison_table[0];
+                if (targetRow) {
+                    showDerivationForRow(targetRow);
+                }
+            }
+            typesetMath();
+        }
+
+        function collectPayload() {
+            return {
+                material_preset: document.getElementById('material_preset').value,
+                workflow_mode: document.getElementById('workflow_mode').value,
+                orientation_bucket: document.getElementById('orientation_bucket').value,
+                moisture_state: document.getElementById('moisture_state').value,
+                load_ratio: parseFloat(document.getElementById('load_ratio').value),
+                stress_amplitude_mpa: parseFloat(document.getElementById('stress_amplitude_mpa').value),
+                temperature_c: parseFloat(document.getElementById('temperature_c').value),
+                load_frequency_hz: parseFloat(document.getElementById('load_frequency_hz').value),
+                target_life_cycles: parseFloat(document.getElementById('target_life_cycles').value),
+                direct_loop_energy_mj_per_m3: parseFloat(document.getElementById('direct_loop_energy_mj_per_m3').value),
+                direct_cyclic_creep_rate_per_cycle: parseFloat(document.getElementById('direct_cyclic_creep_rate_per_cycle').value),
+                ultimate_strength_mpa: parseFloat(document.getElementById('ultimate_strength_mpa').value),
+                yield_strength_mpa: parseFloat(document.getElementById('yield_strength_mpa').value),
+                reference_strength_coeff_mpa: parseFloat(document.getElementById('reference_strength_coeff_mpa').value),
+                reference_exponent: parseFloat(document.getElementById('reference_exponent').value),
+                energy_surrogate_coeff: parseFloat(document.getElementById('energy_surrogate_coeff').value),
+                energy_surrogate_exponent: parseFloat(document.getElementById('energy_surrogate_exponent').value),
+                energy_life_constant: parseFloat(document.getElementById('energy_life_constant').value),
+                energy_life_exponent: parseFloat(document.getElementById('energy_life_exponent').value),
+                creep_surrogate_coeff: parseFloat(document.getElementById('creep_surrogate_coeff').value),
+                creep_surrogate_exponent: parseFloat(document.getElementById('creep_surrogate_exponent').value),
+                creep_life_constant: parseFloat(document.getElementById('creep_life_constant').value),
+                creep_life_exponent: parseFloat(document.getElementById('creep_life_exponent').value),
+                hybrid_creep_weight: parseFloat(document.getElementById('hybrid_creep_weight').value),
+                mean_stress_sensitivity: parseFloat(document.getElementById('mean_stress_sensitivity').value)
+            };
+        }
+
+        async function handleCalculate(event) {
+            event.preventDefault();
+            const button = document.getElementById('calculate-btn');
+            button.disabled = true;
+            button.textContent = 'Calculating...';
+            try {
+                const payload = collectPayload();
+                const resultProxy = pyCompareCaller(JSON.stringify(payload));
+                const raw = resultProxy.toJs({ dict_converter: Object.fromEntries, create_proxies: false });
+                if (resultProxy.destroy) resultProxy.destroy();
+                const results = toPlainObject(raw);
+                displayResults(results);
+            } catch (error) {
+                console.error(error);
+                document.getElementById('results-placeholder').style.display = 'block';
+                document.getElementById('results-placeholder').textContent = `Error: ${error.message}`;
+                document.getElementById('results-shell').style.display = 'none';
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Calculate';
+            }
+        }
+
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+            loadSettings();
+            applySettings();
+            bindSettingsControls();
+            bindFormControls();
+
+            try {
+                loadingText.textContent = 'Loading Pyodide...';
+                const pyodide = await loadPyodide();
+
+                loadingText.textContent = 'Loading Python modules...';
+                await pyodide.runPythonAsync(`
+import inspect
+import json
+from pyodide.http import pyfetch
+
+response_utils = await pyfetch('../../pycalcs/utils.py')
+with open('utils.py', 'w') as handle:
+    handle.write(await response_utils.string())
+
+response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+with open('${TOOL_MODULE_NAME}.py', 'w') as handle:
+    handle.write(await response_tool.string())
+
+import utils
+import ${TOOL_MODULE_NAME}
+
+def call_polymer_tool(payload_json):
+    payload = json.loads(payload_json)
+    signature = inspect.signature(${TOOL_MODULE_NAME}.${TOOL_FUNCTION_NAME})
+    accepted = {
+        name: payload[name]
+        for name in signature.parameters
+        if name in payload
+    }
+    return ${TOOL_MODULE_NAME}.${TOOL_FUNCTION_NAME}(**accepted)
+                `);
+
+                pyUtils = pyodide.globals.get('utils');
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+                pyCompareCaller = pyodide.globals.get('call_polymer_tool');
+
+                loadingText.textContent = 'Loading presets...';
+                const presetsProxy = pyToolModule.get_polymer_fatigue_presets();
+                materialPresets = toPlainObject(
+                    presetsProxy.toJs({ dict_converter: Object.fromEntries, create_proxies: false })
+                );
+                if (presetsProxy.destroy) presetsProxy.destroy();
+                populatePresetSelect();
+                updatePresetSummary();
+                updateWorkflowVisibility();
+
+                loadingText.textContent = 'Parsing documentation...';
+                const docProxy = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME);
+                toolDocumentation = toPlainObject(
+                    docProxy.toJs({ dict_converter: Object.fromEntries, create_proxies: false })
+                );
+                if (docProxy.destroy) docProxy.destroy();
+                populateTooltips();
+
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('calculate-btn').disabled = false;
+                handleCalculate({ preventDefault() {} });
+            } catch (error) {
+                console.error(error);
+                loadingText.textContent = `Error loading tool: ${error.message}`;
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

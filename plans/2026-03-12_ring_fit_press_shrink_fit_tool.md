@@ -718,7 +718,7 @@ If no clean Shigley worked example is available in the chosen edition, keep:
 
 Planned files:
 
-- `plans/ring_fit_press_shrink_fit_tool.md`
+- `plans/2026-03-12_ring_fit_press_shrink_fit_tool.md`
 - `pycalcs/interference_fits.py`
 - `tests/test_interference_fits.py`
 - `tools/ring-fit/index.html`

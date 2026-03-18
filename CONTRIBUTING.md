@@ -4,6 +4,15 @@ This guide describes the day-to-day development workflow, including how to
 prototype new tools safely without deploying to production. For tool creation
 standards (templates, docstrings, required files), see `AGENTS.md`.
 
+## Plans Folder Convention
+
+Repository-level planning documents in `/plans/` must use dated filenames and a matching in-document date:
+
+- Filename: `YYYY-MM-DD_short_slug.md`
+- Header: `Date: YYYY-MM-DD` immediately below the H1 title
+
+Use the same ISO 8601 date in both places so plan files sort chronologically in directory listings. This rule applies to `/plans/` documents, not tool-local `ROADMAP.md` files.
+
 ## Branch Model
 
 - `main`: Production. Only verified or approved releases land here.
@@ -47,6 +56,7 @@ standards (templates, docstrings, required files), see `AGENTS.md`.
 - Pycalcs function docstrings follow the required format.
 - Tests added or updated.
 - `catalog.json` entry added (if the tool should appear in staging or prod).
+- New or updated `/plans/` documents use the required `YYYY-MM-DD_short_slug.md` filename and matching `Date:` header.
 - `python -m pytest` passes.
 
 ## CI Expectations (High Level)
