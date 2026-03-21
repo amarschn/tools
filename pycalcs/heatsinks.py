@@ -109,8 +109,14 @@ def air_properties(temperature_c: float, pressure_pa: float = 101325.0) -> AirPr
     )
     density = pressure_pa / (AIR_GAS_CONSTANT * temperature_k)
 
-    # Compact fits around room-temperature air.
-    thermal_conductivity = 0.0241 * (temperature_k / 273.15) ** 0.9
+    # Sutherland-type thermal conductivity fit for air.
+    # Matches NIST data within 1.5% from 200 K to 700 K.
+    thermal_conductivity = (
+        0.02414
+        * (temperature_k / 273.15) ** 1.5
+        * (273.15 + 194.0)
+        / (temperature_k + 194.0)
+    )
     specific_heat = 1006.0 + 0.1 * (temperature_k - 300.0)
 
     kinematic_viscosity = dynamic_viscosity / density
@@ -206,6 +212,28 @@ def linearized_radiation_coefficient(
     return emissivity * SIGMA * (
         surface_temperature_k**2 + ambient_temperature_k**2
     ) * (surface_temperature_k + ambient_temperature_k)
+
+
+def fin_channel_radiation_view_factor(fin_height: float, fin_spacing: float) -> float:
+    """
+    Effective radiation view factor for a fin channel to the environment.
+
+    For closely spaced fins, most radiation leaving one fin surface strikes
+    the adjacent fin (at nearly the same temperature), reducing net radiation
+    to ambient. The model treats the channel as two parallel plates of height
+    H separated by gap s, open at top and bottom:
+
+        F_eff = s / (s + H)
+
+    Approaches 1 for wide spacing, 0 for deep channels.
+
+    ---References---
+    Sparrow, E. M., Cess, R. D. (1978). Radiation Heat Transfer.
+    Siegel, R., Howell, J. R. (2002). Thermal Radiation Heat Transfer.
+    """
+    if fin_height <= 0.0 or fin_spacing <= 0.0:
+        return 1.0
+    return fin_spacing / (fin_spacing + fin_height)
 
 
 def rectangular_fin_efficiency(
@@ -312,10 +340,172 @@ def natural_convection_plate_array(
         nusselt_number * props.thermal_conductivity / geometry.fin_spacing
     )
 
+    # Estimate induced channel velocity from chimney-flow energy balance.
+    # Q_conv ≈ rho * cp * V * A_channel * dT_air, with dT_air ≈ 0.5 * delta_t.
+    air_rise_estimate = max(delta_t * 0.5, 1.0)
+    if geometry.open_flow_area > 0:
+        channel_velocity_estimate = (
+            convection_coefficient
+            * geometry.fin_spacing
+            * geometry.fin_height
+            * delta_t
+            / (props.density * props.specific_heat * geometry.open_flow_area * air_rise_estimate)
+        )
+    else:
+        channel_velocity_estimate = 0.0
+    channel_velocity_estimate = min(max(channel_velocity_estimate, 0.0), 2.0)
+    volumetric_flow_estimate = channel_velocity_estimate * geometry.open_flow_area
+
     return {
         "convection_coefficient": max(convection_coefficient, 0.0),
         "nusselt_number": nusselt_number,
         "rayleigh_modified": rayleigh_modified,
+        "reynolds_number": 0.0,
+        "channel_velocity": channel_velocity_estimate,
+        "volumetric_flow_rate": volumetric_flow_estimate,
+        "pressure_drop": 0.0,
+    }
+
+
+def rectangular_spreading_resistance(
+    source_length: float,
+    source_width: float,
+    base_length: float,
+    base_width: float,
+    base_thickness: float,
+    thermal_conductivity: float,
+) -> float:
+    """
+    Estimate constriction/spreading resistance for a centered rectangular source
+    on a rectangular plate.
+
+    Uses the Yovanovich et al. dimensionless approach for a uniform-flux source
+    with adiabatic edges:
+
+        R_sp = psi / (k * sqrt(pi * A_s))
+
+    where psi is a function of the relative source size epsilon = sqrt(A_s/A_p)
+    and relative thickness tau = t / sqrt(A_p).
+
+    Returns zero when the source footprint equals or exceeds the plate footprint.
+
+    ---References---
+    Yovanovich, M. M., Muzychka, Y. S., Culham, J. R. (1999).
+        Spreading Resistance of Isoflux Rectangles and Strips on
+        Compound Flux Channels.
+    Lee, S., Song, S., Au, V., Moran, K. P. (1995).
+        Constriction/Spreading Resistance Model for Electronics Packaging.
+    """
+    if source_length <= 0 or source_width <= 0:
+        raise ValueError("Source dimensions must be positive.")
+    if base_length <= 0 or base_width <= 0 or base_thickness <= 0:
+        raise ValueError("Base dimensions must be positive.")
+    if thermal_conductivity <= 0:
+        raise ValueError("Thermal conductivity must be positive.")
+
+    source_area = source_length * source_width
+    plate_area = base_length * base_width
+
+    if source_area >= plate_area:
+        return 0.0
+
+    epsilon = math.sqrt(source_area / plate_area)
+    tau = base_thickness / math.sqrt(plate_area)
+    psi = (1.0 - epsilon) ** 1.5 / (epsilon * tau + (1.0 - epsilon) ** 1.5)
+
+    return psi / (thermal_conductivity * math.sqrt(math.pi * source_area))
+
+
+def estimate_bypass_fraction(
+    geometry: PlateFinGeometry,
+) -> float:
+    """
+    Estimate the fraction of approach airflow that bypasses the fin array
+    in an unducted configuration.
+
+    Uses a first-order model based on fin aspect ratio:
+        bypass_fraction approx 1 / (1 + K * sqrt(H/s))
+
+    where K is an empirical constant (~0.5 for typical unducted heatsinks).
+
+    ---References---
+    Simons, R. E. (2004). Estimating the Effect of Flow Bypass on
+        Parallel Plate-Fin Heat Sink Performance. Electronics Cooling.
+    """
+    if geometry.fin_spacing <= 0 or geometry.fin_height <= 0:
+        return 0.0
+    aspect = geometry.fin_height / geometry.fin_spacing
+    k_bypass = 0.5
+    # Throughput fraction = 1 / (1 + K*sqrt(H/s)); bypass = 1 - throughput.
+    throughput = 1.0 / (1.0 + k_bypass * math.sqrt(max(aspect, 0.01)))
+    return max(0.0, min(1.0 - throughput, 0.9))
+
+
+def natural_convection_horizontal_plate_array(
+    geometry: PlateFinGeometry,
+    surface_temperature: float,
+    ambient_temperature: float,
+    facing: str = "up",
+    pressure_pa: float = 101325.0,
+) -> Dict[str, float]:
+    """
+    Estimate natural convection for a horizontal plate-fin array.
+
+    For fins facing up (heated surface up), uses the McAdams correlation:
+        Nu = 0.54 * Ra_L^0.25  (10^4 < Ra_L < 10^7, laminar)
+        Nu = 0.15 * Ra_L^0.33  (10^7 < Ra_L < 10^11, turbulent)
+
+    For fins facing down (heated surface down):
+        Nu = 0.27 * Ra_L^0.25  (10^5 < Ra_L < 10^10)
+
+    The characteristic length is L_c = A / P for the base footprint.
+
+    ---References---
+    McAdams, W. H. (1954). Heat Transmission, 3rd ed.
+    Incropera et al. Fundamentals of Heat and Mass Transfer, Table 9.1.
+    """
+    delta_t = surface_temperature - ambient_temperature
+    if delta_t <= 0.0:
+        return {
+            "convection_coefficient": 0.0,
+            "nusselt_number": 0.0,
+            "rayleigh_modified": 0.0,
+            "reynolds_number": 0.0,
+            "channel_velocity": 0.0,
+            "volumetric_flow_rate": 0.0,
+            "pressure_drop": 0.0,
+        }
+
+    film_temperature = 0.5 * (surface_temperature + ambient_temperature)
+    props = air_properties(film_temperature, pressure_pa=pressure_pa)
+
+    # Characteristic length for horizontal plate: A / P.
+    char_length = (geometry.base_length * geometry.base_width) / (
+        2.0 * (geometry.base_length + geometry.base_width)
+    )
+    rayleigh = (
+        GRAVITY
+        * props.thermal_expansion
+        * delta_t
+        * char_length ** 3
+        / (props.kinematic_viscosity * props.thermal_diffusivity)
+    )
+    rayleigh = max(rayleigh, 1e-12)
+
+    if facing == "up":
+        if rayleigh < 1e7:
+            nusselt_number = 0.54 * rayleigh ** 0.25
+        else:
+            nusselt_number = 0.15 * rayleigh ** (1.0 / 3.0)
+    else:
+        nusselt_number = 0.27 * rayleigh ** 0.25
+
+    convection_coefficient = nusselt_number * props.thermal_conductivity / char_length
+
+    return {
+        "convection_coefficient": max(convection_coefficient, 0.0),
+        "nusselt_number": nusselt_number,
+        "rayleigh_modified": rayleigh,
         "reynolds_number": 0.0,
         "channel_velocity": 0.0,
         "volumetric_flow_rate": 0.0,
@@ -384,15 +574,16 @@ def forced_convection_plate_array(
             reynolds_number, geometry.fin_spacing / geometry.fin_height
         )
     else:
-        darcy_friction_factor = 0.3164 * reynolds_number ** -0.25
-        friction_term = (0.79 * math.log(reynolds_number) - 1.64) ** -2
+        # Petukhov friction factor — used for both Nusselt and pressure drop
+        # so that the Gnielinski correlation is self-consistent.
+        darcy_friction_factor = (0.790 * math.log(reynolds_number) - 1.64) ** -2
         nusselt_number = (
-            (friction_term / 8.0)
+            (darcy_friction_factor / 8.0)
             * (reynolds_number - 1000.0)
             * props.prandtl
             / (
                 1.0
-                + 12.7 * math.sqrt(friction_term / 8.0) * (props.prandtl ** (2.0 / 3.0) - 1.0)
+                + 12.7 * math.sqrt(darcy_friction_factor / 8.0) * (props.prandtl ** (2.0 / 3.0) - 1.0)
             )
         )
 
@@ -422,8 +613,28 @@ def fan_curve_pressure(
     volumetric_flow_rate: float,
     fan_max_pressure: float,
     fan_max_flow_rate: float,
+    fan_curve_points: list = None,
 ) -> float:
-    """Simple parabolic fan model spanning free-delivery to shutoff pressure."""
+    """
+    Fan pressure at a given flow rate.
+
+    When fan_curve_points is provided (list of [flow, pressure] pairs with at
+    least 2 entries), uses piecewise-linear interpolation. Otherwise falls back
+    to the simple parabolic model: P = P_max * (1 - (Q/Q_max)^2).
+    """
+    if fan_curve_points and len(fan_curve_points) >= 2:
+        points = sorted(fan_curve_points, key=lambda p: p[0])
+        if volumetric_flow_rate <= points[0][0]:
+            return points[0][1]
+        if volumetric_flow_rate >= points[-1][0]:
+            return max(points[-1][1], 0.0)
+        for i in range(len(points) - 1):
+            if points[i][0] <= volumetric_flow_rate <= points[i + 1][0]:
+                frac = (
+                    (volumetric_flow_rate - points[i][0])
+                    / (points[i + 1][0] - points[i][0])
+                )
+                return points[i][1] + frac * (points[i + 1][1] - points[i][1])
 
     if fan_max_pressure < 0.0 or fan_max_flow_rate <= 0.0:
         raise ValueError("Fan curve limits must be positive.")
@@ -499,6 +710,10 @@ def analyze_plate_fin_heatsink(
     interface_resistance: float = 0.0,
     junction_to_case_resistance: float = 0.0,
     pressure_pa: float = 101325.0,
+    orientation: str = "vertical",
+    source_length: float = 0.0,
+    source_width: float = 0.0,
+    ducted: bool = True,
 ) -> Dict[str, Any]:
     r"""
     Analyze the steady-state performance of a straight plate-fin heatsink in air.
@@ -517,48 +732,86 @@ def analyze_plate_fin_heatsink(
 
     ---Parameters---
     heat_load : float
-        Heat that must be rejected to ambient in watts (W).
+        Total heat dissipated to air (W). Typical: 5–150 W for electronics, up to
+        1 kW+ for industrial. Higher loads demand larger sinks or forced air.
     ambient_temperature : float
-        Ambient air temperature in degrees Celsius (°C).
+        Surrounding air temperature (°C). Typical: 25 °C bench, 40–55 °C inside
+        enclosures. Higher ambient shrinks the available ΔT budget.
     target_junction_temperature : float
-        Maximum allowable upper source-node temperature in degrees Celsius (°C).
-        In electronics this is often the junction temperature limit.
+        Maximum allowable internal source temperature (°C). In electronics this is
+        the junction limit from the datasheet. Typical: 85–125 °C for ICs, 150 °C
+        for power devices. Lower limits require more aggressive cooling.
     base_length : float
-        Heatsink length in the primary flow direction in metres (m).
+        Heatsink length along the airflow direction (m). Typical: 30–200 mm. Longer
+        sinks add fin area but also increase pressure drop and reduce convection
+        effectiveness downstream.
     base_width : float
-        Total heatsink width across the fin array in metres (m).
+        Total width across the fin array (m). Typical: 30–200 mm. Wider sinks
+        accept more fins and more airflow. High sensitivity — often the most
+        effective dimension to increase.
     base_thickness : float
-        Thickness of the heatsink base in metres (m).
+        Thickness of the base plate (m). Typical: 3–10 mm. Thicker bases spread
+        heat better from small sources but add weight. Low sensitivity unless the
+        source is much smaller than the base.
     fin_height : float
-        Height of each straight fin above the base in metres (m).
+        Height of each fin above the base (m). Typical: 10–60 mm. Taller fins add
+        area but efficiency drops as conduction path length grows.
     fin_thickness : float
-        Thickness of each fin in metres (m).
+        Thickness of each fin (m). Typical: 0.8–2.0 mm. Thicker fins conduct
+        better but reduce channel spacing. Moderate sensitivity in natural
+        convection, low in forced.
     fin_count : int
-        Number of straight fins in the array.
+        Number of fins in the array. Typical: 5–40 depending on width. More fins
+        add area but narrow the channels, increasing pressure drop and reducing
+        natural-convection flow. High sensitivity — there is an optimum.
     material_conductivity : float
-        Thermal conductivity of the heatsink material in W/m·K.
+        Thermal conductivity of the heatsink material (W/m·K). Aluminium alloys:
+        150–220, copper: 380–400, steel: 15–50. Higher conductivity improves fin
+        efficiency and spreading.
     surface_emissivity : float
-        Surface emissivity of the exposed heatsink in the range (0, 1].
+        Total hemispherical emissivity of exposed surfaces (0–1). Anodized Al:
+        0.8–0.9, polished Al: 0.05–0.1, painted: 0.85–0.95. Affects radiation
+        which can be 25–50% of heat transfer in natural convection.
     airflow_mode : str
-        One of ``natural``, ``forced``, or ``fan_curve``.
+        Cooling regime: "natural" = buoyancy-driven, "forced" = known air velocity
+        or flow rate, "fan_curve" = fan operating point from curve intersection.
     approach_velocity : float
-        Approach velocity through the heatsink frontal area in m/s. Used only
-        for ``forced`` mode when ``volumetric_flow_rate`` is zero.
+        Far-field air velocity upstream of the sink (m/s). Typical: 1–5 m/s.
+        The model converts this to channel velocity using the open area ratio.
+        Used only in forced mode when volumetric_flow_rate is zero.
     volumetric_flow_rate : float
-        Volumetric airflow through the fin channels in m^3/s. Used in
-        ``forced`` mode when greater than zero.
+        Measured airflow through the fin channels (m³/s). Typical: 0.001–0.01 m³/s.
+        If nonzero, overrides approach_velocity. Used in forced mode.
     fan_max_pressure : float
-        Fan shutoff pressure in pascals (Pa) for ``fan_curve`` mode.
+        Fan static pressure at zero flow (Pa), from the fan datasheet. Typical: 20–
+        200 Pa for small axial fans. Used in fan_curve mode.
     fan_max_flow_rate : float
-        Fan free-delivery flow rate in m^3/s for ``fan_curve`` mode.
+        Fan free-delivery flow rate at zero back-pressure (m³/s). Typical: 0.002–
+        0.02 m³/s for 40–120 mm fans. Used in fan_curve mode.
     interface_resistance : float
-        Thermal resistance from the outer mounting surface to the sink base in K/W.
+        Case-to-sink thermal resistance (K/W). Includes TIM, contact pressure,
+        and surface finish effects. Typical: 0.05–0.5 K/W depending on TIM.
     junction_to_case_resistance : float
-        Thermal resistance from the internal source node to the outer mounting
-        surface in K/W. In electronics this is often called junction-to-case
-        resistance.
+        Source-to-case thermal resistance (K/W). In electronics, from the IC
+        junction to the package exterior. Typical: 0.1–2 K/W, from the
+        device datasheet. Dominates the total resistance for low-power devices.
     pressure_pa : float
-        Ambient pressure in pascals (Pa), used for air properties.
+        Ambient air pressure (Pa). Default 101325 Pa (sea level). Lower pressure
+        at altitude reduces air density and convection; e.g. ~80 kPa at 2000 m.
+    orientation : str
+        Heatsink mounting orientation. "vertical" = fins vertical with air rising
+        upward, "horizontal_up" = fins pointing up, "horizontal_down" = fins
+        pointing down. Affects natural convection correlation only.
+    source_length : float
+        Length of the heat source footprint (m). Set to 0 to assume full-base
+        coverage. When smaller than the base, a spreading resistance penalty is
+        computed via the Yovanovich model. Typical: device package size.
+    source_width : float
+        Width of the heat source footprint (m). Same conventions as source_length.
+    ducted : bool
+        True if a duct or shroud forces all air through the fins. False if
+        unducted, where some airflow bypasses the fin array. Bypass reduces
+        effective flow by ~25–50% depending on fin height-to-spacing ratio.
 
     ---Returns---
     required_sink_thermal_resistance : float
@@ -671,13 +924,27 @@ def analyze_plate_fin_heatsink(
 
     def resolve_flow(surface_temperature: float) -> Dict[str, float]:
         if airflow_mode == "natural":
-            state = natural_convection_plate_array(
-                geometry=geometry,
-                surface_temperature=surface_temperature,
-                ambient_temperature=ambient_temperature,
-                pressure_pa=pressure_pa,
-            )
-            state["convection_mode_used"] = "natural"
+            if orientation == "vertical":
+                state = natural_convection_plate_array(
+                    geometry=geometry,
+                    surface_temperature=surface_temperature,
+                    ambient_temperature=ambient_temperature,
+                    pressure_pa=pressure_pa,
+                )
+            elif orientation in ("horizontal_up", "horizontal_down"):
+                facing = "up" if orientation == "horizontal_up" else "down"
+                state = natural_convection_horizontal_plate_array(
+                    geometry=geometry,
+                    surface_temperature=surface_temperature,
+                    ambient_temperature=ambient_temperature,
+                    facing=facing,
+                    pressure_pa=pressure_pa,
+                )
+            else:
+                raise ValueError(
+                    "orientation must be 'vertical', 'horizontal_up', or 'horizontal_down'."
+                )
+            state["convection_mode_used"] = f"natural_{orientation}"
             return state
 
         if airflow_mode == "forced":
@@ -685,6 +952,9 @@ def analyze_plate_fin_heatsink(
                 flow_rate = volumetric_flow_rate
             else:
                 flow_rate = max(approach_velocity, 0.0) * geometry.frontal_area
+            if not ducted:
+                bypass = estimate_bypass_fraction(geometry)
+                flow_rate *= (1.0 - bypass)
             state = forced_convection_plate_array(
                 geometry=geometry,
                 surface_temperature=surface_temperature,
@@ -693,6 +963,8 @@ def analyze_plate_fin_heatsink(
                 pressure_pa=pressure_pa,
             )
             state["convection_mode_used"] = "forced"
+            if not ducted:
+                state["bypass_fraction"] = bypass
             return state
 
         state = solve_fan_operating_point(
@@ -713,6 +985,12 @@ def analyze_plate_fin_heatsink(
             surface_temperature_c=surface_temperature,
             ambient_temperature_c=ambient_temperature,
         )
+        # Correct for fin-to-fin view factor.
+        radiation_view_factor = fin_channel_radiation_view_factor(
+            fin_height=geometry.fin_height,
+            fin_spacing=geometry.fin_spacing,
+        )
+        radiation_coefficient *= radiation_view_factor
         effective_coefficient = flow_state["convection_coefficient"] + radiation_coefficient
         fin_efficiency = rectangular_fin_efficiency(
             fin_height=geometry.fin_height,
@@ -743,6 +1021,7 @@ def analyze_plate_fin_heatsink(
         return {
             "flow_state": flow_state,
             "radiation_coefficient": radiation_coefficient,
+            "radiation_view_factor": radiation_view_factor,
             "fin_efficiency": fin_efficiency,
             "overall_efficiency": overall_efficiency,
             "heat_rejected": heat_rejected,
@@ -773,7 +1052,20 @@ def analyze_plate_fin_heatsink(
     base_temperature = upper_temperature
     final_state = upper_state
     sink_r_theta = (base_temperature - ambient_temperature) / heat_load
-    case_temperature = base_temperature + heat_load * interface_resistance
+
+    # Spreading resistance for undersized source footprints.
+    eff_source_length = source_length if source_length > 0 else geometry.base_length
+    eff_source_width = source_width if source_width > 0 else geometry.base_width
+    spreading_r = rectangular_spreading_resistance(
+        source_length=eff_source_length,
+        source_width=eff_source_width,
+        base_length=geometry.base_length,
+        base_width=geometry.base_width,
+        base_thickness=geometry.base_thickness,
+        thermal_conductivity=material_conductivity,
+    )
+    effective_base_temperature = base_temperature + heat_load * spreading_r
+    case_temperature = effective_base_temperature + heat_load * interface_resistance
     junction_temperature = case_temperature + heat_load * junction_to_case_resistance
     temperature_margin = target_junction_temperature - junction_temperature
 
@@ -786,17 +1078,72 @@ def analyze_plate_fin_heatsink(
 
     recommendations: List[str] = []
     if required_r_sink <= 0.0:
+        _upstream_rise = heat_load * (junction_to_case_resistance + interface_resistance)
+        _total_rise = target_junction_temperature - ambient_temperature
         recommendations.append(
-            "Upstream source-to-case and interface resistances consume the full thermal budget."
+            f"Required sink Rθ is negative ({required_r_sink:.3f} K/W). "
+            f"At {heat_load:.1f} W the upstream path (Rθjc + Rθcs) produces "
+            f"{_upstream_rise:.1f} °C of rise, but only {_total_rise:.1f} °C is available "
+            f"from ambient to the source limit. "
+            "Reduce the heat load, raise the source temperature limit, "
+            "or lower the upstream resistances — heatsink geometry changes alone cannot fix this."
         )
     if temperature_margin < 0.0:
-        recommendations.append("Reduce heat load or increase heatsink surface area and airflow.")
+        _suggestions: List[str] = []
+        if airflow_mode == "natural":
+            _suggestions.append("switch to forced convection")
+        if geometry.fin_count < 20:
+            _suggestions.append(
+                f"increase fin count from {geometry.fin_count} to {geometry.fin_count + 4}"
+            )
+        if geometry.fin_height < 0.05:
+            _h_mm = geometry.fin_height * 1000
+            _suggestions.append(
+                f"increase fin height from {_h_mm:.0f} mm to {_h_mm + 10:.0f} mm"
+            )
+        if surface_emissivity < 0.5:
+            _suggestions.append("use a black anodized finish (emissivity ~0.85)")
+        if geometry.base_thickness < 0.006:
+            _b_mm = geometry.base_thickness * 1000
+            _suggestions.append(
+                f"increase base thickness from {_b_mm:.1f} mm to {_b_mm + 2:.1f} mm"
+            )
+        if _suggestions:
+            recommendations.append(
+                "Design exceeds thermal budget. Try: " + "; ".join(_suggestions) + "."
+            )
+        else:
+            recommendations.append(
+                "Design exceeds thermal budget. Consider a larger heatsink or active cooling."
+            )
     if final_state["fin_efficiency"] < 0.7:
         recommendations.append("Fin efficiency is low; consider shorter fins, thicker fins, or higher conductivity material.")
     if airflow_mode in {"forced", "fan_curve"} and final_state["flow_state"]["pressure_drop"] > 75.0:
         recommendations.append("Pressure drop is high relative to small axial fans; reduce fin density or shorten the flow length.")
     if final_state["radiation_heat"] > 0.15 * heat_load:
         recommendations.append("Radiation is materially helping; a high-emissivity finish is beneficial for this design.")
+    if spreading_r > 0.01:
+        recommendations.append(
+            f"Spreading resistance adds {spreading_r:.3f} K/W; consider a thicker base or vapor chamber."
+        )
+    # Mixed convection Richardson number warning.
+    if airflow_mode in ("forced", "fan_curve"):
+        _flow = final_state["flow_state"]
+        if _flow["reynolds_number"] > 0:
+            _film_t = 0.5 * (base_temperature + ambient_temperature)
+            _props_check = air_properties(_film_t, pressure_pa=pressure_pa)
+            _grashof = (
+                GRAVITY * _props_check.thermal_expansion
+                * (base_temperature - ambient_temperature)
+                * geometry.hydraulic_diameter ** 3
+                / _props_check.kinematic_viscosity ** 2
+            )
+            _richardson = _grashof / (_flow["reynolds_number"] ** 2)
+            if _richardson > 0.1:
+                recommendations.append(
+                    f"Richardson number is {_richardson:.2f} (>0.1); buoyancy effects may be significant. "
+                    "Consider verifying with a mixed-convection analysis."
+                )
     if not recommendations:
         recommendations.append("Thermal budget is met with reasonable margin under the modeled assumptions.")
 
@@ -805,9 +1152,10 @@ def analyze_plate_fin_heatsink(
     cross_section_area = geometry.fin_thickness * geometry.base_length
     wetted_perimeter = 2.0 * (geometry.base_length + geometry.fin_thickness)
     corrected_length = geometry.fin_height + geometry.fin_thickness / 2.0
-    m_length = math.sqrt(
+    m_value = math.sqrt(
         effective_coefficient * wetted_perimeter / (material_conductivity * cross_section_area)
-    ) * corrected_length
+    )
+    m_length = m_value * corrected_length
     result = {
         "required_sink_thermal_resistance": required_r_sink,
         "sink_thermal_resistance": sink_r_theta,
@@ -825,6 +1173,9 @@ def analyze_plate_fin_heatsink(
         "nusselt_number": flow_state["nusselt_number"],
         "convection_coefficient": flow_state["convection_coefficient"],
         "radiation_coefficient": final_state["radiation_coefficient"],
+        "radiation_view_factor": final_state["radiation_view_factor"],
+        "spreading_resistance": spreading_r,
+        "bypass_fraction": flow_state.get("bypass_fraction", 0.0),
         "fin_efficiency": final_state["fin_efficiency"],
         "overall_surface_efficiency": final_state["overall_efficiency"],
         "convection_heat_rejected": final_state["convection_heat"],
@@ -834,6 +1185,8 @@ def analyze_plate_fin_heatsink(
         "status": status,
         "recommendations": recommendations,
     }
+
+    # ── Substituted equation strings (LaTeX) ──
     result["subst_required_sink_thermal_resistance"] = (
         "R_{\\theta,\\mathrm{req,sink}} = "
         f"\\frac{{{target_junction_temperature:.2f} - {ambient_temperature:.2f}}}{{{heat_load:.3f}}}"
@@ -850,6 +1203,21 @@ def analyze_plate_fin_heatsink(
         f"\\left({interface_resistance:.4f} + {junction_to_case_resistance:.4f}\\right)"
         f" = {junction_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
     )
+    result["subst_case_temperature"] = (
+        f"T_{{\\mathrm{{case}}}} = T_{{\\mathrm{{base,eff}}}} + Q \\cdot R_{{\\theta,cs}}"
+        f" = {effective_base_temperature:.2f} + {heat_load:.3f} \\times {interface_resistance:.4f}"
+        f" = {case_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+    )
+    result["subst_base_temperature"] = (
+        f"T_b = T_\\infty + Q \\cdot R_{{\\theta,\\mathrm{{sink}}}}"
+        f" = {ambient_temperature:.2f} + {heat_load:.3f} \\times {sink_r_theta:.4f}"
+        f" = {base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+    )
+    result["subst_channel_velocity"] = (
+        f"V_{{ch}} = \\frac{{\\dot{{V}}}}{{A_{{\\mathrm{{open}}}}}}"
+        f" = \\frac{{{flow_state['volumetric_flow_rate']:.6f}}}{{{geometry.open_flow_area:.6f}}}"
+        f" = {flow_state['channel_velocity']:.3f}\\,\\mathrm{{m/s}}"
+    )
     result["subst_fin_efficiency"] = (
         "\\eta_f = \\frac{\\tanh(mL_c)}{mL_c},\\;"
         f"mL_c = \\sqrt{{\\frac{{{effective_coefficient:.3f} \\times {wetted_perimeter:.6f}}}"
@@ -858,8 +1226,620 @@ def analyze_plate_fin_heatsink(
         f" = {m_length:.4f}"
         f",\\; \\eta_f = {final_state['fin_efficiency']:.4f}"
     )
+    result["subst_overall_efficiency"] = (
+        f"\\eta_o = 1 - \\frac{{A_f}}{{A_t}}(1 - \\eta_f)"
+        f" = 1 - \\frac{{{geometry.fin_area:.6f}}}{{{geometry.total_area:.6f}}}"
+        f"(1 - {final_state['fin_efficiency']:.4f})"
+        f" = {final_state['overall_efficiency']:.4f}"
+    )
     result["subst_pressure_drop"] = (
         "\\Delta P = \\left(f\\frac{L}{D_h} + K_c + K_e\\right)\\frac{\\rho V_{ch}^2}{2}"
         f" = {flow_state['pressure_drop']:.2f}\\,\\mathrm{{Pa}}"
     )
+
+    _h_conv = flow_state["convection_coefficient"]
+    _h_rad_raw = final_state["radiation_coefficient"]
+    _vf = final_state["radiation_view_factor"]
+    result["subst_convection_coefficient"] = (
+        f"h_{{\\mathrm{{conv}}}} = \\frac{{\\mathrm{{Nu}} \\cdot k_{{\\mathrm{{air}}}}}}{{D_h}}"
+        f" = {flow_state['nusselt_number']:.3f} \\times \\frac{{k_{{\\mathrm{{air}}}}}}{{D_h}}"
+        f" = {_h_conv:.3f}\\,\\mathrm{{W/m^2 K}}"
+    )
+    _ts_k = base_temperature + 273.15
+    _ta_k = ambient_temperature + 273.15
+    result["subst_radiation_coefficient"] = (
+        f"h_{{\\mathrm{{rad}}}} = \\varepsilon \\sigma (T_s^2 + T_\\infty^2)(T_s + T_\\infty) \\cdot F_{{\\mathrm{{eff}}}}"
+        f" = {surface_emissivity:.2f} \\times {SIGMA:.4e}"
+        f" \\times ({_ts_k:.1f}^2 + {_ta_k:.1f}^2)({_ts_k:.1f} + {_ta_k:.1f})"
+        f" \\times {_vf:.3f}"
+        f" = {_h_rad_raw:.4f}\\,\\mathrm{{W/m^2 K}}"
+    )
+    _conv_pct = 100.0 * final_state["convection_heat"] / max(final_state["heat_rejected"], 1e-12)
+    _rad_pct = 100.0 * final_state["radiation_heat"] / max(final_state["heat_rejected"], 1e-12)
+    result["subst_heat_split"] = (
+        f"Q_{{\\mathrm{{conv}}}} = \\eta_o h_{{\\mathrm{{conv}}}} A_t \\Delta T"
+        f" = {final_state['convection_heat']:.2f}\\,\\mathrm{{W}}"
+        f"\\;({_conv_pct:.1f}\\%),\\quad"
+        f"Q_{{\\mathrm{{rad}}}} = \\eta_o h_{{\\mathrm{{rad}}}} A_t \\Delta T"
+        f" = {final_state['radiation_heat']:.2f}\\,\\mathrm{{W}}"
+        f"\\;({_rad_pct:.1f}\\%)"
+    )
+
+    # ── Intermediate values for progressive disclosure ──
+    film_t = 0.5 * (base_temperature + ambient_temperature)
+    props_final = air_properties(film_t, pressure_pa=pressure_pa)
+    result["intermediate_values"] = {
+        "film_temperature": film_t,
+        "air_density": props_final.density,
+        "air_dynamic_viscosity": props_final.dynamic_viscosity,
+        "air_thermal_conductivity": props_final.thermal_conductivity,
+        "air_specific_heat": props_final.specific_heat,
+        "air_prandtl": props_final.prandtl,
+        "air_kinematic_viscosity": props_final.kinematic_viscosity,
+        "fin_cross_section_area": cross_section_area,
+        "fin_wetted_perimeter": wetted_perimeter,
+        "fin_corrected_length": corrected_length,
+        "fin_m_value": m_value,
+        "fin_m_length": m_length,
+        "effective_h": effective_coefficient,
+        "open_flow_area": geometry.open_flow_area,
+        "open_area_ratio": geometry.open_area_ratio,
+        "frontal_area": geometry.frontal_area,
+        "fin_area": geometry.fin_area,
+        "exposed_base_area": geometry.exposed_base_area,
+        "total_area": geometry.total_area,
+        "radiation_view_factor": _vf,
+        "spreading_resistance": spreading_r,
+        "effective_base_temperature": effective_base_temperature,
+        "rayleigh_or_reynolds": (
+            flow_state.get("rayleigh_modified", 0.0)
+            if airflow_mode == "natural"
+            else flow_state["reynolds_number"]
+        ),
+    }
+    if airflow_mode != "natural":
+        _re = flow_state["reynolds_number"]
+        _graetz = _re * props_final.prandtl * geometry.hydraulic_diameter / geometry.base_length
+        result["intermediate_values"]["graetz_number"] = _graetz
+        _sigma = geometry.open_area_ratio
+        result["intermediate_values"]["contraction_loss_Kc"] = 0.42 * (1.0 - _sigma**2)
+        result["intermediate_values"]["expansion_loss_Ke"] = (1.0 - _sigma) ** 2
+        if _re > 0 and _re < 2300:
+            _beta = min(max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0)
+            _f_poi = 24.0 * (1.0 - 1.3553*_beta + 1.9467*_beta**2
+                             - 1.7012*_beta**3 + 0.9564*_beta**4 - 0.2537*_beta**5)
+            result["intermediate_values"]["darcy_friction_factor"] = _f_poi / _re
+            result["intermediate_values"]["flow_regime"] = "laminar"
+        elif _re >= 2300:
+            result["intermediate_values"]["darcy_friction_factor"] = (
+                (0.790 * math.log(_re) - 1.64) ** -2
+            )
+            result["intermediate_values"]["flow_regime"] = "turbulent"
+
+    # ── Dynamic assumptions list ──
+    assumptions: List[str] = [
+        "Steady-state analysis — no transient effects modeled.",
+        "Isothermal base — the base plate is assumed to be at a uniform temperature "
+        "before adding the spreading resistance correction.",
+        f"Air properties evaluated at the film temperature "
+        f"T_film = ({base_temperature:.1f} + {ambient_temperature:.1f})/2 = {film_t:.1f} °C "
+        f"using Sutherland-law fits (valid 200–700 K, actual {film_t + 273.15:.0f} K).",
+    ]
+    if airflow_mode == "natural":
+        if orientation == "vertical":
+            assumptions.append(
+                "Natural convection: Bar-Cohen/Rohsenow (1984) composite isothermal parallel-plate "
+                f"correlation with modified Rayleigh number Ra* = {flow_state.get('rayleigh_modified', 0):.2f}."
+            )
+        else:
+            _ra = flow_state.get("rayleigh_modified", 0)
+            _facing = "heated surface up" if orientation == "horizontal_up" else "heated surface down"
+            assumptions.append(
+                f"Natural convection: McAdams (1954) horizontal plate correlation ({_facing}), "
+                f"Ra_L = {_ra:.1f}."
+            )
+        assumptions.append(
+            "Induced channel velocity estimated from chimney-flow energy balance — "
+            "treat as approximate."
+        )
+    else:
+        _re = flow_state["reynolds_number"]
+        if _re < 2300:
+            assumptions.append(
+                f"Forced convection: Laminar regime (Re = {_re:.0f} < 2300). "
+                "Developing-flow Nusselt number from Muzychka/Yovanovich (2004) combined-entry correlation. "
+                "Friction factor from Shah/London rectangular-duct Poiseuille-number fit."
+            )
+        else:
+            assumptions.append(
+                f"Forced convection: Turbulent regime (Re = {_re:.0f} > 2300). "
+                "Gnielinski correlation for Nusselt number. "
+                "Petukhov friction factor used for both heat transfer and pressure drop."
+            )
+        if not ducted and flow_state.get("bypass_fraction", 0.0) > 0:
+            _bp = flow_state["bypass_fraction"]
+            assumptions.append(
+                f"Unducted configuration — bypass fraction = {_bp:.0%} removed from channel flow "
+                "(first-order model: bypass ≈ 1/(1 + 0.5·√(H/s)), per Simons 2003)."
+            )
+        assumptions.append(
+            f"Pressure drop includes Darcy friction (f·L/D_h), entrance contraction (K_c = "
+            f"{0.42 * (1.0 - geometry.open_area_ratio**2):.3f}), and exit expansion "
+            f"(K_e = {(1.0 - geometry.open_area_ratio)**2:.3f})."
+        )
+
+    if airflow_mode == "fan_curve":
+        assumptions.append(
+            "Fan operating point found by binary-search intersection of parabolic fan curve "
+            "with the heatsink system curve (ΔP ∝ Q²)."
+        )
+
+    assumptions.append(
+        f"Radiation: linearized Stefan-Boltzmann coefficient with ε = {surface_emissivity:.2f}. "
+        f"Fin-channel view factor F_eff = s/(s+H) = {_vf:.3f} "
+        f"(Sparrow/Cess 1978 parallel-plate model)."
+    )
+    assumptions.append(
+        f"Fin efficiency: straight rectangular fin with corrected tip length "
+        f"(L_c = H + t/2 = {corrected_length*1000:.2f} mm). "
+        f"η_f = tanh(mL_c)/(mL_c) = {final_state['fin_efficiency']:.3f}."
+    )
+    assumptions.append(
+        f"Overall surface efficiency η_o = {final_state['overall_efficiency']:.3f} "
+        f"(A_fin/A_total = {geometry.fin_area/geometry.total_area:.3f})."
+    )
+    if spreading_r > 0.0:
+        assumptions.append(
+            f"Spreading resistance R_sp = {spreading_r:.4f} K/W added for source footprint "
+            f"{eff_source_length*1000:.1f}×{eff_source_width*1000:.1f} mm on "
+            f"{geometry.base_length*1000:.1f}×{geometry.base_width*1000:.1f} mm base "
+            "(Yovanovich et al. 1999 dimensionless model)."
+        )
+    else:
+        assumptions.append("Source covers full base — no spreading resistance added.")
+
+    _t_k = film_t + 273.15
+    if _t_k < 200.0 or _t_k > 700.0:
+        assumptions.append(
+            f"WARNING: Film temperature {_t_k:.0f} K is outside the validated range "
+            "for the Sutherland air-property fits (200–700 K). Results may be inaccurate."
+        )
+
+    result["assumptions"] = assumptions
+
+    # ── Correlation details per output ──
+    result["correlation_details"] = {
+        "convection_coefficient": {
+            "name": (
+                "Bar-Cohen/Rohsenow (1984)" if airflow_mode == "natural" and orientation == "vertical"
+                else "McAdams (1954)" if airflow_mode == "natural"
+                else "Gnielinski" if flow_state["reynolds_number"] >= 2300
+                else "Muzychka/Yovanovich (2004)"
+            ),
+            "reference": (
+                "Bar-Cohen, Rohsenow, J. Heat Transfer 106(1), 1984, doi:10.1115/1.3246622"
+                if airflow_mode == "natural" and orientation == "vertical"
+                else "McAdams, Heat Transmission, 3rd ed., 1954; Incropera et al., Table 9.1"
+                if airflow_mode == "natural"
+                else "Gnielinski, Int. Chem. Eng. 16:359, 1976; Petukhov, Adv. Heat Transfer 6:503, 1970"
+                if flow_state["reynolds_number"] >= 2300
+                else "Muzychka, Yovanovich, J. Heat Transfer 126(1), 2004, doi:10.1115/1.1643752"
+            ),
+            "validity": (
+                "Isothermal vertical parallel plates, Ra* > 0"
+                if airflow_mode == "natural" and orientation == "vertical"
+                else f"Horizontal plate, 10⁴ < Ra_L < 10¹¹"
+                if airflow_mode == "natural"
+                else "2300 < Re < 5×10⁶, 0.5 < Pr < 2000"
+                if flow_state["reynolds_number"] >= 2300
+                else "Developing laminar flow in rectangular ducts, Re < 2300"
+            ),
+        },
+        "pressure_drop": {
+            "name": (
+                "Darcy-Weisbach with rectangular-duct Poiseuille correction"
+                if flow_state["reynolds_number"] < 2300
+                else "Darcy-Weisbach with Petukhov friction factor"
+            ),
+            "reference": (
+                "Shah, London, Laminar Flow Forced Convection in Ducts, 1978; "
+                "Simons, Electronics Cooling, 2003"
+            ),
+            "validity": "Entrance/exit losses via Kays & London contraction/expansion model.",
+        },
+        "radiation_coefficient": {
+            "name": "Linearized Stefan-Boltzmann with parallel-plate view factor",
+            "reference": (
+                "Incropera et al., Fundamentals of Heat and Mass Transfer; "
+                "Sparrow & Cess, Radiation Heat Transfer, 1978"
+            ),
+            "validity": "Gray-diffuse surfaces, linearization valid when T_s − T_∞ is moderate.",
+        },
+        "fin_efficiency": {
+            "name": "Straight rectangular fin with corrected tip length",
+            "reference": "Incropera et al., Fundamentals of Heat and Mass Transfer, Table 3.5.",
+            "validity": "Uniform h over fin surface, 1D conduction along fin height.",
+        },
+        "spreading_resistance": {
+            "name": "Yovanovich dimensionless spreading model",
+            "reference": (
+                "Yovanovich, Muzychka, Culham (1999), Spreading Resistance of Isoflux Rectangles; "
+                "Lee, Song, Au, Moran (1995), Constriction/Spreading Resistance Model"
+            ),
+            "validity": "Centered rectangular source on rectangular plate, uniform flux, adiabatic edges.",
+        },
+    }
+
     return result
+
+
+def analyze_heatsink_spreading_view(
+    heat_load: float,
+    ambient_temperature: float,
+    target_junction_temperature: float,
+    base_length: float,
+    base_width: float,
+    base_thickness: float,
+    fin_height: float,
+    fin_thickness: float,
+    fin_count: int,
+    material_conductivity: float,
+    surface_emissivity: float = 0.85,
+    airflow_mode: str = "natural",
+    approach_velocity: float = 0.0,
+    volumetric_flow_rate: float = 0.0,
+    fan_max_pressure: float = 0.0,
+    fan_max_flow_rate: float = 0.0,
+    interface_resistance: float = 0.0,
+    junction_to_case_resistance: float = 0.0,
+    pressure_pa: float = 101325.0,
+    orientation: str = "vertical",
+    source_length: float = 0.0,
+    source_width: float = 0.0,
+    ducted: bool = True,
+    source_x: float = 0.0,
+    source_y: float = 0.0,
+    grid_x: int = 41,
+    grid_y: int = 25,
+    sink_thermal_resistance: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Run the global plate-fin solver, then solve the 2D base spreading field.
+
+    Parameters match ``analyze_plate_fin_heatsink`` with additional source
+    position and grid controls.  ``source_x`` and ``source_y`` are the source
+    center coordinates measured from the lower-left corner of the base.  If
+    zero, the source is centered.
+
+    If ``sink_thermal_resistance`` is provided and > 0, the internal baseline
+    solver call is skipped and the provided value is used directly.  This
+    avoids redundant computation when the caller already has the baseline
+    result.
+
+    Returns a dict with the full baseline result under ``"baseline"`` and
+    the spreading field data under ``"spreading"``.
+    """
+    try:
+        from pycalcs.heatsink_spreading import solve_base_spreading_field
+    except ImportError:
+        from heatsink_spreading import solve_base_spreading_field
+
+    if sink_thermal_resistance > 0:
+        baseline = None
+        sink_r = sink_thermal_resistance
+    else:
+        baseline = analyze_plate_fin_heatsink(
+            heat_load=heat_load,
+            ambient_temperature=ambient_temperature,
+            target_junction_temperature=target_junction_temperature,
+            base_length=base_length,
+            base_width=base_width,
+            base_thickness=base_thickness,
+            fin_height=fin_height,
+            fin_thickness=fin_thickness,
+            fin_count=fin_count,
+            material_conductivity=material_conductivity,
+            surface_emissivity=surface_emissivity,
+            airflow_mode=airflow_mode,
+            approach_velocity=approach_velocity,
+            volumetric_flow_rate=volumetric_flow_rate,
+            fan_max_pressure=fan_max_pressure,
+            fan_max_flow_rate=fan_max_flow_rate,
+            interface_resistance=interface_resistance,
+            junction_to_case_resistance=junction_to_case_resistance,
+            pressure_pa=pressure_pa,
+            orientation=orientation,
+            source_length=source_length,
+            source_width=source_width,
+            ducted=ducted,
+        )
+        sink_r = baseline["sink_thermal_resistance"]
+
+    eff_source_length = source_length if source_length > 0 else base_length
+    eff_source_width = source_width if source_width > 0 else base_width
+    eff_source_x = source_x if source_x > 0 else base_length / 2.0
+    eff_source_y = source_y if source_y > 0 else base_width / 2.0
+
+    # Flag off-center source in baseline assumptions.
+    is_off_center = (
+        abs(eff_source_x - base_length / 2.0) > 1e-6
+        or abs(eff_source_y - base_width / 2.0) > 1e-6
+    )
+    if is_off_center and baseline is not None:
+        baseline.setdefault("assumptions", []).append(
+            "Headline results use a centered-source spreading model (Yovanovich); "
+            "see Spread View for off-center effects."
+        )
+
+    if sink_r <= 0:
+        return {
+            "baseline": baseline,
+            "spreading": None,
+            "spreading_error": "Sink thermal resistance is zero or negative; spreading solve not possible.",
+        }
+
+    sources = [{
+        "id": "source_1",
+        "x_center": eff_source_x,
+        "y_center": eff_source_y,
+        "length": eff_source_length,
+        "width": eff_source_width,
+        "power": heat_load,
+        "junction_to_case_resistance": junction_to_case_resistance,
+        "interface_resistance": interface_resistance,
+    }]
+
+    try:
+        spreading = solve_base_spreading_field(
+            base_length=base_length,
+            base_width=base_width,
+            base_thickness=base_thickness,
+            material_conductivity=material_conductivity,
+            ambient_temperature=ambient_temperature,
+            sink_thermal_resistance=sink_r,
+            sources=sources,
+            grid_x=grid_x,
+            grid_y=grid_y,
+        )
+    except ValueError as e:
+        return {
+            "baseline": baseline,
+            "spreading": None,
+            "spreading_error": str(e),
+        }
+
+    return {
+        "baseline": baseline,
+        "spreading": spreading,
+        "spreading_error": None,
+    }
+
+
+def get_heatsink_sweep_metadata() -> Dict[str, Any]:
+    """Return parameter and output definitions for sensitivity analysis."""
+    return {
+        "parameters": {
+            "fin_height": {
+                "label": "Fin Height", "unit": "m", "display_unit": "mm",
+                "display_scale": 1000, "category": "geometry",
+                "default_span": [0.5, 1.5], "min": 0.005, "max": 0.120,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "fin_thickness": {
+                "label": "Fin Thickness", "unit": "m", "display_unit": "mm",
+                "display_scale": 1000, "category": "geometry",
+                "default_span": [0.5, 2.0], "min": 0.0003, "max": 0.005,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "fin_count": {
+                "label": "Fin Count", "unit": "", "display_unit": "",
+                "display_scale": 1, "category": "geometry",
+                "default_span": [0.5, 2.0], "min": 2, "max": 60,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+                "integer": True,
+            },
+            "base_thickness": {
+                "label": "Base Thickness", "unit": "m", "display_unit": "mm",
+                "display_scale": 1000, "category": "geometry",
+                "default_span": [0.5, 2.0], "min": 0.001, "max": 0.020,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "base_length": {
+                "label": "Base Length", "unit": "m", "display_unit": "mm",
+                "display_scale": 1000, "category": "geometry",
+                "default_span": [0.5, 1.5], "min": 0.020, "max": 0.300,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "base_width": {
+                "label": "Base Width", "unit": "m", "display_unit": "mm",
+                "display_scale": 1000, "category": "geometry",
+                "default_span": [0.5, 1.5], "min": 0.020, "max": 0.300,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "heat_load": {
+                "label": "Heat Load", "unit": "W", "display_unit": "W",
+                "display_scale": 1, "category": "thermal",
+                "default_span": [0.5, 2.0], "min": 0.5, "max": 500.0,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "ambient_temperature": {
+                "label": "Ambient Temperature", "unit": "°C", "display_unit": "°C",
+                "display_scale": 1, "category": "thermal",
+                "default_span": [0.8, 1.2], "min": -40.0, "max": 85.0,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "surface_emissivity": {
+                "label": "Surface Emissivity", "unit": "", "display_unit": "",
+                "display_scale": 1, "category": "thermal",
+                "default_span": [0.5, 1.0], "min": 0.02, "max": 0.95,
+                "scale": "linear", "modes": ["natural", "forced", "fan_curve"],
+            },
+            "approach_velocity": {
+                "label": "Approach Velocity", "unit": "m/s", "display_unit": "m/s",
+                "display_scale": 1, "category": "airflow",
+                "default_span": [0.3, 2.0], "min": 0.1, "max": 15.0,
+                "scale": "linear", "modes": ["forced"],
+            },
+        },
+        "outputs": {
+            "sink_thermal_resistance": {
+                "label": "Sink Thermal Resistance", "unit": "K/W", "goal": "minimize",
+            },
+            "junction_temperature": {
+                "label": "Junction Temperature", "unit": "°C", "goal": "minimize",
+            },
+            "temperature_margin": {
+                "label": "Temperature Margin", "unit": "°C", "goal": "maximize",
+            },
+            "pressure_drop": {
+                "label": "Pressure Drop", "unit": "Pa", "goal": "minimize",
+            },
+            "fin_efficiency": {
+                "label": "Fin Efficiency", "unit": "", "goal": "maximize",
+            },
+        },
+    }
+
+
+def _filter_solver_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip keys not accepted by analyze_plate_fin_heatsink."""
+    import inspect
+    valid = set(inspect.signature(analyze_plate_fin_heatsink).parameters)
+    return {k: v for k, v in inputs.items() if k in valid}
+
+
+def run_heatsink_1d_sweep(
+    baseline_inputs: Dict[str, Any],
+    sweep_param: str,
+    sweep_values: list,
+    output_keys: list = None,
+) -> Dict[str, Any]:
+    """
+    Run a 1D parameter sweep around a baseline heatsink configuration.
+
+    For each value in sweep_values, overrides sweep_param in baseline_inputs,
+    calls analyze_plate_fin_heatsink(), and collects the requested output keys.
+    """
+    if output_keys is None:
+        output_keys = ["sink_thermal_resistance", "junction_temperature", "temperature_margin"]
+
+    metadata = get_heatsink_sweep_metadata()
+    if sweep_param not in metadata["parameters"]:
+        raise ValueError(f"Unknown sweep parameter: {sweep_param}")
+
+    baseline_x = baseline_inputs.get(sweep_param)
+    results_series: Dict[str, list] = {key: [] for key in output_keys}
+    valid_mask: List[bool] = []
+    warnings: List[str] = []
+
+    for val in sweep_values:
+        inputs = dict(baseline_inputs)
+        if metadata["parameters"][sweep_param].get("integer"):
+            inputs[sweep_param] = int(val)
+        else:
+            inputs[sweep_param] = float(val)
+        try:
+            result = analyze_plate_fin_heatsink(**_filter_solver_inputs(inputs))
+            for key in output_keys:
+                results_series[key].append(result.get(key))
+            valid_mask.append(True)
+        except (ValueError, ZeroDivisionError) as exc:
+            for key in output_keys:
+                results_series[key].append(None)
+            valid_mask.append(False)
+            warnings.append(f"At {sweep_param}={val}: {exc}")
+
+    baseline_outputs: Dict[str, Any] = {}
+    try:
+        baseline_result = analyze_plate_fin_heatsink(**_filter_solver_inputs(baseline_inputs))
+        for key in output_keys:
+            baseline_outputs[key] = baseline_result.get(key)
+    except Exception:
+        pass
+
+    return {
+        "x_values": list(sweep_values),
+        "series": results_series,
+        "baseline_x": baseline_x,
+        "baseline_outputs": baseline_outputs,
+        "valid_mask": valid_mask,
+        "warnings": warnings,
+    }
+
+
+def run_heatsink_2d_contour(
+    baseline_inputs: Dict[str, Any],
+    x_param: str,
+    y_param: str,
+    x_values: list,
+    y_values: list,
+    output_key: str = "sink_thermal_resistance",
+) -> Dict[str, Any]:
+    """
+    Run a 2D parameter sweep and return a contour grid.
+
+    Returns z_values as a 2D list [y_index][x_index].
+    """
+    metadata = get_heatsink_sweep_metadata()
+    if x_param not in metadata["parameters"]:
+        raise ValueError(f"Unknown x parameter: {x_param}")
+    if y_param not in metadata["parameters"]:
+        raise ValueError(f"Unknown y parameter: {y_param}")
+
+    z_values: List[list] = []
+    valid_mask: List[list] = []
+    best_z = None
+    best_point = None
+    goal = metadata["outputs"].get(output_key, {}).get("goal", "minimize")
+
+    for y_val in y_values:
+        z_row: list = []
+        valid_row: List[bool] = []
+        for x_val in x_values:
+            inputs = dict(baseline_inputs)
+            if metadata["parameters"][x_param].get("integer"):
+                inputs[x_param] = int(x_val)
+            else:
+                inputs[x_param] = float(x_val)
+            if metadata["parameters"][y_param].get("integer"):
+                inputs[y_param] = int(y_val)
+            else:
+                inputs[y_param] = float(y_val)
+            try:
+                result = analyze_plate_fin_heatsink(**_filter_solver_inputs(inputs))
+                z = result.get(output_key)
+                z_row.append(z)
+                valid_row.append(True)
+                if z is not None:
+                    is_better = (
+                        best_z is None
+                        or (goal == "minimize" and z < best_z)
+                        or (goal == "maximize" and z > best_z)
+                    )
+                    if is_better:
+                        best_z = z
+                        best_point = {"x": x_val, "y": y_val, "z": z}
+            except (ValueError, ZeroDivisionError):
+                z_row.append(None)
+                valid_row.append(False)
+        z_values.append(z_row)
+        valid_mask.append(valid_row)
+
+    baseline_point: Dict[str, Any] = {
+        "x": baseline_inputs.get(x_param),
+        "y": baseline_inputs.get(y_param),
+    }
+    try:
+        bl_result = analyze_plate_fin_heatsink(**baseline_inputs)
+        baseline_point["z"] = bl_result.get(output_key)
+    except Exception:
+        baseline_point["z"] = None
+
+    return {
+        "x_values": list(x_values),
+        "y_values": list(y_values),
+        "z_values": z_values,
+        "valid_mask": valid_mask,
+        "baseline_point": baseline_point,
+        "best_point": best_point,
+    }

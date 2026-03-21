@@ -18,6 +18,17 @@
     >
 
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        setTimeout(() => {
+            if (!window.MathJax || !window.MathJax.typesetPromise) {
+                document.querySelectorAll('.equation-box, .equation-card').forEach((el) => {
+                    el.style.fontFamily = 'monospace';
+                    el.style.fontSize = '0.85rem';
+                });
+                console.warn('MathJax failed to load. Equations shown as raw LaTeX.');
+            }
+        }, 10000);
+    </script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
@@ -54,7 +65,7 @@
             --primary-color: #f9fafb;
             --primary-light: #1f2937;
             --secondary-color: #9ca3af;
-            --accent-color: #f9fafb;
+            --accent-color: #60a5fa;
             --success-color: #34d399;
             --warning-color: #fbbf24;
             --danger-color: #f87171;
@@ -80,7 +91,7 @@
                 --primary-color: #f9fafb;
                 --primary-light: #1f2937;
                 --secondary-color: #9ca3af;
-                --accent-color: #f9fafb;
+                --accent-color: #60a5fa;
                 --success-color: #34d399;
                 --warning-color: #fbbf24;
                 --danger-color: #f87171;
@@ -389,6 +400,10 @@
             color: var(--text-light);
             margin-top: 6px;
         }
+        #tim-absolute-inputs,
+        #tim-conductivity-inputs {
+            display: none;
+        }
         .tooltip-trigger {
             display: inline-flex;
             align-items: center;
@@ -460,6 +475,7 @@
             align-items: center;
             gap: 8px;
             cursor: pointer;
+            position: relative;
         }
         .expert-toggle input { display: none; }
         .expert-toggle-label {
@@ -643,6 +659,20 @@
             color: var(--text-color);
         }
 
+        .spreading-warning {
+            display: none;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            background: rgba(180, 83, 9, 0.12);
+            border: 1px solid rgba(180, 83, 9, 0.35);
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        .spreading-warning.visible {
+            display: block;
+        }
+
         .chart-panel {
             border: 1px solid var(--border-color);
             border-radius: 10px;
@@ -694,6 +724,15 @@
             background: var(--callout-warning-bg);
         }
         .callout p:last-child { margin-bottom: 0; }
+        .stale-banner {
+            padding: 10px 14px;
+            background: var(--callout-warning-bg);
+            border-left: 4px solid var(--callout-warning-border);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 0.88rem;
+            color: var(--text-color);
+        }
         .callout ul {
             padding-left: 20px;
             margin: 8px 0 0;
@@ -921,8 +960,11 @@
         body[data-density="compact"] .input-group { margin-bottom: 0.85rem; }
         body[data-density="compact"] .result-item { min-height: 88px; padding: 12px; }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 768px) {
             .tool-layout { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .tool-layout { grid-template-columns: minmax(320px, 0.85fr) minmax(400px, 1.15fr); gap: 20px; }
         }
         @media (max-width: 640px) {
             h1 { font-size: 1.85rem; }
@@ -1039,8 +1081,9 @@
                     <li>Derivations show substituted values for the core thermal equations.</li>
                 </ul>
                 <p>
-                    Phase 1 is intentionally scoped to one trustworthy geometry family. Multi-source spreading,
-                    airflow bypass, and additional heatsink geometries are planned later once this core is fully validated.
+                    The tool currently supports one geometry family (plate-fin) with airflow bypass modeling
+                    and single-source 2D spreading analysis. Additional heatsink geometries (pin fin, radial fin)
+                    may be added in the future.
                 </p>
             </div>
         </details>
@@ -1094,9 +1137,43 @@
                             </div>
                         </div>
                         <div class="input-group">
-                            <label for="interface_resistance">Case-to-Sink Resistance (K/W) <span class="tooltip-trigger" data-param="interface_resistance" data-tooltip="Loading...">?</span></label>
-                            <input type="number" id="interface_resistance" name="interface_resistance" value="0.20" step="any" min="0">
-                            <div class="input-note">This covers the thermal interface material, clamping pressure, flatness, and contact quality between the mounted part and the heatsink base.</div>
+                            <label for="tim_input_mode">TIM Input Mode <span class="tooltip-trigger" data-param="tim_input_mode" data-tooltip="Choose how to specify the thermal interface material (TIM) between the heat source case and the heatsink base. Thermal impedance is the most common datasheet format and the recommended default. It is measured end-to-end and captures contact resistance at both surfaces, not just bulk conduction.">?</span></label>
+                            <select id="tim_input_mode" name="tim_input_mode">
+                                <option value="none">None (bare contact / soldered)</option>
+                                <option value="absolute">Absolute resistance (K/W)</option>
+                                <option value="area_normalized" selected>Thermal impedance (K·cm²/W)</option>
+                                <option value="conductivity">Conductivity + bondline thickness</option>
+                            </select>
+                        </div>
+                        <div id="tim-absolute-inputs">
+                            <div class="input-group">
+                                <label for="interface_resistance">Case-to-Sink Resistance (K/W) <span class="tooltip-trigger" data-param="interface_resistance" data-tooltip="Total thermal resistance from the component case to the heatsink base, already divided by contact area. Use this mode if you have pre-computed or measured the absolute interface resistance for your specific assembly. Example: a TO-220 with thermal grease on a small heatsink might be 0.5–2.0 K/W.">?</span></label>
+                                <input type="number" id="interface_resistance" name="interface_resistance" value="0.20" step="any" min="0">
+                                <div class="input-note">Total thermal resistance from the case to the heatsink base. Use when you already know the absolute value for your specific contact area.</div>
+                            </div>
+                        </div>
+                        <div id="tim-area-inputs">
+                            <div class="input-group">
+                                <label for="tim_area_resistance">TIM Thermal Impedance (K·cm²/W) <span class="tooltip-trigger" data-param="tim_area_resistance" data-tooltip="Area-normalized thermal impedance from the TIM datasheet. Measured end-to-end using methods like ASTM D5470 — includes bulk conduction through the material plus contact resistance at both interfaces. The tool divides this value by the source contact area to compute absolute resistance. Examples: 3M 8805 adhesive tape (0.125 mm) = 3.2, Shin-Etsu X-23-7783D thermal grease = 0.009, Bergquist Gap Pad 5000S35 (1 mm) = 1.9, Arctic MX-6 thermal paste = 0.04.">?</span></label>
+                                <input type="number" id="tim_area_resistance" name="tim_area_resistance" value="0.50" step="any" min="0">
+                                <div class="input-note">Area-normalized thermal impedance from the TIM datasheet. Measured end-to-end and includes contact resistance at both interfaces. The tool divides by the source contact area (or full base if no source is set) to get absolute K/W. Typical ranges: high-performance thermal paste 0.01–0.1, thermal grease 0.1–0.5, phase-change pad 0.3–1.0, gap pad 1–5, adhesive transfer tape 3–10.</div>
+                            </div>
+                        </div>
+                        <div id="tim-conductivity-inputs">
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="tim_conductivity">TIM Conductivity (W/m·K) <span class="tooltip-trigger" data-param="tim_conductivity" data-tooltip="Bulk thermal conductivity of the interface material. Found on datasheets as a material property, typically measured per ASTM C-177 or ASTM D5470. This describes how well the material itself conducts — it does not include contact resistance at the surfaces. Examples: 3M 8800-series adhesive tape = 0.6, generic thermal grease = 1–5, Fujipoly SARCON = 3–17, indium solder = 50–80.">?</span></label>
+                                    <input type="number" id="tim_conductivity" name="tim_conductivity" value="5.0" step="any" min="0.01">
+                                </div>
+                                <div class="input-group">
+                                    <label for="tim_bondline">Bondline Thickness (mm) <span class="tooltip-trigger" data-param="tim_bondline" data-tooltip="The compressed or applied thickness of the TIM layer between the component case and heatsink base. For thermal paste or grease this is the gap between mating surfaces under clamping pressure, typically 0.025–0.1 mm. For pads and tapes it is the manufactured thickness. Examples: thermal paste under clamp = 0.025–0.05, 3M 8805 tape = 0.125, 3M 8810 tape = 0.25, 1 mm gap pad = 1.0. Thinner bondlines give lower resistance.">?</span></label>
+                                    <input type="number" id="tim_bondline" name="tim_bondline" value="0.05" step="any" min="0.001">
+                                </div>
+                            </div>
+                            <div class="input-note">Computes R = BLT / (k &times; A), where BLT is bondline thickness, k is thermal conductivity, and A is the source contact area. This estimate excludes contact resistance at the interfaces and will be optimistic compared to the measured thermal impedance. Use the datasheet impedance (K&middot;cm&sup2;/W) when available. Typical conductivities: thermal paste 1&ndash;5, adhesive tape 0.5&ndash;1, gap pad 1&ndash;8, solder 25&ndash;60 W/m&middot;K.</div>
+                        </div>
+                        <div id="tim-none-note" style="display:none;">
+                            <div class="input-note">Interface resistance set to zero. Appropriate for soldered joints, press-fit contacts, or cases where the TIM contribution is negligible compared to other resistances in the thermal path. Note that real bare metal-to-metal contact does have some thermal resistance (dependent on surface finish, flatness, and clamping pressure), but it is often small enough to neglect in preliminary analysis.</div>
                         </div>
                     </div>
 
@@ -1104,28 +1181,28 @@
                         <p class="section-intro">Start with the heatsink envelope and fin layout. The geometry previews on the right update immediately from these values.</p>
                         <div class="input-row">
                             <div class="input-group">
-                                <label for="base_length">Base Length (m) <span class="tooltip-trigger" data-param="base_length" data-tooltip="Loading...">?</span></label>
-                                <input type="number" id="base_length" name="base_length" value="0.10" step="any" min="0.001">
+                                <label for="base_length">Base Length (mm) <span class="tooltip-trigger" data-param="base_length" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="base_length" name="base_length" value="100" step="any" min="1">
                             </div>
                             <div class="input-group">
-                                <label for="base_width">Base Width (m) <span class="tooltip-trigger" data-param="base_width" data-tooltip="Loading...">?</span></label>
-                                <input type="number" id="base_width" name="base_width" value="0.08" step="any" min="0.001">
-                            </div>
-                        </div>
-                        <div class="input-row">
-                            <div class="input-group">
-                                <label for="base_thickness">Base Thickness (m) <span class="tooltip-trigger" data-param="base_thickness" data-tooltip="Loading...">?</span></label>
-                                <input type="number" id="base_thickness" name="base_thickness" value="0.005" step="any" min="0.0001">
-                            </div>
-                            <div class="input-group">
-                                <label for="fin_height">Fin Height (m) <span class="tooltip-trigger" data-param="fin_height" data-tooltip="Loading...">?</span></label>
-                                <input type="number" id="fin_height" name="fin_height" value="0.03" step="any" min="0.001">
+                                <label for="base_width">Base Width (mm) <span class="tooltip-trigger" data-param="base_width" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="base_width" name="base_width" value="80" step="any" min="1">
                             </div>
                         </div>
                         <div class="input-row">
                             <div class="input-group">
-                                <label for="fin_thickness">Fin Thickness (m) <span class="tooltip-trigger" data-param="fin_thickness" data-tooltip="Loading...">?</span></label>
-                                <input type="number" id="fin_thickness" name="fin_thickness" value="0.001" step="any" min="0.0001">
+                                <label for="base_thickness">Base Thickness (mm) <span class="tooltip-trigger" data-param="base_thickness" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="base_thickness" name="base_thickness" value="5" step="any" min="0.1">
+                            </div>
+                            <div class="input-group">
+                                <label for="fin_height">Fin Height (mm) <span class="tooltip-trigger" data-param="fin_height" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="fin_height" name="fin_height" value="30" step="any" min="1">
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="fin_thickness">Fin Thickness (mm) <span class="tooltip-trigger" data-param="fin_thickness" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="fin_thickness" name="fin_thickness" value="1.0" step="any" min="0.1">
                             </div>
                             <div class="input-group">
                                 <label for="fin_count">Fin Count <span class="tooltip-trigger" data-param="fin_count" data-tooltip="Loading...">?</span></label>
@@ -1135,6 +1212,21 @@
                         <div class="input-group">
                             <label for="material_preset">Preset Material / Finish</label>
                             <select id="material_preset" name="material_preset"></select>
+                        </div>
+                        <h4 style="margin-top:14px;">Source Footprint</h4>
+                        <div class="input-note" style="margin-bottom:12px;">
+                            If the heat source is smaller than the heatsink base, spreading resistance adds
+                            temperature rise. Leave at 0 to assume the source covers the full base.
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="source_length">Source Length (mm) <span class="tooltip-trigger" data-param="source_length" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="source_length" name="source_length" value="0" step="any" min="0">
+                            </div>
+                            <div class="input-group">
+                                <label for="source_width">Source Width (mm) <span class="tooltip-trigger" data-param="source_width" data-tooltip="Loading...">?</span></label>
+                                <input type="number" id="source_width" name="source_width" value="0" step="any" min="0">
+                            </div>
                         </div>
                         <div class="advanced-section">
                             <div class="input-row">
@@ -1148,12 +1240,35 @@
                                 </div>
                             </div>
                             <div class="input-note">Expert mode lets you override the preset conductivity and emissivity directly.</div>
+                            <h4 style="margin-top:14px;">Source Position</h4>
+                            <div class="input-note" style="margin-bottom:12px;">
+                                Position the source center on the base. Leave at 0 to center the source automatically.
+                            </div>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="source_x">Source Center X (mm) <span class="tooltip-trigger" data-param="source_x" data-tooltip="X-coordinate of the source center on the heatsink base (mm). 0 = auto-centered. Used in the Spread View for off-center hotspot analysis.">?</span></label>
+                                    <input type="number" id="source_x" name="source_x" value="0" step="any" min="0">
+                                </div>
+                                <div class="input-group">
+                                    <label for="source_y">Source Center Y (mm) <span class="tooltip-trigger" data-param="source_y" data-tooltip="Y-coordinate of the source center on the heatsink base (mm). 0 = auto-centered. Used in the Spread View for off-center hotspot analysis.">?</span></label>
+                                    <input type="number" id="source_y" name="source_y" value="0" step="any" min="0">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div id="cooling-section" class="input-section">
                         <div class="callout">
                             <p><strong>Cooling mode picks the governing relationship.</strong> Natural convection solves buoyancy-driven channel flow. Forced flow uses known air delivery. Fan curve mode balances fan capability against heatsink pressure drop to find the operating point.</p>
+                        </div>
+                        <div class="input-group">
+                            <label for="orientation">Heatsink Orientation <span class="tooltip-trigger" data-param="orientation" data-tooltip="Loading...">?</span></label>
+                            <select id="orientation" name="orientation">
+                                <option value="vertical">Vertical (fins point up, air flows up)</option>
+                                <option value="horizontal_up">Horizontal, fins up</option>
+                                <option value="horizontal_down">Horizontal, fins down</option>
+                            </select>
+                            <div class="input-note">Orientation affects the natural convection correlation. Forced and fan modes ignore this setting.</div>
                         </div>
                         <div class="input-group">
                             <label for="airflow_mode">Cooling Mode <span class="tooltip-trigger" data-param="airflow_mode" data-tooltip="Loading...">?</span></label>
@@ -1176,6 +1291,14 @@
                                 <div class="input-note">If this is greater than zero, it overrides the approach velocity estimate.</div>
                             </div>
                         </div>
+                        <div class="input-group forced-only fan-only">
+                            <label for="ducted">Duct Configuration <span class="tooltip-trigger" data-param="ducted" data-tooltip="Loading...">?</span></label>
+                            <select id="ducted" name="ducted">
+                                <option value="true">Ducted (all air through fins)</option>
+                                <option value="false">Unducted (some air bypasses)</option>
+                            </select>
+                            <div class="input-note">If the heatsink is in open air without a duct or shroud, some airflow will bypass the fin channels.</div>
+                        </div>
                         <div class="input-row fan-only">
                             <div class="input-group">
                                 <label for="fan_max_pressure">Fan Shutoff Pressure (Pa) <span class="tooltip-trigger" data-param="fan_max_pressure" data-tooltip="Loading...">?</span></label>
@@ -1196,6 +1319,10 @@
                     </div>
 
                     <button type="submit" class="btn-primary" id="calculate-btn" disabled>Calculate</button>
+                    <button type="button" id="export-btn" disabled
+                        style="background:var(--bg-card);color:var(--text-color);border:1px solid var(--border-color);padding:10px 24px;border-radius:var(--border-radius);cursor:pointer;font-size:0.95rem;margin-top:8px;">
+                        Export Results (JSON)
+                    </button>
                 </form>
             </section>
 
@@ -1214,10 +1341,13 @@
                 </div>
 
                 <div class="tabs">
-                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
-                    <button class="tab-link" onclick="openTab(event, 'ladder')">Temperature Ladder</button>
-                    <button class="tab-link" onclick="openTab(event, 'heat')">Heat Split</button>
-                    <button class="tab-link" onclick="openTab(event, 'background')">Background</button>
+                    <button class="tab-link active" data-tab="results">Results</button>
+                    <button class="tab-link" data-tab="spreading">Spread View</button>
+                    <button class="tab-link" data-tab="ladder">Temperature Ladder</button>
+                    <button class="tab-link" data-tab="heat">Heat Split</button>
+                    <button class="tab-link" data-tab="sweep1d" disabled id="tab-sweep1d">1D Sweep</button>
+                    <button class="tab-link" data-tab="sweep2d" disabled id="tab-sweep2d">2D Trade Space</button>
+                    <button class="tab-link" data-tab="background">Background</button>
                 </div>
 
                 <div id="results" class="tab-content" style="display: block;">
@@ -1229,43 +1359,51 @@
                         <ul id="recommendations-list"></ul>
                     </div>
 
+                    <div class="spreading-warning" id="spreading-warning-results">
+                        <strong>Note:</strong> The Spread View peak junction temperature exceeds the target, even though the headline result (centered-source model) shows an acceptable margin. Check the Spread View tab for localized hotspot details.
+                    </div>
+
+                    <div class="stale-banner" id="stale-banner" style="display:none;">
+                        <p>Inputs have changed since the last calculation. Results shown may be outdated.</p>
+                    </div>
+
                     <div class="results-grid" id="results-grid" style="display: none;">
-                        <div class="result-item clickable" data-key="required_sink_thermal_resistance" onclick="toggleDerivation('required_sink_thermal_resistance')">
+                        <div class="result-item clickable" data-key="required_sink_thermal_resistance" tabindex="0" role="button">
                             <div class="label">Required Sink Rθ</div>
                             <div class="value" id="val-required_sink_thermal_resistance">--</div>
                             <div class="subtext">Budget left for the sink alone</div>
                         </div>
-                        <div class="result-item clickable" data-key="sink_thermal_resistance" onclick="toggleDerivation('sink_thermal_resistance')">
+                        <div class="result-item clickable" data-key="sink_thermal_resistance" tabindex="0" role="button">
                             <div class="label">Achieved Sink Rθ</div>
                             <div class="value" id="val-sink_thermal_resistance">--</div>
                             <div class="subtext">Predicted sink-to-ambient</div>
                         </div>
-                        <div class="result-item clickable" data-key="junction_temperature" onclick="toggleDerivation('junction_temperature')">
+                        <div class="result-item clickable" data-key="junction_temperature" tabindex="0" role="button">
                             <div class="label">Source / Junction Temp</div>
                             <div class="value" id="val-junction_temperature">--</div>
                             <div class="subtext">Hottest internal source node</div>
                         </div>
-                        <div class="result-item">
+                        <div class="result-item clickable" data-key="case_temperature" tabindex="0" role="button">
                             <div class="label">Case Temp</div>
                             <div class="value" id="val-case_temperature">--</div>
                             <div class="subtext">Outer mounting surface</div>
                         </div>
-                        <div class="result-item">
+                        <div class="result-item clickable" data-key="base_temperature" tabindex="0" role="button">
                             <div class="label">Base Temp</div>
                             <div class="value" id="val-base_temperature">--</div>
                             <div class="subtext">Heatsink metal at the mounting footprint</div>
                         </div>
-                        <div class="result-item clickable" data-key="pressure_drop" onclick="toggleDerivation('pressure_drop')">
+                        <div class="result-item clickable" data-key="pressure_drop" tabindex="0" role="button">
                             <div class="label">Pressure Drop</div>
                             <div class="value" id="val-pressure_drop">--</div>
                             <div class="subtext">Through the fin channels</div>
                         </div>
-                        <div class="result-item clickable" data-key="fin_efficiency" onclick="toggleDerivation('fin_efficiency')">
+                        <div class="result-item clickable" data-key="fin_efficiency" tabindex="0" role="button">
                             <div class="label">Fin Efficiency</div>
                             <div class="value" id="val-fin_efficiency">--</div>
                             <div class="subtext">Single-fin conduction effectiveness</div>
                         </div>
-                        <div class="result-item">
+                        <div class="result-item clickable" data-key="channel_velocity" tabindex="0" role="button">
                             <div class="label">Channel Velocity</div>
                             <div class="value" id="val-channel_velocity">--</div>
                             <div class="subtext">Internal fin-channel air speed</div>
@@ -1275,7 +1413,7 @@
                     <div class="derivation-panel" id="deriv-required_sink_thermal_resistance">
                         <div class="derivation-header">
                             <span class="derivation-title">Required Sink Thermal Resistance</span>
-                            <button class="derivation-close" type="button" onclick="toggleDerivation('required_sink_thermal_resistance')">&times;</button>
+                            <button class="derivation-close" type="button">&times;</button>
                         </div>
                         <div class="derivation-step">
                             <div class="equation-box">$$R_{\theta,\mathrm{req,sink}} = \frac{T_{j,\max}-T_{\infty}}{Q} - R_{\theta,jc} - R_{\theta,cs}$$</div>
@@ -1288,7 +1426,7 @@
                     <div class="derivation-panel" id="deriv-sink_thermal_resistance">
                         <div class="derivation-header">
                             <span class="derivation-title">Achieved Sink Thermal Resistance</span>
-                            <button class="derivation-close" type="button" onclick="toggleDerivation('sink_thermal_resistance')">&times;</button>
+                            <button class="derivation-close" type="button">&times;</button>
                         </div>
                         <div class="derivation-step">
                             <div class="equation-box">$$R_{\theta,\mathrm{sink}} = \frac{T_b - T_{\infty}}{Q}$$</div>
@@ -1301,7 +1439,7 @@
                     <div class="derivation-panel" id="deriv-junction_temperature">
                         <div class="derivation-header">
                             <span class="derivation-title">Source / Junction Temperature Stack-Up</span>
-                            <button class="derivation-close" type="button" onclick="toggleDerivation('junction_temperature')">&times;</button>
+                            <button class="derivation-close" type="button">&times;</button>
                         </div>
                         <div class="derivation-step">
                             <div class="equation-box">$$T_j = T_b + Q \left(R_{\theta,cs} + R_{\theta,jc}\right)$$</div>
@@ -1314,7 +1452,7 @@
                     <div class="derivation-panel" id="deriv-pressure_drop">
                         <div class="derivation-header">
                             <span class="derivation-title">Pressure Drop Through the Fin Channels</span>
-                            <button class="derivation-close" type="button" onclick="toggleDerivation('pressure_drop')">&times;</button>
+                            <button class="derivation-close" type="button">&times;</button>
                         </div>
                         <div class="derivation-step">
                             <div class="equation-box">$$\Delta P = \left(f\frac{L}{D_h} + K_c + K_e\right)\frac{\rho V_{ch}^2}{2}$$</div>
@@ -1322,18 +1460,120 @@
                         <div class="derivation-step">
                             <div class="equation-box" id="subst-pressure_drop">Waiting for calculation...</div>
                         </div>
+                        <div class="derivation-step">
+                            <div class="equation-box" style="font-size:0.82rem;color:var(--text-light);" id="corr-pressure_drop"></div>
+                        </div>
                     </div>
 
                     <div class="derivation-panel" id="deriv-fin_efficiency">
                         <div class="derivation-header">
                             <span class="derivation-title">Straight-Fin Efficiency</span>
-                            <button class="derivation-close" type="button" onclick="toggleDerivation('fin_efficiency')">&times;</button>
+                            <button class="derivation-close" type="button">&times;</button>
                         </div>
                         <div class="derivation-step">
-                            <div class="equation-box">$$\eta_f = \frac{\tanh(mL_c)}{mL_c}, \quad m = \sqrt{\frac{h_{\mathrm{eff}} P}{k A_c}}$$</div>
+                            <div class="equation-box">$$\eta_f = \frac{\tanh(mL_c)}{mL_c}, \quad m = \sqrt{\frac{h_{\mathrm{eff}} P}{k A_c}}, \quad L_c = H + \tfrac{t}{2}$$</div>
                         </div>
                         <div class="derivation-step">
                             <div class="equation-box" id="subst-fin_efficiency">Waiting for calculation...</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box" id="subst-overall_efficiency">Waiting for calculation...</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box" style="font-size:0.82rem;color:var(--text-light);" id="corr-fin_efficiency"></div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-case_temperature">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Case Temperature</span>
+                            <button class="derivation-close" type="button">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box">$$T_{\mathrm{case}} = T_{\mathrm{base,eff}} + Q \cdot R_{\theta,cs}$$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box" id="subst-case_temperature">Waiting for calculation...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-base_temperature">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Base Temperature</span>
+                            <button class="derivation-close" type="button">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box">$$T_b \text{ found by bisection such that } Q_{\mathrm{rejected}}(T_b) = Q_{\mathrm{load}}$$</div>
+                            <div class="equation-box">$$Q_{\mathrm{rejected}} = \eta_o \, h_{\mathrm{eff}} \, A_t \, (T_b - T_\infty), \quad h_{\mathrm{eff}} = h_{\mathrm{conv}} + h_{\mathrm{rad}}$$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box" id="subst-base_temperature">Waiting for calculation...</div>
+                        </div>
+                    </div>
+
+                    <div class="derivation-panel" id="deriv-channel_velocity">
+                        <div class="derivation-header">
+                            <span class="derivation-title">Channel Velocity</span>
+                            <button class="derivation-close" type="button">&times;</button>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box">$$V_{ch} = \frac{\dot{V}}{A_{\mathrm{open}}}, \quad A_{\mathrm{open}} = N_{\mathrm{ch}} \cdot s \cdot H$$</div>
+                        </div>
+                        <div class="derivation-step">
+                            <div class="equation-box" id="subst-channel_velocity">Waiting for calculation...</div>
+                        </div>
+                    </div>
+
+                    <div class="assumptions-card" id="results-assumptions" style="display:none;margin-top:18px;padding:16px 20px;border:1px solid var(--border-color);border-radius:var(--border-radius);background:var(--bg-card);">
+                        <h4 style="margin:0 0 10px 0;font-size:0.9rem;">Assumptions &amp; Correlations Used</h4>
+                        <ul id="results-assumptions-list" style="margin:0;padding-left:20px;font-size:0.82rem;color:var(--text-light);line-height:1.65;"></ul>
+                    </div>
+                </div>
+
+                <div id="spreading" class="tab-content">
+                    <div id="spreading-empty" style="text-align:center;padding:60px 20px;color:var(--text-light);">
+                        Set a source footprint (length and width) in the Geometry section to see localized base spreading.
+                    </div>
+                    <div id="spreading-content" style="display:none;">
+                        <div class="spreading-warning" id="spreading-warning-spread">
+                            <strong>Warning:</strong> The estimated peak junction temperature from the 2D field solver exceeds the target junction temperature. The headline results may underestimate the thermal risk for this source placement.
+                        </div>
+                        <div class="metric-strip" id="spreading-metrics">
+                            <div class="metric-card">
+                                <div class="metric-label">Avg Base Temp</div>
+                                <div class="metric-value" id="spread-avg-base">--</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Peak Base Temp</div>
+                                <div class="metric-value" id="spread-peak-base">--</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Spreading &Delta;T</div>
+                                <div class="metric-value" id="spread-delta">--</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Est. Peak Junction</div>
+                                <div class="metric-value" id="spread-peak-junction">--</div>
+                            </div>
+                        </div>
+                        <div class="chart-panel">
+                            <div class="plot-area" id="spreading-heatmap" style="height:400px;"></div>
+                        </div>
+                        <div style="display:flex;gap:16px;margin:12px 0;align-items:center;">
+                            <label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;">
+                                <input type="radio" name="spreading-mode" value="absolute" checked> Absolute (°C)
+                            </label>
+                            <label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;">
+                                <input type="radio" name="spreading-mode" value="rise"> Rise above ambient (°C)
+                            </label>
+                        </div>
+                        <div class="chart-panel" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+                            <div class="plot-area" id="spreading-centerline-x" style="height:260px;"></div>
+                            <div class="plot-area" id="spreading-centerline-y" style="height:260px;"></div>
+                        </div>
+                        <div class="callout" id="spreading-assumptions" style="margin-top:16px;">
+                            <p><strong>Model assumptions:</strong></p>
+                            <ul id="spreading-assumptions-list"></ul>
                         </div>
                     </div>
                 </div>
@@ -1341,7 +1581,9 @@
                 <div id="ladder" class="tab-content">
                     <div class="chart-panel">
                         <p>The ladder plot and thermal-path diagram show the same chain two ways: source or junction is the hottest internal node, case is the outer mounting surface, base is the sink metal under that surface, and ambient is the surrounding air.</p>
-                        <div class="plot-area" id="ladder-plot"></div>
+                        <div class="plot-area" id="ladder-plot">
+                            <p class="chart-placeholder" style="text-align:center;padding:60px 20px;color:var(--text-light);">Run a calculation to see the temperature ladder chart.</p>
+                        </div>
                         <div class="metric-strip">
                             <div class="metric-card">
                                 <div class="metric-label">Base Temperature</div>
@@ -1395,7 +1637,10 @@
                 <div id="heat" class="tab-content">
                     <div class="chart-panel">
                         <p>This view separates convection and radiation so you can see which mechanism is really carrying the load. Radiation can matter a lot more than intuition suggests once sink temperatures or emissivity climb.</p>
-                        <div class="plot-area" id="heat-plot"></div>
+                        <div class="plot-area" id="heat-plot">
+                            <p class="chart-placeholder" style="text-align:center;padding:60px 20px;color:var(--text-light);">Run a calculation to see the heat split chart.</p>
+                        </div>
+                        <div class="plot-area" id="fan-curve-plot" style="display:none;margin-top:18px;"></div>
                         <div class="metric-strip">
                             <div class="metric-card">
                                 <div class="metric-label">Reynolds Number</div>
@@ -1418,15 +1663,100 @@
                                 <div class="metric-value" id="metric-volumetric_flow_rate">--</div>
                             </div>
                         </div>
+                        <div id="heat-split-derivations" style="display:none;margin-top:16px;font-size:0.85rem;line-height:1.7;">
+                            <div style="padding:12px 16px;border:1px solid var(--border-color);border-radius:var(--border-radius);background:var(--bg-card);margin-bottom:10px;">
+                                <strong>Heat split</strong>
+                                <div class="equation-box" id="subst-heat_split" style="margin-top:8px;">Waiting for calculation...</div>
+                            </div>
+                            <div style="padding:12px 16px;border:1px solid var(--border-color);border-radius:var(--border-radius);background:var(--bg-card);margin-bottom:10px;">
+                                <strong>Convection coefficient</strong>
+                                <div class="equation-box" id="subst-convection_coefficient" style="margin-top:8px;">Waiting for calculation...</div>
+                                <div class="equation-box" style="margin-top:4px;font-size:0.82rem;color:var(--text-light);" id="heat-convection-correlation">--</div>
+                            </div>
+                            <div style="padding:12px 16px;border:1px solid var(--border-color);border-radius:var(--border-radius);background:var(--bg-card);">
+                                <strong>Radiation coefficient</strong>
+                                <div class="equation-box" id="subst-radiation_coefficient" style="margin-top:8px;">Waiting for calculation...</div>
+                                <div class="equation-box" style="margin-top:4px;font-size:0.82rem;color:var(--text-light);" id="corr-radiation_coefficient"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sweep1d" class="tab-content">
+                    <div class="callout">
+                        <p><strong>1D Sweep:</strong> Vary one parameter at a time to see how it affects the selected output metric. The baseline point is marked in red.</p>
+                    </div>
+                    <div class="input-row" style="margin-bottom:16px;">
+                        <div class="input-group">
+                            <label for="sweep1d-param">Sweep Parameter</label>
+                            <select id="sweep1d-param"></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep1d-output">Output Metric</label>
+                            <select id="sweep1d-output"></select>
+                        </div>
+                    </div>
+                    <div class="input-row" style="margin-bottom:16px;">
+                        <div class="input-group">
+                            <label for="sweep1d-range">Range</label>
+                            <select id="sweep1d-range">
+                                <option value="0.2">&plusmn; 20%</option>
+                                <option value="0.5" selected>&plusmn; 50%</option>
+                                <option value="1.0">&plusmn; 100%</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <button type="button" class="btn-primary" id="sweep1d-run" style="margin-top:22px;">Run Sweep</button>
+                        </div>
+                    </div>
+                    <div class="chart-panel">
+                        <div class="plot-area" id="sweep1d-plot">
+                            <p style="text-align:center;padding:60px 20px;color:var(--text-light);">Configure and run a sweep to see results.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sweep2d" class="tab-content">
+                    <div class="callout">
+                        <p><strong>2D Trade Space:</strong> Sweep two parameters simultaneously to see feasibility regions and interaction effects.</p>
+                    </div>
+                    <div class="input-row" style="margin-bottom:16px;">
+                        <div class="input-group">
+                            <label for="sweep2d-xparam">X Parameter</label>
+                            <select id="sweep2d-xparam"></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep2d-yparam">Y Parameter</label>
+                            <select id="sweep2d-yparam"></select>
+                        </div>
+                    </div>
+                    <div class="input-row" style="margin-bottom:16px;">
+                        <div class="input-group">
+                            <label for="sweep2d-output">Output Metric</label>
+                            <select id="sweep2d-output"></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep2d-resolution">Grid Resolution</label>
+                            <select id="sweep2d-resolution">
+                                <option value="15">15 &times; 15</option>
+                                <option value="25" selected>25 &times; 25</option>
+                                <option value="40">40 &times; 40</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <button type="button" class="btn-primary" id="sweep2d-run" style="margin-top:22px;">Run Contour</button>
+                        </div>
+                    </div>
+                    <div class="chart-panel">
+                        <div class="plot-area" id="sweep2d-plot">
+                            <p style="text-align:center;padding:60px 20px;color:var(--text-light);">Configure and run a contour to see results.</p>
+                        </div>
                     </div>
                 </div>
 
                 <div id="background" class="tab-content">
                     <div class="callout">
-                        <p><strong>Design intent:</strong> this tool is not trying to be CFD in disguise. It is an explicit early-design model for straight plate-fin heatsinks, built to show what the dominant terms are and where the design margin comes from.</p>
-                    </div>
-                    <div class="callout warning">
-                        <p><strong>Current scope:</strong> the present implementation does not yet include multi-source spreading resistance or airflow bypass penalties. Those are intentionally deferred until the core plate-fin model is fully validated.</p>
+                        <p><strong>Design intent:</strong> this tool is not trying to be CFD in disguise. It is an explicit early-design model for straight plate-fin heatsinks, built to show what the dominant terms are and where the design margin comes from. Every correlation, assumption, and validity limit is documented below.</p>
                     </div>
 
                     <nav class="toc-card" aria-label="Background table of contents">
@@ -1436,10 +1766,20 @@
                             <li><a href="#bg-thermal-nodes">2. Thermal Nodes</a></li>
                             <li><a href="#bg-thermal-budget">3. Thermal Budget</a></li>
                             <li><a href="#bg-plate-fin-model">4. Plate-Fin Surface Model</a></li>
-                            <li><a href="#bg-natural-convection">5. Natural Convection Between Vertical Parallel Plates</a></li>
-                            <li><a href="#bg-forced-convection">6. Forced Convection and Pressure Drop</a></li>
-                            <li><a href="#bg-fin-efficiency">7. Fin Efficiency and Radiation</a></li>
-                            <li><a href="#bg-references">8. References</a></li>
+                            <li><a href="#bg-air-properties">5. Air Properties</a></li>
+                            <li><a href="#bg-natural-convection">6. Natural Convection &mdash; Vertical</a></li>
+                            <li><a href="#bg-natural-horizontal">7. Natural Convection &mdash; Horizontal</a></li>
+                            <li><a href="#bg-forced-convection">8. Forced Convection</a></li>
+                            <li><a href="#bg-pressure-drop">9. Pressure Drop</a></li>
+                            <li><a href="#bg-fin-efficiency">10. Fin Efficiency</a></li>
+                            <li><a href="#bg-radiation">11. Radiation</a></li>
+                            <li><a href="#bg-spreading">12. Spreading Resistance &amp; Base-Plane Solver</a></li>
+                            <li><a href="#bg-bypass">13. Bypass Model</a></li>
+                            <li><a href="#bg-fan-curve">14. Fan Curve Intersection</a></li>
+                            <li><a href="#bg-mixed-convection">15. Mixed Convection</a></li>
+                            <li><a href="#bg-validity">16. Model Limitations &amp; Validity Ranges</a></li>
+                            <li><a href="#bg-references">17. References</a></li>
+                            <li><a href="#bg-worked-examples">18. Worked Examples</a></li>
                         </ul>
                     </nav>
 
@@ -1465,16 +1805,14 @@
                             <strong>Ambient temperature</strong> is the surrounding air away from the immediate hot boundary layer.
                         </p>
                         <p>
-                            The reason this distinction matters is simple: the heatsink only controls the base-to-ambient part directly. The internal source-to-case path and the interface material spend the rest of the temperature rise before the heat ever reaches the fin array.
+                            The heatsink only controls the base-to-ambient part directly. The internal source-to-case path and the interface material spend the rest of the temperature rise before the heat ever reaches the fin array.
                         </p>
                     </div>
 
                     <div class="background-section" id="bg-thermal-budget">
                         <h3>3. Thermal Budget</h3>
                         <p>
-                            The sink does not own the full temperature rise from the source node to ambient. The mounted part usually spends part
-                            of the temperature budget internally and another part across the case-to-sink interface. The sink only gets
-                            whatever temperature rise is left after those upstream resistances are subtracted.
+                            The sink does not own the full temperature rise from the source node to ambient. The mounted part usually spends part of the temperature budget internally and another part across the case-to-sink interface. The sink only gets whatever temperature rise is left after those upstream resistances are subtracted.
                         </p>
                         <div class="equation-card">
                             $$R_{\theta,\mathrm{req,sink}} = \frac{T_{j,\max} - T_{\infty}}{Q} - R_{\theta,jc} - R_{\theta,cs}$$
@@ -1486,90 +1824,354 @@
                                 \(R_{\theta,cs}\): case-to-sink resistance.
                             </div>
                         </div>
+                        <p>If R<sub>&theta;,req,sink</sub> is negative, the upstream resistances alone consume the entire budget &mdash; no heatsink can fix this. Reduce the heat load, raise the temperature limit, or improve the upstream path.</p>
                     </div>
 
                     <div class="background-section" id="bg-plate-fin-model">
                         <h3>4. Plate-Fin Surface Model</h3>
                         <p>
-                            The solver treats the sink as an isothermal base feeding straight fins. The total exposed area is the exposed base between fins plus the broad fin faces and tips.
-                            Fin efficiency is then used to discount the fin area because real fins are not perfectly isothermal.
+                            The solver treats the sink as an isothermal base feeding straight fins. Base temperature is found by bisection: the solver iterates T<sub>b</sub> until the total heat rejected equals the heat load. The total exposed area is the exposed base between fins plus the broad fin faces and tips. Fin efficiency discounts the fin area because real fins are not perfectly isothermal.
                         </p>
                         <div class="equation-card">
                             $$Q = \eta_o\,h_{\mathrm{eff}}\,A_t\,(T_b - T_{\infty}), \qquad \eta_o = 1 - \frac{A_f}{A_t}(1-\eta_f)$$
                             <div class="legend">
-                                \(A_t\): total exposed area,
-                                \(A_f\): fin area,
-                                \(\eta_f\): single-fin efficiency,
+                                \(A_t\): total exposed area (base + fins),
+                                \(A_f\): fin area only,
+                                \(\eta_f\): single-fin efficiency (&sect;10),
                                 \(\eta_o\): overall surface efficiency,
-                                \(h_{\mathrm{eff}} = h_{\mathrm{conv}} + h_{\mathrm{rad}}\).
+                                \(h_{\mathrm{eff}} = h_{\mathrm{conv}} + h_{\mathrm{rad}}\): combined heat-transfer coefficient.
                             </div>
                         </div>
+                        <p><strong>Assumption:</strong> The base is isothermal. This is reasonable for aluminum bases with moderate heat loads but breaks down when a small source sits on a large, thin base &mdash; see &sect;12 for the spreading correction.</p>
+                    </div>
+
+                    <div class="background-section" id="bg-air-properties">
+                        <h3>5. Air Properties</h3>
+                        <p>
+                            Air density, viscosity, thermal conductivity, and specific heat are evaluated at the film temperature T<sub>film</sub> = (T<sub>b</sub> + T<sub>&infin;</sub>)/2.
+                        </p>
+                        <div class="equation-card">
+                            $$\mu = 1.716 \times 10^{-5} \left(\frac{T}{273.15}\right)^{3/2} \frac{273.15 + 110.4}{T + 110.4} \quad \text{(Sutherland law)}$$
+                            $$k_{\mathrm{air}} = 0.02414 \left(\frac{T}{273.15}\right)^{3/2} \frac{273.15 + 194.0}{T + 194.0} \quad \text{(Sutherland-type fit)}$$
+                            $$\rho = \frac{p}{R_{\mathrm{air}} \cdot T}, \qquad c_p \approx 1006 + 0.1(T - 300) \;\mathrm{J/(kg{\cdot}K)}$$
+                            <div class="legend">
+                                All temperatures in Kelvin. \(R_{\mathrm{air}}\) = 287.058 J/(kg&middot;K).
+                            </div>
+                        </div>
+                        <p><strong>Validity:</strong> These fits match NIST data within 1.5% from 200 K to 700 K. The c<sub>p</sub> linear fit is adequate for the 250&ndash;500 K range typical of heatsink design. Outside this range a full property package should be used. <strong>Ref:</strong> [1], [8].</p>
                     </div>
 
                     <div class="background-section" id="bg-natural-convection">
-                        <h3>5. Natural Convection Between Vertical Parallel Plates</h3>
+                        <h3>6. Natural Convection &mdash; Vertical Parallel Plates</h3>
                         <p>
-                            For natural convection, the fin spacing matters at least as much as raw area. Tight spacing creates more area but can choke buoyancy-driven flow.
-                            This implementation uses a vertical parallel-plate relation derived from the Bar-Cohen and Rohsenow treatment of isothermal plate arrays.
+                            For vertical natural convection, the fin spacing matters at least as much as raw area. Tight spacing creates more area but can choke buoyancy-driven flow.
+                            This implementation uses the Bar-Cohen and Rohsenow composite isothermal parallel-plate relation [2].
                         </p>
                         <div class="equation-card">
-                            $$Nu = \left(\frac{576}{Ra_m^2} + \frac{2.873}{\sqrt{Ra_m}}\right)^{-1/2}, \qquad
-                            Ra_m = \frac{g \beta (T_b-T_{\infty}) s^4}{\nu \alpha H}$$
+                            $$\mathrm{Nu}_s = \left(\frac{576}{Ra_m^2} + \frac{2.873}{\sqrt{Ra_m}}\right)^{-1/2}$$
+                            $$Ra_m = \frac{g \beta (T_b-T_{\infty}) s^4}{\nu \alpha H}$$
                             <div class="legend">
-                                \(s\): fin spacing,
-                                \(H\): fin height,
+                                \(s\): fin spacing (clear gap),
+                                \(H\): fin height (channel depth),
                                 \(\nu\): kinematic viscosity,
                                 \(\alpha\): thermal diffusivity,
-                                \(\beta\): volumetric expansion coefficient.
+                                \(\beta = 1/T_{\mathrm{film}}\): volumetric expansion coefficient.
+                                Convection coefficient: \(h_{\mathrm{conv}} = \mathrm{Nu}_s \cdot k_{\mathrm{air}} / s\).
                             </div>
                         </div>
+                        <p><strong>Validity:</strong> Isothermal vertical plates, Ra<sub>m</sub> &gt; 0. The composite form blends the fully-developed limit (Nu &rarr; const) with the isolated-plate limit (Nu &sim; Ra<sup>1/4</sup>). Channel velocity is estimated from a chimney-flow energy balance &mdash; treat as approximate.</p>
+                        <p><strong>Ref:</strong> Bar-Cohen, A., Rohsenow, W. M. (1984) [2].</p>
+                    </div>
+
+                    <div class="background-section" id="bg-natural-horizontal">
+                        <h3>7. Natural Convection &mdash; Horizontal Plates</h3>
+                        <p>
+                            For horizontal orientations, the McAdams correlation [3] is used with the characteristic length L<sub>c</sub> = A/P (area over perimeter of the base footprint).
+                        </p>
+                        <div class="equation-card">
+                            $$\text{Heated surface up: } \mathrm{Nu} = \begin{cases} 0.54\,Ra_L^{1/4} & 10^4 < Ra_L < 10^7 \\ 0.15\,Ra_L^{1/3} & 10^7 < Ra_L < 10^{11} \end{cases}$$
+                            $$\text{Heated surface down: } \mathrm{Nu} = 0.27\,Ra_L^{1/4}, \quad 10^5 < Ra_L < 10^{10}$$
+                            <div class="legend">
+                                \(Ra_L = g\beta\Delta T\,L_c^3 / (\nu\alpha)\), \(L_c = A_{\mathrm{base}}/P_{\mathrm{base}}\).
+                            </div>
+                        </div>
+                        <p><strong>Assumption:</strong> Uses the flat-plate correlation rather than the channel correlation (&sect;6). This is a simplification &mdash; horizontal fin arrays have more complex flow patterns than vertical ones.</p>
+                        <p><strong>Ref:</strong> McAdams, W. H. (1954) [3]; Incropera et al. [8], Table 9.1.</p>
                     </div>
 
                     <div class="background-section" id="bg-forced-convection">
-                        <h3>6. Forced Convection and Pressure Drop</h3>
+                        <h3>8. Forced Convection</h3>
                         <p>
-                            Under forced flow, the fin channels are treated as rectangular ducts. Heat transfer depends on Reynolds number, entry-length effects, and hydraulic diameter.
-                            Pressure drop rises rapidly as spacing decreases, which is why denser fins are not automatically better when fans are involved.
+                            Under forced flow, the fin channels are treated as rectangular ducts. The flow regime is determined by the channel Reynolds number.
                         </p>
                         <div class="equation-card">
-                            $$Re = \frac{\rho V_{ch} D_h}{\mu}, \qquad
-                            \Delta P = \left(f\frac{L}{D_h} + K_c + K_e\right)\frac{\rho V_{ch}^2}{2}$$
+                            $$Re = \frac{\rho V_{ch} D_h}{\mu}, \qquad D_h = \frac{2 s H}{s + H}$$
                             <div class="legend">
-                                \(V_{ch}\): channel velocity,
+                                \(V_{ch}\): channel velocity = \(\dot{V}/A_{\mathrm{open}}\),
                                 \(D_h\): hydraulic diameter,
-                                \(L\): flow length,
-                                \(f\): Darcy friction factor,
-                                \(K_c, K_e\): contraction and expansion loss coefficients.
+                                \(s\): fin spacing, \(H\): fin height.
                             </div>
                         </div>
+                        <p><strong>Laminar (Re &lt; 2300):</strong> Combined-entry developing-flow correlation from Muzychka &amp; Yovanovich [4]:</p>
+                        <div class="equation-card">
+                            $$\mathrm{Nu} = \left(7.54^3 + (1.841\,Gz^{1/3})^3\right)^{1/3}, \qquad Gz = Re \cdot Pr \cdot D_h / L$$
+                            <div class="legend">\(Gz\): Graetz number. At large Gz (short channels, high flow), entry effects dominate and Nu rises above the fully-developed value of 7.54.</div>
+                        </div>
+                        <p><strong>Turbulent (Re &ge; 2300):</strong> Gnielinski correlation [5] with Petukhov friction factor [6]:</p>
+                        <div class="equation-card">
+                            $$\mathrm{Nu} = \frac{(f/8)(Re - 1000)\,Pr}{1 + 12.7\sqrt{f/8}\,(Pr^{2/3}-1)}, \qquad f = (0.790\ln Re - 1.64)^{-2}$$
+                            <div class="legend">Valid for 2300 &lt; Re &lt; 5&times;10<sup>6</sup>, 0.5 &lt; Pr &lt; 2000. The same friction factor \(f\) is used for both heat transfer and pressure drop to maintain self-consistency.</div>
+                        </div>
+                    </div>
+
+                    <div class="background-section" id="bg-pressure-drop">
+                        <h3>9. Pressure Drop</h3>
+                        <p>
+                            Pressure drop includes Darcy friction losses through the channel plus entrance contraction and exit expansion losses.
+                        </p>
+                        <div class="equation-card">
+                            $$\Delta P = \left(f\frac{L}{D_h} + K_c + K_e\right)\frac{\rho V_{ch}^2}{2}$$
+                            <div class="legend">
+                                \(K_c = 0.42(1-\sigma^2)\): contraction loss,
+                                \(K_e = (1-\sigma)^2\): expansion loss,
+                                \(\sigma = A_{\mathrm{open}}/A_{\mathrm{frontal}}\): open-area ratio.
+                            </div>
+                        </div>
+                        <p><strong>Laminar friction factor:</strong> Shah &amp; London [7] rectangular-duct Poiseuille-number fit:</p>
+                        <div class="equation-card">
+                            $$f = \frac{24(1 - 1.3553\beta + 1.9467\beta^2 - 1.7012\beta^3 + 0.9564\beta^4 - 0.2537\beta^5)}{Re}$$
+                            <div class="legend">\(\beta = \min(s/H, 1)\): channel aspect ratio. This is the exact Poiseuille solution for a rectangular cross-section, not the circular-pipe approximation.</div>
+                        </div>
+                        <p><strong>Turbulent friction factor:</strong> Petukhov correlation [6] as shown in &sect;8.</p>
+                        <p><strong>Ref:</strong> Shah, London (1978) [7]; Kays, London, Compact Heat Exchangers; Simons (2003) [9].</p>
                     </div>
 
                     <div class="background-section" id="bg-fin-efficiency">
-                        <h3>7. Fin Efficiency and Radiation</h3>
+                        <h3>10. Fin Efficiency</h3>
                         <p>
-                            Tall or very thin fins can underperform because the fin tip cools less effectively than the fin root. Radiation is handled through a linearized coefficient so it can be added
-                            to convection as an effective surface coefficient.
+                            Tall or thin fins underperform because the fin tip runs cooler than the root. The standard straight-rectangular-fin formula with a corrected tip length is used.
                         </p>
                         <div class="equation-card">
-                            $$\eta_f = \frac{\tanh(mL_c)}{mL_c}, \qquad
-                            h_{\mathrm{rad}} = \varepsilon \sigma (T_b^2 + T_{\infty}^2)(T_b + T_{\infty})$$
+                            $$\eta_f = \frac{\tanh(mL_c)}{mL_c}, \qquad m = \sqrt{\frac{h_{\mathrm{eff}} \cdot P}{k \cdot A_c}}$$
+                            $$L_c = H + \frac{t}{2}, \qquad A_c = t \cdot L, \qquad P = 2(L + t)$$
                             <div class="legend">
-                                \(m = \sqrt{\frac{h_{\mathrm{eff}}P}{kA_c}}\),
-                                \(L_c\): corrected fin length,
-                                \(\varepsilon\): emissivity,
-                                \(\sigma\): Stefan-Boltzmann constant.
+                                \(L_c\): corrected fin length (adds half the thickness to account for tip area),
+                                \(A_c\): fin cross-section area,
+                                \(P\): fin perimeter,
+                                \(k\): material thermal conductivity,
+                                \(h_{\mathrm{eff}} = h_{\mathrm{conv}} + h_{\mathrm{rad}}\).
+                            </div>
+                        </div>
+                        <p>Overall surface efficiency combines fin and exposed-base contributions: \(\eta_o = 1 - (A_f/A_t)(1 - \eta_f)\).</p>
+                        <p><strong>Assumptions:</strong> Uniform heat-transfer coefficient over the entire fin surface. 1D conduction along the fin height. Tip heat transfer modeled via the corrected-length approximation rather than a separate tip boundary condition.</p>
+                        <p><strong>Ref:</strong> Incropera et al. [8], Table 3.5.</p>
+                    </div>
+
+                    <div class="background-section" id="bg-radiation">
+                        <h3>11. Radiation</h3>
+                        <p>
+                            Radiation is handled through a linearized coefficient so it can be added to convection as an effective surface coefficient. A view-factor correction accounts for fin-to-fin radiation blockage.
+                        </p>
+                        <div class="equation-card">
+                            $$h_{\mathrm{rad}} = \varepsilon \sigma (T_s^2 + T_{\infty}^2)(T_s + T_{\infty}) \cdot F_{\mathrm{eff}}$$
+                            $$F_{\mathrm{eff}} = \frac{s}{s + H}$$
+                            <div class="legend">
+                                \(\varepsilon\): surface emissivity,
+                                \(\sigma\) = 5.670&times;10<sup>&minus;8</sup> W/m<sup>2</sup>K<sup>4</sup> (Stefan-Boltzmann constant),
+                                \(T_s, T_{\infty}\): surface and ambient in Kelvin,
+                                \(F_{\mathrm{eff}}\): effective view factor from the parallel-plate model.
+                                \(s\): fin spacing, \(H\): fin height.
+                            </div>
+                        </div>
+                        <p>\(F_{\mathrm{eff}}\) models the fact that in deep, narrow channels, most radiation from one fin strikes the adjacent fin (at nearly the same temperature), reducing net radiation to the environment. For wide spacing, F &rarr; 1. For deep channels, F &rarr; 0.</p>
+                        <p><strong>Assumptions:</strong> Gray-diffuse surfaces. Linearization is valid when T<sub>s</sub> &minus; T<sub>&infin;</sub> is moderate (&lt;100 K for most heatsink applications).</p>
+                        <p><strong>Ref:</strong> Sparrow, Cess (1978) [10]; Siegel, Howell (2002) [11].</p>
+                    </div>
+
+                    <div class="background-section" id="bg-spreading">
+                        <h3>12. Spreading Resistance &amp; Base-Plane Solver</h3>
+                        <p>
+                            When the heat source is smaller than the heatsink base, the heat must spread laterally before reaching the fin array. This adds an additional thermal resistance.
+                        </p>
+                        <h4>Scalar Model (always applied)</h4>
+                        <div class="equation-card">
+                            $$R_{\mathrm{sp}} = \frac{\psi}{k \sqrt{\pi A_s}}, \qquad \psi = \frac{(1-\epsilon)^{3/2}}{\epsilon\tau + (1-\epsilon)^{3/2}}$$
+                            <div class="legend">
+                                \(\epsilon = \sqrt{A_s / A_p}\): relative source size,
+                                \(\tau = t / \sqrt{A_p}\): relative base thickness,
+                                \(A_s\): source area, \(A_p\): plate area, \(t\): base thickness, \(k\): conductivity.
+                            </div>
+                        </div>
+                        <p><strong>Ref:</strong> Yovanovich, Muzychka, Culham (1999) [12]; Lee, Song, Au, Moran (1995) [13].</p>
+                        <h4>2D Field Solver (Spread View tab)</h4>
+                        <p>
+                            When a source footprint is defined, the Spread View tab additionally solves a 2D base-plane conduction problem using Gauss-Seidel iteration with successive over-relaxation (SOR). The fin array is represented as a distributed sink term derived from the global solver&rsquo;s R<sub>&theta;,sink</sub>.
+                        </p>
+                        <div class="equation-card">
+                            $$\sum_{\mathrm{neighbors}} G_n(T_{ij} - T_n) + G_{\mathrm{sink},ij}(T_{ij} - T_{\infty}) = Q_{ij}$$
+                            <div class="legend">
+                                \(G_x = k t \Delta y / \Delta x\): in-plane conductance (x-direction), \(G_y = k t \Delta x / \Delta y\) (y-direction).
+                                \(G_{\mathrm{sink},ij} = G_{\mathrm{sink,total}} \cdot A_{\mathrm{cell}} / A_{\mathrm{total}}\): distributed sink.
+                                \(Q_{ij}\): source heat input per cell (area-weighted overlap).
+                            </div>
+                        </div>
+                        <p><strong>Assumptions:</strong> 2D in-plane conduction only (fins not individually meshed). Heat rejection is a distributed sink term, not localized at fin roots. Adiabatic outer edges. One-way coupling: the global solver runs first, then the field solver uses R<sub>&theta;,sink</sub> as input.</p>
+                    </div>
+
+                    <div class="background-section" id="bg-bypass">
+                        <h3>13. Bypass Model</h3>
+                        <p>
+                            In an unducted configuration, some approach airflow bypasses the fin array instead of entering the channels. The bypass fraction depends on the fin aspect ratio.
+                        </p>
+                        <div class="equation-card">
+                            $$f_{\mathrm{bypass}} \approx \frac{1}{1 + K\sqrt{H/s}}, \qquad K = 0.5$$
+                            <div class="legend">
+                                \(H\): fin height, \(s\): fin spacing, \(K\): empirical constant.
+                                Deep, closely-spaced fins capture more flow; shallow, wide-spaced fins lose more to bypass.
+                            </div>
+                        </div>
+                        <p>This is a first-order model. Real bypass depends on the exact shroud geometry, approach flow profile, and fin-tip shape. In a ducted configuration (shroud forces all air through fins), bypass is zero.</p>
+                        <p><strong>Ref:</strong> Simons, R. E. (2003) [9].</p>
+                    </div>
+
+                    <div class="background-section" id="bg-fan-curve">
+                        <h3>14. Fan Curve Intersection</h3>
+                        <p>
+                            In fan-curve mode, the operating point is found by intersecting the fan pressure-flow curve with the heatsink system curve. The system curve is &Delta;P &prop; Q&sup2; from the pressure-drop model in &sect;9.
+                        </p>
+                        <div class="equation-card">
+                            $$P_{\mathrm{fan}}(Q) = P_{\max}\left(1 - \left(\frac{Q}{Q_{\max}}\right)^2\right) \quad \text{(parabolic model)}$$
+                            <div class="legend">
+                                \(P_{\max}\): fan shutoff pressure, \(Q_{\max}\): fan free-delivery flow rate.
+                                The operating point is found by binary search (60 iterations) where \(P_{\mathrm{fan}}(Q) = \Delta P_{\mathrm{sink}}(Q)\).
+                            </div>
+                        </div>
+                        <p>Piecewise-linear fan curves can also be used if specific P-Q data points are available.</p>
+                    </div>
+
+                    <div class="background-section" id="bg-mixed-convection">
+                        <h3>15. Mixed Convection</h3>
+                        <p>
+                            When forced-flow velocities are low enough that buoyancy forces are comparable to inertial forces, the flow is in the mixed-convection regime. The Richardson number quantifies this.
+                        </p>
+                        <div class="equation-card">
+                            $$Ri = \frac{Gr}{Re^2} = \frac{g \beta \Delta T\,D_h^3 / \nu^2}{Re^2}$$
+                            <div class="legend">
+                                Ri &gt; 0.1: buoyancy effects may be significant. The tool warns when this occurs but does not apply a mixed-convection correlation &mdash; this is a known limitation.
                             </div>
                         </div>
                     </div>
 
+                    <div class="background-section" id="bg-validity">
+                        <h3>16. Model Limitations &amp; Validity Ranges</h3>
+                        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:12px;">
+                            <thead>
+                                <tr style="border-bottom:2px solid var(--border-color);text-align:left;">
+                                    <th style="padding:8px 10px;">Model</th>
+                                    <th style="padding:8px 10px;">Parameter</th>
+                                    <th style="padding:8px 10px;">Valid Range</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">Air properties</td>
+                                    <td style="padding:6px 10px;">T<sub>film</sub></td>
+                                    <td style="padding:6px 10px;">200&ndash;700 K (&minus;73 to 427 °C)</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">Bar-Cohen/Rohsenow</td>
+                                    <td style="padding:6px 10px;">Ra<sub>m</sub></td>
+                                    <td style="padding:6px 10px;">&gt; 0 (composite form)</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">McAdams horizontal</td>
+                                    <td style="padding:6px 10px;">Ra<sub>L</sub></td>
+                                    <td style="padding:6px 10px;">10<sup>4</sup>&ndash;10<sup>11</sup></td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">Muzychka/Yovanovich</td>
+                                    <td style="padding:6px 10px;">Re</td>
+                                    <td style="padding:6px 10px;">&lt; 2300 (laminar)</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">Gnielinski/Petukhov</td>
+                                    <td style="padding:6px 10px;">Re, Pr</td>
+                                    <td style="padding:6px 10px;">2300 &lt; Re &lt; 5&times;10<sup>6</sup>, 0.5 &lt; Pr &lt; 2000</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">Linearized radiation</td>
+                                    <td style="padding:6px 10px;">&Delta;T</td>
+                                    <td style="padding:6px 10px;">Best for &Delta;T &lt; 100 K</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid var(--border-color);">
+                                    <td style="padding:6px 10px;">Yovanovich spreading</td>
+                                    <td style="padding:6px 10px;">Source</td>
+                                    <td style="padding:6px 10px;">Centered, rectangular, uniform flux</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:6px 10px;">2D field solver</td>
+                                    <td style="padding:6px 10px;">Grid</td>
+                                    <td style="padding:6px 10px;">41&times;25 default; convergence &lt; 10<sup>&minus;4</sup> K</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top:12px;">
+                            <strong>What this tool does not model:</strong> 3D conduction through fins, turbulence-driven flow instabilities, airflow maldistribution across the array, transient thermal response, contact resistance at fin-to-base joints, or manufacturing tolerances. Use CFD or test data for these effects.
+                        </p>
+                    </div>
+
                     <div class="background-section" id="bg-references">
-                        <h3>8. References</h3>
+                        <h3>17. References</h3>
                         <ol>
-                            <li>Bar-Cohen, A., Rohsenow, W. M. (1984). Thermally Optimum Spacing of Vertical, Natural Convection Cooled, Parallel Plates.</li>
-                            <li>Muzychka, Y. S., Yovanovich, M. M. (2004). Laminar Forced Convection Heat Transfer in the Combined Entry Region of Non-Circular Ducts.</li>
-                            <li>Simons, R. E. Estimating Parallel Plate-fin Heat Sink Pressure Drop.</li>
-                            <li>Incropera, DeWitt, Bergman, Lavine. Fundamentals of Heat and Mass Transfer.</li>
+                            <li><strong>[1]</strong> Lemmon, E. W., Jacobsen, R. T., Penoncello, S. G., Friend, D. G. (2000). Thermodynamic Properties of Air and Mixtures of Nitrogen, Argon, and Oxygen from 60 to 2000 K. <em>J. Phys. Chem. Ref. Data</em> 29(3). NIST baseline for the Sutherland fits.</li>
+                            <li><strong>[2]</strong> Bar-Cohen, A., Rohsenow, W. M. (1984). Thermally Optimum Spacing of Vertical, Natural Convection Cooled, Parallel Plates. <em>J. Heat Transfer</em> 106(1), 116&ndash;123. <a href="https://doi.org/10.1115/1.3246622" target="_blank" rel="noopener">doi:10.1115/1.3246622</a>. Used in &sect;6.</li>
+                            <li><strong>[3]</strong> McAdams, W. H. (1954). <em>Heat Transmission</em>, 3rd ed. McGraw-Hill. Horizontal plate correlations used in &sect;7.</li>
+                            <li><strong>[4]</strong> Muzychka, Y. S., Yovanovich, M. M. (2004). Laminar Forced Convection Heat Transfer in the Combined Entry Region of Non-Circular Ducts. <em>J. Heat Transfer</em> 126(1), 54&ndash;61. <a href="https://doi.org/10.1115/1.1643752" target="_blank" rel="noopener">doi:10.1115/1.1643752</a>. Used in &sect;8 (laminar branch).</li>
+                            <li><strong>[5]</strong> Gnielinski, V. (1976). New Equations for Heat and Mass Transfer in Turbulent Pipe and Channel Flow. <em>Int. Chem. Eng.</em> 16, 359&ndash;368. Used in &sect;8 (turbulent branch).</li>
+                            <li><strong>[6]</strong> Petukhov, B. S. (1970). Heat Transfer and Friction in Turbulent Pipe Flow with Variable Physical Properties. <em>Adv. Heat Transfer</em> 6, 503&ndash;564. Friction factor used in &sect;8 and &sect;9.</li>
+                            <li><strong>[7]</strong> Shah, R. K., London, A. L. (1978). <em>Laminar Flow Forced Convection in Ducts</em>. Academic Press. Poiseuille-number polynomial for rectangular ducts (&sect;9).</li>
+                            <li><strong>[8]</strong> Incropera, F. P., DeWitt, D. P., Bergman, T. L., Lavine, A. S. <em>Fundamentals of Heat and Mass Transfer</em>, 7th ed. Wiley. General reference for correlations, fin efficiency (Table 3.5), horizontal convection (Table 9.1).</li>
+                            <li><strong>[9]</strong> Simons, R. E. (2003). Estimating Parallel Plate-Fin Heat Sink Pressure Drop. <em>Electronics Cooling</em> 9(1). Pressure-drop methodology and bypass model (&sect;9, &sect;13).</li>
+                            <li><strong>[10]</strong> Sparrow, E. M., Cess, R. D. (1978). <em>Radiation Heat Transfer</em>. Hemisphere. View factor model (&sect;11).</li>
+                            <li><strong>[11]</strong> Siegel, R., Howell, J. R. (2002). <em>Thermal Radiation Heat Transfer</em>, 4th ed. Taylor &amp; Francis. View factor reference (&sect;11).</li>
+                            <li><strong>[12]</strong> Yovanovich, M. M., Muzychka, Y. S., Culham, J. R. (1999). Spreading Resistance of Isoflux Rectangles and Strips on Compound Flux Channels. <em>J. Thermophys. Heat Transfer</em> 13(4). Scalar spreading model (&sect;12).</li>
+                            <li><strong>[13]</strong> Lee, S., Song, S., Au, V., Moran, K. P. (1995). Constriction/Spreading Resistance Model for Electronics Packaging. <em>ASME/JSME Thermal Eng. Conf.</em>, vol. 4. Additional spreading-resistance formulation (&sect;12).</li>
                         </ol>
+                    </div>
+
+                    <div class="background-section" id="bg-worked-examples">
+                        <h3>18. Worked Examples</h3>
+
+                        <h4>Example 1: Natural Convection</h4>
+                        <p><strong>Given:</strong> 15 W heat load, 25 °C ambient, target junction limit 100 °C. Aluminum 6063-T5 heatsink (k = 201 W/m&middot;K), base 100 &times; 80 &times; 5 mm, 10 fins at 30 mm tall &times; 1 mm thick, black anodized (&epsilon; = 0.85). R<sub>&theta;,jc</sub> = 0.50 K/W, R<sub>&theta;,cs</sub> = 0.20 K/W. Vertical orientation, natural convection.</p>
+
+                        <p><strong>Step 1 &mdash; Thermal Budget:</strong></p>
+                        <p style="margin-left:1.5em;">Available rise = 100 &minus; 25 = 75 °C. Total budget = 75 / 15 = 5.00 K/W.<br>
+                        Upstream consumption = 0.50 + 0.20 = 0.70 K/W.<br>
+                        Required sink R<sub>&theta;</sub> = 5.00 &minus; 0.70 = <strong>4.30 K/W</strong>.</p>
+
+                        <p><strong>Step 2 &mdash; Geometry:</strong></p>
+                        <p style="margin-left:1.5em;">Fin spacing: s = (80 &minus; 10 &times; 1) / (10 &minus; 1) = 7.78 mm.<br>
+                        Hydraulic diameter: D<sub>h</sub> = 2 &times; 7.78 &times; 30 / (7.78 + 30) = 12.35 mm.<br>
+                        Total wetted area: &asymp; 680 cm&sup2;.</p>
+
+                        <p><strong>Step 3 &mdash; Results:</strong></p>
+                        <p style="margin-left:1.5em;">The Bar-Cohen/Rohsenow correlation (&sect;6) gives h<sub>conv</sub> &asymp; 7.9 W/m&sup2;K. Linearized radiation (&sect;11) adds h<sub>rad</sub> &asymp; 1.19 W/m&sup2;K (corrected for fin-channel view factor F<sub>eff</sub> = 0.206).<br>
+                        Fin efficiency (&sect;10): 97.3%. Sink R<sub>&theta;</sub> = <strong>1.66 K/W</strong> &mdash; well within the 4.30 K/W budget.<br>
+                        Base temperature: 49.9 °C. Junction temperature: 60.4 °C. Margin: <strong>39.6 °C</strong>.<br>
+                        Heat split: 13.0 W convection, 2.0 W radiation.</p>
+                        <p style="margin-left:1.5em;"><em>Enter these values in the tool to verify. Results should match within rounding precision.</em></p>
+
+                        <h4>Example 2: Forced Convection (Same Heatsink)</h4>
+                        <p><strong>Given:</strong> Same heatsink and thermal path as Example 1, but with 2 m/s approach velocity (forced convection mode).</p>
+
+                        <p><strong>Results:</strong></p>
+                        <p style="margin-left:1.5em;">At 2 m/s approach, the channel velocity is 2.29 m/s (due to contraction into fin channels). Re &asymp; 1770 (laminar, &sect;8).<br>
+                        h<sub>conv</sub> jumps to 24.0 W/m&sup2;K &mdash; roughly 3&times; the natural-convection value. Radiation drops to 0.66 W because the base runs much cooler.<br>
+                        Fin efficiency: 92.9%. Sink R<sub>&theta;</sub> = <strong>0.63 K/W</strong>. Pressure drop (&sect;9): 0.6 Pa.<br>
+                        Base temperature: 34.4 °C. Junction temperature: 44.9 °C. Margin: <strong>55.1 °C</strong>.<br>
+                        The forced airflow cuts the thermal resistance by nearly 3&times; compared to natural convection.</p>
+                        <p style="margin-left:1.5em;"><em>Switching from natural to forced convection is often the single largest lever in a thermal design.</em></p>
                     </div>
                 </div>
             </section>
@@ -1598,7 +2200,13 @@
             'fan_max_flow_rate',
             'interface_resistance',
             'junction_to_case_resistance',
-            'pressure_pa'
+            'pressure_pa',
+            'orientation',
+            'source_length',
+            'source_width',
+            'source_x',
+            'source_y',
+            'ducted'
         ];
         const STORAGE_KEY = 'heatsink-designer-settings';
         const defaultSettings = {
@@ -1610,12 +2218,109 @@
         };
 
         let settings = { ...defaultSettings };
+        let pyodideInstance = null;
         let pyUtils = null;
         let pyToolModule = null;
         let toolDocumentation = {};
         let materialDatabase = {};
         let lastResults = null;
         let openDerivation = null;
+        let resultsAreStale = false;
+
+        function markResultsStale() {
+            if (lastResults && !resultsAreStale) {
+                resultsAreStale = true;
+                document.getElementById('stale-banner').style.display = 'block';
+                document.getElementById('results-grid').style.opacity = '0.6';
+            }
+        }
+
+        function clearStaleIndicator() {
+            resultsAreStale = false;
+            document.getElementById('stale-banner').style.display = 'none';
+            document.getElementById('results-grid').style.opacity = '1';
+        }
+
+        // --- Inline input validation ---
+        const VALIDATION_RULES = {
+            heat_load: { min: 0.01, message: 'Must be positive' },
+            ambient_temperature: { min: -273.14, message: 'Must be above absolute zero' },
+            target_junction_temperature: { min: -273.14, message: 'Must be above absolute zero' },
+            base_length: { min: 1, message: 'Must be at least 1 mm' },
+            base_width: { min: 1, message: 'Must be at least 1 mm' },
+            base_thickness: { min: 0.1, message: 'Must be at least 0.1 mm' },
+            fin_height: { min: 1, message: 'Must be at least 1 mm' },
+            fin_thickness: { min: 0.1, message: 'Must be at least 0.1 mm' },
+            fin_count: { min: 2, message: 'Must be at least 2' },
+            surface_emissivity: { min: 0.01, max: 1.0, message: 'Must be between 0.01 and 1.0' },
+        };
+
+        function validateInput(inputEl) {
+            const rules = VALIDATION_RULES[inputEl.id];
+            if (!rules) return true;
+            const val = parseFloat(inputEl.value);
+            let valid = Number.isFinite(val);
+            if (valid && rules.min !== undefined) valid = val >= rules.min;
+            if (valid && rules.max !== undefined) valid = val <= rules.max;
+            inputEl.style.borderColor = valid ? '' : 'var(--danger-color)';
+            let errorEl = inputEl.parentElement.querySelector('.validation-error');
+            if (!valid) {
+                if (!errorEl) {
+                    errorEl = document.createElement('div');
+                    errorEl.className = 'validation-error';
+                    errorEl.style.cssText = 'font-size:0.78rem;color:var(--danger-color);margin-top:4px;';
+                    inputEl.parentElement.appendChild(errorEl);
+                }
+                errorEl.textContent = rules.message;
+            } else if (errorEl) {
+                errorEl.remove();
+            }
+            return valid;
+        }
+
+        function validateGeometry() {
+            const finCount = parseInt(document.getElementById('fin_count').value, 10);
+            const finThickness = parseFloat(document.getElementById('fin_thickness').value);
+            const baseWidth = parseFloat(document.getElementById('base_width').value);
+            if (finCount * finThickness >= baseWidth) {
+                const el = document.getElementById('fin_count');
+                el.style.borderColor = 'var(--danger-color)';
+                let errorEl = el.parentElement.querySelector('.validation-error');
+                if (!errorEl) {
+                    errorEl = document.createElement('div');
+                    errorEl.className = 'validation-error';
+                    errorEl.style.cssText = 'font-size:0.78rem;color:var(--danger-color);margin-top:4px;';
+                    el.parentElement.appendChild(errorEl);
+                }
+                errorEl.textContent = 'Total fin thickness exceeds base width';
+                return false;
+            }
+            return true;
+        }
+
+        function validateAllInputs() {
+            let allValid = true;
+            document.querySelectorAll('#calc-form input[type="number"]').forEach((el) => {
+                if (!validateInput(el)) allValid = false;
+            });
+            if (!validateGeometry()) allValid = false;
+            return allValid;
+        }
+
+        // --- Auto-calculate with debounce ---
+        let autoCalcTimer = null;
+
+        function scheduleAutoCalculate() {
+            markResultsStale();
+            if (autoCalcTimer) clearTimeout(autoCalcTimer);
+            autoCalcTimer = setTimeout(() => {
+                if (!document.getElementById('calculate-btn').disabled && validateAllInputs()) {
+                    handleCalculate(new Event('submit'));
+                }
+            }, 500);
+        }
+
+        const sweepState = { metadata: null, baselineInputs: null, baselineResults: null };
 
         function saveSettings() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -1733,6 +2438,14 @@
                     }
                 }, 100);
             }
+            if (tabName === 'spreading') {
+                setTimeout(() => {
+                    ['spreading-heatmap', 'spreading-centerline-x', 'spreading-centerline-y'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el && el.data) Plotly.Plots.resize(el);
+                    });
+                }, 100);
+            }
         }
 
         function openInputSection(section) {
@@ -1776,6 +2489,43 @@
             renderHeatsinkGeometryPreview();
         }
 
+        function updateTimInputVisibility() {
+            const mode = document.getElementById('tim_input_mode').value;
+            document.getElementById('tim-absolute-inputs').style.display = mode === 'absolute' ? 'block' : 'none';
+            document.getElementById('tim-area-inputs').style.display = mode === 'area_normalized' ? 'block' : 'none';
+            document.getElementById('tim-conductivity-inputs').style.display = mode === 'conductivity' ? 'block' : 'none';
+            document.getElementById('tim-none-note').style.display = mode === 'none' ? 'block' : 'none';
+        }
+
+        function getEffectiveInterfaceResistance() {
+            const mode = document.getElementById('tim_input_mode').value;
+            if (mode === 'none') {
+                return 0;
+            }
+            if (mode === 'absolute') {
+                return parseFloat(document.getElementById('interface_resistance').value) || 0;
+            }
+            // Contact area from source footprint; fall back to full base
+            const srcL = parseFloat(document.getElementById('source_length').value) / 1000 || 0;
+            const srcW = parseFloat(document.getElementById('source_width').value) / 1000 || 0;
+            const baseL = parseFloat(document.getElementById('base_length').value) / 1000;
+            const baseW = parseFloat(document.getElementById('base_width').value) / 1000;
+            const areaM2 = (srcL > 0 && srcW > 0) ? srcL * srcW : baseL * baseW;
+            if (areaM2 <= 0) return 0;
+            if (mode === 'area_normalized') {
+                const rAreaCm2 = parseFloat(document.getElementById('tim_area_resistance').value) || 0;
+                // Convert K·cm²/W → K/W:  R = R'' / A, where R'' in cm² and A in cm²
+                const areaCm2 = areaM2 * 1e4;
+                return areaCm2 > 0 ? rAreaCm2 / areaCm2 : 0;
+            }
+            if (mode === 'conductivity') {
+                const k = parseFloat(document.getElementById('tim_conductivity').value) || 0;
+                const blt = (parseFloat(document.getElementById('tim_bondline').value) || 0) / 1000; // mm → m
+                return (k > 0 && areaM2 > 0) ? blt / (k * areaM2) : 0;
+            }
+            return 0;
+        }
+
         function renderThermalPathPrimer() {
             const svg = document.getElementById('thermal-path-primer-svg');
             const note = document.getElementById('thermal-path-primer-note');
@@ -1784,7 +2534,7 @@
             const heatLoad = parseFloat(document.getElementById('heat_load').value);
             const ambientTemperature = parseFloat(document.getElementById('ambient_temperature').value);
             const targetJunctionTemperature = parseFloat(document.getElementById('target_junction_temperature').value);
-            const interfaceResistance = parseFloat(document.getElementById('interface_resistance').value);
+            const interfaceResistance = getEffectiveInterfaceResistance();
             const junctionToCaseResistance = parseFloat(document.getElementById('junction_to_case_resistance').value);
 
             const style = getComputedStyle(document.body);
@@ -1920,11 +2670,11 @@
             const infoColor = style.getPropertyValue('--secondary-color').trim();
             const warnColor = style.getPropertyValue('--danger-color').trim();
 
-            const baseLength = parseFloat(document.getElementById('base_length').value);
-            const baseWidth = parseFloat(document.getElementById('base_width').value);
-            const baseThickness = parseFloat(document.getElementById('base_thickness').value);
-            const finHeight = parseFloat(document.getElementById('fin_height').value);
-            const finThickness = parseFloat(document.getElementById('fin_thickness').value);
+            const baseLength = parseFloat(document.getElementById('base_length').value) / 1000;      // mm → m
+            const baseWidth = parseFloat(document.getElementById('base_width').value) / 1000;         // mm → m
+            const baseThickness = parseFloat(document.getElementById('base_thickness').value) / 1000;  // mm → m
+            const finHeight = parseFloat(document.getElementById('fin_height').value) / 1000;          // mm → m
+            const finThickness = parseFloat(document.getElementById('fin_thickness').value) / 1000;    // mm → m
             const finCount = parseInt(document.getElementById('fin_count').value, 10);
             const airflowMode = document.getElementById('airflow_mode')?.value ?? 'natural';
 
@@ -2023,6 +2773,31 @@
                     infoColor
                 );
             }
+            // Source rectangle overlay
+            const srcLen = parseFloat(document.getElementById('source_length').value) / 1000;
+            const srcWid = parseFloat(document.getElementById('source_width').value) / 1000;
+            if (Number.isFinite(srcLen) && Number.isFinite(srcWid) && srcLen > 0 && srcWid > 0) {
+                const srcXInput = parseFloat(document.getElementById('source_x').value) / 1000;
+                const srcYInput = parseFloat(document.getElementById('source_y').value) / 1000;
+                const srcCx = (Number.isFinite(srcXInput) && srcXInput > 0) ? srcXInput : baseLength / 2;
+                const srcCy = (Number.isFinite(srcYInput) && srcYInput > 0) ? srcYInput : baseWidth / 2;
+                const srcX0 = Math.max(srcCx - srcLen / 2, 0);
+                const srcY0 = Math.max(srcCy - srcWid / 2, 0);
+                const srcX1 = Math.min(srcCx + srcLen / 2, baseLength);
+                const srcY1 = Math.min(srcCy + srcWid / 2, baseWidth);
+                const sx = topX + srcX0 * scaleTop;
+                const sy = topY + srcY0 * scaleTop;
+                const sw = (srcX1 - srcX0) * scaleTop;
+                const sh = (srcY1 - srcY0) * scaleTop;
+                const srcColor = style.getPropertyValue('--danger-color').trim() || '#b91c1c';
+                topViewHtml += `
+                    <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}"
+                        fill="${srcColor}" fill-opacity="0.15" stroke="${srcColor}" stroke-width="1.5" stroke-dasharray="5,3"/>
+                    <circle cx="${topX + srcCx * scaleTop}" cy="${topY + srcCy * scaleTop}" r="3" fill="${srcColor}"/>
+                    <text x="${sx + sw + 4}" y="${sy + 12}" fill="${srcColor}" font-size="11" font-weight="600" font-family="var(--font-mono)">Source</text>
+                `;
+            }
+
             topViewSvg.setAttribute('viewBox', '0 0 600 240');
             topViewSvg.innerHTML = topViewHtml;
 
@@ -2074,6 +2849,20 @@
                 accentColor,
                 true
             );
+            // Fin spacing dimension between first two fins
+            if (finCount >= 2) {
+                const fin1Right = frontX + scaledFrontFinThickness;
+                const fin2Left = frontX + scaledFrontFinThickness + scaledFrontSpacing;
+                const spacingDimY = frontBaseTop - scaledFrontFinHeight - 16;
+                frontViewHtml += previewDimLine(
+                    fin1Right,
+                    spacingDimY,
+                    fin2Left,
+                    spacingDimY,
+                    `s = ${formatPreviewLength(spacing)}`,
+                    successColor
+                );
+            }
             if (airflowMode === 'natural') {
                 frontViewHtml += previewArrow(
                     frontX + scaledFrontWidth + 30,
@@ -2103,7 +2892,11 @@
                 'base_thickness',
                 'fin_height',
                 'fin_thickness',
-                'fin_count'
+                'fin_count',
+                'source_length',
+                'source_width',
+                'source_x',
+                'source_y'
             ].forEach((id) => {
                 const element = document.getElementById(id);
                 if (!element) return;
@@ -2346,6 +3139,59 @@
             Plotly.react('heat-plot', data, layout, { displayModeBar: false, responsive: true });
         }
 
+        function renderFanCurvePlot(results, inputs) {
+            const plotDiv = document.getElementById('fan-curve-plot');
+            if (inputs.airflow_mode !== 'fan_curve') {
+                plotDiv.style.display = 'none';
+                return;
+            }
+            plotDiv.style.display = 'block';
+
+            const nPoints = 50;
+            const maxFlow = inputs.fan_max_flow_rate;
+            const flows = Array.from({ length: nPoints }, (_, i) => (i / (nPoints - 1)) * maxFlow);
+
+            // Fan curve: parabolic P = Pmax * (1 - (Q/Qmax)^2)
+            const fanPressures = flows.map(q => {
+                const ratio = Math.min(q / maxFlow, 1.0);
+                return inputs.fan_max_pressure * (1 - ratio * ratio);
+            });
+
+            // System curve: ΔP ∝ Q² scaled through the operating point
+            const opFlow = results.volumetric_flow_rate;
+            const opDrop = results.pressure_drop;
+            const systemK = opDrop / (opFlow * opFlow + 1e-12);
+            const systemPressures = flows.map(q => systemK * q * q);
+
+            const accentColor = getComputedStyle(document.body).getPropertyValue('--accent-color').trim();
+            const dangerColor = getComputedStyle(document.body).getPropertyValue('--danger-color').trim();
+            const fanTrace = {
+                x: flows.map(q => q * 1000), y: fanPressures,
+                name: 'Fan Curve', mode: 'lines',
+                line: { color: accentColor, width: 2 },
+            };
+            const sysTrace = {
+                x: flows.map(q => q * 1000), y: systemPressures,
+                name: 'System Curve', mode: 'lines',
+                line: { color: getComputedStyle(document.body).getPropertyValue('--warning-color').trim(), width: 2, dash: 'dash' },
+            };
+            const opPoint = {
+                x: [opFlow * 1000], y: [opDrop],
+                name: 'Operating Point', mode: 'markers',
+                marker: { size: 12, color: dangerColor, symbol: 'diamond' },
+            };
+
+            const layout = {
+                ...getPlotTheme(),
+                title: { text: 'Fan vs System Curve', font: { size: 14 } },
+                xaxis: { ...getPlotTheme().xaxis, title: 'Flow Rate (L/s)' },
+                yaxis: { ...getPlotTheme().yaxis, title: 'Pressure (Pa)' },
+                showlegend: true,
+                legend: { x: 1, xanchor: 'right', y: 1 },
+            };
+            Plotly.react('fan-curve-plot', [fanTrace, sysTrace, opPoint], layout, { displayModeBar: false, responsive: true });
+        }
+
         function clearComputedViews() {
             [
                 'metric-base_temperature',
@@ -2365,7 +3211,207 @@
             const heatPlot = document.getElementById('heat-plot');
             if (ladderPlot) ladderPlot.innerHTML = '';
             if (heatPlot) heatPlot.innerHTML = '';
+            const fanPlot = document.getElementById('fan-curve-plot');
+            if (fanPlot) { fanPlot.innerHTML = ''; fanPlot.style.display = 'none'; }
+            document.getElementById('heat-split-derivations').style.display = 'none';
+            document.getElementById('results-assumptions').style.display = 'none';
+            ['corr-pressure_drop', 'corr-fin_efficiency', 'corr-radiation_coefficient', 'heat-convection-correlation'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '';
+            });
+            // Clear spreading views
+            ['spread-avg-base', 'spread-peak-base', 'spread-delta', 'spread-peak-junction'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '--';
+            });
+            const heatmapEl = document.getElementById('spreading-heatmap');
+            if (heatmapEl) heatmapEl.innerHTML = '';
+            const clxEl = document.getElementById('spreading-centerline-x');
+            const clyEl = document.getElementById('spreading-centerline-y');
+            if (clxEl) clxEl.innerHTML = '';
+            if (clyEl) clyEl.innerHTML = '';
+            document.getElementById('spreading-content').style.display = 'none';
+            document.getElementById('spreading-empty').style.display = 'block';
+            clearSpreadingWarning();
             renderThermalStackDiagram(null);
+        }
+
+        // ─── Spreading Warning Helpers ───
+
+        function showSpreadingWarning() {
+            document.getElementById('spreading-warning-results').classList.add('visible');
+            document.getElementById('spreading-warning-spread').classList.add('visible');
+        }
+
+        function clearSpreadingWarning() {
+            document.getElementById('spreading-warning-results').classList.remove('visible');
+            document.getElementById('spreading-warning-spread').classList.remove('visible');
+        }
+
+        // ─── Spreading View Renderers ───
+
+        let lastSpreadingData = null;
+
+        function renderSpreadingView(spreadingResult, inputs) {
+            const emptyEl = document.getElementById('spreading-empty');
+            const contentEl = document.getElementById('spreading-content');
+
+            if (!spreadingResult || !spreadingResult.spreading) {
+                emptyEl.style.display = 'block';
+                contentEl.style.display = 'none';
+                if (spreadingResult && spreadingResult.spreading_error) {
+                    emptyEl.textContent = spreadingResult.spreading_error;
+                } else if (!inputs.source_length || !inputs.source_width) {
+                    emptyEl.textContent = 'Set a source footprint (length and width) in the Geometry section to see localized base spreading.';
+                }
+                lastSpreadingData = null;
+                return;
+            }
+
+            emptyEl.style.display = 'none';
+            contentEl.style.display = 'block';
+
+            const sp = spreadingResult.spreading;
+            lastSpreadingData = { spreading: sp, inputs };
+
+            // Summary metrics
+            document.getElementById('spread-avg-base').innerHTML = formatWithUnit(sp.mean_base_temperature, '°C', 1);
+            document.getElementById('spread-peak-base').innerHTML = formatWithUnit(sp.peak_base_temperature, '°C', 1);
+            document.getElementById('spread-delta').innerHTML = formatWithUnit(sp.max_spreading_delta, '°C', 2);
+
+            const worstSource = sp.source_summaries && sp.source_summaries.length > 0 ? sp.source_summaries[0] : null;
+            if (worstSource) {
+                document.getElementById('spread-peak-junction').innerHTML = formatWithUnit(worstSource.peak_junction_temperature_estimate, '°C', 1);
+            } else {
+                document.getElementById('spread-peak-junction').innerHTML = '--';
+            }
+
+            const mode = document.querySelector('input[name="spreading-mode"]:checked')?.value || 'absolute';
+            renderSpreadingHeatmap(sp, inputs, mode);
+            renderSpreadingCenterlines(sp, inputs, mode);
+
+            // Assumptions
+            const listEl = document.getElementById('spreading-assumptions-list');
+            listEl.innerHTML = '';
+            (sp.assumptions || []).forEach((a) => {
+                const li = document.createElement('li');
+                li.textContent = a;
+                listEl.appendChild(li);
+            });
+        }
+
+        function renderSpreadingHeatmap(sp, inputs, mode) {
+            const theme = getPlotTheme();
+            const ambient = inputs.ambient_temperature || 25;
+
+            // The temperature_grid is [Nx][Ny], Plotly heatmap expects z[row][col] where row is y
+            const grid = mode === 'rise' ? sp.temperature_rise_grid : sp.temperature_grid;
+
+            // Transpose: grid[i][j] where i=x, j=y → z[j][i] for Plotly (y rows, x cols)
+            const ny = sp.y_coords.length;
+            const nx = sp.x_coords.length;
+            const z = [];
+            for (let j = 0; j < ny; j++) {
+                const row = [];
+                for (let i = 0; i < nx; i++) {
+                    row.push(grid[i][j]);
+                }
+                z.push(row);
+            }
+
+            // Convert coords from m to mm for display
+            const xMm = sp.x_coords.map((v) => v * 1000);
+            const yMm = sp.y_coords.map((v) => v * 1000);
+
+            const colorbarTitle = mode === 'rise' ? 'Rise (°C)' : 'Temp (°C)';
+
+            const trace = {
+                type: 'heatmap',
+                x: xMm,
+                y: yMm,
+                z: z,
+                colorscale: 'Hot',
+                reversescale: true,
+                colorbar: { title: colorbarTitle, titleside: 'right' },
+                hovertemplate: 'x: %{x:.1f} mm<br>y: %{y:.1f} mm<br>%{z:.2f} °C<extra></extra>',
+            };
+
+            // Source rectangle shapes
+            const shapes = (sp.source_rectangles || []).map((src) => ({
+                type: 'rect',
+                x0: src.x0 * 1000,
+                y0: src.y0 * 1000,
+                x1: src.x1 * 1000,
+                y1: src.y1 * 1000,
+                line: { color: 'rgba(255,255,255,0.9)', width: 2, dash: 'dash' },
+            }));
+
+            const layout = {
+                ...theme,
+                title: { text: mode === 'rise' ? 'Base Temperature Rise' : 'Base Temperature Field', font: { size: 14 } },
+                xaxis: { ...theme.xaxis, title: 'x (mm)', scaleanchor: 'y', constrain: 'domain' },
+                yaxis: { ...theme.yaxis, title: 'y (mm)' },
+                shapes,
+                margin: { l: 56, r: 20, t: 36, b: 46 },
+            };
+
+            Plotly.react('spreading-heatmap', [trace], layout, { displayModeBar: false, responsive: true });
+        }
+
+        function renderSpreadingCenterlines(sp, inputs, mode) {
+            const theme = getPlotTheme();
+            const xMm = sp.centerline_x.coords.map((v) => v * 1000);
+            const yMm = sp.centerline_y.coords.map((v) => v * 1000);
+            const ambient = inputs.ambient_temperature || 25;
+
+            const xTemp = mode === 'rise'
+                ? sp.centerline_x.temperature.map((t) => t - ambient)
+                : sp.centerline_x.temperature;
+            const yTemp = mode === 'rise'
+                ? sp.centerline_y.temperature.map((t) => t - ambient)
+                : sp.centerline_y.temperature;
+
+            const yLabel = mode === 'rise' ? 'Rise (°C)' : 'Temperature (°C)';
+
+            // Show cut position in plot titles
+            const cutY = sp.centerline_x.cut_y;
+            const cutX = sp.centerline_y.cut_x;
+            const xTitle = cutY != null
+                ? `Centerline Along X (at y = ${(cutY * 1000).toFixed(1)} mm)`
+                : 'Centerline Along X';
+            const yTitle = cutX != null
+                ? `Centerline Along Y (at x = ${(cutX * 1000).toFixed(1)} mm)`
+                : 'Centerline Along Y';
+
+            Plotly.react('spreading-centerline-x', [{
+                x: xMm,
+                y: xTemp,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#b91c1c', width: 2 },
+                hovertemplate: '%{x:.1f} mm<br>%{y:.2f} °C<extra></extra>',
+            }], {
+                ...theme,
+                title: { text: xTitle, font: { size: 13 } },
+                xaxis: { ...theme.xaxis, title: 'x (mm)' },
+                yaxis: { ...theme.yaxis, title: yLabel },
+                margin: { l: 52, r: 12, t: 32, b: 40 },
+            }, { displayModeBar: false, responsive: true });
+
+            Plotly.react('spreading-centerline-y', [{
+                x: yMm,
+                y: yTemp,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#0f766e', width: 2 },
+                hovertemplate: '%{x:.1f} mm<br>%{y:.2f} °C<extra></extra>',
+            }], {
+                ...theme,
+                title: { text: yTitle, font: { size: 13 } },
+                xaxis: { ...theme.xaxis, title: 'y (mm)' },
+                yaxis: { ...theme.yaxis, title: yLabel },
+                margin: { l: 52, r: 12, t: 32, b: 40 },
+            }, { displayModeBar: false, responsive: true });
         }
 
         function setStatusBanner(results) {
@@ -2390,17 +3436,37 @@
 
         function displayResults(results) {
             lastResults = results;
+            clearStaleIndicator();
             document.getElementById('results-placeholder').style.display = 'none';
             document.getElementById('results-grid').style.display = 'grid';
+            document.getElementById('export-btn').disabled = false;
             setStatusBanner(results);
 
             document.getElementById('val-required_sink_thermal_resistance').innerHTML = formatWithUnit(results.required_sink_thermal_resistance, 'K/W');
             document.getElementById('val-sink_thermal_resistance').innerHTML = formatWithUnit(results.sink_thermal_resistance, 'K/W');
+
+            // Visual indicator: is the required Rθ budget negative (impossible)?
+            const requiredCard = document.querySelector('.result-item[data-key="required_sink_thermal_resistance"]');
+            const budgetNegative = results.required_sink_thermal_resistance < 0;
+            requiredCard.style.borderColor = budgetNegative ? 'var(--danger-color)' : '';
+            requiredCard.querySelector('.subtext').textContent = budgetNegative
+                ? 'Negative — upstream resistances exceed the thermal budget. Reduce heat load, raise the junction limit, or lower Rθjc / Rθcs.'
+                : 'Budget left for the sink alone';
+
+            // Visual indicator: does the achieved Rθ meet the thermal budget?
+            const achievedCard = document.querySelector('.result-item[data-key="sink_thermal_resistance"]');
+            const meetsTarget = !budgetNegative && results.sink_thermal_resistance <= results.required_sink_thermal_resistance;
+            achievedCard.style.borderColor = meetsTarget ? 'var(--success-color)' : 'var(--danger-color)';
+            achievedCard.querySelector('.subtext').textContent = budgetNegative
+                ? 'Budget is negative — no heatsink alone can fix this'
+                : meetsTarget
+                    ? 'Meets the thermal budget'
+                    : 'Exceeds the required thermal resistance';
             document.getElementById('val-junction_temperature').innerHTML = formatWithUnit(results.junction_temperature, '°C', 1);
             document.getElementById('val-case_temperature').innerHTML = formatWithUnit(results.case_temperature, '°C', 1);
             document.getElementById('val-base_temperature').innerHTML = formatWithUnit(results.base_temperature, '°C', 1);
             document.getElementById('val-pressure_drop').innerHTML = formatWithUnit(results.pressure_drop, 'Pa', 1);
-            document.getElementById('val-fin_efficiency').innerHTML = formatNumber(results.fin_efficiency, 3);
+            document.getElementById('val-fin_efficiency').innerHTML = formatWithUnit(results.fin_efficiency * 100, '%', 1);
             document.getElementById('val-channel_velocity').innerHTML = formatWithUnit(results.channel_velocity, 'm/s', 2);
 
             document.getElementById('metric-base_temperature').innerHTML = formatWithUnit(results.base_temperature, '°C', 1);
@@ -2415,16 +3481,215 @@
             document.getElementById('subst-required_sink_thermal_resistance').innerHTML = `$$${results.subst_required_sink_thermal_resistance}$$`;
             document.getElementById('subst-sink_thermal_resistance').innerHTML = `$$${results.subst_sink_thermal_resistance}$$`;
             document.getElementById('subst-junction_temperature').innerHTML = `$$${results.subst_junction_temperature}$$`;
+            document.getElementById('subst-case_temperature').innerHTML = `$$${results.subst_case_temperature}$$`;
+            document.getElementById('subst-base_temperature').innerHTML = `$$${results.subst_base_temperature}$$`;
+            document.getElementById('subst-channel_velocity').innerHTML = `$$${results.subst_channel_velocity}$$`;
             document.getElementById('subst-pressure_drop').innerHTML = `$$${results.subst_pressure_drop}$$`;
             document.getElementById('subst-fin_efficiency').innerHTML = `$$${results.subst_fin_efficiency}$$`;
+            document.getElementById('subst-overall_efficiency').innerHTML = `$$${results.subst_overall_efficiency}$$`;
+
+            // Assumptions card
+            const assumptionsList = document.getElementById('results-assumptions-list');
+            const assumptionsCard = document.getElementById('results-assumptions');
+            if (results.assumptions && results.assumptions.length > 0) {
+                assumptionsList.innerHTML = '';
+                results.assumptions.forEach((a) => {
+                    const li = document.createElement('li');
+                    li.textContent = a;
+                    if (a.startsWith('WARNING')) li.style.color = 'var(--danger-color)';
+                    assumptionsList.appendChild(li);
+                });
+                assumptionsCard.style.display = 'block';
+            } else {
+                assumptionsCard.style.display = 'none';
+            }
+
+            // Heat split derivation details
+            document.getElementById('subst-heat_split').innerHTML = `$$${results.subst_heat_split}$$`;
+            document.getElementById('subst-convection_coefficient').innerHTML = `$$${results.subst_convection_coefficient}$$`;
+            document.getElementById('subst-radiation_coefficient').innerHTML = `$$${results.subst_radiation_coefficient}$$`;
+            // Populate correlation detail lines throughout UI
+            const cd = results.correlation_details || {};
+            if (cd.convection_coefficient) {
+                document.getElementById('heat-convection-correlation').textContent =
+                    `Correlation: ${cd.convection_coefficient.name}. Validity: ${cd.convection_coefficient.validity}.`;
+            }
+            if (cd.radiation_coefficient) {
+                document.getElementById('corr-radiation_coefficient').textContent =
+                    `${cd.radiation_coefficient.name}. ${cd.radiation_coefficient.validity}`;
+            }
+            if (cd.pressure_drop) {
+                document.getElementById('corr-pressure_drop').textContent =
+                    `${cd.pressure_drop.name}. ${cd.pressure_drop.validity}`;
+            }
+            if (cd.fin_efficiency) {
+                document.getElementById('corr-fin_efficiency').textContent =
+                    `${cd.fin_efficiency.name}. ${cd.fin_efficiency.validity}`;
+            }
+            document.getElementById('heat-split-derivations').style.display = 'block';
 
             renderTemperaturePlot(results);
             renderHeatPlot(results);
+            renderFanCurvePlot(results, results.input_snapshot);
             renderThermalStackDiagram(results);
             if (settings.showDerivations && !openDerivation) {
                 toggleDerivation('required_sink_thermal_resistance');
             }
             typesetMath();
+
+            // Enable sweep tabs after a successful baseline calculation
+            document.getElementById('tab-sweep1d').disabled = false;
+            document.getElementById('tab-sweep2d').disabled = false;
+            sweepState.baselineInputs = gatherInputs();
+            sweepState.baselineResults = results;
+        }
+
+        function populateSweepControls() {
+            const meta = sweepState.metadata;
+            if (!meta) return;
+
+            // Helper to populate a select from metadata
+            function fillParamSelect(selectEl) {
+                selectEl.innerHTML = '';
+                Object.entries(meta.parameters).forEach(([key, p]) => {
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `${p.label}${p.display_unit ? ' (' + p.display_unit + ')' : ''}`;
+                    selectEl.appendChild(opt);
+                });
+            }
+            function fillOutputSelect(selectEl) {
+                selectEl.innerHTML = '';
+                Object.entries(meta.outputs).forEach(([key, o]) => {
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `${o.label}${o.unit ? ' (' + o.unit + ')' : ''}`;
+                    selectEl.appendChild(opt);
+                });
+            }
+
+            fillParamSelect(document.getElementById('sweep1d-param'));
+            fillOutputSelect(document.getElementById('sweep1d-output'));
+            fillParamSelect(document.getElementById('sweep2d-xparam'));
+            fillParamSelect(document.getElementById('sweep2d-yparam'));
+            // Default 2D Y to second parameter
+            const ySelect = document.getElementById('sweep2d-yparam');
+            if (ySelect.options.length > 1) ySelect.selectedIndex = 1;
+            fillOutputSelect(document.getElementById('sweep2d-output'));
+        }
+
+        function runOneDSweep() {
+            try {
+                const paramKey = document.getElementById('sweep1d-param').value;
+                const outputKey = document.getElementById('sweep1d-output').value;
+                const rangeValue = document.getElementById('sweep1d-range').value;
+                const baseline = gatherInputs();
+                const meta = sweepState.metadata.parameters[paramKey];
+
+                const baseVal = baseline[paramKey];
+                const span = parseFloat(rangeValue);
+                const nPoints = 40;
+                const low = Math.max(baseVal * (1 - span), meta.min);
+                const high = Math.min(baseVal * (1 + span), meta.max);
+                const step = (high - low) / (nPoints - 1);
+                const sweepValues = Array.from({ length: nPoints }, (_, i) => low + i * step);
+                if (meta.integer) sweepValues.forEach((v, i) => { sweepValues[i] = Math.round(v); });
+
+                const sweepProxy = pyToolModule.run_heatsink_1d_sweep(
+                    pyodideInstance.toPy(baseline), paramKey, pyodideInstance.toPy(sweepValues), pyodideInstance.toPy([outputKey])
+                );
+                const sweepResult = normalizeNestedDict(sweepProxy.toJs({ dict_converter: Object.fromEntries }));
+                sweepProxy.destroy();
+
+                const displayScale = meta.display_scale || 1;
+                const xDisplay = sweepResult.x_values.map(v => v * displayScale);
+                const baselineXDisplay = sweepResult.baseline_x * displayScale;
+                const outputMeta = sweepState.metadata.outputs[outputKey];
+
+                const trace = {
+                    x: xDisplay, y: sweepResult.series[outputKey],
+                    mode: 'lines+markers', marker: { size: 4 },
+                    name: outputMeta.label,
+                    line: { color: getComputedStyle(document.body).getPropertyValue('--accent-color').trim() },
+                };
+                const baselineTrace = {
+                    x: [baselineXDisplay], y: [sweepResult.baseline_outputs[outputKey]],
+                    mode: 'markers', marker: { size: 12, color: getComputedStyle(document.body).getPropertyValue('--danger-color').trim(), symbol: 'diamond' },
+                    name: 'Baseline',
+                };
+                const layout = {
+                    ...getPlotTheme(),
+                    title: { text: `${meta.label} Sweep`, font: { size: 14 } },
+                    xaxis: { ...getPlotTheme().xaxis, title: `${meta.label} (${meta.display_unit || meta.unit})` },
+                    yaxis: { ...getPlotTheme().yaxis, title: `${outputMeta.label} (${outputMeta.unit})` },
+                    showlegend: true,
+                    legend: { x: 1, xanchor: 'right', y: 1 },
+                };
+                Plotly.react('sweep1d-plot', [trace, baselineTrace], layout, { displayModeBar: false, responsive: true });
+            } catch (err) {
+                console.error('1D sweep error:', err);
+                const plotDiv = document.getElementById('sweep1d-plot');
+                plotDiv.innerHTML = `<div style="padding:24px;color:var(--danger-color);font-size:0.9rem;">Sweep failed: ${err.message}</div>`;
+            }
+        }
+
+        function runTwoDContour() {
+            try {
+                const xParam = document.getElementById('sweep2d-xparam').value;
+                const yParam = document.getElementById('sweep2d-yparam').value;
+                const outputKey = document.getElementById('sweep2d-output').value;
+                const resolution = parseInt(document.getElementById('sweep2d-resolution').value, 10);
+                const baseline = gatherInputs();
+                const xMeta = sweepState.metadata.parameters[xParam];
+                const yMeta = sweepState.metadata.parameters[yParam];
+                const outputMeta = sweepState.metadata.outputs[outputKey];
+
+                const baseX = baseline[xParam];
+                const baseY = baseline[yParam];
+                const xLow = Math.max(baseX * 0.5, xMeta.min);
+                const xHigh = Math.min(baseX * 1.5, xMeta.max);
+                const yLow = Math.max(baseY * 0.5, yMeta.min);
+                const yHigh = Math.min(baseY * 1.5, yMeta.max);
+                const xVals = Array.from({ length: resolution }, (_, i) => xLow + i * (xHigh - xLow) / (resolution - 1));
+                const yVals = Array.from({ length: resolution }, (_, i) => yLow + i * (yHigh - yLow) / (resolution - 1));
+                if (xMeta.integer) xVals.forEach((v, i) => { xVals[i] = Math.round(v); });
+                if (yMeta.integer) yVals.forEach((v, i) => { yVals[i] = Math.round(v); });
+
+                const contourProxy = pyToolModule.run_heatsink_2d_contour(
+                    pyodideInstance.toPy(baseline), xParam, yParam,
+                    pyodideInstance.toPy(xVals), pyodideInstance.toPy(yVals), outputKey
+                );
+                const contourResult = normalizeNestedDict(contourProxy.toJs({ dict_converter: Object.fromEntries }));
+                contourProxy.destroy();
+
+                const xScale = xMeta.display_scale || 1;
+                const yScale = yMeta.display_scale || 1;
+                const xDisp = contourResult.x_values.map(v => v * xScale);
+                const yDisp = contourResult.y_values.map(v => v * yScale);
+
+                const heatmap = {
+                    x: xDisp, y: yDisp, z: contourResult.z_values,
+                    type: 'heatmap', colorscale: 'Viridis', connectgaps: false,
+                    colorbar: { title: { text: `${outputMeta.label} (${outputMeta.unit})`, side: 'right' } },
+                };
+                const bp = contourResult.baseline_point;
+                const baseMarker = {
+                    x: [bp.x * xScale], y: [bp.y * yScale],
+                    mode: 'markers', marker: { size: 14, color: 'red', symbol: 'diamond-open', line: { width: 2 } },
+                    name: 'Baseline', showlegend: true,
+                };
+                const layout = {
+                    ...getPlotTheme(),
+                    title: { text: `${outputMeta.label} — ${xMeta.label} vs ${yMeta.label}`, font: { size: 14 } },
+                    xaxis: { ...getPlotTheme().xaxis, title: `${xMeta.label} (${xMeta.display_unit || xMeta.unit})` },
+                    yaxis: { ...getPlotTheme().yaxis, title: `${yMeta.label} (${yMeta.display_unit || yMeta.unit})` },
+                };
+                Plotly.react('sweep2d-plot', [heatmap, baseMarker], layout, { displayModeBar: false, responsive: true });
+            } catch (err) {
+                console.error('2D contour error:', err);
+                const plotDiv = document.getElementById('sweep2d-plot');
+                plotDiv.innerHTML = `<div style="padding:24px;color:var(--danger-color);font-size:0.9rem;">Contour sweep failed: ${err.message}</div>`;
+            }
         }
 
         function gatherInputs() {
@@ -2432,11 +3697,11 @@
                 heat_load: parseFloat(document.getElementById('heat_load').value),
                 ambient_temperature: parseFloat(document.getElementById('ambient_temperature').value),
                 target_junction_temperature: parseFloat(document.getElementById('target_junction_temperature').value),
-                base_length: parseFloat(document.getElementById('base_length').value),
-                base_width: parseFloat(document.getElementById('base_width').value),
-                base_thickness: parseFloat(document.getElementById('base_thickness').value),
-                fin_height: parseFloat(document.getElementById('fin_height').value),
-                fin_thickness: parseFloat(document.getElementById('fin_thickness').value),
+                base_length: parseFloat(document.getElementById('base_length').value) / 1000,      // mm → m
+                base_width: parseFloat(document.getElementById('base_width').value) / 1000,         // mm → m
+                base_thickness: parseFloat(document.getElementById('base_thickness').value) / 1000,  // mm → m
+                fin_height: parseFloat(document.getElementById('fin_height').value) / 1000,          // mm → m
+                fin_thickness: parseFloat(document.getElementById('fin_thickness').value) / 1000,    // mm → m
                 fin_count: parseInt(document.getElementById('fin_count').value, 10),
                 material_conductivity: parseFloat(document.getElementById('material_conductivity').value),
                 surface_emissivity: parseFloat(document.getElementById('surface_emissivity').value),
@@ -2445,9 +3710,15 @@
                 volumetric_flow_rate: parseFloat(document.getElementById('volumetric_flow_rate').value),
                 fan_max_pressure: parseFloat(document.getElementById('fan_max_pressure').value),
                 fan_max_flow_rate: parseFloat(document.getElementById('fan_max_flow_rate').value),
-                interface_resistance: parseFloat(document.getElementById('interface_resistance').value),
+                interface_resistance: getEffectiveInterfaceResistance(),
                 junction_to_case_resistance: parseFloat(document.getElementById('junction_to_case_resistance').value),
-                pressure_pa: parseFloat(document.getElementById('pressure_pa').value)
+                pressure_pa: parseFloat(document.getElementById('pressure_pa').value),
+                orientation: document.getElementById('orientation').value,
+                source_length: parseFloat(document.getElementById('source_length').value) / 1000,  // mm → m
+                source_width: parseFloat(document.getElementById('source_width').value) / 1000,    // mm → m
+                source_x: parseFloat(document.getElementById('source_x').value) / 1000,            // mm → m
+                source_y: parseFloat(document.getElementById('source_y').value) / 1000,            // mm → m
+                ducted: document.getElementById('ducted').value === 'true'
             };
         }
 
@@ -2467,6 +3738,30 @@
             renderThermalPathPrimer();
         }
 
+        /**
+         * Wraps a synchronous function call in a Promise with a timeout.
+         *
+         * LIMITATION: Because fn() runs synchronously on the main thread,
+         * the setTimeout timer cannot fire until fn() returns. This means
+         * the timeout only catches cases where fn() completes but takes
+         * longer than limitMs, or where fn() throws after a long delay.
+         * It cannot interrupt a truly blocked main thread. A Web Worker
+         * would be needed for real preemptive timeout protection.
+         */
+        function withTimeout(fn, limitMs = 30000) {
+            return new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error(`Calculation timed out after ${limitMs / 1000} seconds.`)), limitMs);
+                try {
+                    const result = fn();
+                    clearTimeout(timer);
+                    resolve(result);
+                } catch (err) {
+                    clearTimeout(timer);
+                    reject(err);
+                }
+            });
+        }
+
         async function handleCalculate(event) {
             event.preventDefault();
             const button = document.getElementById('calculate-btn');
@@ -2474,7 +3769,7 @@
             button.textContent = 'Calculating...';
             try {
                 const inputs = gatherInputs();
-                const resultProxy = pyToolModule.analyze_plate_fin_heatsink(
+                const resultProxy = await withTimeout(() => pyToolModule.analyze_plate_fin_heatsink(
                     inputs.heat_load,
                     inputs.ambient_temperature,
                     inputs.target_junction_temperature,
@@ -2493,13 +3788,80 @@
                     inputs.fan_max_flow_rate,
                     inputs.interface_resistance,
                     inputs.junction_to_case_resistance,
-                    inputs.pressure_pa
-                );
+                    inputs.pressure_pa,
+                    inputs.orientation,
+                    inputs.source_length,
+                    inputs.source_width,
+                    inputs.ducted
+                ));
                 const rawResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
                 resultProxy.destroy();
                 const normalizedResults = normalizeNestedDict(rawResults);
                 normalizedResults.input_snapshot = { ...inputs };
                 displayResults(normalizedResults);
+
+                // Run spreading solver if source is defined
+                if (inputs.source_length > 0 && inputs.source_width > 0) {
+                    button.textContent = 'Computing spread...';
+                    try {
+                        const sinkR = normalizedResults.sink_thermal_resistance || 0;
+                        const spreadProxy = await withTimeout(() => pyToolModule.analyze_heatsink_spreading_view(
+                            inputs.heat_load,
+                            inputs.ambient_temperature,
+                            inputs.target_junction_temperature,
+                            inputs.base_length,
+                            inputs.base_width,
+                            inputs.base_thickness,
+                            inputs.fin_height,
+                            inputs.fin_thickness,
+                            inputs.fin_count,
+                            inputs.material_conductivity,
+                            inputs.surface_emissivity,
+                            inputs.airflow_mode,
+                            inputs.approach_velocity,
+                            inputs.volumetric_flow_rate,
+                            inputs.fan_max_pressure,
+                            inputs.fan_max_flow_rate,
+                            inputs.interface_resistance,
+                            inputs.junction_to_case_resistance,
+                            inputs.pressure_pa,
+                            inputs.orientation,
+                            inputs.source_length,
+                            inputs.source_width,
+                            inputs.ducted,
+                            inputs.source_x,
+                            inputs.source_y,
+                            41,
+                            25,
+                            sinkR
+                        ), 60000);
+                        const rawSpread = spreadProxy.toJs({ dict_converter: Object.fromEntries });
+                        spreadProxy.destroy();
+                        const spreadResult = normalizeNestedDict(rawSpread);
+                        renderSpreadingView(spreadResult, inputs);
+
+                        // Fix 5: Check if spread-view peak junction exceeds target
+                        // while headline says acceptable
+                        clearSpreadingWarning();
+                        if (spreadResult.spreading) {
+                            const ss = spreadResult.spreading.source_summaries;
+                            const peakJunc = ss && ss.length > 0
+                                ? ss[0].peak_junction_temperature_estimate
+                                : null;
+                            if (peakJunc !== null
+                                && peakJunc > inputs.target_junction_temperature
+                                && normalizedResults.status === 'acceptable') {
+                                showSpreadingWarning();
+                            }
+                        }
+                    } catch (spreadErr) {
+                        console.warn('Spreading solver error:', spreadErr);
+                        renderSpreadingView({ spreading: null, spreading_error: `Spreading solve failed: ${spreadErr.message}` }, inputs);
+                    }
+                } else {
+                    renderSpreadingView(null, inputs);
+                    clearSpreadingWarning();
+                }
             } catch (error) {
                 console.error(error);
                 lastResults = null;
@@ -2521,24 +3883,31 @@
             applySettings();
             bindSettingsControls();
             updateAirflowVisibility();
+            updateTimInputVisibility();
 
             try {
                 loadingText.textContent = 'Loading Pyodide...';
                 const pyodide = await loadPyodide();
+                pyodideInstance = pyodide;
 
                 loadingText.textContent = 'Loading Python modules...';
                 await pyodide.runPythonAsync(`
                     from pyodide.http import pyfetch
 
-                    response_utils = await pyfetch('../../pycalcs/utils.py')
+                    response_utils = await pyfetch('../../pycalcs/utils.py?v=${Date.now()}')
                     with open('utils.py', 'w') as f:
                         f.write(await response_utils.string())
 
-                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    response_spreading = await pyfetch('../../pycalcs/heatsink_spreading.py?v=${Date.now()}')
+                    with open('heatsink_spreading.py', 'w') as f:
+                        f.write(await response_spreading.string())
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py?v=${Date.now()}')
                     with open('${TOOL_MODULE_NAME}.py', 'w') as f:
                         f.write(await response_tool.string())
 
                     import utils
+                    import heatsink_spreading
                     import ${TOOL_MODULE_NAME}
                 `);
 
@@ -2559,14 +3928,110 @@
                 materialsProxy.destroy();
                 populateMaterialSelect();
 
+                // Load sweep metadata and populate controls (non-blocking)
+                try {
+                    const sweepMetaProxy = pyToolModule.get_heatsink_sweep_metadata();
+                    sweepState.metadata = normalizeNestedDict(
+                        sweepMetaProxy.toJs({ dict_converter: Object.fromEntries })
+                    );
+                    sweepMetaProxy.destroy();
+                    populateSweepControls();
+                    document.getElementById('sweep1d-run').addEventListener('click', runOneDSweep);
+                    document.getElementById('sweep2d-run').addEventListener('click', runTwoDContour);
+                } catch (sweepErr) {
+                    console.warn('Sweep metadata not available:', sweepErr.message);
+                }
+
                 document.getElementById('material_preset').addEventListener('change', applyMaterialPreset);
                 document.getElementById('airflow_mode').addEventListener('change', updateAirflowVisibility);
+                document.getElementById('tim_input_mode').addEventListener('change', updateTimInputVisibility);
                 document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+                document.getElementById('export-btn').addEventListener('click', () => {
+                    if (!lastResults) return;
+                    const exportData = {
+                        tool: 'Heatsink Designer',
+                        version: '1.1',
+                        timestamp: new Date().toISOString(),
+                        inputs: gatherInputs(),
+                        results: lastResults,
+                    };
+                    // Include spreading summary metrics (exclude large grid arrays)
+                    if (lastSpreadingData && lastSpreadingData.spreading) {
+                        const sp = lastSpreadingData.spreading;
+                        exportData.spreading_summary = {
+                            mean_base_temperature: sp.mean_base_temperature,
+                            peak_base_temperature: sp.peak_base_temperature,
+                            min_base_temperature: sp.min_base_temperature,
+                            max_spreading_delta: sp.max_spreading_delta,
+                            energy_balance_error: sp.energy_balance_error,
+                            iterations: sp.iterations,
+                            converged: sp.converged,
+                            source_summaries: sp.source_summaries,
+                            assumptions: sp.assumptions,
+                        };
+                    }
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'heatsink-design-export.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
                 document.querySelectorAll('.input-tab').forEach((button) => {
                     button.addEventListener('click', () => openInputSection(button.dataset.section));
                 });
                 bindGeometryPreview();
                 bindThermalPrimer();
+
+                // Tab links — data-tab driven, no inline onclick
+                document.querySelectorAll('.tab-link').forEach((link) => {
+                    link.addEventListener('click', (event) => openTab(event, link.dataset.tab));
+                });
+
+                // Derivation toggles — click and keyboard
+                document.querySelectorAll('.result-item.clickable').forEach((item) => {
+                    const key = item.dataset.key;
+                    if (key) {
+                        item.addEventListener('click', () => toggleDerivation(key));
+                        item.addEventListener('keydown', (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                toggleDerivation(key);
+                            }
+                        });
+                    }
+                });
+
+                // Derivation close buttons
+                document.querySelectorAll('.derivation-close').forEach((button) => {
+                    const panel = button.closest('.derivation-panel');
+                    if (panel) {
+                        const key = panel.id.replace('deriv-', '');
+                        button.addEventListener('click', () => toggleDerivation(key));
+                    }
+                });
+
+                // Spreading display mode toggle
+                document.querySelectorAll('input[name="spreading-mode"]').forEach((radio) => {
+                    radio.addEventListener('change', () => {
+                        if (lastSpreadingData) {
+                            const mode = radio.value;
+                            renderSpreadingHeatmap(lastSpreadingData.spreading, lastSpreadingData.inputs, mode);
+                            renderSpreadingCenterlines(lastSpreadingData.spreading, lastSpreadingData.inputs, mode);
+                        }
+                    });
+                });
+
+                // Auto-calculate with debounce + inline validation on input change
+                document.querySelectorAll('#calc-form input[type="number"]').forEach((el) => {
+                    el.addEventListener('input', () => { validateInput(el); scheduleAutoCalculate(); });
+                    el.addEventListener('blur', () => { validateInput(el); validateGeometry(); });
+                });
+                document.querySelectorAll('#calc-form select').forEach((el) => {
+                    el.addEventListener('change', scheduleAutoCalculate);
+                });
+
                 openInputSection('thermal-path');
                 renderThermalStackDiagram(null);
 
@@ -2580,5 +4045,11 @@
 
         main();
     </script>
+
+    <footer style="border-top:1px solid var(--border-color);padding:18px 5%;text-align:center;font-size:0.85rem;color:var(--text-light);">
+        <a href="../../index.html" style="color:var(--text-color);font-weight:600;">Transparent Tools</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a>
+    </footer>
 </body>
 </html>
