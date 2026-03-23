@@ -80,6 +80,20 @@ For the full audit and detailed implementation plan, see:
 - [ ] Additional geometries (pin fin, radial fin) — future
 - [ ] HTML smoke test with Playwright (E5) — future
 
+## Phase 6B: Future Thermal Tool Family (planning only)
+
+- [ ] Keep `simple_thermal` scoped to flat plate-fin heatsinks; do not broaden it into a universal thermal calculator
+- [ ] Add archetype gating and applicability routing so users can be guided to the right thermal tool early
+- [ ] Plan a separate generic thermal-path / resistance-network tool
+  - Spec captured in [plans/thermal_path_budget_tool_spec.md](/Users/drew/code/tools/plans/thermal_path_budget_tool_spec.md)
+  - API/schema captured in [plans/thermal_path_budget_tool_schema.md](/Users/drew/code/tools/plans/thermal_path_budget_tool_schema.md)
+- [ ] Plan a separate spreader plate / chassis wall thermal tool
+- [ ] Plan a separate radial-fin / cylindrical-body heatsink tool
+- [ ] Plan a separate transient thermal RC tool
+- [ ] Plan a separate pin-fin / impingement cooling tool only after higher-leverage thermal tools exist
+- [ ] Refactor shared thermal equations into reusable `pycalcs` modules as the tool family grows
+- [ ] Use `plans/thermal_tool_family_future_plan.md` as the boundary document for what should remain in `simple_thermal` versus become a separate tool
+
 ## Phase 7: Source-Aware Spreading Visualization
 
 - [x] Create `pycalcs/heatsink_spreading.py` — 2D Gauss-Seidel/SOR base-plane solver

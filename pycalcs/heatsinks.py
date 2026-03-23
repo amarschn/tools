@@ -117,6 +117,10 @@ def air_properties(temperature_c: float, pressure_pa: float = 101325.0) -> AirPr
         * (273.15 + 194.0)
         / (temperature_k + 194.0)
     )
+    # Linear fit for dry air Cp: 1006 J/(kg·K) at 300 K with a slope of
+    # ~0.1 J/(kg·K²).  Adequate for 250–500 K; Cp varies only ~3% over that
+    # range.  Source: Incropera et al., "Fundamentals of Heat and Mass
+    # Transfer," Appendix A, Table A.4.
     specific_heat = 1006.0 + 0.1 * (temperature_k - 300.0)
 
     kinematic_viscosity = dynamic_viscosity / density
@@ -435,6 +439,14 @@ def estimate_bypass_fraction(
     if geometry.fin_spacing <= 0 or geometry.fin_height <= 0:
         return 0.0
     aspect = geometry.fin_height / geometry.fin_spacing
+    # K is an empirical constant that sets how aggressively flow bypasses the
+    # fin array vs. entering the channels.  Simons (2004) fits K ≈ 0.5 for
+    # typical unducted plate-fin heatsinks in low-velocity crossflow.  Higher K
+    # means more bypass.  The value is geometry-dependent and not well-
+    # characterized for all configurations — treat results as approximate for
+    # unducted setups.  Ref: Simons, R. E. (2004), "Estimating the Effect of
+    # Flow Bypass on Parallel Plate-Fin Heat Sink Performance," Electronics
+    # Cooling, Vol. 10, No. 1.
     k_bypass = 0.5
     # Throughput fraction = 1 / (1 + K*sqrt(H/s)); bypass = 1 - throughput.
     throughput = 1.0 / (1.0 + k_bypass * math.sqrt(max(aspect, 0.01)))
@@ -514,8 +526,17 @@ def natural_convection_horizontal_plate_array(
 
 
 def _laminar_rectangular_duct_friction_factor(reynolds_number: float, aspect_ratio: float) -> float:
-    """Return the Darcy friction factor for fully developed laminar flow in a rectangular duct."""
+    """Return the Darcy friction factor for fully developed laminar flow in a rectangular duct.
 
+    Uses the Shah & London (1978) polynomial fit for the Poiseuille number
+    (f·Re) in rectangular ducts, where β is the channel aspect ratio
+    (short side / long side, clamped to [0, 1]).  The five polynomial
+    coefficients reproduce the exact analytical solution to within 0.05%.
+
+    Ref: Shah, R. K. & London, A. L. (1978), "Laminar Flow Forced
+    Convection in Ducts," Supplement 1 to Advances in Heat Transfer,
+    Academic Press, Table 43.
+    """
     if reynolds_number <= 0.0:
         return 0.0
     beta = min(max(aspect_ratio, 1e-6), 1.0)
@@ -566,7 +587,13 @@ def forced_convection_plate_array(
         / geometry.base_length
     )
 
+    # Re = 2300 is the standard laminar-turbulent transition threshold for
+    # internal duct flow (Incropera et al., Ch. 8).
     if reynolds_number < 2300.0:
+        # Muzychka & Yovanovich (2004) combined-entry correlation for
+        # developing laminar flow in a rectangular duct.  7.54 is the
+        # fully-developed asymptote for uniform wall temperature; 1.841 is
+        # the developing-flow coefficient.
         nusselt_number = (
             7.54**3 + (1.841 * graetz_number ** (1.0 / 3.0)) ** 3
         ) ** (1.0 / 3.0)
@@ -574,9 +601,16 @@ def forced_convection_plate_array(
             reynolds_number, geometry.fin_spacing / geometry.fin_height
         )
     else:
-        # Petukhov friction factor — used for both Nusselt and pressure drop
-        # so that the Gnielinski correlation is self-consistent.
+        # Petukhov (1970) friction factor — used for both Nusselt and
+        # pressure drop so that the Gnielinski correlation is self-consistent.
+        # Ref: Petukhov, B. S. (1970), "Heat Transfer and Friction in
+        # Turbulent Pipe Flow," Advances in Heat Transfer, Vol. 6.
         darcy_friction_factor = (0.790 * math.log(reynolds_number) - 1.64) ** -2
+        # Gnielinski (1976) correlation, valid for 2300 < Re < 5e6 and
+        # 0.5 < Pr < 2000.  The (Re - 1000) term improves accuracy in the
+        # transition region; 12.7 is the Prandtl-correction coefficient.
+        # Ref: Gnielinski, V. (1976), "New Equations for Heat and Mass
+        # Transfer in Turbulent Pipe and Channel Flow," Int. Chem. Eng. 16.
         nusselt_number = (
             (darcy_friction_factor / 8.0)
             * (reynolds_number - 1000.0)
@@ -587,6 +621,11 @@ def forced_convection_plate_array(
             )
         )
 
+    # Entrance/exit minor loss coefficients for abrupt contraction and
+    # expansion into a parallel-plate channel.  The 0.42 contraction
+    # coefficient is from Kays & London (1984), "Compact Heat Exchangers,"
+    # Table 6-1, for a sharp-edged entrance.  The expansion loss uses the
+    # Borda-Carnot formula (1 - σ)².
     sigma = geometry.open_area_ratio
     contraction_loss = 0.42 * (1.0 - sigma**2)
     expansion_loss = (1.0 - sigma) ** 2
@@ -1064,11 +1103,24 @@ def analyze_plate_fin_heatsink(
         base_thickness=geometry.base_thickness,
         thermal_conductivity=material_conductivity,
     )
+    # Yovanovich intermediate variables for progressive disclosure.
+    _src_area = eff_source_length * eff_source_width
+    _plate_area = geometry.base_length * geometry.base_width
+    _sp_epsilon = math.sqrt(_src_area / _plate_area) if _plate_area > 0 else 1.0
+    _sp_tau = geometry.base_thickness / math.sqrt(_plate_area) if _plate_area > 0 else 0.0
+    if _src_area < _plate_area:
+        _sp_psi = (1.0 - _sp_epsilon) ** 1.5 / (_sp_epsilon * _sp_tau + (1.0 - _sp_epsilon) ** 1.5)
+    else:
+        _sp_psi = 0.0
     effective_base_temperature = base_temperature + heat_load * spreading_r
     case_temperature = effective_base_temperature + heat_load * interface_resistance
     junction_temperature = case_temperature + heat_load * junction_to_case_resistance
     temperature_margin = target_junction_temperature - junction_temperature
 
+    # Status thresholds: 5 K margin is a common industry guard-band to account
+    # for correlation uncertainty, manufacturing variation, and aging.  The
+    # "marginal" band (0–5 K) flags designs that nominally pass but have
+    # little safety margin.
     if temperature_margin >= 5.0:
         status = "acceptable"
     elif temperature_margin >= 0.0:
@@ -1116,6 +1168,12 @@ def analyze_plate_fin_heatsink(
             recommendations.append(
                 "Design exceeds thermal budget. Consider a larger heatsink or active cooling."
             )
+    # Recommendation thresholds below are engineering rules of thumb, not
+    # precise limits.  They flag common design issues:
+    #   - η_fin < 0.7: diminishing returns on fin height (Kraus & Bar-Cohen)
+    #   - ΔP > 75 Pa: exceeds typical 40 mm axial fan capability at mid-flow
+    #   - Q_rad > 15% of Q: radiation is a meaningful contributor
+    #   - R_spread > 0.01 K/W: spreading penalty is noticeable
     if final_state["fin_efficiency"] < 0.7:
         recommendations.append("Fin efficiency is low; consider shorter fins, thicker fins, or higher conductivity material.")
     if airflow_mode in {"forced", "fan_curve"} and final_state["flow_state"]["pressure_drop"] > 75.0:
@@ -1126,7 +1184,10 @@ def analyze_plate_fin_heatsink(
         recommendations.append(
             f"Spreading resistance adds {spreading_r:.3f} K/W; consider a thicker base or vapor chamber."
         )
-    # Mixed convection Richardson number warning.
+    # Mixed convection Richardson number check.  Ri = Gr/Re² measures the
+    # ratio of buoyancy to inertial forces.  Ri > 0.1 means buoyancy is at
+    # least 10% of the forced-flow effect and pure forced-convection
+    # correlations lose accuracy.  Threshold from Incropera et al., Ch. 9.
     if airflow_mode in ("forced", "fan_curve"):
         _flow = final_state["flow_state"]
         if _flow["reynolds_number"] > 0:
@@ -1198,33 +1259,70 @@ def analyze_plate_fin_heatsink(
         f"\\frac{{{base_temperature:.2f} - {ambient_temperature:.2f}}}{{{heat_load:.3f}}}"
         f" = {sink_r_theta:.4f}\\,\\mathrm{{K/W}}"
     )
-    result["subst_junction_temperature"] = (
-        f"T_j = {base_temperature:.2f} + {heat_load:.3f}"
-        f"\\left({interface_resistance:.4f} + {junction_to_case_resistance:.4f}\\right)"
-        f" = {junction_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
-    )
-    result["subst_case_temperature"] = (
-        f"T_{{\\mathrm{{case}}}} = T_{{\\mathrm{{base,eff}}}} + Q \\cdot R_{{\\theta,cs}}"
-        f" = {effective_base_temperature:.2f} + {heat_load:.3f} \\times {interface_resistance:.4f}"
-        f" = {case_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
-    )
+    if spreading_r > 1e-6:
+        result["subst_junction_temperature"] = (
+            f"T_j = T_{{\\mathrm{{base,eff}}}} + Q(R_{{\\theta,cs}} + R_{{\\theta,jc}})"
+            f" = {effective_base_temperature:.2f} + {heat_load:.3f}"
+            f"\\left({interface_resistance:.4f} + {junction_to_case_resistance:.4f}\\right)"
+            f" = {junction_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        )
+    else:
+        result["subst_junction_temperature"] = (
+            f"T_j = T_b + Q(R_{{\\theta,cs}} + R_{{\\theta,jc}})"
+            f" = {base_temperature:.2f} + {heat_load:.3f}"
+            f"\\left({interface_resistance:.4f} + {junction_to_case_resistance:.4f}\\right)"
+            f" = {junction_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        )
+    if spreading_r > 1e-6:
+        result["subst_case_temperature"] = (
+            f"T_{{\\mathrm{{case}}}} = T_{{\\mathrm{{base,eff}}}} + Q \\cdot R_{{\\theta,cs}}"
+            f" = {effective_base_temperature:.2f} + {heat_load:.3f} \\times {interface_resistance:.4f}"
+            f" = {case_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+            f",\\quad T_{{\\mathrm{{base,eff}}}} = T_b + Q \\cdot R_{{sp}}"
+            f" = {base_temperature:.2f} + {heat_load:.3f} \\times {spreading_r:.4f}"
+            f" = {effective_base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        )
+    else:
+        result["subst_case_temperature"] = (
+            f"T_{{\\mathrm{{case}}}} = T_b + Q \\cdot R_{{\\theta,cs}}"
+            f" = {base_temperature:.2f} + {heat_load:.3f} \\times {interface_resistance:.4f}"
+            f" = {case_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        )
+    _h_eff_base = flow_state["convection_coefficient"] + final_state["radiation_coefficient"]
+    _delta_t_base = base_temperature - ambient_temperature
     result["subst_base_temperature"] = (
-        f"T_b = T_\\infty + Q \\cdot R_{{\\theta,\\mathrm{{sink}}}}"
-        f" = {ambient_temperature:.2f} + {heat_load:.3f} \\times {sink_r_theta:.4f}"
-        f" = {base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        f"Q_{{\\mathrm{{load}}}} = \\eta_o \\, h_{{\\mathrm{{eff}}}} \\, A_t \\, (T_b - T_\\infty)"
+        f" = {final_state['overall_efficiency']:.4f} \\times {_h_eff_base:.3f}"
+        f" \\times {geometry.total_area:.6f} \\times {_delta_t_base:.2f}"
+        f" = {final_state['heat_rejected']:.2f}\\,\\mathrm{{W}}"
+        f"\\;\\Rightarrow\\; T_b = {base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        f",\\quad R_{{\\theta,\\mathrm{{sink}}}} = \\frac{{{_delta_t_base:.2f}}}{{{heat_load:.3f}}}"
+        f" = {sink_r_theta:.4f}\\,\\mathrm{{K/W}}"
     )
+    _N_ch = geometry.channel_count
+    _s = geometry.fin_spacing
+    _H = geometry.fin_height
     result["subst_channel_velocity"] = (
-        f"V_{{ch}} = \\frac{{\\dot{{V}}}}{{A_{{\\mathrm{{open}}}}}}"
+        f"A_{{\\mathrm{{open}}}} = N_{{ch}} \\cdot s \\cdot H"
+        f" = {_N_ch} \\times {_s:.5f} \\times {_H:.4f}"
+        f" = {geometry.open_flow_area:.6f}\\,\\mathrm{{m^2}}"
+        f",\\quad V_{{ch}} = \\frac{{\\dot{{V}}}}{{A_{{\\mathrm{{open}}}}}}"
         f" = \\frac{{{flow_state['volumetric_flow_rate']:.6f}}}{{{geometry.open_flow_area:.6f}}}"
         f" = {flow_state['channel_velocity']:.3f}\\,\\mathrm{{m/s}}"
     )
+    _h_conv_fin = flow_state["convection_coefficient"]
+    _h_rad_fin = final_state["radiation_coefficient"]
     result["subst_fin_efficiency"] = (
-        "\\eta_f = \\frac{\\tanh(mL_c)}{mL_c},\\;"
-        f"mL_c = \\sqrt{{\\frac{{{effective_coefficient:.3f} \\times {wetted_perimeter:.6f}}}"
+        f"h_{{\\mathrm{{eff}}}} = h_{{\\mathrm{{conv}}}} + h_{{\\mathrm{{rad}}}}"
+        f" = {_h_conv_fin:.3f} + {_h_rad_fin:.4f}"
+        f" = {effective_coefficient:.3f}\\,\\mathrm{{W/m^2 K}}"
+        f",\\quad mL_c = \\sqrt{{\\frac{{h_{{\\mathrm{{eff}}}} \\cdot P}}{{k \\cdot A_c}}}} \\cdot L_c"
+        f" = \\sqrt{{\\frac{{{effective_coefficient:.3f} \\times {wetted_perimeter:.6f}}}"
         f"{{{material_conductivity:.1f} \\times {cross_section_area:.6f}}}}}"
         f" \\times {corrected_length:.6f}"
         f" = {m_length:.4f}"
-        f",\\; \\eta_f = {final_state['fin_efficiency']:.4f}"
+        f",\\; \\eta_f = \\frac{{\\tanh({m_length:.4f})}}{{{m_length:.4f}}}"
+        f" = {final_state['fin_efficiency']:.4f}"
     )
     result["subst_overall_efficiency"] = (
         f"\\eta_o = 1 - \\frac{{A_f}}{{A_t}}(1 - \\eta_f)"
@@ -1232,19 +1330,143 @@ def analyze_plate_fin_heatsink(
         f"(1 - {final_state['fin_efficiency']:.4f})"
         f" = {final_state['overall_efficiency']:.4f}"
     )
-    result["subst_pressure_drop"] = (
-        "\\Delta P = \\left(f\\frac{L}{D_h} + K_c + K_e\\right)\\frac{\\rho V_{ch}^2}{2}"
-        f" = {flow_state['pressure_drop']:.2f}\\,\\mathrm{{Pa}}"
-    )
+    # Pressure drop — fully substituted with friction factor, loss coefficients, density.
+    _dp_f = flow_state.get("_darcy_friction_factor", 0.0)
+    _dp_re = flow_state["reynolds_number"]
+    _dp_sigma = geometry.open_area_ratio
+    _dp_Kc = 0.42 * (1.0 - _dp_sigma**2)
+    _dp_Ke = (1.0 - _dp_sigma) ** 2
+    _dp_V = flow_state["channel_velocity"]
+    if airflow_mode != "natural" and _dp_re > 0:
+        # Recompute friction factor from Re (same logic as forced_convection_plate_array).
+        if _dp_re < 2300.0:
+            _beta_dp = min(max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0)
+            _poi_dp = 24.0 * (1.0 - 1.3553*_beta_dp + 1.9467*_beta_dp**2
+                              - 1.7012*_beta_dp**3 + 0.9564*_beta_dp**4 - 0.2537*_beta_dp**5)
+            _dp_f = _poi_dp / _dp_re
+        else:
+            _dp_f = (0.790 * math.log(_dp_re) - 1.64) ** -2
+        _film_dp = 0.5 * (base_temperature + ambient_temperature)
+        _props_dp = air_properties(_film_dp, pressure_pa=pressure_pa)
+        _dp_rho = _props_dp.density
+        result["subst_pressure_drop"] = (
+            "\\Delta P = \\left(f\\frac{L}{D_h} + K_c + K_e\\right)\\frac{\\rho V_{ch}^2}{2}"
+            f" = \\left({_dp_f:.5f} \\times \\frac{{{geometry.base_length:.4f}}}{{{geometry.hydraulic_diameter:.5f}}}"
+            f" + {_dp_Kc:.4f} + {_dp_Ke:.4f}\\right)"
+            f"\\frac{{{_dp_rho:.3f} \\times {_dp_V:.3f}^2}}{{2}}"
+            f" = {flow_state['pressure_drop']:.2f}\\,\\mathrm{{Pa}}"
+        )
+    else:
+        result["subst_pressure_drop"] = (
+            "\\Delta P = 0\\,\\mathrm{Pa}\\;\\text{(natural convection)}"
+        )
 
     _h_conv = flow_state["convection_coefficient"]
     _h_rad_raw = final_state["radiation_coefficient"]
     _vf = final_state["radiation_view_factor"]
+    _Nu = flow_state["nusselt_number"]
+    _film_cv = 0.5 * (base_temperature + ambient_temperature)
+    _props_cv = air_properties(_film_cv, pressure_pa=pressure_pa)
+    _k_air = _props_cv.thermal_conductivity
     result["subst_convection_coefficient"] = (
         f"h_{{\\mathrm{{conv}}}} = \\frac{{\\mathrm{{Nu}} \\cdot k_{{\\mathrm{{air}}}}}}{{D_h}}"
-        f" = {flow_state['nusselt_number']:.3f} \\times \\frac{{k_{{\\mathrm{{air}}}}}}{{D_h}}"
+        f" = \\frac{{{_Nu:.3f} \\times {_k_air:.5f}}}{{{geometry.hydraulic_diameter:.5f}}}"
         f" = {_h_conv:.3f}\\,\\mathrm{{W/m^2 K}}"
     )
+
+    # Nusselt number derivation — shows the correlation and substituted values.
+    if airflow_mode == "natural":
+        _Ra = flow_state.get("rayleigh_modified", 0.0)
+        if orientation == "vertical":
+            result["subst_nusselt_number"] = (
+                f"\\mathrm{{Nu}} = \\left(\\frac{{576}}{{\\mathrm{{Ra}}^{{*2}}}} + "
+                f"\\frac{{2.873}}{{\\sqrt{{\\mathrm{{Ra}}^*}}}}\\right)^{{-0.5}}"
+                f" = \\left(\\frac{{576}}{{{_Ra:.2f}^2}} + "
+                f"\\frac{{2.873}}{{\\sqrt{{{_Ra:.2f}}}}}\\right)^{{-0.5}}"
+                f" = {_Nu:.3f}"
+            )
+        else:
+            _facing_str = "up" if orientation == "horizontal_up" else "down"
+            if _facing_str == "up" and _Ra < 1e7:
+                result["subst_nusselt_number"] = (
+                    f"\\mathrm{{Nu}} = 0.54\\,\\mathrm{{Ra}}_L^{{0.25}}"
+                    f" = 0.54 \\times {_Ra:.2f}^{{0.25}}"
+                    f" = {_Nu:.3f}"
+                )
+            elif _facing_str == "up":
+                result["subst_nusselt_number"] = (
+                    f"\\mathrm{{Nu}} = 0.15\\,\\mathrm{{Ra}}_L^{{1/3}}"
+                    f" = 0.15 \\times {_Ra:.2f}^{{1/3}}"
+                    f" = {_Nu:.3f}"
+                )
+            else:
+                result["subst_nusselt_number"] = (
+                    f"\\mathrm{{Nu}} = 0.27\\,\\mathrm{{Ra}}_L^{{0.25}}"
+                    f" = 0.27 \\times {_Ra:.2f}^{{0.25}}"
+                    f" = {_Nu:.3f}"
+                )
+    else:
+        _Re = flow_state["reynolds_number"]
+        _Pr = _props_cv.prandtl
+        _Gz = _Re * _Pr * geometry.hydraulic_diameter / geometry.base_length
+        if _Re < 2300.0:
+            result["subst_nusselt_number"] = (
+                f"\\mathrm{{Nu}} = \\left(7.54^3 + (1.841\\,\\mathrm{{Gz}}^{{1/3}})^3\\right)^{{1/3}}"
+                f",\\; \\mathrm{{Gz}} = \\mathrm{{Re}}\\,\\mathrm{{Pr}}\\,\\frac{{D_h}}{{L}}"
+                f" = {_Re:.1f} \\times {_Pr:.3f} \\times \\frac{{{geometry.hydraulic_diameter:.5f}}}{{{geometry.base_length:.4f}}}"
+                f" = {_Gz:.2f}"
+                f",\\; \\mathrm{{Nu}} = {_Nu:.3f}"
+            )
+        else:
+            result["subst_nusselt_number"] = (
+                f"\\mathrm{{Nu}} = \\frac{{(f/8)(\\mathrm{{Re}} - 1000)\\mathrm{{Pr}}}}"
+                f"{{1 + 12.7\\sqrt{{f/8}}(\\mathrm{{Pr}}^{{2/3}} - 1)}}"
+                f",\\; f = {_dp_f:.5f},\\; \\mathrm{{Re}} = {_Re:.1f},\\; \\mathrm{{Pr}} = {_Pr:.3f}"
+                f",\\; \\mathrm{{Nu}} = {_Nu:.3f}"
+            )
+
+    # Reynolds / Rayleigh number derivation.
+    if airflow_mode == "natural":
+        _Ra = flow_state.get("rayleigh_modified", 0.0)
+        if orientation == "vertical":
+            result["subst_flow_dimensionless"] = (
+                f"\\mathrm{{Ra}}^* = \\frac{{g \\beta \\Delta T\\, s^4}}{{\\nu \\alpha\\, H}}"
+                f" = {_Ra:.2f}"
+            )
+        else:
+            result["subst_flow_dimensionless"] = (
+                f"\\mathrm{{Ra}}_L = \\frac{{g \\beta \\Delta T\\, L_c^3}}{{\\nu \\alpha}}"
+                f" = {_Ra:.2f}"
+            )
+    else:
+        _Re = flow_state["reynolds_number"]
+        result["subst_flow_dimensionless"] = (
+            f"\\mathrm{{Re}} = \\frac{{\\rho V_{{ch}} D_h}}{{\\mu}}"
+            f" = \\frac{{{_props_cv.density:.3f} \\times {_dp_V:.3f} \\times {geometry.hydraulic_diameter:.5f}}}"
+            f"{{{_props_cv.dynamic_viscosity:.4e}}}"
+            f" = {_Re:.1f}"
+        )
+
+    # Spreading resistance derivation.
+    if spreading_r > 1e-6:
+        result["subst_spreading_resistance"] = (
+            f"\\varepsilon = \\sqrt{{A_s/A_p}} = \\sqrt{{{_src_area:.6f}/{_plate_area:.6f}}} = {_sp_epsilon:.4f}"
+            f",\\; \\tau = t/\\sqrt{{A_p}} = {geometry.base_thickness:.4f}/\\sqrt{{{_plate_area:.6f}}} = {_sp_tau:.4f}"
+            f",\\; \\psi = \\frac{{(1-\\varepsilon)^{{1.5}}}}{{\\varepsilon\\tau + (1-\\varepsilon)^{{1.5}}}} = {_sp_psi:.4f}"
+            f",\\; R_{{sp}} = \\frac{{\\psi}}{{k\\sqrt{{\\pi A_s}}}}"
+            f" = \\frac{{{_sp_psi:.4f}}}{{{material_conductivity:.1f} \\times \\sqrt{{\\pi \\times {_src_area:.6f}}}}}"
+            f" = {spreading_r:.4f}\\,\\mathrm{{K/W}}"
+        )
+        result["subst_effective_base_temperature"] = (
+            f"T_{{\\mathrm{{base,eff}}}} = T_b + Q \\cdot R_{{sp}}"
+            f" = {base_temperature:.2f} + {heat_load:.3f} \\times {spreading_r:.4f}"
+            f" = {effective_base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+        )
+    else:
+        result["subst_spreading_resistance"] = (
+            "R_{sp} = 0\\,\\mathrm{K/W}\\;\\text{(source covers full base)}"
+        )
+
     _ts_k = base_temperature + 273.15
     _ta_k = ambient_temperature + 273.15
     result["subst_radiation_coefficient"] = (
@@ -1256,11 +1478,16 @@ def analyze_plate_fin_heatsink(
     )
     _conv_pct = 100.0 * final_state["convection_heat"] / max(final_state["heat_rejected"], 1e-12)
     _rad_pct = 100.0 * final_state["radiation_heat"] / max(final_state["heat_rejected"], 1e-12)
+    _eta_o = final_state["overall_efficiency"]
+    _delta_t = base_temperature - ambient_temperature
+    _At = geometry.total_area
     result["subst_heat_split"] = (
         f"Q_{{\\mathrm{{conv}}}} = \\eta_o h_{{\\mathrm{{conv}}}} A_t \\Delta T"
+        f" = {_eta_o:.4f} \\times {_h_conv:.3f} \\times {_At:.6f} \\times {_delta_t:.2f}"
         f" = {final_state['convection_heat']:.2f}\\,\\mathrm{{W}}"
         f"\\;({_conv_pct:.1f}\\%),\\quad"
         f"Q_{{\\mathrm{{rad}}}} = \\eta_o h_{{\\mathrm{{rad}}}} A_t \\Delta T"
+        f" = {_eta_o:.4f} \\times {_h_rad_raw:.4f} \\times {_At:.6f} \\times {_delta_t:.2f}"
         f" = {final_state['radiation_heat']:.2f}\\,\\mathrm{{W}}"
         f"\\;({_rad_pct:.1f}\\%)"
     )
@@ -1468,6 +1695,515 @@ def analyze_plate_fin_heatsink(
             ),
             "validity": "Centered rectangular source on rectangular plate, uniform flux, adiabatic edges.",
         },
+    }
+
+    # ── Derivation DAG for Foundation + Tree view ──
+    # Builds an HTML-based dependency graph that the JS renderer turns into
+    # a "Building Blocks" grid (foundation) plus a nested result tree.
+    _dag_foundation: List[Dict[str, Any]] = []
+
+    # Foundation: Air Properties
+    _dag_foundation.append({
+        "id": "air_props",
+        "label": "Air Properties",
+        "value": (
+            f"T<sub>film</sub> = {film_t:.1f} °C ({film_t + 273.15:.1f} K)"
+        ),
+        "steps": [
+            (f"T<sub>film</sub> = (T<sub>b</sub> + T<sub>∞</sub>)/2 = "
+             f"({base_temperature:.1f} + {ambient_temperature:.1f})/2 = "
+             f"<strong>{film_t:.1f} °C</strong>"),
+            (f"ρ = {props_final.density:.3f} kg/m³ · "
+             f"μ = {props_final.dynamic_viscosity:.3e} Pa·s · "
+             f"k<sub>air</sub> = {props_final.thermal_conductivity:.4f} W/m·K"),
+            (f"c<sub>p</sub> = {props_final.specific_heat:.0f} J/kg·K · "
+             f"Pr = {props_final.prandtl:.3f} · "
+             f"ν = {props_final.kinematic_viscosity:.3e} m²/s"),
+        ],
+        "deps": [],
+        "reference": "Sutherland-law fits, valid 200–700 K.",
+    })
+
+    # Foundation: Flow Regime
+    if airflow_mode == "natural":
+        _Ra_dag = flow_state.get("rayleigh_modified", 0.0)
+        if orientation == "vertical":
+            _dag_foundation.append({
+                "id": "flow_regime",
+                "label": "Flow Regime",
+                "value": f"Ra* = {_Ra_dag:.1f} (natural, vertical)",
+                "steps": [
+                    (f"Ra* = g·β·ΔT·s⁴/(ν·α·H) = "
+                     f"<strong>{_Ra_dag:.1f}</strong>"),
+                    (f"V<sub>ch</sub> ≈ {flow_state['channel_velocity']:.3f} m/s "
+                     "(chimney-flow estimate)"),
+                ],
+                "deps": ["air_props"],
+                "reference": "Bar-Cohen/Rohsenow chimney-flow energy balance.",
+            })
+        else:
+            _dag_foundation.append({
+                "id": "flow_regime",
+                "label": "Flow Regime",
+                "value": f"Ra<sub>L</sub> = {_Ra_dag:.1f} (natural, horizontal)",
+                "steps": [
+                    (f"Ra<sub>L</sub> = g·β·ΔT·L<sub>c</sub>³/(ν·α) = "
+                     f"<strong>{_Ra_dag:.1f}</strong>"),
+                ],
+                "deps": ["air_props"],
+                "reference": "McAdams (1954).",
+            })
+    else:
+        _Re_dag = flow_state["reynolds_number"]
+        _regime_dag = "laminar" if _Re_dag < 2300 else "turbulent"
+        _dag_foundation.append({
+            "id": "flow_regime",
+            "label": "Flow Regime",
+            "value": (
+                f"Re = {_Re_dag:.0f} ({_regime_dag}), "
+                f"V<sub>ch</sub> = {flow_state['channel_velocity']:.2f} m/s"
+            ),
+            "steps": [
+                (f"A<sub>open</sub> = N<sub>ch</sub> · s · H = "
+                 f"{geometry.channel_count} × {geometry.fin_spacing:.5f} × "
+                 f"{geometry.fin_height:.4f} = "
+                 f"<strong>{geometry.open_flow_area:.5f} m²</strong>"),
+                (f"V<sub>ch</sub> = V̇ / A<sub>open</sub> = "
+                 f"{flow_state['volumetric_flow_rate']:.5f} / "
+                 f"{geometry.open_flow_area:.5f} = "
+                 f"<strong>{flow_state['channel_velocity']:.3f} m/s</strong>"),
+                (f"Re = ρ · V<sub>ch</sub> · D<sub>h</sub> / μ = "
+                 f"{props_final.density:.3f} × "
+                 f"{flow_state['channel_velocity']:.3f} × "
+                 f"{geometry.hydraulic_diameter:.5f} / "
+                 f"{props_final.dynamic_viscosity:.3e} = "
+                 f"<strong>{_Re_dag:.0f}</strong> "
+                 f"({'< 2300 → laminar' if _Re_dag < 2300 else '≥ 2300 → turbulent'})"),
+            ],
+            "deps": ["air_props"],
+            "reference": None,
+        })
+
+    # Foundation: Convection Coefficient
+    _h_conv_dag = flow_state["convection_coefficient"]
+    _Nu_dag = flow_state["nusselt_number"]
+    _k_air_dag = props_final.thermal_conductivity
+    if airflow_mode == "natural":
+        _Ra_dag = flow_state.get("rayleigh_modified", 0.0)
+        if orientation == "vertical":
+            _conv_steps_dag = [
+                (f"Nu = (576/Ra*² + 2.873/√Ra*)<sup>−0.5</sup> = "
+                 f"(576/{_Ra_dag:.1f}² + 2.873/√{_Ra_dag:.1f})<sup>−0.5</sup>"
+                 f" = <strong>{_Nu_dag:.3f}</strong>"),
+                (f"h<sub>conv</sub> = Nu · k<sub>air</sub> / D<sub>h</sub> = "
+                 f"{_Nu_dag:.3f} × {_k_air_dag:.4f} / "
+                 f"{geometry.hydraulic_diameter:.5f} = "
+                 f"<strong>{_h_conv_dag:.2f} W/m²K</strong>"),
+            ]
+            _conv_ref_dag = (
+                "Bar-Cohen/Rohsenow (1984). "
+                "Isothermal vertical parallel plates."
+            )
+        else:
+            _conv_steps_dag = [
+                f"Nu = {_Nu_dag:.3f} (McAdams horizontal plate)",
+                (f"h<sub>conv</sub> = Nu · k<sub>air</sub> / L<sub>c</sub> = "
+                 f"<strong>{_h_conv_dag:.2f} W/m²K</strong>"),
+            ]
+            _conv_ref_dag = (
+                "McAdams (1954). Horizontal plate, natural convection."
+            )
+    else:
+        _Re_dag = flow_state["reynolds_number"]
+        _Pr_dag = props_final.prandtl
+        _Gz_dag = (
+            _Re_dag * _Pr_dag * geometry.hydraulic_diameter
+            / geometry.base_length
+        )
+        if _Re_dag < 2300:
+            _conv_steps_dag = [
+                (f"Gz = Re · Pr · D<sub>h</sub>/L = "
+                 f"{_Re_dag:.0f} × {_Pr_dag:.3f} × "
+                 f"{geometry.hydraulic_diameter:.5f} / "
+                 f"{geometry.base_length:.4f} = "
+                 f"<strong>{_Gz_dag:.1f}</strong>"),
+                (f"Nu = (7.54³ + (1.841 · Gz<sup>1/3</sup>)³)<sup>1/3</sup>"
+                 f" = <strong>{_Nu_dag:.3f}</strong>"),
+                (f"h<sub>conv</sub> = Nu · k<sub>air</sub> / D<sub>h</sub> = "
+                 f"{_Nu_dag:.3f} × {_k_air_dag:.4f} / "
+                 f"{geometry.hydraulic_diameter:.5f} = "
+                 f"<strong>{_h_conv_dag:.2f} W/m²K</strong>"),
+            ]
+            _conv_ref_dag = (
+                "Muzychka/Yovanovich (2004). "
+                "Developing laminar flow in rectangular ducts."
+            )
+        else:
+            _f_gn = (0.790 * math.log(_Re_dag) - 1.64) ** -2
+            _conv_steps_dag = [
+                f"f = (0.790 · ln(Re) − 1.64)⁻² = {_f_gn:.5f}",
+                (f"Nu = (f/8)(Re−1000)Pr / "
+                 f"(1 + 12.7√(f/8)(Pr<sup>2/3</sup>−1)) = "
+                 f"<strong>{_Nu_dag:.3f}</strong>"),
+                (f"h<sub>conv</sub> = Nu · k<sub>air</sub> / D<sub>h</sub> = "
+                 f"{_Nu_dag:.3f} × {_k_air_dag:.4f} / "
+                 f"{geometry.hydraulic_diameter:.5f} = "
+                 f"<strong>{_h_conv_dag:.2f} W/m²K</strong>"),
+            ]
+            _conv_ref_dag = (
+                "Gnielinski (1976). "
+                "Turbulent flow, 2300 < Re < 5×10⁶."
+            )
+    _dag_foundation.append({
+        "id": "h_conv",
+        "label": "Convection Coefficient",
+        "value": f"h<sub>conv</sub> = {_h_conv_dag:.2f} W/m²K",
+        "steps": _conv_steps_dag,
+        "deps": ["air_props", "flow_regime"],
+        "reference": _conv_ref_dag,
+    })
+
+    # Foundation: Radiation Coefficient
+    _h_rad_dag = final_state["radiation_coefficient"]
+    _vf_dag = final_state["radiation_view_factor"]
+    _ts_dag = base_temperature + 273.15
+    _ta_dag = ambient_temperature + 273.15
+    _dag_foundation.append({
+        "id": "h_rad",
+        "label": "Radiation Coefficient",
+        "value": f"h<sub>rad</sub> = {_h_rad_dag:.3f} W/m²K",
+        "steps": [
+            ("h<sub>rad</sub> = ε · σ · (T<sub>s</sub>² + T<sub>∞</sub>²)"
+             "(T<sub>s</sub> + T<sub>∞</sub>) · F<sub>eff</sub>"),
+            (f"= {surface_emissivity:.2f} × 5.67×10⁻⁸ × "
+             f"({_ts_dag:.1f}² + {_ta_dag:.1f}²)"
+             f"({_ts_dag:.1f} + {_ta_dag:.1f}) × {_vf_dag:.3f} = "
+             f"<strong>{_h_rad_dag:.3f} W/m²K</strong>"),
+            (f"F<sub>eff</sub> = s/(s+H) = "
+             f"{geometry.fin_spacing:.5f}/({geometry.fin_spacing:.5f} + "
+             f"{geometry.fin_height:.4f}) = {_vf_dag:.3f}"),
+        ],
+        "deps": [],
+        "reference": "Linearized Stefan-Boltzmann. Sparrow & Cess (1978).",
+    })
+
+    # Foundation: Fin & Surface Efficiency
+    _dag_foundation.append({
+        "id": "fin_eff",
+        "label": "Fin & Surface Efficiency",
+        "value": (
+            f"η<sub>f</sub> = {final_state['fin_efficiency']:.3f}, "
+            f"η<sub>o</sub> = {final_state['overall_efficiency']:.3f}"
+        ),
+        "steps": [
+            (f"h<sub>eff</sub> = h<sub>conv</sub> + h<sub>rad</sub> = "
+             f"{_h_conv_dag:.3f} + {_h_rad_dag:.3f} = "
+             f"<strong>{effective_coefficient:.3f} W/m²K</strong>"),
+            (f"m · L<sub>c</sub> = √(h<sub>eff</sub> · P / (k · A<sub>c</sub>))"
+             f" · L<sub>c</sub> = √({effective_coefficient:.3f} × "
+             f"{wetted_perimeter:.4f} / ({material_conductivity:.1f} × "
+             f"{cross_section_area:.6f})) × {corrected_length:.4f} = "
+             f"<strong>{m_length:.3f}</strong>"),
+            (f"η<sub>f</sub> = tanh({m_length:.3f}) / {m_length:.3f} = "
+             f"<strong>{final_state['fin_efficiency']:.3f}</strong>"),
+            (f"η<sub>o</sub> = 1 − (A<sub>f</sub>/A<sub>t</sub>)"
+             f"(1 − η<sub>f</sub>) = 1 − "
+             f"({geometry.fin_area:.5f}/{geometry.total_area:.5f})"
+             f"(1 − {final_state['fin_efficiency']:.3f}) = "
+             f"<strong>{final_state['overall_efficiency']:.3f}</strong>"),
+        ],
+        "deps": ["h_conv", "h_rad"],
+        "reference": "Incropera et al., Fundamentals of Heat and Mass Transfer.",
+    })
+
+    # Foundation: Friction & Losses (forced convection only)
+    _dag_f = 0.0
+    _dag_Kc = 0.0
+    _dag_Ke = 0.0
+    if airflow_mode != "natural":
+        _Re_dag = flow_state["reynolds_number"]
+        _sigma_dag = geometry.open_area_ratio
+        _dag_Kc = 0.42 * (1.0 - _sigma_dag ** 2)
+        _dag_Ke = (1.0 - _sigma_dag) ** 2
+        if _Re_dag > 0 and _Re_dag < 2300:
+            _beta_dag = min(
+                max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0
+            )
+            _poi_dag = 24.0 * (
+                1.0 - 1.3553 * _beta_dag + 1.9467 * _beta_dag ** 2
+                - 1.7012 * _beta_dag ** 3 + 0.9564 * _beta_dag ** 4
+                - 0.2537 * _beta_dag ** 5
+            )
+            _dag_f = _poi_dag / _Re_dag
+            _friction_steps_dag = [
+                (f"β = s/H = {geometry.fin_spacing:.5f} / "
+                 f"{geometry.fin_height:.4f} = {_beta_dag:.3f}"),
+                (f"f · Re = 24(1 − 1.355β + 1.947β² − …) = "
+                 f"{_poi_dag:.2f} → f = {_poi_dag:.2f}/{_Re_dag:.0f} = "
+                 f"<strong>{_dag_f:.5f}</strong>"),
+            ]
+            _friction_ref_dag = "Shah & London (1978), Kays & London (1984)."
+        else:
+            _dag_f = (0.790 * math.log(_Re_dag) - 1.64) ** -2
+            _friction_steps_dag = [
+                (f"f = (0.790 · ln({_Re_dag:.0f}) − 1.64)⁻² = "
+                 f"<strong>{_dag_f:.5f}</strong>"),
+            ]
+            _friction_ref_dag = "Petukhov (1970), Kays & London (1984)."
+        _friction_steps_dag.extend([
+            f"σ = A<sub>open</sub>/A<sub>frontal</sub> = {_sigma_dag:.3f}",
+            (f"K<sub>c</sub> = 0.42(1 − σ²) = "
+             f"<strong>{_dag_Kc:.3f}</strong> (Kays & London)"),
+            (f"K<sub>e</sub> = (1 − σ)² = "
+             f"<strong>{_dag_Ke:.4f}</strong> (Borda-Carnot)"),
+        ])
+        _dag_foundation.append({
+            "id": "friction",
+            "label": "Friction & Losses",
+            "value": (
+                f"f = {_dag_f:.5f}, K<sub>c</sub> = {_dag_Kc:.3f}, "
+                f"K<sub>e</sub> = {_dag_Ke:.4f}"
+            ),
+            "steps": _friction_steps_dag,
+            "deps": ["flow_regime"],
+            "reference": _friction_ref_dag,
+        })
+
+    # ── Result tree nodes ──
+    _delta_t_dag = base_temperature - ambient_temperature
+    _eta_o_dag = final_state["overall_efficiency"]
+
+    # Base temperature (energy balance)
+    _base_node: Dict[str, Any] = {
+        "id": "base_temp",
+        "label": "Base Temp",
+        "value": f"T<sub>b</sub> = {base_temperature:.1f} °C",
+        "steps": [
+            ("Solved: η<sub>o</sub> · h<sub>eff</sub> · A<sub>t</sub> · "
+             "(T<sub>b</sub> − T<sub>∞</sub>) = Q"),
+            (f"{_eta_o_dag:.3f} × {effective_coefficient:.2f} × "
+             f"{geometry.total_area:.5f} × {_delta_t_dag:.1f} = "
+             f"<strong>{final_state['heat_rejected']:.1f} W</strong> ⇒ "
+             f"T<sub>b</sub> = {base_temperature:.1f} °C"),
+            (f"R<sub>θ,sink</sub> = ΔT/Q = "
+             f"{_delta_t_dag:.1f}/{heat_load:.1f} = "
+             f"<strong>{sink_r_theta:.3f} K/W</strong>"),
+        ],
+        "foundation_refs": [
+            {"id": "fin_eff", "label": "η<sub>o</sub>"},
+            {"id": "h_conv", "label": "h<sub>conv</sub>"},
+            {"id": "h_rad", "label": "h<sub>rad</sub>"},
+        ],
+        "children": [],
+    }
+
+    # Build the chain above base temperature
+    if spreading_r > 1e-6:
+        _spreading_node: Dict[str, Any] = {
+            "id": "spreading_r",
+            "label": "Spreading R<sub>θ</sub>",
+            "value": f"{spreading_r:.4f} K/W",
+            "steps": [
+                (f"ε = √(A<sub>s</sub>/A<sub>p</sub>) = "
+                 f"√({_src_area:.6f}/{_plate_area:.6f}) = "
+                 f"{_sp_epsilon:.4f}, "
+                 f"τ = t/√A<sub>p</sub> = "
+                 f"{geometry.base_thickness:.4f}/√{_plate_area:.6f} = "
+                 f"{_sp_tau:.4f}"),
+                (f"ψ = (1−ε)<sup>1.5</sup> / "
+                 f"(ε·τ + (1−ε)<sup>1.5</sup>) = {_sp_psi:.4f}"),
+                (f"R<sub>sp</sub> = ψ/(k·√(π·A<sub>s</sub>)) = "
+                 f"{_sp_psi:.4f}/({material_conductivity:.1f} × "
+                 f"√(π × {_src_area:.6f})) = "
+                 f"<strong>{spreading_r:.4f} K/W</strong>"),
+            ],
+            "foundation_refs": [],
+            "children": [],
+            "reference": "Yovanovich, Muzychka, Culham (1999).",
+        }
+        _eff_base_node: Dict[str, Any] = {
+            "id": "eff_base_temp",
+            "label": "Effective Base",
+            "value": (
+                f"T<sub>base,eff</sub> = "
+                f"{effective_base_temperature:.1f} °C"
+            ),
+            "steps": [
+                (f"T<sub>base,eff</sub> = T<sub>b</sub> + Q · R<sub>sp</sub>"
+                 f" = {base_temperature:.1f} + {heat_load:.1f} × "
+                 f"{spreading_r:.4f} = "
+                 f"<strong>{effective_base_temperature:.1f} °C</strong>"),
+            ],
+            "foundation_refs": [],
+            "children": [_base_node, _spreading_node],
+        }
+        _above_base = _eff_base_node
+    else:
+        _above_base = _base_node
+
+    # Interface resistance
+    _interface_node: Dict[str, Any] = {
+        "id": "interface_r",
+        "label": "Interface R<sub>θ,cs</sub>",
+        "value": f"{interface_resistance:.4f} K/W",
+        "steps": [
+            (f"R<sub>θ,cs</sub> = {interface_resistance:.4f} K/W "
+             "(from TIM input)"),
+        ],
+        "foundation_refs": [],
+        "children": [],
+        "tim_derivation": True,
+    }
+
+    # Case temperature
+    _case_ref_temp = (
+        effective_base_temperature if spreading_r > 1e-6 else base_temperature
+    )
+    _case_ref_label = (
+        "T<sub>base,eff</sub>" if spreading_r > 1e-6 else "T<sub>b</sub>"
+    )
+    _case_node: Dict[str, Any] = {
+        "id": "case_temp",
+        "label": "Case Temp",
+        "value": f"T<sub>case</sub> = {case_temperature:.1f} °C",
+        "steps": [
+            (f"T<sub>case</sub> = {_case_ref_label} + Q · R<sub>θ,cs</sub>"
+             f" = {_case_ref_temp:.1f} + {heat_load:.1f} × "
+             f"{interface_resistance:.4f} = "
+             f"<strong>{case_temperature:.1f} °C</strong>"),
+        ],
+        "foundation_refs": [],
+        "children": [_above_base, _interface_node],
+    }
+
+    # Junction temperature (root of the thermal chain)
+    _junction_children: List[Dict[str, Any]] = [_case_node]
+    if junction_to_case_resistance > 0:
+        _junction_children.append({
+            "id": "r_jc",
+            "label": "R<sub>θ,jc</sub>",
+            "value": f"{junction_to_case_resistance:.4f} K/W (input)",
+            "leaf": True,
+        })
+
+    _margin_sym = "✓" if temperature_margin >= 0 else "✗"
+    _junction_node: Dict[str, Any] = {
+        "id": "junction_temp",
+        "label": "Junction Temp",
+        "value": f"T<sub>j</sub> = {junction_temperature:.1f} °C",
+        "status": status,
+        "steps": [
+            (f"T<sub>j</sub> = T<sub>case</sub> + Q · R<sub>θ,jc</sub>"
+             f" = {case_temperature:.1f} + {heat_load:.1f} × "
+             f"{junction_to_case_resistance:.4f} = "
+             f"<strong>{junction_temperature:.1f} °C</strong>"),
+            (f"Margin = T<sub>j,max</sub> − T<sub>j</sub> = "
+             f"{target_junction_temperature:.1f} − "
+             f"{junction_temperature:.1f} = "
+             f"<strong>{temperature_margin:.1f} °C</strong> {_margin_sym}"),
+        ],
+        "foundation_refs": [],
+        "children": _junction_children,
+    }
+
+    # Standalone result nodes
+    _standalone_nodes: List[Dict[str, Any]] = []
+
+    # Pressure drop
+    if airflow_mode != "natural" and flow_state["reynolds_number"] > 0:
+        _dp_val = flow_state["pressure_drop"]
+        _standalone_nodes.append({
+            "id": "pressure_drop",
+            "label": "Pressure Drop",
+            "value": f"ΔP = {_dp_val:.2f} Pa",
+            "steps": [
+                ("ΔP = (f · L/D<sub>h</sub> + K<sub>c</sub> + K<sub>e</sub>)"
+                 " · ρ · V<sub>ch</sub>²/2"),
+                (f"= ({_dag_f:.5f} × {geometry.base_length:.4f} / "
+                 f"{geometry.hydraulic_diameter:.5f} + "
+                 f"{_dag_Kc:.3f} + {_dag_Ke:.4f}) × "
+                 f"{props_final.density:.3f} × "
+                 f"{flow_state['channel_velocity']:.3f}² / 2 = "
+                 f"<strong>{_dp_val:.2f} Pa</strong>"),
+            ],
+            "foundation_refs": [
+                {"id": "friction", "label": "f, K<sub>c</sub>, K<sub>e</sub>"},
+                {"id": "air_props", "label": "ρ"},
+                {"id": "flow_regime", "label": "V<sub>ch</sub>"},
+            ],
+            "children": [],
+        })
+    else:
+        _standalone_nodes.append({
+            "id": "pressure_drop",
+            "label": "Pressure Drop",
+            "value": f"ΔP = {flow_state['pressure_drop']:.2f} Pa",
+            "steps": [
+                "ΔP = 0 Pa (natural convection — no forced pressure drop)",
+            ],
+            "foundation_refs": [],
+            "children": [],
+        })
+
+    # Required sink Rθ
+    _standalone_nodes.append({
+        "id": "required_sink_r",
+        "label": "Required Sink R<sub>θ</sub>",
+        "value": f"{required_r_sink:.3f} K/W (budget)",
+        "steps": [
+            (f"R<sub>req</sub> = (T<sub>j,max</sub> − T<sub>∞</sub>)/Q "
+             f"− R<sub>jc</sub> − R<sub>cs</sub> = "
+             f"({target_junction_temperature:.1f} − "
+             f"{ambient_temperature:.1f}) / {heat_load:.1f} − "
+             f"{junction_to_case_resistance:.3f} − "
+             f"{interface_resistance:.3f} = "
+             f"<strong>{required_r_sink:.3f} K/W</strong>"),
+        ],
+        "foundation_refs": [],
+        "children": [],
+    })
+
+    # Heat split
+    _conv_pct_dag = (
+        100.0 * final_state["convection_heat"]
+        / max(final_state["heat_rejected"], 1e-12)
+    )
+    _rad_pct_dag = (
+        100.0 * final_state["radiation_heat"]
+        / max(final_state["heat_rejected"], 1e-12)
+    )
+    _standalone_nodes.append({
+        "id": "heat_split",
+        "label": "Heat Split",
+        "value": (
+            f"Q<sub>conv</sub> = {final_state['convection_heat']:.1f} W "
+            f"({_conv_pct_dag:.0f}%), "
+            f"Q<sub>rad</sub> = {final_state['radiation_heat']:.1f} W "
+            f"({_rad_pct_dag:.0f}%)"
+        ),
+        "steps": [
+            (f"Q<sub>conv</sub> = η<sub>o</sub> · h<sub>conv</sub> · "
+             f"A<sub>t</sub> · ΔT = {_eta_o_dag:.3f} × {_h_conv_dag:.2f} × "
+             f"{geometry.total_area:.5f} × {_delta_t_dag:.1f} = "
+             f"<strong>{final_state['convection_heat']:.1f} W</strong> "
+             f"({_conv_pct_dag:.0f}%)"),
+            (f"Q<sub>rad</sub> = η<sub>o</sub> · h<sub>rad</sub> · "
+             f"A<sub>t</sub> · ΔT = {_eta_o_dag:.3f} × {_h_rad_dag:.3f} × "
+             f"{geometry.total_area:.5f} × {_delta_t_dag:.1f} = "
+             f"<strong>{final_state['radiation_heat']:.1f} W</strong> "
+             f"({_rad_pct_dag:.0f}%)"),
+        ],
+        "foundation_refs": [
+            {"id": "fin_eff", "label": "η<sub>o</sub>"},
+            {"id": "h_conv", "label": "h<sub>conv</sub>"},
+            {"id": "h_rad", "label": "h<sub>rad</sub>"},
+        ],
+        "children": [],
+    })
+
+    result["derivation_dag"] = {
+        "foundation": _dag_foundation,
+        "result_tree": [_junction_node] + _standalone_nodes,
     }
 
     return result
