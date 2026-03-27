@@ -1529,11 +1529,16 @@
                     <details style="margin-top:10px;font-size:0.82rem;">
                         <summary style="cursor:pointer;color:var(--text-light);user-select:none;">Sample Test Cases</summary>
                         <ul style="margin:6px 0 0 0;padding-left:18px;line-height:1.9;">
-                            <li><a href="#" class="load-sample" data-src="test-cases/natural_convection_baseline.json">Natural Convection Baseline (20W)</a></li>
-                            <li><a href="#" class="load-sample" data-src="test-cases/forced_convection_high_power.json">Forced Convection — High Power (50W)</a></li>
-                            <li><a href="#" class="load-sample" data-src="test-cases/fan_curve_mode.json">Fan Curve — 40mm Axial Fan (25W)</a></li>
-                            <li><a href="#" class="load-sample" data-src="test-cases/negative_budget_edge_case.json">Negative Budget — Impossible Design</a></li>
-                            <li><a href="#" class="load-sample" data-src="test-cases/bar_cohen_natural_convection.json">Bar-Cohen Natural Convection Benchmark</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/natural_convection_baseline.json">Natural Convection Baseline (Internal, 20W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/forced_convection_high_power.json">Forced Convection High Power (Internal, 50W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/fan_curve_mode.json">Fan Curve, 40 mm Axial Fan (Internal, 25W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/negative_budget_edge_case.json">Negative Budget Edge Case (Internal qualitative)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/bar_cohen_natural_convection.json">Bar-Cohen and Rohsenow (1984) Natural Convection</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/ventola_forced_convection_5p6_ms.json">Ventola et al. (2016) Forced Convection, 5.6 m/s</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/ventola_forced_convection_13p9_ms.json">Ventola et al. (2016) Forced Convection, 13.9 m/s</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/kirincic_natural_convection_low_delta_t.json">Kirincic et al. (2025) Natural Convection, Low Delta T</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/kirincic_natural_convection_high_delta_t.json">Kirincic et al. (2025) Natural Convection, High Delta T</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/lee_partial_heating_uniform_midflow.json">Lee et al. (2019) Partial Heating Reference</a></li>
                         </ul>
                     </details>
                 </form>
@@ -2521,6 +2526,12 @@
                         const el = document.getElementById(id);
                         if (el && el.data) Plotly.Plots.resize(el);
                     });
+                }, 100);
+            }
+            if (tabName === 'sweep1d' || tabName === 'sweep2d') {
+                setTimeout(() => {
+                    const plotEl = document.getElementById(tabName === 'sweep1d' ? 'sweep1d-plot' : 'sweep2d-plot');
+                    if (plotEl && plotEl.data) Plotly.Plots.resize(plotEl);
                 }, 100);
             }
         }
@@ -3790,23 +3801,38 @@
             document.getElementById('tab-sweep2d').disabled = false;
             sweepState.baselineInputs = gatherInputs();
             sweepState.baselineResults = results;
+            populateSweepControls();
         }
 
         function populateSweepControls() {
             const meta = sweepState.metadata;
             if (!meta) return;
+            const activeMode = sweepState.baselineInputs?.airflow_mode || gatherInputs().airflow_mode;
+            const availableParams = Object.entries(meta.parameters).filter(([, p]) => {
+                return !p.modes || p.modes.includes(activeMode);
+            });
+            const currentSelections = {
+                sweep1dParam: document.getElementById('sweep1d-param')?.value,
+                sweep1dOutput: document.getElementById('sweep1d-output')?.value,
+                sweep2dX: document.getElementById('sweep2d-xparam')?.value,
+                sweep2dY: document.getElementById('sweep2d-yparam')?.value,
+                sweep2dOutput: document.getElementById('sweep2d-output')?.value,
+            };
 
             // Helper to populate a select from metadata
-            function fillParamSelect(selectEl) {
+            function fillParamSelect(selectEl, selectedValue = null) {
                 selectEl.innerHTML = '';
-                Object.entries(meta.parameters).forEach(([key, p]) => {
+                availableParams.forEach(([key, p]) => {
                     const opt = document.createElement('option');
                     opt.value = key;
                     opt.textContent = `${p.label}${p.display_unit ? ' (' + p.display_unit + ')' : ''}`;
                     selectEl.appendChild(opt);
                 });
+                if (selectedValue && Array.from(selectEl.options).some((opt) => opt.value === selectedValue)) {
+                    selectEl.value = selectedValue;
+                }
             }
-            function fillOutputSelect(selectEl) {
+            function fillOutputSelect(selectEl, selectedValue = null) {
                 selectEl.innerHTML = '';
                 Object.entries(meta.outputs).forEach(([key, o]) => {
                     const opt = document.createElement('option');
@@ -3814,16 +3840,66 @@
                     opt.textContent = `${o.label}${o.unit ? ' (' + o.unit + ')' : ''}`;
                     selectEl.appendChild(opt);
                 });
+                if (selectedValue && Array.from(selectEl.options).some((opt) => opt.value === selectedValue)) {
+                    selectEl.value = selectedValue;
+                }
             }
 
-            fillParamSelect(document.getElementById('sweep1d-param'));
-            fillOutputSelect(document.getElementById('sweep1d-output'));
-            fillParamSelect(document.getElementById('sweep2d-xparam'));
-            fillParamSelect(document.getElementById('sweep2d-yparam'));
+            fillParamSelect(document.getElementById('sweep1d-param'), currentSelections.sweep1dParam);
+            fillOutputSelect(document.getElementById('sweep1d-output'), currentSelections.sweep1dOutput);
+            fillParamSelect(document.getElementById('sweep2d-xparam'), currentSelections.sweep2dX);
+            fillParamSelect(document.getElementById('sweep2d-yparam'), currentSelections.sweep2dY);
             // Default 2D Y to second parameter
             const ySelect = document.getElementById('sweep2d-yparam');
-            if (ySelect.options.length > 1) ySelect.selectedIndex = 1;
-            fillOutputSelect(document.getElementById('sweep2d-output'));
+            if (!currentSelections.sweep2dY && ySelect.options.length > 1) ySelect.selectedIndex = 1;
+            fillOutputSelect(document.getElementById('sweep2d-output'), currentSelections.sweep2dOutput);
+        }
+
+        function getSweepBaseline() {
+            if (!sweepState.baselineInputs) {
+                throw new Error('Run a baseline calculation before using sweeps.');
+            }
+            return { ...sweepState.baselineInputs };
+        }
+
+        function getSweepBounds(baseValue, meta, spanFraction) {
+            const min = meta.min;
+            const max = meta.max;
+            const defaultSpan = Array.isArray(meta.default_span) && meta.default_span.length === 2
+                ? meta.default_span
+                : null;
+
+            let low;
+            let high;
+
+            if (Number.isFinite(baseValue) && baseValue > 0) {
+                low = baseValue * (1 - spanFraction);
+                high = baseValue * (1 + spanFraction);
+            } else if (defaultSpan) {
+                [low, high] = defaultSpan;
+            } else {
+                low = min;
+                high = max;
+            }
+
+            const clampedLow = Math.max(low, min);
+            const clampedHigh = Math.min(high, max);
+            if (Number.isFinite(clampedLow) && Number.isFinite(clampedHigh) && clampedHigh > clampedLow) {
+                return [clampedLow, clampedHigh];
+            }
+
+            if (Number.isFinite(low) && Number.isFinite(high) && high > low) {
+                return [low, high];
+            }
+
+            if (defaultSpan && defaultSpan[1] > defaultSpan[0]) {
+                return [
+                    Math.max(defaultSpan[0], min),
+                    Math.min(defaultSpan[1], max),
+                ];
+            }
+
+            return [min, max];
         }
 
         function runOneDSweep() {
@@ -3831,14 +3907,13 @@
                 const paramKey = document.getElementById('sweep1d-param').value;
                 const outputKey = document.getElementById('sweep1d-output').value;
                 const rangeValue = document.getElementById('sweep1d-range').value;
-                const baseline = gatherInputs();
+                const baseline = getSweepBaseline();
                 const meta = sweepState.metadata.parameters[paramKey];
 
                 const baseVal = baseline[paramKey];
                 const span = parseFloat(rangeValue);
                 const nPoints = 40;
-                const low = Math.max(baseVal * (1 - span), meta.min);
-                const high = Math.min(baseVal * (1 + span), meta.max);
+                const [low, high] = getSweepBounds(baseVal, meta, span);
                 const step = (high - low) / (nPoints - 1);
                 const sweepValues = Array.from({ length: nPoints }, (_, i) => low + i * step);
                 if (meta.integer) sweepValues.forEach((v, i) => { sweepValues[i] = Math.round(v); });
@@ -3853,6 +3928,8 @@
                 const xDisplay = sweepResult.x_values.map(v => v * displayScale);
                 const baselineXDisplay = sweepResult.baseline_x * displayScale;
                 const outputMeta = sweepState.metadata.outputs[outputKey];
+                const inSweepDomain = sweepResult.baseline_x >= Math.min(...sweepResult.x_values)
+                    && sweepResult.baseline_x <= Math.max(...sweepResult.x_values);
 
                 const trace = {
                     x: xDisplay, y: sweepResult.series[outputKey],
@@ -3860,11 +3937,48 @@
                     name: outputMeta.label,
                     line: { color: getComputedStyle(document.body).getPropertyValue('--accent-color').trim() },
                 };
-                const baselineTrace = {
-                    x: [baselineXDisplay], y: [sweepResult.baseline_outputs[outputKey]],
-                    mode: 'markers', marker: { size: 12, color: getComputedStyle(document.body).getPropertyValue('--danger-color').trim(), symbol: 'diamond' },
-                    name: 'Baseline',
-                };
+                const traces = [trace];
+                if (inSweepDomain && sweepResult.baseline_outputs[outputKey] != null) {
+                    traces.push({
+                        x: [baselineXDisplay], y: [sweepResult.baseline_outputs[outputKey]],
+                        mode: 'markers', marker: { size: 12, color: getComputedStyle(document.body).getPropertyValue('--danger-color').trim(), symbol: 'diamond' },
+                        name: 'Baseline',
+                    });
+                }
+                const annotations = [];
+                if (resultsAreStale) {
+                    annotations.push({
+                        text: 'Sweep uses the last calculated baseline. Recalculate to include current form edits.',
+                        xref: 'paper',
+                        yref: 'paper',
+                        x: 0,
+                        y: 1.18,
+                        showarrow: false,
+                        font: { size: 11, color: getComputedStyle(document.body).getPropertyValue('--text-light').trim() },
+                    });
+                }
+                if (!inSweepDomain) {
+                    annotations.push({
+                        text: `Baseline ${meta.label.toLowerCase()} lies outside the swept range and is not shown.`,
+                        xref: 'paper',
+                        yref: 'paper',
+                        x: 0,
+                        y: annotations.length > 0 ? 1.10 : 1.12,
+                        showarrow: false,
+                        font: { size: 11, color: getComputedStyle(document.body).getPropertyValue('--text-light').trim() },
+                    });
+                }
+                if ((sweepResult.warnings || []).length > 0) {
+                    annotations.push({
+                        text: `${sweepResult.warnings.length} sweep points were invalid`,
+                        xref: 'paper',
+                        yref: 'paper',
+                        x: 0,
+                        y: annotations.length > 0 ? 1.02 : 1.12,
+                        showarrow: false,
+                        font: { size: 11, color: getComputedStyle(document.body).getPropertyValue('--text-light').trim() },
+                    });
+                }
                 const layout = {
                     ...getPlotTheme(),
                     title: { text: `${meta.label} Sweep`, font: { size: 14 } },
@@ -3872,8 +3986,13 @@
                     yaxis: { ...getPlotTheme().yaxis, title: `${outputMeta.label} (${outputMeta.unit})` },
                     showlegend: true,
                     legend: { x: 1, xanchor: 'right', y: 1 },
+                    annotations,
                 };
-                Plotly.react('sweep1d-plot', [trace, baselineTrace], layout, { displayModeBar: false, responsive: true });
+                Plotly.react('sweep1d-plot', traces, layout, { displayModeBar: false, responsive: true });
+                requestAnimationFrame(() => {
+                    const plotEl = document.getElementById('sweep1d-plot');
+                    if (plotEl && plotEl.data) Plotly.Plots.resize(plotEl);
+                });
             } catch (err) {
                 console.error('1D sweep error:', err);
                 const plotDiv = document.getElementById('sweep1d-plot');
@@ -3887,17 +4006,15 @@
                 const yParam = document.getElementById('sweep2d-yparam').value;
                 const outputKey = document.getElementById('sweep2d-output').value;
                 const resolution = parseInt(document.getElementById('sweep2d-resolution').value, 10);
-                const baseline = gatherInputs();
+                const baseline = getSweepBaseline();
                 const xMeta = sweepState.metadata.parameters[xParam];
                 const yMeta = sweepState.metadata.parameters[yParam];
                 const outputMeta = sweepState.metadata.outputs[outputKey];
 
                 const baseX = baseline[xParam];
                 const baseY = baseline[yParam];
-                const xLow = Math.max(baseX * 0.5, xMeta.min);
-                const xHigh = Math.min(baseX * 1.5, xMeta.max);
-                const yLow = Math.max(baseY * 0.5, yMeta.min);
-                const yHigh = Math.min(baseY * 1.5, yMeta.max);
+                const [xLow, xHigh] = getSweepBounds(baseX, xMeta, 0.5);
+                const [yLow, yHigh] = getSweepBounds(baseY, yMeta, 0.5);
                 const xVals = Array.from({ length: resolution }, (_, i) => xLow + i * (xHigh - xLow) / (resolution - 1));
                 const yVals = Array.from({ length: resolution }, (_, i) => yLow + i * (yHigh - yLow) / (resolution - 1));
                 if (xMeta.integer) xVals.forEach((v, i) => { xVals[i] = Math.round(v); });
@@ -3933,6 +4050,10 @@
                     yaxis: { ...getPlotTheme().yaxis, title: `${yMeta.label} (${yMeta.display_unit || yMeta.unit})` },
                 };
                 Plotly.react('sweep2d-plot', [heatmap, baseMarker], layout, { displayModeBar: false, responsive: true });
+                requestAnimationFrame(() => {
+                    const plotEl = document.getElementById('sweep2d-plot');
+                    if (plotEl && plotEl.data) Plotly.Plots.resize(plotEl);
+                });
             } catch (err) {
                 console.error('2D contour error:', err);
                 const plotDiv = document.getElementById('sweep2d-plot');
@@ -4160,35 +4281,44 @@
             try {
                 const inputs = gatherInputs();
                 const timInfo = gatherTimInfo(inputs);
-                const timInfoPy = pyodide.toPy(timInfo);
-                const resultProxy = await withTimeout(() => pyToolModule.analyze_plate_fin_heatsink(
-                    inputs.heat_load,
-                    inputs.ambient_temperature,
-                    inputs.target_junction_temperature,
-                    inputs.base_length,
-                    inputs.base_width,
-                    inputs.base_thickness,
-                    inputs.fin_height,
-                    inputs.fin_thickness,
-                    inputs.fin_count,
-                    inputs.material_conductivity,
-                    inputs.surface_emissivity,
-                    inputs.airflow_mode,
-                    inputs.approach_velocity,
-                    inputs.volumetric_flow_rate,
-                    inputs.fan_max_pressure,
-                    inputs.fan_max_flow_rate,
-                    inputs.interface_resistance,
-                    inputs.junction_to_case_resistance,
-                    inputs.pressure_pa,
-                    inputs.orientation,
-                    inputs.source_length,
-                    inputs.source_width,
-                    inputs.ducted,
-                    timInfoPy
-                ));
-                const rawResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
-                resultProxy.destroy();
+                const timInfoPy = pyodideInstance.toPy(timInfo);
+                let resultProxy;
+                try {
+                    resultProxy = await withTimeout(() => pyToolModule.analyze_plate_fin_heatsink(
+                        inputs.heat_load,
+                        inputs.ambient_temperature,
+                        inputs.target_junction_temperature,
+                        inputs.base_length,
+                        inputs.base_width,
+                        inputs.base_thickness,
+                        inputs.fin_height,
+                        inputs.fin_thickness,
+                        inputs.fin_count,
+                        inputs.material_conductivity,
+                        inputs.surface_emissivity,
+                        inputs.airflow_mode,
+                        inputs.approach_velocity,
+                        inputs.volumetric_flow_rate,
+                        inputs.fan_max_pressure,
+                        inputs.fan_max_flow_rate,
+                        inputs.interface_resistance,
+                        inputs.junction_to_case_resistance,
+                        inputs.pressure_pa,
+                        inputs.orientation,
+                        inputs.source_length,
+                        inputs.source_width,
+                        inputs.ducted,
+                        timInfoPy
+                    ));
+                } finally {
+                    timInfoPy.destroy();
+                }
+                let rawResults;
+                try {
+                    rawResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                } finally {
+                    resultProxy.destroy();
+                }
                 const normalizedResults = normalizeNestedDict(rawResults);
                 normalizedResults.input_snapshot = { ...inputs };
                 displayResults(normalizedResults);

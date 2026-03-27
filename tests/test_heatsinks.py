@@ -452,6 +452,13 @@ def test_sweep_metadata_has_required_keys() -> None:
         assert "max" in param
 
 
+def test_approach_velocity_sweep_metadata_covers_supported_forced_flow_range() -> None:
+    meta = get_heatsink_sweep_metadata()
+    approach = meta["parameters"]["approach_velocity"]
+    assert approach["modes"] == ["forced"]
+    assert approach["max"] >= 30.0
+
+
 def test_1d_sweep_returns_expected_shape() -> None:
     sweep_values = [0.02, 0.025, 0.03, 0.035, 0.04]
     result = run_heatsink_1d_sweep(

@@ -847,9 +847,11 @@ def analyze_plate_fin_heatsink(
         Cooling regime: "natural" = buoyancy-driven, "forced" = known air velocity
         or flow rate, "fan_curve" = fan operating point from curve intersection.
     approach_velocity : float
-        Far-field air velocity upstream of the sink (m/s). Typical: 1–5 m/s.
-        The model converts this to channel velocity using the open area ratio.
-        Used only in forced mode when volumetric_flow_rate is zero.
+        Far-field air velocity upstream of the sink (m/s). Typical electronics-
+        cooling cases are often 1–5 m/s, but ducted validation cases and
+        aggressive forced-flow designs may be substantially higher. The model
+        converts this to channel velocity using the open area ratio. Used only
+        in forced mode when volumetric_flow_rate is zero.
     volumetric_flow_rate : float
         Measured airflow through the fin channels (m³/s). Typical: 0.001–0.01 m³/s.
         If nonzero, overrides approach_velocity. Used in forced mode.
@@ -2638,7 +2640,7 @@ def get_heatsink_sweep_metadata() -> Dict[str, Any]:
             "approach_velocity": {
                 "label": "Approach Velocity", "unit": "m/s", "display_unit": "m/s",
                 "display_scale": 1, "category": "airflow",
-                "default_span": [0.3, 2.0], "min": 0.1, "max": 15.0,
+                "default_span": [0.3, 2.0], "min": 0.1, "max": 50.0,
                 "scale": "linear", "modes": ["forced"],
             },
         },
