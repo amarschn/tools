@@ -12,12 +12,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 SIGMA = 5.670374419e-8
 GRAVITY = 9.80665
 AIR_GAS_CONSTANT = 287.058
+
+# Laminar-turbulent transition blending zone for internal duct flow.
+# Below _RE_TRANS_LO: pure laminar correlations.
+# Above _RE_TRANS_HI: pure turbulent correlations.
+# Between: linear blend of both, eliminating the Nusselt/friction
+# discontinuity that a hard switch at Re=2300 would produce.
+_RE_TRANS_LO = 2000.0
+_RE_TRANS_HI = 3000.0
 
 
 @dataclass(frozen=True)
@@ -551,6 +559,24 @@ def _laminar_rectangular_duct_friction_factor(reynolds_number: float, aspect_rat
     return poisson_term / reynolds_number
 
 
+def _gnielinski_nusselt(reynolds_number: float, prandtl: float, darcy_f: float) -> float:
+    """Gnielinski (1976) Nusselt number for turbulent internal duct flow."""
+    return (
+        (darcy_f / 8.0)
+        * (reynolds_number - 1000.0)
+        * prandtl
+        / (
+            1.0
+            + 12.7 * math.sqrt(darcy_f / 8.0) * (prandtl ** (2.0 / 3.0) - 1.0)
+        )
+    )
+
+
+def _petukhov_friction(reynolds_number: float) -> float:
+    """Petukhov (1970) Darcy friction factor for turbulent pipe flow."""
+    return (0.790 * math.log(reynolds_number) - 1.64) ** -2
+
+
 def forced_convection_plate_array(
     geometry: PlateFinGeometry,
     surface_temperature: float,
@@ -587,39 +613,35 @@ def forced_convection_plate_array(
         / geometry.base_length
     )
 
-    # Re = 2300 is the standard laminar-turbulent transition threshold for
-    # internal duct flow (Incropera et al., Ch. 8).
-    if reynolds_number < 2300.0:
-        # Muzychka & Yovanovich (2004) combined-entry correlation for
-        # developing laminar flow in a rectangular duct.  7.54 is the
-        # fully-developed asymptote for uniform wall temperature; 1.841 is
-        # the developing-flow coefficient.
-        nusselt_number = (
-            7.54**3 + (1.841 * graetz_number ** (1.0 / 3.0)) ** 3
-        ) ** (1.0 / 3.0)
-        darcy_friction_factor = _laminar_rectangular_duct_friction_factor(
-            reynolds_number, geometry.fin_spacing / geometry.fin_height
-        )
+    # Laminar correlation: Muzychka & Yovanovich (2004) combined-entry for
+    # developing flow in a rectangular duct.  Always computed so it is
+    # available for blending in the transition zone.
+    nu_lam = (
+        7.54**3 + (1.841 * graetz_number ** (1.0 / 3.0)) ** 3
+    ) ** (1.0 / 3.0)
+    f_lam = _laminar_rectangular_duct_friction_factor(
+        reynolds_number, geometry.fin_spacing / geometry.fin_height
+    )
+
+    if reynolds_number < _RE_TRANS_LO:
+        # Pure laminar regime.
+        nusselt_number = nu_lam
+        darcy_friction_factor = f_lam
+        flow_regime = "laminar"
+    elif reynolds_number > _RE_TRANS_HI:
+        # Pure turbulent: Gnielinski (1976) Nu with Petukhov (1970) friction.
+        darcy_friction_factor = _petukhov_friction(reynolds_number)
+        nusselt_number = _gnielinski_nusselt(reynolds_number, props.prandtl, darcy_friction_factor)
+        flow_regime = "turbulent"
     else:
-        # Petukhov (1970) friction factor — used for both Nusselt and
-        # pressure drop so that the Gnielinski correlation is self-consistent.
-        # Ref: Petukhov, B. S. (1970), "Heat Transfer and Friction in
-        # Turbulent Pipe Flow," Advances in Heat Transfer, Vol. 6.
-        darcy_friction_factor = (0.790 * math.log(reynolds_number) - 1.64) ** -2
-        # Gnielinski (1976) correlation, valid for 2300 < Re < 5e6 and
-        # 0.5 < Pr < 2000.  The (Re - 1000) term improves accuracy in the
-        # transition region; 12.7 is the Prandtl-correction coefficient.
-        # Ref: Gnielinski, V. (1976), "New Equations for Heat and Mass
-        # Transfer in Turbulent Pipe and Channel Flow," Int. Chem. Eng. 16.
-        nusselt_number = (
-            (darcy_friction_factor / 8.0)
-            * (reynolds_number - 1000.0)
-            * props.prandtl
-            / (
-                1.0
-                + 12.7 * math.sqrt(darcy_friction_factor / 8.0) * (props.prandtl ** (2.0 / 3.0) - 1.0)
-            )
-        )
+        # Transition zone: linear blend avoids the Nusselt/friction
+        # discontinuity that a hard switch at Re=2300 would produce.
+        gamma = (reynolds_number - _RE_TRANS_LO) / (_RE_TRANS_HI - _RE_TRANS_LO)
+        f_turb = _petukhov_friction(reynolds_number)
+        nu_turb = _gnielinski_nusselt(reynolds_number, props.prandtl, f_turb)
+        nusselt_number = (1.0 - gamma) * nu_lam + gamma * nu_turb
+        darcy_friction_factor = (1.0 - gamma) * f_lam + gamma * f_turb
+        flow_regime = "transition"
 
     # Entrance/exit minor loss coefficients for abrupt contraction and
     # expansion into a parallel-plate channel.  The 0.42 contraction
@@ -638,14 +660,23 @@ def forced_convection_plate_array(
     convection_coefficient = (
         nusselt_number * props.thermal_conductivity / geometry.hydraulic_diameter
     )
-    return {
+    result = {
         "convection_coefficient": convection_coefficient,
         "nusselt_number": nusselt_number,
         "reynolds_number": reynolds_number,
         "channel_velocity": channel_velocity,
         "volumetric_flow_rate": volumetric_flow_rate,
         "pressure_drop": pressure_drop,
+        "flow_regime": flow_regime,
     }
+    if flow_regime == "transition":
+        gamma = (reynolds_number - _RE_TRANS_LO) / (_RE_TRANS_HI - _RE_TRANS_LO)
+        result["transition_gamma"] = gamma
+        result["nusselt_laminar"] = nu_lam
+        result["nusselt_turbulent"] = _gnielinski_nusselt(
+            reynolds_number, props.prandtl, _petukhov_friction(reynolds_number)
+        )
+    return result
 
 
 def fan_curve_pressure(
@@ -753,6 +784,7 @@ def analyze_plate_fin_heatsink(
     source_length: float = 0.0,
     source_width: float = 0.0,
     ducted: bool = True,
+    tim_info: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     r"""
     Analyze the steady-state performance of a straight plate-fin heatsink in air.
@@ -1339,13 +1371,17 @@ def analyze_plate_fin_heatsink(
     _dp_V = flow_state["channel_velocity"]
     if airflow_mode != "natural" and _dp_re > 0:
         # Recompute friction factor from Re (same logic as forced_convection_plate_array).
-        if _dp_re < 2300.0:
-            _beta_dp = min(max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0)
-            _poi_dp = 24.0 * (1.0 - 1.3553*_beta_dp + 1.9467*_beta_dp**2
-                              - 1.7012*_beta_dp**3 + 0.9564*_beta_dp**4 - 0.2537*_beta_dp**5)
-            _dp_f = _poi_dp / _dp_re
+        _f_lam_dp = _laminar_rectangular_duct_friction_factor(
+            _dp_re, geometry.fin_spacing / geometry.fin_height
+        )
+        _dp_regime = flow_state.get("flow_regime", "laminar")
+        if _dp_regime == "laminar":
+            _dp_f = _f_lam_dp
+        elif _dp_regime == "turbulent":
+            _dp_f = _petukhov_friction(_dp_re)
         else:
-            _dp_f = (0.790 * math.log(_dp_re) - 1.64) ** -2
+            _g = (_dp_re - _RE_TRANS_LO) / (_RE_TRANS_HI - _RE_TRANS_LO)
+            _dp_f = (1.0 - _g) * _f_lam_dp + _g * _petukhov_friction(_dp_re)
         _film_dp = 0.5 * (base_temperature + ambient_temperature)
         _props_dp = air_properties(_film_dp, pressure_pa=pressure_pa)
         _dp_rho = _props_dp.density
@@ -1409,7 +1445,8 @@ def analyze_plate_fin_heatsink(
         _Re = flow_state["reynolds_number"]
         _Pr = _props_cv.prandtl
         _Gz = _Re * _Pr * geometry.hydraulic_diameter / geometry.base_length
-        if _Re < 2300.0:
+        _nu_regime = flow_state.get("flow_regime", "laminar")
+        if _nu_regime == "laminar":
             result["subst_nusselt_number"] = (
                 f"\\mathrm{{Nu}} = \\left(7.54^3 + (1.841\\,\\mathrm{{Gz}}^{{1/3}})^3\\right)^{{1/3}}"
                 f",\\; \\mathrm{{Gz}} = \\mathrm{{Re}}\\,\\mathrm{{Pr}}\\,\\frac{{D_h}}{{L}}"
@@ -1417,12 +1454,23 @@ def analyze_plate_fin_heatsink(
                 f" = {_Gz:.2f}"
                 f",\\; \\mathrm{{Nu}} = {_Nu:.3f}"
             )
-        else:
+        elif _nu_regime == "turbulent":
             result["subst_nusselt_number"] = (
                 f"\\mathrm{{Nu}} = \\frac{{(f/8)(\\mathrm{{Re}} - 1000)\\mathrm{{Pr}}}}"
                 f"{{1 + 12.7\\sqrt{{f/8}}(\\mathrm{{Pr}}^{{2/3}} - 1)}}"
                 f",\\; f = {_dp_f:.5f},\\; \\mathrm{{Re}} = {_Re:.1f},\\; \\mathrm{{Pr}} = {_Pr:.3f}"
                 f",\\; \\mathrm{{Nu}} = {_Nu:.3f}"
+            )
+        else:
+            _gamma_nu = flow_state.get("transition_gamma", 0.5)
+            _nu_l = flow_state.get("nusselt_laminar", _Nu)
+            _nu_t = flow_state.get("nusselt_turbulent", _Nu)
+            result["subst_nusselt_number"] = (
+                f"\\text{{Transition blend (}}\\gamma = {_gamma_nu:.2f}\\text{{)}}: "
+                f"\\mathrm{{Nu}}_{{\\mathrm{{lam}}}} = {_nu_l:.3f},\\; "
+                f"\\mathrm{{Nu}}_{{\\mathrm{{turb}}}} = {_nu_t:.3f},\\; "
+                f"\\mathrm{{Nu}} = (1-\\gamma)\\mathrm{{Nu}}_{{\\mathrm{{lam}}}} + "
+                f"\\gamma\\,\\mathrm{{Nu}}_{{\\mathrm{{turb}}}} = {_Nu:.3f}"
             )
 
     # Reynolds / Rayleigh number derivation.
@@ -1531,17 +1579,22 @@ def analyze_plate_fin_heatsink(
         _sigma = geometry.open_area_ratio
         result["intermediate_values"]["contraction_loss_Kc"] = 0.42 * (1.0 - _sigma**2)
         result["intermediate_values"]["expansion_loss_Ke"] = (1.0 - _sigma) ** 2
-        if _re > 0 and _re < 2300:
-            _beta = min(max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0)
-            _f_poi = 24.0 * (1.0 - 1.3553*_beta + 1.9467*_beta**2
-                             - 1.7012*_beta**3 + 0.9564*_beta**4 - 0.2537*_beta**5)
-            result["intermediate_values"]["darcy_friction_factor"] = _f_poi / _re
-            result["intermediate_values"]["flow_regime"] = "laminar"
-        elif _re >= 2300:
+        _regime = flow_state.get("flow_regime", "laminar" if _re < _RE_TRANS_LO else "turbulent")
+        result["intermediate_values"]["flow_regime"] = _regime
+        _f_lam = _laminar_rectangular_duct_friction_factor(
+            _re, geometry.fin_spacing / geometry.fin_height
+        )
+        if _regime == "laminar":
+            result["intermediate_values"]["darcy_friction_factor"] = _f_lam
+        elif _regime == "turbulent":
+            result["intermediate_values"]["darcy_friction_factor"] = _petukhov_friction(_re)
+        else:
+            _gamma = (_re - _RE_TRANS_LO) / (_RE_TRANS_HI - _RE_TRANS_LO)
+            _f_turb = _petukhov_friction(_re)
             result["intermediate_values"]["darcy_friction_factor"] = (
-                (0.790 * math.log(_re) - 1.64) ** -2
+                (1.0 - _gamma) * _f_lam + _gamma * _f_turb
             )
-            result["intermediate_values"]["flow_regime"] = "turbulent"
+            result["intermediate_values"]["transition_gamma"] = _gamma
 
     # ── Dynamic assumptions list ──
     assumptions: List[str] = [
@@ -1571,17 +1624,27 @@ def analyze_plate_fin_heatsink(
         )
     else:
         _re = flow_state["reynolds_number"]
-        if _re < 2300:
+        _regime = flow_state.get("flow_regime", "laminar")
+        if _regime == "laminar":
             assumptions.append(
-                f"Forced convection: Laminar regime (Re = {_re:.0f} < 2300). "
+                f"Forced convection: Laminar regime (Re = {_re:.0f} < {_RE_TRANS_LO:.0f}). "
                 "Developing-flow Nusselt number from Muzychka/Yovanovich (2004) combined-entry correlation. "
                 "Friction factor from Shah/London rectangular-duct Poiseuille-number fit."
             )
-        else:
+        elif _regime == "turbulent":
             assumptions.append(
-                f"Forced convection: Turbulent regime (Re = {_re:.0f} > 2300). "
+                f"Forced convection: Turbulent regime (Re = {_re:.0f} > {_RE_TRANS_HI:.0f}). "
                 "Gnielinski correlation for Nusselt number. "
                 "Petukhov friction factor used for both heat transfer and pressure drop."
+            )
+        else:
+            _gamma = flow_state.get("transition_gamma", 0.5)
+            assumptions.append(
+                f"Forced convection: Transition regime (Re = {_re:.0f}, "
+                f"{_RE_TRANS_LO:.0f} < Re < {_RE_TRANS_HI:.0f}). "
+                f"Nu and friction factor are linearly blended between laminar "
+                f"(Muzychka/Yovanovich) and turbulent (Gnielinski/Petukhov) "
+                f"correlations (blend factor γ = {_gamma:.2f})."
             )
         if not ducted and flow_state.get("bypass_fraction", 0.0) > 0:
             _bp = flow_state["bypass_fraction"]
@@ -1635,39 +1698,53 @@ def analyze_plate_fin_heatsink(
     result["assumptions"] = assumptions
 
     # ── Correlation details per output ──
+    _corr_regime = flow_state.get("flow_regime", "laminar")
+    if airflow_mode == "natural":
+        _corr_name = (
+            "Bar-Cohen/Rohsenow (1984)" if orientation == "vertical"
+            else "McAdams (1954)"
+        )
+        _corr_ref = (
+            "Bar-Cohen, Rohsenow, J. Heat Transfer 106(1), 1984, doi:10.1115/1.3246622"
+            if orientation == "vertical"
+            else "McAdams, Heat Transmission, 3rd ed., 1954; Incropera et al., Table 9.1"
+        )
+        _corr_valid = (
+            "Isothermal vertical parallel plates, Ra* > 0"
+            if orientation == "vertical"
+            else f"Horizontal plate, 10⁴ < Ra_L < 10¹¹"
+        )
+    elif _corr_regime == "turbulent":
+        _corr_name = "Gnielinski (1976)"
+        _corr_ref = "Gnielinski, Int. Chem. Eng. 16:359, 1976; Petukhov, Adv. Heat Transfer 6:503, 1970"
+        _corr_valid = "2300 < Re < 5×10⁶, 0.5 < Pr < 2000"
+    elif _corr_regime == "transition":
+        _corr_name = "Blended Muzychka-Yovanovich / Gnielinski"
+        _corr_ref = (
+            "Muzychka, Yovanovich, J. Heat Transfer 126(1), 2004; "
+            "Gnielinski, Int. Chem. Eng. 16:359, 1976"
+        )
+        _corr_valid = f"Transition zone, {_RE_TRANS_LO:.0f} < Re < {_RE_TRANS_HI:.0f}"
+    else:
+        _corr_name = "Muzychka/Yovanovich (2004)"
+        _corr_ref = "Muzychka, Yovanovich, J. Heat Transfer 126(1), 2004, doi:10.1115/1.1643752"
+        _corr_valid = f"Developing laminar flow in rectangular ducts, Re < {_RE_TRANS_LO:.0f}"
+
+    if airflow_mode != "natural" and _corr_regime == "transition":
+        _dp_corr_name = "Darcy-Weisbach with blended laminar/Petukhov friction"
+    elif airflow_mode != "natural" and _corr_regime == "turbulent":
+        _dp_corr_name = "Darcy-Weisbach with Petukhov friction factor"
+    else:
+        _dp_corr_name = "Darcy-Weisbach with rectangular-duct Poiseuille correction"
+
     result["correlation_details"] = {
         "convection_coefficient": {
-            "name": (
-                "Bar-Cohen/Rohsenow (1984)" if airflow_mode == "natural" and orientation == "vertical"
-                else "McAdams (1954)" if airflow_mode == "natural"
-                else "Gnielinski" if flow_state["reynolds_number"] >= 2300
-                else "Muzychka/Yovanovich (2004)"
-            ),
-            "reference": (
-                "Bar-Cohen, Rohsenow, J. Heat Transfer 106(1), 1984, doi:10.1115/1.3246622"
-                if airflow_mode == "natural" and orientation == "vertical"
-                else "McAdams, Heat Transmission, 3rd ed., 1954; Incropera et al., Table 9.1"
-                if airflow_mode == "natural"
-                else "Gnielinski, Int. Chem. Eng. 16:359, 1976; Petukhov, Adv. Heat Transfer 6:503, 1970"
-                if flow_state["reynolds_number"] >= 2300
-                else "Muzychka, Yovanovich, J. Heat Transfer 126(1), 2004, doi:10.1115/1.1643752"
-            ),
-            "validity": (
-                "Isothermal vertical parallel plates, Ra* > 0"
-                if airflow_mode == "natural" and orientation == "vertical"
-                else f"Horizontal plate, 10⁴ < Ra_L < 10¹¹"
-                if airflow_mode == "natural"
-                else "2300 < Re < 5×10⁶, 0.5 < Pr < 2000"
-                if flow_state["reynolds_number"] >= 2300
-                else "Developing laminar flow in rectangular ducts, Re < 2300"
-            ),
+            "name": _corr_name,
+            "reference": _corr_ref,
+            "validity": _corr_valid,
         },
         "pressure_drop": {
-            "name": (
-                "Darcy-Weisbach with rectangular-duct Poiseuille correction"
-                if flow_state["reynolds_number"] < 2300
-                else "Darcy-Weisbach with Petukhov friction factor"
-            ),
+            "name": _dp_corr_name,
             "reference": (
                 "Shah, London, Laminar Flow Forced Convection in Ducts, 1978; "
                 "Simons, Electronics Cooling, 2003"
@@ -1701,6 +1778,44 @@ def analyze_plate_fin_heatsink(
     # Builds an HTML-based dependency graph that the JS renderer turns into
     # a "Building Blocks" grid (foundation) plus a nested result tree.
     _dag_foundation: List[Dict[str, Any]] = []
+
+    # Foundation: Geometry & Surface Area
+    _dag_foundation.append({
+        "id": "geometry",
+        "label": "Geometry & Surface Area",
+        "value": (
+            f"A<sub>total</sub> = {geometry.total_area:.5f} m²"
+        ),
+        "steps": [
+            (f"N<sub>ch</sub> = N<sub>fin</sub> − 1 = "
+             f"{geometry.fin_count} − 1 = "
+             f"<strong>{geometry.channel_count}</strong>"),
+            (f"s = (W − N·t) / N<sub>ch</sub> = "
+             f"({geometry.base_width * 1000:.1f} − {geometry.fin_count} × "
+             f"{geometry.fin_thickness * 1000:.2f}) / {geometry.channel_count} = "
+             f"<strong>{geometry.fin_spacing * 1000:.2f} mm</strong>"),
+            (f"D<sub>h</sub> = 2·s·H / (s + H) = "
+             f"2 × {geometry.fin_spacing * 1000:.2f} × "
+             f"{geometry.fin_height * 1000:.1f} / "
+             f"({geometry.fin_spacing * 1000:.2f} + "
+             f"{geometry.fin_height * 1000:.1f}) = "
+             f"<strong>{geometry.hydraulic_diameter * 1000:.2f} mm</strong>"),
+            (f"A<sub>base</sub> = N<sub>ch</sub> · s · L = "
+             f"{geometry.channel_count} × {geometry.fin_spacing:.5f} × "
+             f"{geometry.base_length:.4f} = "
+             f"<strong>{geometry.exposed_base_area:.5f} m²</strong>"),
+            (f"A<sub>fin</sub> = N · (2·H·L + t·L) = "
+             f"{geometry.fin_count} × (2 × {geometry.fin_height:.4f} × "
+             f"{geometry.base_length:.4f} + {geometry.fin_thickness:.4f} × "
+             f"{geometry.base_length:.4f}) = "
+             f"<strong>{geometry.fin_area:.5f} m²</strong>"),
+            (f"A<sub>total</sub> = A<sub>base</sub> + A<sub>fin</sub> = "
+             f"{geometry.exposed_base_area:.5f} + {geometry.fin_area:.5f} = "
+             f"<strong>{geometry.total_area:.5f} m²</strong>"),
+        ],
+        "deps": [],
+        "reference": "Plate-fin geometry. Fin area includes both faces and tip.",
+    })
 
     # Foundation: Air Properties
     _dag_foundation.append({
@@ -1738,7 +1853,7 @@ def analyze_plate_fin_heatsink(
                     (f"V<sub>ch</sub> ≈ {flow_state['channel_velocity']:.3f} m/s "
                      "(chimney-flow estimate)"),
                 ],
-                "deps": ["air_props"],
+                "deps": ["air_props", "geometry"],
                 "reference": "Bar-Cohen/Rohsenow chimney-flow energy balance.",
             })
         else:
@@ -1750,12 +1865,21 @@ def analyze_plate_fin_heatsink(
                     (f"Ra<sub>L</sub> = g·β·ΔT·L<sub>c</sub>³/(ν·α) = "
                      f"<strong>{_Ra_dag:.1f}</strong>"),
                 ],
-                "deps": ["air_props"],
+                "deps": ["air_props", "geometry"],
                 "reference": "McAdams (1954).",
             })
     else:
         _Re_dag = flow_state["reynolds_number"]
-        _regime_dag = "laminar" if _Re_dag < 2300 else "turbulent"
+        _regime_dag = flow_state.get("flow_regime", "laminar")
+        if _regime_dag == "transition":
+            _regime_label = (
+                f"< {_RE_TRANS_HI:.0f} → transition "
+                f"(γ = {flow_state.get('transition_gamma', 0):.2f})"
+            )
+        elif _regime_dag == "turbulent":
+            _regime_label = f"≥ {_RE_TRANS_HI:.0f} → turbulent"
+        else:
+            _regime_label = f"< {_RE_TRANS_LO:.0f} → laminar"
         _dag_foundation.append({
             "id": "flow_regime",
             "label": "Flow Regime",
@@ -1778,9 +1902,9 @@ def analyze_plate_fin_heatsink(
                  f"{geometry.hydraulic_diameter:.5f} / "
                  f"{props_final.dynamic_viscosity:.3e} = "
                  f"<strong>{_Re_dag:.0f}</strong> "
-                 f"({'< 2300 → laminar' if _Re_dag < 2300 else '≥ 2300 → turbulent'})"),
+                 f"({_regime_label})"),
             ],
-            "deps": ["air_props"],
+            "deps": ["air_props", "geometry"],
             "reference": None,
         })
 
@@ -1820,7 +1944,7 @@ def analyze_plate_fin_heatsink(
             _Re_dag * _Pr_dag * geometry.hydraulic_diameter
             / geometry.base_length
         )
-        if _Re_dag < 2300:
+        if _regime_dag == "laminar":
             _conv_steps_dag = [
                 (f"Gz = Re · Pr · D<sub>h</sub>/L = "
                  f"{_Re_dag:.0f} × {_Pr_dag:.3f} × "
@@ -1838,8 +1962,8 @@ def analyze_plate_fin_heatsink(
                 "Muzychka/Yovanovich (2004). "
                 "Developing laminar flow in rectangular ducts."
             )
-        else:
-            _f_gn = (0.790 * math.log(_Re_dag) - 1.64) ** -2
+        elif _regime_dag == "turbulent":
+            _f_gn = _petukhov_friction(_Re_dag)
             _conv_steps_dag = [
                 f"f = (0.790 · ln(Re) − 1.64)⁻² = {_f_gn:.5f}",
                 (f"Nu = (f/8)(Re−1000)Pr / "
@@ -1852,7 +1976,34 @@ def analyze_plate_fin_heatsink(
             ]
             _conv_ref_dag = (
                 "Gnielinski (1976). "
-                "Turbulent flow, 2300 < Re < 5×10⁶."
+                f"Turbulent flow, Re > {_RE_TRANS_HI:.0f}."
+            )
+        else:
+            _gamma_dag = flow_state.get("transition_gamma", 0.5)
+            _nu_l_dag = flow_state.get("nusselt_laminar", _Nu_dag)
+            _nu_t_dag = flow_state.get("nusselt_turbulent", _Nu_dag)
+            _conv_steps_dag = [
+                (f"Gz = Re · Pr · D<sub>h</sub>/L = "
+                 f"{_Re_dag:.0f} × {_Pr_dag:.3f} × "
+                 f"{geometry.hydraulic_diameter:.5f} / "
+                 f"{geometry.base_length:.4f} = "
+                 f"<strong>{_Gz_dag:.1f}</strong>"),
+                (f"Nu<sub>lam</sub> = (7.54³ + (1.841 · Gz<sup>1/3</sup>)³)<sup>1/3</sup>"
+                 f" = {_nu_l_dag:.3f}"),
+                (f"Nu<sub>turb</sub> = Gnielinski = {_nu_t_dag:.3f}"),
+                (f"γ = (Re − {_RE_TRANS_LO:.0f}) / "
+                 f"({_RE_TRANS_HI:.0f} − {_RE_TRANS_LO:.0f}) = "
+                 f"{_gamma_dag:.3f}"),
+                (f"Nu = (1−γ)·Nu<sub>lam</sub> + γ·Nu<sub>turb</sub> = "
+                 f"<strong>{_Nu_dag:.3f}</strong>"),
+                (f"h<sub>conv</sub> = Nu · k<sub>air</sub> / D<sub>h</sub> = "
+                 f"{_Nu_dag:.3f} × {_k_air_dag:.4f} / "
+                 f"{geometry.hydraulic_diameter:.5f} = "
+                 f"<strong>{_h_conv_dag:.2f} W/m²K</strong>"),
+            ]
+            _conv_ref_dag = (
+                "Muzychka/Yovanovich (2004) + Gnielinski (1976). "
+                f"Transition blend, {_RE_TRANS_LO:.0f} < Re < {_RE_TRANS_HI:.0f}."
             )
     _dag_foundation.append({
         "id": "h_conv",
@@ -1912,7 +2063,7 @@ def analyze_plate_fin_heatsink(
              f"(1 − {final_state['fin_efficiency']:.3f}) = "
              f"<strong>{final_state['overall_efficiency']:.3f}</strong>"),
         ],
-        "deps": ["h_conv", "h_rad"],
+        "deps": ["h_conv", "h_rad", "geometry"],
         "reference": "Incropera et al., Fundamentals of Heat and Mass Transfer.",
     })
 
@@ -1925,16 +2076,19 @@ def analyze_plate_fin_heatsink(
         _sigma_dag = geometry.open_area_ratio
         _dag_Kc = 0.42 * (1.0 - _sigma_dag ** 2)
         _dag_Ke = (1.0 - _sigma_dag) ** 2
-        if _Re_dag > 0 and _Re_dag < 2300:
-            _beta_dag = min(
-                max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0
-            )
-            _poi_dag = 24.0 * (
-                1.0 - 1.3553 * _beta_dag + 1.9467 * _beta_dag ** 2
-                - 1.7012 * _beta_dag ** 3 + 0.9564 * _beta_dag ** 4
-                - 0.2537 * _beta_dag ** 5
-            )
-            _dag_f = _poi_dag / _Re_dag
+        _f_lam_dag = _laminar_rectangular_duct_friction_factor(
+            _Re_dag, geometry.fin_spacing / geometry.fin_height
+        )
+        _beta_dag = min(
+            max(geometry.fin_spacing / geometry.fin_height, 1e-6), 1.0
+        )
+        _poi_dag = 24.0 * (
+            1.0 - 1.3553 * _beta_dag + 1.9467 * _beta_dag ** 2
+            - 1.7012 * _beta_dag ** 3 + 0.9564 * _beta_dag ** 4
+            - 0.2537 * _beta_dag ** 5
+        )
+        if _regime_dag == "laminar":
+            _dag_f = _f_lam_dag
             _friction_steps_dag = [
                 (f"β = s/H = {geometry.fin_spacing:.5f} / "
                  f"{geometry.fin_height:.4f} = {_beta_dag:.3f}"),
@@ -1943,13 +2097,29 @@ def analyze_plate_fin_heatsink(
                  f"<strong>{_dag_f:.5f}</strong>"),
             ]
             _friction_ref_dag = "Shah & London (1978), Kays & London (1984)."
-        else:
-            _dag_f = (0.790 * math.log(_Re_dag) - 1.64) ** -2
+        elif _regime_dag == "turbulent":
+            _dag_f = _petukhov_friction(_Re_dag)
             _friction_steps_dag = [
                 (f"f = (0.790 · ln({_Re_dag:.0f}) − 1.64)⁻² = "
                  f"<strong>{_dag_f:.5f}</strong>"),
             ]
             _friction_ref_dag = "Petukhov (1970), Kays & London (1984)."
+        else:
+            _g_dag = flow_state.get("transition_gamma", 0.5)
+            _f_turb_dag = _petukhov_friction(_Re_dag)
+            _dag_f = (1.0 - _g_dag) * _f_lam_dag + _g_dag * _f_turb_dag
+            _friction_steps_dag = [
+                (f"f<sub>lam</sub> = {_poi_dag:.2f}/{_Re_dag:.0f} = "
+                 f"{_f_lam_dag:.5f}"),
+                (f"f<sub>turb</sub> = (0.790 · ln({_Re_dag:.0f}) − 1.64)⁻² = "
+                 f"{_f_turb_dag:.5f}"),
+                (f"f = (1−γ)·f<sub>lam</sub> + γ·f<sub>turb</sub> = "
+                 f"<strong>{_dag_f:.5f}</strong> (γ = {_g_dag:.3f})"),
+            ]
+            _friction_ref_dag = (
+                "Shah & London (1978) + Petukhov (1970). "
+                "Blended in transition zone."
+            )
         _friction_steps_dag.extend([
             f"σ = A<sub>open</sub>/A<sub>frontal</sub> = {_sigma_dag:.3f}",
             (f"K<sub>c</sub> = 0.42(1 − σ²) = "
@@ -2041,15 +2211,70 @@ def analyze_plate_fin_heatsink(
     else:
         _above_base = _base_node
 
-    # Interface resistance
+    # Interface resistance — build derivation steps from tim_info if available
+    _tim_steps: List[str] = []
+    _ti = tim_info or {}
+    _tim_mode = _ti.get("mode", "absolute")
+    if _tim_mode == "none":
+        _tim_steps.append(
+            "R<sub>θ,cs</sub> = 0 K/W (no TIM specified)"
+        )
+    elif _tim_mode == "area_normalized":
+        _r_area = _ti.get("area_resistance", 0.0)
+        _contact_m2 = _ti.get("contact_area_m2", 0.0)
+        _contact_cm2 = _contact_m2 * 1e4
+        _tim_steps.append(
+            f"R<sub>θ,cs</sub> = R″ / A"
+        )
+        _tim_steps.append(
+            f"R″ = {_r_area:.2f} K·cm²/W (from TIM datasheet)"
+        )
+        _cl = _ti.get("contact_length_m", 0.0)
+        _cw = _ti.get("contact_width_m", 0.0)
+        _tim_steps.append(
+            f"A = {_cl * 1000:.1f} mm × {_cw * 1000:.1f} mm = "
+            f"{_contact_cm2:.2f} cm²"
+            if _contact_m2 > 0 else "A = 0 cm²"
+        )
+        _tim_steps.append(
+            f"= {_r_area:.2f} / {_contact_cm2:.2f} = "
+            f"<strong>{interface_resistance:.4f} K/W</strong>"
+        )
+    elif _tim_mode == "conductivity":
+        _k_tim = _ti.get("conductivity", 0.0)
+        _blt_mm = _ti.get("bondline_mm", 0.0)
+        _blt_m = _blt_mm / 1000.0
+        _contact_m2 = _ti.get("contact_area_m2", 0.0)
+        _contact_cm2 = _contact_m2 * 1e4
+        _tim_steps.append(
+            f"R<sub>θ,cs</sub> = BLT / (k · A)"
+        )
+        _tim_steps.append(
+            f"k = {_k_tim:.2f} W/m·K, BLT = {_blt_mm:.3f} mm "
+            f"({_blt_m:.6f} m)"
+        )
+        _cl = _ti.get("contact_length_m", 0.0)
+        _cw = _ti.get("contact_width_m", 0.0)
+        _tim_steps.append(
+            f"A = {_cl * 1000:.1f} mm × {_cw * 1000:.1f} mm = "
+            f"{_contact_cm2:.2f} cm² ({_contact_m2:.6f} m²)"
+        )
+        _tim_steps.append(
+            f"= {_blt_m:.6f} / ({_k_tim:.2f} × {_contact_m2:.6f}) = "
+            f"<strong>{interface_resistance:.4f} K/W</strong>"
+        )
+    else:
+        # absolute mode — user entered the value directly
+        _tim_steps.append(
+            f"R<sub>θ,cs</sub> = {interface_resistance:.4f} K/W "
+            "(entered directly as thermal impedance)"
+        )
+
     _interface_node: Dict[str, Any] = {
         "id": "interface_r",
         "label": "Interface R<sub>θ,cs</sub>",
         "value": f"{interface_resistance:.4f} K/W",
-        "steps": [
-            (f"R<sub>θ,cs</sub> = {interface_resistance:.4f} K/W "
-             "(from TIM input)"),
-        ],
+        "steps": _tim_steps,
         "foundation_refs": [],
         "children": [],
         "tim_derivation": True,

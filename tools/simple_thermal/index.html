@@ -1514,10 +1514,28 @@
                     </div>
 
                     <button type="submit" class="btn-primary" id="calculate-btn" disabled>Calculate</button>
-                    <button type="button" id="export-btn" disabled
-                        style="background:var(--bg-card);color:var(--text-color);border:1px solid var(--border-color);padding:10px 24px;border-radius:var(--border-radius);cursor:pointer;font-size:0.95rem;margin-top:8px;">
-                        Export Results (JSON)
-                    </button>
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
+                        <span style="font-size:0.82rem;color:var(--text-light);margin-right:4px;">Inputs:</span>
+                        <button type="button" id="save-inputs-btn"
+                            style="background:var(--bg-card);color:var(--text-color);border:1px solid var(--border-color);padding:6px 14px;border-radius:var(--border-radius);cursor:pointer;font-size:0.82rem;">
+                            Save
+                        </button>
+                        <button type="button" id="load-inputs-btn"
+                            style="background:var(--bg-card);color:var(--text-color);border:1px solid var(--border-color);padding:6px 14px;border-radius:var(--border-radius);cursor:pointer;font-size:0.82rem;">
+                            Load
+                        </button>
+                        <input type="file" id="load-inputs-file" accept=".json" style="display:none;">
+                    </div>
+                    <details style="margin-top:10px;font-size:0.82rem;">
+                        <summary style="cursor:pointer;color:var(--text-light);user-select:none;">Sample Test Cases</summary>
+                        <ul style="margin:6px 0 0 0;padding-left:18px;line-height:1.9;">
+                            <li><a href="#" class="load-sample" data-src="test-cases/natural_convection_baseline.json">Natural Convection Baseline (20W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/forced_convection_high_power.json">Forced Convection — High Power (50W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/fan_curve_mode.json">Fan Curve — 40mm Axial Fan (25W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/negative_budget_edge_case.json">Negative Budget — Impossible Design</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/bar_cohen_natural_convection.json">Bar-Cohen Natural Convection Benchmark</a></li>
+                        </ul>
+                    </details>
                 </form>
             </section>
 
@@ -1573,6 +1591,11 @@
                         <h4 style="margin:0 0 10px 0;font-size:0.9rem;">Assumptions &amp; Correlations Used</h4>
                         <ul id="results-assumptions-list" style="margin:0;padding-left:20px;font-size:0.82rem;color:var(--text-light);line-height:1.65;"></ul>
                     </div>
+
+                    <button type="button" id="export-btn" disabled
+                        style="background:var(--bg-card);color:var(--text-color);border:1px solid var(--border-color);padding:8px 18px;border-radius:var(--border-radius);cursor:pointer;font-size:0.85rem;margin-top:16px;">
+                        Export Results (JSON)
+                    </button>
                 </div>
 
                 <div id="spreading" class="tab-content">
@@ -2527,9 +2550,12 @@
         function updateAirflowVisibility() {
             const mode = document.getElementById('airflow_mode').value;
             document.querySelectorAll('.forced-only').forEach((element) => {
-                element.style.display = mode === 'forced' ? 'grid' : 'none';
+                // Elements with both classes should show in either mode
+                const alsoFan = element.classList.contains('fan-only');
+                const show = mode === 'forced' || (alsoFan && mode === 'fan_curve');
+                element.style.display = show ? 'grid' : 'none';
             });
-            document.querySelectorAll('.fan-only').forEach((element) => {
+            document.querySelectorAll('.fan-only:not(.forced-only)').forEach((element) => {
                 element.style.display = mode === 'fan_curve' ? 'grid' : 'none';
             });
             const summary = document.getElementById('cooling-mode-summary');
@@ -2578,6 +2604,29 @@
                 return (k > 0 && areaM2 > 0) ? blt / (k * areaM2) : 0;
             }
             return 0;
+        }
+
+        function gatherTimInfo(inputs) {
+            const mode = document.getElementById('tim_input_mode').value;
+            // Contact area: source footprint if defined, else full base
+            const srcA = inputs.source_length * inputs.source_width;
+            const baseA = inputs.base_length * inputs.base_width;
+            const contactArea = (srcA > 0) ? srcA : baseA;
+            const contactL = (srcA > 0) ? inputs.source_length : inputs.base_length;
+            const contactW = (srcA > 0) ? inputs.source_width : inputs.base_width;
+            const info = {
+                mode: mode,
+                contact_area_m2: contactArea,
+                contact_length_m: contactL,
+                contact_width_m: contactW,
+            };
+            if (mode === 'area_normalized') {
+                info.area_resistance = parseFloat(document.getElementById('tim_area_resistance').value) || 0;
+            } else if (mode === 'conductivity') {
+                info.conductivity = parseFloat(document.getElementById('tim_conductivity').value) || 0;
+                info.bondline_mm = parseFloat(document.getElementById('tim_bondline').value) || 0;
+            }
+            return info;
         }
 
         function populateTimDerivation(stepId, substId) {
@@ -3921,6 +3970,148 @@
             };
         }
 
+        /**
+         * Gathers raw form values (in display units, no conversion) for save/load round-tripping.
+         */
+        function gatherRawInputs() {
+            const fields = {};
+            // All numeric inputs
+            [
+                'heat_load', 'ambient_temperature', 'target_junction_temperature',
+                'base_length', 'base_width', 'base_thickness',
+                'fin_height', 'fin_thickness', 'fin_count',
+                'material_conductivity', 'surface_emissivity',
+                'approach_velocity', 'volumetric_flow_rate',
+                'fan_max_pressure', 'fan_max_flow_rate',
+                'interface_resistance', 'junction_to_case_resistance', 'pressure_pa',
+                'source_length', 'source_width', 'source_x', 'source_y',
+                'tim_area_resistance', 'tim_conductivity', 'tim_bondline',
+                'fin_spacing_input'
+            ].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) fields[id] = el.value;
+            });
+            // All select/dropdown inputs
+            [
+                'airflow_mode', 'orientation', 'material_preset',
+                'tim_input_mode', 'ducted'
+            ].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) fields[id] = el.value;
+            });
+            fields._fin_layout_mode = finLayoutMode;
+            return fields;
+        }
+
+        function saveInputsToFile() {
+            const data = {
+                tool: 'Heatsink Designer',
+                type: 'saved_inputs',
+                timestamp: new Date().toISOString(),
+                inputs: gatherRawInputs()
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'heatsink-inputs.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Fields whose form display units are mm but gatherInputs() converts to m
+        const MM_FIELDS = new Set([
+            'base_length', 'base_width', 'base_thickness',
+            'fin_height', 'fin_thickness',
+            'source_length', 'source_width', 'source_x', 'source_y'
+        ]);
+
+        function loadInputsFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const inputs = data.inputs || data;
+                    // Detect format: saved_inputs has raw display-unit strings,
+                    // export results has converted m values from gatherInputs().
+                    const isRaw = data.type === 'saved_inputs';
+                    applyLoadedInputs(inputs, isRaw);
+                } catch (err) {
+                    alert('Could not parse input file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function applyLoadedInputs(inputs, isRaw) {
+            // All numeric input field IDs
+            const numericFields = [
+                'heat_load', 'ambient_temperature', 'target_junction_temperature',
+                'base_length', 'base_width', 'base_thickness',
+                'fin_height', 'fin_thickness', 'fin_count',
+                'material_conductivity', 'surface_emissivity',
+                'approach_velocity', 'volumetric_flow_rate',
+                'fan_max_pressure', 'fan_max_flow_rate',
+                'interface_resistance', 'junction_to_case_resistance', 'pressure_pa',
+                'source_length', 'source_width', 'source_x', 'source_y',
+                'tim_area_resistance', 'tim_conductivity', 'tim_bondline',
+                'fin_spacing_input'
+            ];
+            numericFields.forEach(id => {
+                if (inputs[id] !== undefined) {
+                    let val = inputs[id];
+                    // If loaded from an export (not raw), convert m → mm for length fields
+                    if (!isRaw && MM_FIELDS.has(id)) {
+                        val = parseFloat(val) * 1000;
+                    }
+                    const el = document.getElementById(id);
+                    if (el) el.value = val;
+                }
+            });
+            // Set selects
+            [
+                'airflow_mode', 'orientation', 'material_preset',
+                'tim_input_mode', 'ducted'
+            ].forEach(id => {
+                if (inputs[id] !== undefined) {
+                    const el = document.getElementById(id);
+                    if (el) el.value = inputs[id];
+                }
+            });
+            // Sync fin spacing slider with its numeric input
+            const spacingRange = document.getElementById('fin_spacing_range');
+            const spacingInput = document.getElementById('fin_spacing_input');
+            if (spacingRange && spacingInput) spacingRange.value = spacingInput.value;
+
+            // Restore fin layout mode
+            if (inputs._fin_layout_mode) {
+                finLayoutMode = inputs._fin_layout_mode;
+                const btnCount = document.getElementById('fin-mode-count');
+                const btnSpacing = document.getElementById('fin-mode-spacing');
+                const wrapCount = document.getElementById('fin-wrap-count');
+                const wrapSpacing = document.getElementById('fin-wrap-spacing');
+                if (finLayoutMode === 'spacing') {
+                    btnSpacing?.classList.add('active');
+                    btnCount?.classList.remove('active');
+                    if (wrapSpacing) wrapSpacing.style.display = 'block';
+                    if (wrapCount) wrapCount.style.display = 'none';
+                } else {
+                    btnCount?.classList.add('active');
+                    btnSpacing?.classList.remove('active');
+                    if (wrapCount) wrapCount.style.display = 'block';
+                    if (wrapSpacing) wrapSpacing.style.display = 'none';
+                }
+            }
+
+            // Trigger UI updates for conditional visibility and previews
+            updateAirflowVisibility();
+            updateTimInputVisibility();
+            if (typeof updateFinLayoutReadouts === 'function') updateFinLayoutReadouts();
+            if (typeof renderGeometryPreview === 'function') renderGeometryPreview();
+            if (typeof renderThermalPathPrimer === 'function') renderThermalPathPrimer();
+            markResultsStale();
+        }
+
         function bindThermalPrimer() {
             [
                 'heat_load',
@@ -3968,6 +4159,8 @@
             button.textContent = 'Calculating...';
             try {
                 const inputs = gatherInputs();
+                const timInfo = gatherTimInfo(inputs);
+                const timInfoPy = pyodide.toPy(timInfo);
                 const resultProxy = await withTimeout(() => pyToolModule.analyze_plate_fin_heatsink(
                     inputs.heat_load,
                     inputs.ambient_temperature,
@@ -3991,7 +4184,8 @@
                     inputs.orientation,
                     inputs.source_length,
                     inputs.source_width,
-                    inputs.ducted
+                    inputs.ducted,
+                    timInfoPy
                 ));
                 const rawResults = resultProxy.toJs({ dict_converter: Object.fromEntries });
                 resultProxy.destroy();
@@ -4176,6 +4370,30 @@
                     a.download = 'heatsink-design-export.json';
                     a.click();
                     URL.revokeObjectURL(url);
+                });
+                document.getElementById('save-inputs-btn').addEventListener('click', saveInputsToFile);
+                document.getElementById('load-inputs-btn').addEventListener('click', () => {
+                    document.getElementById('load-inputs-file').click();
+                });
+                document.getElementById('load-inputs-file').addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        loadInputsFromFile(e.target.files[0]);
+                        e.target.value = ''; // allow re-loading the same file
+                    }
+                });
+                document.querySelectorAll('.load-sample').forEach(link => {
+                    link.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const src = link.dataset.src;
+                        try {
+                            const resp = await fetch(src);
+                            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                            const data = await resp.json();
+                            applyLoadedInputs(data.parameters, true);
+                        } catch (err) {
+                            alert('Failed to load sample: ' + err.message);
+                        }
+                    });
                 });
                 document.querySelectorAll('.input-tab').forEach((button) => {
                     button.addEventListener('click', () => openInputSection(button.dataset.section));

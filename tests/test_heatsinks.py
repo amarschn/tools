@@ -631,36 +631,9 @@ def test_radiation_significant_at_high_emissivity_low_load() -> None:
     assert result_low_e["base_temperature"] > result["base_temperature"]
 
 
-def test_benchmark_natural_convection_against_bar_cohen_example() -> None:
-    """
-    Compare against Bar-Cohen & Rohsenow (1984) representative example (E1/A8).
-
-    Vertical aluminum plate-fin heatsink:
-      base: 150mm x 100mm x 6mm
-      fins: 25mm tall, 1.5mm thick, 12 fins
-      heat load: 10W, ambient: 25 C
-
-    This large heatsink (150x100mm, 12 fins, ~7.5mm spacing) with radiation
-    should produce a relatively low R_sink in the 0.8-3.0 K/W range.
-    """
-    result = analyze_plate_fin_heatsink(
-        heat_load=10.0,
-        ambient_temperature=25.0,
-        target_junction_temperature=200.0,
-        base_length=0.150,
-        base_width=0.100,
-        base_thickness=0.006,
-        fin_height=0.025,
-        fin_thickness=0.0015,
-        fin_count=12,
-        material_conductivity=201.0,
-        surface_emissivity=0.85,
-        airflow_mode="natural",
-    )
-    # Large heatsink with radiation — generous range for correlation-based model
-    assert 0.5 < result["sink_thermal_resistance"] < 3.0
-    # Radiation should contribute meaningfully at 0.85 emissivity
-    assert result["radiation_heat_rejected"] > 0.5
+# Benchmark test for Bar-Cohen natural convection has been migrated to
+# tools/simple_thermal/test-cases/bar_cohen_natural_convection.json
+# and is now run by tests/test_heatsink_benchmarks.py.
 
 
 # --- Spreading solver tests ---
