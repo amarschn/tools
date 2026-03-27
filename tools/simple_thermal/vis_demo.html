@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heatsink Visualization Demo (Interactive 3D)</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+        :root {
+            /* Polestar-inspired minimal palette */
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --info-color: #3b82f6;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #d1d5db;
+            --bg-color: #e5e7eb;
+            --bg-card: #ffffff;
+            
+            --iso-top: #f3f4f6;
+            --iso-stroke: #374151;
+
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --border-radius: 8px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary-light: #1f2937;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #111827;
+                --bg-card: #1f2937;
+                --iso-top: #4b5563;
+                --iso-stroke: #9ca3af;
+                --accent-color: #60a5fa;
+            }
+            body { background-color: var(--bg-color); color: var(--text-color); }
+        }
+
+        body {
+            font-family: var(--font-sans);
+            margin: 0;
+            padding: 40px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border-color);
+        }
+
+        h2 { margin-top: 0; font-weight: 600; font-size: 1.25rem; margin-bottom: 20px; }
+
+        .control-group { margin-bottom: 16px; }
+        .control-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-color);
+        }
+        .input-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .input-row input[type="number"], .input-row select {
+            width: 70px;
+            padding: 6px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+        }
+        .input-row select {
+            width: 100%;
+            font-family: var(--font-sans);
+        }
+        .input-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-color);
+        }
+
+        /* Segmented Control for Fin Mode */
+        .segmented-control {
+            display: flex;
+            background: var(--bg-color);
+            border-radius: 6px;
+            padding: 3px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+        }
+        .segmented-control button {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .segmented-control button.active {
+            background: var(--bg-card);
+            color: var(--text-color);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .views-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .views-grid-2d {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+        .view-panel {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 320px;
+            flex: 1; 
+        }
+
+        .view-panel-3d {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        min-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        opacity 0.2s ease,
+                        padding 0.3s ease,
+                        margin 0.3s ease,
+                        border-width 0.3s ease;
+            min-height: 420px;
+            max-height: 800px;
+            opacity: 1;
+        }
+
+        .view-panel-3d.collapsed {
+            min-height: 0;
+            max-height: 0;
+            opacity: 0;
+            border-width: 0;
+            margin-top: -24px; 
+            pointer-events: none;
+        }
+
+        #container-3d {
+            width: 100%;
+            height: 100%;
+            min-height: 420px;
+            cursor: grab;
+        }
+        #container-3d:active { cursor: grabbing; }
+
+        .view-label {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            background: var(--bg-card);
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        .toggle-3d-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: background 0.2s, border-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toggle-3d-btn:hover { background: var(--primary-light); border-color: var(--text-light); }
+        .toggle-3d-btn.active { background: var(--accent-color); color: var(--bg-card); border-color: var(--accent-color); }
+        
+        .interaction-hint {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            font-size: 0.75rem;
+            color: var(--text-light);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        svg { width: 100%; height: 100%; display: block; }
+        .dim-line { stroke: var(--text-color); stroke-width: 1.2; stroke-dasharray: 4,4; }
+        .dim-tick { stroke: var(--text-color); stroke-width: 1.5; }
+        .dim-ext { stroke: var(--text-light); stroke-width: 1.2; stroke-opacity: 0.4; }
+        .dim-text { fill: var(--text-color); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+        
+        /* Opaque background pill behind dimension text so the extension lines don't run through it */
+        .dim-bg { fill: var(--primary-light); }
+        
+        .flow-arrow { stroke: var(--info-color); stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .flow-text { fill: var(--info-color); font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+        
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Controls -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Geometry (mm)</h2>
+            </div>
+
+            <div class="control-group" style="margin-bottom: 24px;">
+                <label>Material</label>
+                <div class="input-row">
+                    <select id="inp-mat">
+                        <option value="aluminum">Aluminum</option>
+                        <option value="copper">Copper</option>
+                        <option value="black_anodized">Black Anodized</option>
+                        <option value="custom">Custom (White)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Base Length (L)</label>
+                <div class="input-row">
+                    <input type="number" id="num-L" value="100" step="1">
+                    <input type="range" id="inp-L" min="20" max="300" value="100" step="1">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Base Width (W)</label>
+                <div class="input-row">
+                    <input type="number" id="num-W" value="80" step="1">
+                    <input type="range" id="inp-W" min="20" max="250" value="80" step="1">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Base Thickness (Tb)</label>
+                <div class="input-row">
+                    <input type="number" id="num-Tb" value="5" step="0.5">
+                    <input type="range" id="inp-Tb" min="1" max="20" value="5" step="0.5">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Fin Height (Hf)</label>
+                <div class="input-row">
+                    <input type="number" id="num-Hf" value="35" step="1">
+                    <input type="range" id="inp-Hf" min="5" max="100" value="35" step="1">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Fin Thickness (Tf)</label>
+                <div class="input-row">
+                    <input type="number" id="num-Tf" value="1.5" step="0.1">
+                    <input type="range" id="inp-Tf" min="0.3" max="10" value="1.5" step="0.1">
+                </div>
+            </div>
+
+            <!-- New Fin Layout Segmented Control -->
+            <div class="control-group">
+                <label>Fin Layout</label>
+                <div class="segmented-control">
+                    <button class="active" id="mode-count">By Count (N)</button>
+                    <button id="mode-spacing">By Spacing (s)</button>
+                </div>
+
+                <!-- Count Mode -->
+                <div id="wrap-count">
+                    <div class="input-row">
+                        <input type="number" id="num-N" value="12" step="1">
+                        <input type="range" id="inp-N" min="2" max="60" value="12" step="1">
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 8px;">
+                        Actual Spacing (s): <span id="computed-s" style="font-family: var(--font-mono); color: var(--text-color); font-weight: 500;">--</span>
+                    </div>
+                </div>
+
+                <!-- Spacing Mode -->
+                <div id="wrap-spacing" style="display: none;">
+                    <div class="input-row">
+                        <input type="number" id="num-s" value="6.0" step="0.1">
+                        <input type="range" id="inp-s" min="1.0" max="50.0" value="6.0" step="0.1">
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 8px;">
+                        Fitted Count (N): <span id="computed-N" style="font-family: var(--font-mono); color: var(--text-color); font-weight: 500;">--</span>
+                        <div style="margin-top: 4px; font-size: 0.75rem;">(Actual spacing: <span id="computed-s-actual">--</span>)</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid var(--border-color); margin: 24px 0;">
+            
+            <div style="display: flex; justify-content: center;">
+                <button class="toggle-3d-btn" id="toggle-3d-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                    <span>View in 3D</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Previews Container -->
+        <div class="views-container">
+            <!-- 2D Views always visible at the top -->
+            <div class="views-grid-2d">
+                <div class="view-panel">
+                    <div class="view-label">Front Section</div>
+                    <svg id="svg-front"></svg>
+                </div>
+                <div class="view-panel">
+                    <div class="view-label">Top Plan</div>
+                    <svg id="svg-top"></svg>
+                </div>
+            </div>
+
+            <!-- Collapsible 3D View below -->
+            <div class="view-panel-3d collapsed" id="panel-3d">
+                <div class="view-label">Interactive 3D</div>
+                <div id="container-3d"></div>
+                <div class="interaction-hint">Left Click: Rotate &bull; Right Click: Pan &bull; Scroll: Zoom</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // State
+        const state = { 
+            L: 100, W: 80, Tb: 5, Hf: 35, Tf: 1.5, mat: 'aluminum',
+            finMode: 'count', // 'count' or 'spacing'
+            N: 12,            // Active N (used for drawing)
+            s_target: 6.0,    // Target spacing when in spacing mode
+            s_actual: 5.63    // Actual physical spacing 
+        };
+
+        const MATERIALS = {
+            aluminum: { three: { color: '#c0c5ce', roughness: 0.3, metalness: 0.8 }, svg: '#e2e8f0', stroke: '#64748b' },
+            copper: { three: { color: '#b87333', roughness: 0.35, metalness: 0.9 }, svg: '#fed7aa', stroke: '#c2410c' },
+            black_anodized: { three: { color: '#1a1a1a', roughness: 0.5, metalness: 0.2 }, svg: '#334155', stroke: '#0f172a' },
+            custom: { three: { color: '#f8fafc', roughness: 0.8, metalness: 0.1 }, svg: '#ffffff', stroke: '#cbd5e1' }
+        };
+
+        // --- Layout/Mode Toggles ---
+        const panel3d = document.getElementById('panel-3d');
+        const toggleBtn = document.getElementById('toggle-3d-btn');
+        let is3DVisible = false;
+
+        toggleBtn.addEventListener('click', () => {
+            is3DVisible = !is3DVisible;
+            if (is3DVisible) {
+                panel3d.classList.remove('collapsed');
+                toggleBtn.classList.add('active');
+                toggleBtn.querySelector('span').textContent = 'Hide 3D View';
+                setTimeout(() => {
+                    if (panel3d.clientWidth > 0) {
+                        camera.aspect = panel3d.clientWidth / panel3d.clientHeight;
+                        camera.updateProjectionMatrix();
+                        renderer.setSize(panel3d.clientWidth, panel3d.clientHeight);
+                    }
+                }, 310);
+            } else {
+                panel3d.classList.add('collapsed');
+                toggleBtn.classList.remove('active');
+                toggleBtn.querySelector('span').textContent = 'View in 3D';
+            }
+        });
+
+        // Fin Mode Segmented Control
+        const btnCount = document.getElementById('mode-count');
+        const btnSpacing = document.getElementById('mode-spacing');
+        const wrapCount = document.getElementById('wrap-count');
+        const wrapSpacing = document.getElementById('wrap-spacing');
+
+        btnCount.addEventListener('click', () => {
+            state.finMode = 'count';
+            btnCount.classList.add('active');
+            btnSpacing.classList.remove('active');
+            wrapCount.style.display = 'block';
+            wrapSpacing.style.display = 'none';
+            // Snap target spacing to current actual spacing so transition is smooth
+            state.s_target = state.s_actual;
+            document.getElementById('num-s').value = state.s_target.toFixed(1);
+            document.getElementById('inp-s').value = state.s_target.toFixed(1);
+            updateState();
+        });
+
+        btnSpacing.addEventListener('click', () => {
+            state.finMode = 'spacing';
+            btnSpacing.classList.add('active');
+            btnCount.classList.remove('active');
+            wrapSpacing.style.display = 'block';
+            wrapCount.style.display = 'none';
+            // Start spacing mode with the current actual spacing
+            state.s_target = parseFloat((state.s_actual || 6.0).toFixed(1));
+            document.getElementById('num-s').value = state.s_target;
+            document.getElementById('inp-s').value = state.s_target;
+            updateState();
+        });
+
+
+        // Bind 2-way inputs
+        ['L', 'W', 'Tb', 'Hf', 'Tf', 'N', 's'].forEach(p => {
+            const range = document.getElementById(`inp-${p}`);
+            const num = document.getElementById(`num-${p}`);
+            if(!range || !num) return;
+            
+            range.addEventListener('input', (e) => {
+                num.value = e.target.value;
+                updateState();
+            });
+            num.addEventListener('input', (e) => {
+                let val = parseFloat(e.target.value);
+                if (isNaN(val)) return;
+                range.value = val;
+                updateState();
+            });
+        });
+
+        document.getElementById('inp-mat').addEventListener('change', (e) => {
+            state.mat = e.target.value;
+            update3DMaterial();
+            renderSVG();
+        });
+
+        function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+        // --- 3D Scene Setup ---
+        const container3d = document.getElementById('container-3d');
+        const scene = new THREE.Scene();
+        const updateBg = () => { scene.background = new THREE.Color(getCssVar('--primary-light')); };
+        updateBg();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateBg);
+
+        const camera = new THREE.PerspectiveCamera(45, container3d.clientWidth / container3d.clientHeight || 1, 0.1, 2000);
+        camera.position.set(150, 100, 150);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container3d.clientWidth || 800, container3d.clientHeight || 420);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container3d.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(100, 200, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.left = -150;
+        dirLight.shadow.camera.right = 150;
+        dirLight.shadow.camera.top = 150;
+        dirLight.shadow.camera.bottom = -150;
+        scene.add(dirLight);
+        const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.3);
+        fillLight.position.set(-100, 50, -100);
+        scene.add(fillLight);
+
+        // Grid/Floor
+        const gridHelper = new THREE.GridHelper(400, 20, 0x000000, 0x000000);
+        gridHelper.material.opacity = 0.1;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+        const floorGeo = new THREE.PlaneGeometry(400, 400);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.2 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Heatsink Mesh Group
+        const heatsinkGroup = new THREE.Group();
+        scene.add(heatsinkGroup);
+
+        let material = new THREE.MeshStandardMaterial();
+        function update3DMaterial() {
+            const props = MATERIALS[state.mat].three;
+            material.color.set(props.color);
+            material.roughness = props.roughness;
+            material.metalness = props.metalness;
+            material.needsUpdate = true;
+        }
+        update3DMaterial();
+
+        function build3DHeatsink() {
+            while(heatsinkGroup.children.length > 0){ 
+                const child = heatsinkGroup.children[0];
+                heatsinkGroup.remove(child);
+                if (child.geometry) child.geometry.dispose();
+            }
+
+            const ox = -state.W / 2;
+            const oy = 0;
+            const oz = -state.L / 2;
+
+            const baseGeo = new THREE.BoxGeometry(state.W, state.Tb, state.L);
+            const baseMesh = new THREE.Mesh(baseGeo, material);
+            baseMesh.position.set(0, state.Tb / 2, 0);
+            baseMesh.castShadow = true;
+            baseMesh.receiveShadow = true;
+            heatsinkGroup.add(baseMesh);
+
+            let currentX = ox + state.Tf / 2;
+            const finGeo = new THREE.BoxGeometry(state.Tf, state.Hf, state.L);
+            for(let i=0; i<state.N; i++) {
+                const finMesh = new THREE.Mesh(finGeo, material);
+                finMesh.position.set(currentX, state.Tb + state.Hf / 2, 0);
+                finMesh.castShadow = true;
+                finMesh.receiveShadow = true;
+                heatsinkGroup.add(finMesh);
+                currentX += state.Tf + state.s_actual;
+            }
+        }
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            if (is3DVisible) {
+                controls.update();
+                renderer.render(scene, camera);
+            }
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            if (is3DVisible && container3d.clientWidth > 0) {
+                camera.aspect = container3d.clientWidth / container3d.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+            }
+            renderSVG();
+        });
+
+
+        // --- SVG 2D Renderers ---
+        function updateState() {
+            state.L = parseFloat(document.getElementById('num-L').value);
+            state.W = parseFloat(document.getElementById('num-W').value);
+            state.Tb = parseFloat(document.getElementById('num-Tb').value);
+            state.Hf = parseFloat(document.getElementById('num-Hf').value);
+            state.Tf = parseFloat(document.getElementById('num-Tf').value);
+
+            if (state.finMode === 'count') {
+                state.N = parseInt(document.getElementById('num-N').value, 10);
+                const maxN = Math.floor(state.W / state.Tf);
+                if (state.N > maxN) {
+                    state.N = Math.max(2, maxN);
+                    document.getElementById('num-N').value = state.N;
+                    document.getElementById('inp-N').value = state.N;
+                }
+                state.s_actual = (state.W - state.N * state.Tf) / (state.N - 1);
+                document.getElementById('computed-s').textContent = `${state.s_actual.toFixed(2)} mm`;
+            } else {
+                state.s_target = parseFloat(document.getElementById('num-s').value);
+                // N = floor( (W + s) / (Tf + s) )
+                state.N = Math.floor((state.W + state.s_target) / (state.Tf + state.s_target));
+                if (state.N < 2) state.N = 2;
+                const maxN = Math.floor(state.W / state.Tf);
+                if (state.N > maxN) state.N = Math.max(2, maxN);
+                
+                state.s_actual = (state.W - state.N * state.Tf) / (state.N - 1);
+                document.getElementById('computed-N').textContent = state.N;
+                document.getElementById('computed-s-actual').textContent = `${state.s_actual.toFixed(2)} mm`;
+            }
+
+            build3DHeatsink();
+            renderSVG();
+        }
+
+        // Draw Dimensions with proper offset lines
+        function drawDimLine(x1, y1, x2, y2, label, offset = 0, hideExtLine = false) {
+            const dx = x2 - x1; const dy = y2 - y1; const len = Math.sqrt(dx*dx + dy*dy);
+            if (len === 0) return '';
+            
+            const nx = -dy / len; const ny = dx / len;
+            const px1 = x1 + nx * offset; const py1 = y1 + ny * offset;
+            const px2 = x2 + nx * offset; const py2 = y2 + ny * offset;
+            const tickSize = 4; const extGap = 4; 
+            const extLen = Math.abs(offset) + 2; // the extension line goes all the way out past the dim line
+
+            let html = '';
+            
+            // Draw extension lines coming FROM the geometry out TO the dimension line
+            if (!hideExtLine && Math.abs(offset) > 0) {
+                const dir = offset > 0 ? 1 : -1;
+                html += `
+                    <line x1="${x1 + nx*dir*extGap}" y1="${y1 + ny*dir*extGap}" x2="${x1 + nx*dir*extLen}" y2="${y1 + ny*dir*extLen}" class="dim-ext"/>
+                    <line x1="${x2 + nx*dir*extGap}" y1="${y2 + ny*dir*extGap}" x2="${x2 + nx*dir*extLen}" y2="${y2 + ny*dir*extLen}" class="dim-ext"/>
+                `;
+            }
+
+            html += `
+                <line x1="${px1}" y1="${py1}" x2="${px2}" y2="${py2}" class="dim-line"/>
+                <line x1="${px1 - nx*tickSize}" y1="${py1 - ny*tickSize}" x2="${px1 + nx*tickSize}" y2="${py1 + ny*tickSize}" class="dim-tick"/>
+                <line x1="${px2 - nx*tickSize}" y1="${py2 - ny*tickSize}" x2="${px2 + nx*tickSize}" y2="${py2 + ny*tickSize}" class="dim-tick"/>
+            `;
+
+            const cx = (px1 + px2) / 2; const cy = (py1 + py2) / 2;
+            const tx = cx + nx * 8; const ty = cy + ny * 8;
+            
+            let anchor = 'middle'; let baseline = 'middle';
+            if (Math.abs(nx) > 0.5) anchor = nx > 0 ? 'start' : 'end';
+            else baseline = ny > 0 ? 'hanging' : 'baseline';
+
+            // Add background pill for text so extension line doesn't cross it
+            html += `
+                <rect x="${tx - 18}" y="${ty - 8}" width="36" height="16" class="dim-bg" rx="4"/>
+                <text x="${tx}" y="${ty}" text-anchor="${anchor}" dominant-baseline="${baseline}" class="dim-text">${label}</text>
+            `;
+            return html;
+        }
+
+        function renderFront() {
+            const svg = document.getElementById('svg-front');
+            const cw = svg.clientWidth || 300; const ch = svg.clientHeight || 280;
+            const totalH = state.Tb + state.Hf;
+            
+            // Significant margins to give the extension lines room to breathe outside the geometry
+            const marginX = 80, marginY = 80;
+            const scale = Math.min((cw - marginX*2) / state.W, (ch - marginY*2) / totalH);
+            
+            const sW = state.W * scale; const sH = totalH * scale;
+            const sTb = state.Tb * scale; const sHf = state.Hf * scale;
+            const sTf = state.Tf * scale; const sSp = state.s_actual * scale;
+
+            const ox = (cw - sW) / 2; const oy = (ch + sH) / 2;
+            const fillColor = MATERIALS[state.mat].svg; const strokeColor = MATERIALS[state.mat].stroke;
+
+            let html = `<rect x="${ox}" y="${oy - sTb}" width="${sW}" height="${sTb}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" stroke-linejoin="round"/>`;
+            let cx = ox;
+            for(let i=0; i<state.N; i++) {
+                html += `<rect x="${cx}" y="${oy - sTb - sHf}" width="${sTf}" height="${sHf}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" stroke-linejoin="round"/>`;
+                cx += sTf + sSp;
+            }
+
+            // Dimensions pulled OUTSIDE the geometry with large offsets
+            html += drawDimLine(ox, oy, ox + sW, oy, `W = ${state.W}`, 35);
+            html += drawDimLine(ox, oy - sTb - sHf, ox, oy - sTb, `Hf = ${state.Hf}`, -35);
+            html += drawDimLine(ox + sW, oy - sTb, ox + sW, oy, `Tb = ${state.Tb}`, 35);
+
+            if (state.N >= 2 && sSp > 20) {
+                // For the inner spacing dimension, we don't want massive offsets and no extension lines needed
+                html += drawDimLine(ox + sTf, oy - sTb - sHf, ox + sTf + sSp, oy - sTb - sHf, `s = ${state.s_actual.toFixed(1)}`, -15, true);
+            }
+
+            const symX = ox + sW + 55; const symY = oy - sTb - sHf/2;
+            html += `
+                <circle cx="${symX}" cy="${symY}" r="8" fill="none" stroke="var(--info-color)" stroke-width="1.5"/>
+                <circle cx="${symX}" cy="${symY}" r="3" fill="var(--info-color)"/>
+                <text x="${symX}" y="${symY + 24}" text-anchor="middle" class="flow-text">FLOW</text>
+            `;
+            svg.innerHTML = html;
+        }
+
+        function renderTop() {
+            const svg = document.getElementById('svg-top');
+            const cw = svg.clientWidth || 300; const ch = svg.clientHeight || 280;
+            
+            // Significant margins
+            const marginX = 100, marginY = 80;
+            const scale = Math.min((cw - marginX*2) / state.L, (ch - marginY*2) / state.W);
+            
+            const sL = state.L * scale; const sW = state.W * scale;
+            const sTf = state.Tf * scale; const sSp = state.s_actual * scale;
+            const ox = (cw - sL) / 2; const oy = (ch - sW) / 2;
+            const fillColor = MATERIALS[state.mat].svg; const strokeColor = MATERIALS[state.mat].stroke;
+
+            let html = `<rect x="${ox}" y="${oy}" width="${sL}" height="${sW}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" stroke-linejoin="round"/>`;
+
+            let cy = oy;
+            for(let i=0; i<state.N; i++) {
+                html += `<rect x="${ox}" y="${cy}" width="${sL}" height="${sTf}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5"/>`;
+                cy += sTf + sSp;
+            }
+
+            // Dimensions pulled OUTSIDE the geometry
+            html += drawDimLine(ox, oy + sW, ox + sL, oy + sW, `L = ${state.L}`, 50);
+            html += drawDimLine(ox, oy, ox, oy + sW, `W = ${state.W}`, -50);
+
+            // Flow Arrows running centrally through the channels, pulled far enough away to clear W
+            const flowY = oy + sW/2;
+            html += `
+                <path d="M ${ox - 65} ${flowY} L ${ox - 20} ${flowY} M ${ox - 30} ${flowY - 6} L ${ox - 20} ${flowY} L ${ox - 30} ${flowY + 6}" class="flow-arrow"/>
+                <path d="M ${ox + sL + 20} ${flowY} L ${ox + sL + 65} ${flowY} M ${ox + sL + 55} ${flowY - 6} L ${ox + sL + 65} ${flowY} L ${ox + sL + 55} ${flowY + 6}" class="flow-arrow"/>
+                <text x="${ox + sL/2}" y="${oy - 25}" text-anchor="middle" class="flow-text">FLOW DIRECTION</text>
+            `;
+            svg.innerHTML = html;
+        }
+
+        function renderSVG() {
+            renderFront();
+            renderTop();
+        }
+
+        setTimeout(updateState, 100);
+
+    </script>
+</body>
+</html>

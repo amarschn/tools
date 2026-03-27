@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option D: Foundation + Tree</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --bg-card: #fff; --text: #1a1a2e; --text-light: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --border: #e5e7eb;
+    --success: #16a34a; --danger: #dc2626;
+    --tree-line: #cbd5e1;
+    --found-bg: #f0fdf4; --found-border: #86efac;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 1.2rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 24px; }
+  h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  /* Foundation section — shared building blocks */
+  .foundation {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 600px) { .foundation { grid-template-columns: 1fr; } }
+
+  .found-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; cursor: pointer; user-select: none;
+    transition: all 0.15s;
+  }
+  .found-card:hover { border-color: var(--accent); }
+  .found-card.expanded { background: var(--found-bg); border-color: var(--found-border); }
+  .found-card .card-header { display: flex; justify-content: space-between; align-items: center; }
+  .found-card .card-label { font-size: 0.82rem; color: var(--text-light); }
+  .found-card .card-value { font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .found-card .card-arrow { font-size: 0.6rem; color: var(--text-light); transition: transform 0.2s; }
+  .found-card.expanded .card-arrow { transform: rotate(90deg); }
+  .found-card .card-detail {
+    display: none; margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--border); font-size: 0.84rem; line-height: 1.8;
+  }
+  .found-card.expanded .card-detail { display: block; }
+  .found-card .ref-line { font-size: 0.76rem; color: var(--text-light); font-style: italic; margin-top: 4px; }
+
+  /* Tree section */
+  .tree ul { list-style: none; padding-left: 28px; position: relative; }
+  .tree ul::before {
+    content: ''; position: absolute; left: 12px; top: 0; bottom: 16px;
+    width: 1px; background: var(--tree-line);
+  }
+  .tree li { position: relative; padding: 4px 0; }
+  .tree li::before {
+    content: ''; position: absolute; left: -16px; top: 18px;
+    width: 16px; height: 1px; background: var(--tree-line);
+  }
+  .tree > ul { padding-left: 0; }
+  .tree > ul::before, .tree > ul > li::before { display: none; }
+
+  .node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    transition: all 0.15s; font-size: 0.88rem;
+  }
+  .node:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node.expanded { border-color: var(--accent); background: var(--accent-light); }
+  .node .name { color: var(--text-light); font-size: 0.8rem; }
+  .node .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .node .arrow { font-size: 0.65rem; color: var(--text-light); transition: transform 0.2s; }
+  .node.expanded .arrow { transform: rotate(90deg); }
+  .node.leaf { cursor: default; opacity: 0.85; }
+  .node.leaf:hover { border-color: var(--border); background: var(--bg-card); }
+  .node.leaf .arrow { display: none; }
+
+  .node-detail {
+    display: none; margin: 6px 0 8px 0; padding: 12px 16px;
+    background: #f1f5f9; border-radius: 8px; border-left: 3px solid var(--accent);
+    font-size: 0.85rem; line-height: 1.8; max-width: 620px;
+  }
+  .node.expanded + .node-detail { display: block; }
+
+  /* Foundation reference pill inside tree */
+  .fpill {
+    display: inline-block; font-size: 0.78rem; padding: 2px 8px;
+    background: var(--found-bg); border: 1px solid var(--found-border);
+    border-radius: 4px; color: #166534; cursor: pointer;
+    text-decoration: none; margin-left: 4px;
+  }
+  .fpill:hover { background: #dcfce7; }
+
+  .eq-line { font-family: Georgia, serif; }
+  .separator { margin: 24px 0 20px 0; }
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5); }
+    100% { box-shadow: 0 0 0 4px transparent; }
+  }
+  .flash { animation: flash 1.2s ease-out; }
+</style>
+</head>
+<body>
+
+<h1>Option D: Foundation + Tree</h1>
+<p class="subtitle">Shared "building block" values (air properties, Re, Nu, h<sub>conv</sub>, h<sub>rad</sub>, friction factor) are defined once in a foundation section. The tree below references them by name via green pills — click a pill to scroll up to the definition. No duplication, clean separation.</p>
+
+<h2>Building Blocks</h2>
+
+<div class="foundation">
+  <div class="found-card" onclick="toggleCard(this)" id="fc-air">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Air Properties</div>
+        <div class="card-value">T<sub>film</sub> = 33.6 °C (306.8 K)</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-detail">
+      T<sub>film</sub> = (T<sub>b</sub> + T<sub>∞</sub>)/2 = (42.2 + 25.0)/2 = 33.6 °C<br>
+      ρ = 1.151 kg/m³, μ = 1.878e-5 Pa·s, k<sub>air</sub> = 0.0268 W/m·K<br>
+      c<sub>p</sub> = 1007 J/kg·K, Pr = 0.705, ν = 1.632e-5 m²/s
+      <div class="ref-line">Sutherland-law fits, valid 200–700 K.</div>
+    </div>
+  </div>
+
+  <div class="found-card" onclick="toggleCard(this)" id="fc-flow">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Flow Regime</div>
+        <div class="card-value">Re = 1213 (laminar), V<sub>ch</sub> = 2.46 m/s</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-detail">
+      A<sub>open</sub> = N<sub>ch</sub>·s·H = 14 × 0.00464 × 0.030 = 0.00195 m²<br>
+      V<sub>ch</sub> = V̇/A<sub>open</sub> = 0.00480/0.00195 = <strong>2.462 m/s</strong><br>
+      Re = ρ·V·D<sub>h</sub>/μ = 1.151 × 2.46 × 0.00804/1.88e-5 = <strong>1213</strong> (< 2300 → laminar)
+    </div>
+  </div>
+
+  <div class="found-card" onclick="toggleCard(this)" id="fc-hconv">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Convection Coefficient</div>
+        <div class="card-value">h<sub>conv</sub> = 31.67 W/m²K</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-detail">
+      Gz = Re·Pr·D<sub>h</sub>/L = 1213 × 0.705 × 0.00804/0.10 = <strong>68.8</strong><br>
+      Nu = (7.54³ + (1.841·Gz<sup>1/3</sup>)³)<sup>1/3</sup> = <strong>9.502</strong><br>
+      h<sub>conv</sub> = Nu·k<sub>air</sub>/D<sub>h</sub> = 9.50 × 0.0268/0.00804 = <strong>31.67 W/m²K</strong>
+      <div class="ref-line">Muzychka/Yovanovich (2004). Developing laminar flow in rectangular ducts.</div>
+    </div>
+  </div>
+
+  <div class="found-card" onclick="toggleCard(this)" id="fc-hrad">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Radiation Coefficient</div>
+        <div class="card-value">h<sub>rad</sub> = 0.746 W/m²K</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-detail">
+      h<sub>rad</sub> = ε·σ·(T<sub>s</sub>²+T<sub>∞</sub>²)(T<sub>s</sub>+T<sub>∞</sub>)·F<sub>eff</sub><br>
+      = 0.85 × 5.67e-8 × (315²+298²)(315+298) × 0.134 = <strong>0.746 W/m²K</strong><br>
+      F<sub>eff</sub> = s/(s+H) = 0.00464/0.0346 = 0.134
+      <div class="ref-line">Linearized Stefan-Boltzmann. Sparrow & Cess (1978).</div>
+    </div>
+  </div>
+
+  <div class="found-card" onclick="toggleCard(this)" id="fc-eta">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Fin & Surface Efficiency</div>
+        <div class="card-value">η<sub>f</sub> = 0.910, η<sub>o</sub> = 0.917</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-detail">
+      h<sub>eff</sub> = <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hrad')">h<sub>rad</sub></span> = 31.67 + 0.746 = <strong>32.42 W/m²K</strong><br>
+      m·L<sub>c</sub> = √(h<sub>eff</sub>·P/(k·A<sub>c</sub>))·L<sub>c</sub> = √(32.42×0.202/(200×0.0001))×0.0305 = <strong>0.552</strong><br>
+      η<sub>f</sub> = tanh(0.552)/0.552 = <strong>0.910</strong><br>
+      η<sub>o</sub> = 1 − (A<sub>f</sub>/A<sub>t</sub>)(1−η<sub>f</sub>) = 1 − (0.090/0.098)(1−0.910) = <strong>0.917</strong>
+    </div>
+  </div>
+
+  <div class="found-card" onclick="toggleCard(this)" id="fc-friction">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Friction & Losses</div>
+        <div class="card-value">f = 0.01644, K<sub>c</sub> = 0.143, K<sub>e</sub> = 0.035</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-detail">
+      β = s/H = 0.00464/0.030 = 0.155<br>
+      f·Re = 24(1 − 1.355β + 1.947β² − ...) = 19.93 → f = 19.93/1213 = <strong>0.01644</strong><br>
+      σ = A<sub>open</sub>/A<sub>frontal</sub> = 0.813<br>
+      K<sub>c</sub> = 0.42(1−σ²) = <strong>0.143</strong> (Kays & London)<br>
+      K<sub>e</sub> = (1−σ)² = <strong>0.035</strong> (Borda-Carnot)
+      <div class="ref-line">Shah & London (1978), Kays & London (1984).</div>
+    </div>
+  </div>
+</div>
+
+<div class="separator"></div>
+
+<h2>Results</h2>
+
+<div class="tree">
+<ul>
+  <!-- JUNCTION TEMP -->
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Junction Temp</span>
+      <span class="val" style="color:var(--danger)">T<sub>j</sub> = 89.1 °C</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">T<sub>j</sub> = T<sub>case</sub> + Q · R<sub>θ,jc</sub> = 74.1 + 50.0 × 0.30 = <strong>89.1 °C</strong></span><br>
+      <span class="eq-line">Margin = 100.0 − 89.1 = <strong>10.9 °C</strong> ✓</span>
+    </div>
+    <ul>
+      <li>
+        <div class="node" onclick="toggleNode(this)">
+          <span class="arrow">&#9654;</span>
+          <span class="name">Case Temp</span>
+          <span class="val">T<sub>case</sub> = 74.1 °C</span>
+        </div>
+        <div class="node-detail">
+          <span class="eq-line">T<sub>case</sub> = T<sub>base,eff</sub> + Q · R<sub>θ,cs</sub> = 49.1 + 50.0 × 0.50 = <strong>74.1 °C</strong></span>
+        </div>
+        <ul>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Effective Base</span>
+              <span class="val">T<sub>base,eff</sub> = 49.1 °C</span>
+            </div>
+            <div class="node-detail">
+              <span class="eq-line">T<sub>base,eff</sub> = T<sub>b</sub> + Q · R<sub>sp</sub> = 42.2 + 50.0 × 0.139 = <strong>49.1 °C</strong></span>
+            </div>
+            <ul>
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">&#9654;</span>
+                  <span class="name">Base Temp</span>
+                  <span class="val">T<sub>b</sub> = 42.2 °C</span>
+                </div>
+                <div class="node-detail">
+                  <span class="eq-line">Solved: <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-eta')">η<sub>o</sub></span> · (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hrad')">h<sub>rad</sub></span>) · A<sub>t</sub> · (T<sub>b</sub>−T<sub>∞</sub>) = Q</span><br>
+                  <span class="eq-line">0.917 × 32.42 × 0.098 × 17.2 = <strong>50.0 W</strong> ⇒ T<sub>b</sub> = 42.2 °C</span><br>
+                  <span class="eq-line">R<sub>θ,sink</sub> = ΔT/Q = 17.2/50 = <strong>0.344 K/W</strong></span>
+                </div>
+              </li>
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">&#9654;</span>
+                  <span class="name">Spreading R<sub>θ</sub></span>
+                  <span class="val">0.139 K/W</span>
+                </div>
+                <div class="node-detail">
+                  <span class="eq-line">ε = √(A<sub>s</sub>/A<sub>p</sub>) = 0.224, τ = t/√A<sub>p</sub> = 0.056, ψ = 0.990</span><br>
+                  <span class="eq-line">R<sub>sp</sub> = ψ/(k√πA<sub>s</sub>) = 0.990/(200×0.035) = <strong>0.139 K/W</strong></span>
+                  <div class="ref-line">Yovanovich, Muzychka, Culham (1999).</div>
+                </div>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Interface R<sub>θ,cs</sub></span>
+              <span class="val">0.500 K/W</span>
+            </div>
+            <div class="node-detail">
+              <span class="eq-line">R<sub>θ,cs</sub> = BLT/(k·A) = 0.0005/(3.0×0.0004) = <strong>0.417 K/W</strong></span>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li><div class="node leaf"><span class="arrow">&#9654;</span><span class="name">R<sub>θ,jc</sub></span><span class="val">0.300 K/W (input)</span></div></li>
+    </ul>
+  </li>
+</ul>
+
+<div style="margin-top: 16px;"></div>
+
+<ul style="list-style:none; padding:0;">
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Pressure Drop</span>
+      <span class="val">ΔP = 1.33 Pa</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">ΔP = (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">f</span>·L/D<sub>h</sub> + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>c</sub></span> + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>e</sub></span>) · <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-air')">ρ</span>·<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-flow')">V<sub>ch</sub></span>²/2</span><br>
+      <span class="eq-line">= (0.01644 × 0.10/0.00804 + 0.143 + 0.035) × 1.151 × 2.46²/2 = <strong>1.33 Pa</strong></span>
+    </div>
+  </li>
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Required Sink R<sub>θ</sub></span>
+      <span class="val">0.700 K/W (budget)</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">R<sub>req</sub> = (T<sub>j,max</sub>−T<sub>∞</sub>)/Q − R<sub>jc</sub> − R<sub>cs</sub> = (100−25)/50 − 0.30 − 0.50 = <strong>0.700 K/W</strong></span>
+    </div>
+  </li>
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Heat Split</span>
+      <span class="val">Q<sub>conv</sub> = 47.7 W (95%), Q<sub>rad</sub> = 2.3 W (5%)</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">Q<sub>conv</sub> = <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-eta')">η<sub>o</sub></span> · <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> · A<sub>t</sub> · ΔT = 0.917 × 31.67 × 0.098 × 17.2 = <strong>47.7 W</strong></span><br>
+      <span class="eq-line">Q<sub>rad</sub> = <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-eta')">η<sub>o</sub></span> · <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hrad')">h<sub>rad</sub></span> · A<sub>t</sub> · ΔT = 0.917 × 0.746 × 0.098 × 17.2 = <strong>2.3 W</strong></span>
+    </div>
+  </li>
+</ul>
+</div>
+
+<script>
+function toggleNode(el) {
+  if (el.classList.contains('leaf')) return;
+  el.classList.toggle('expanded');
+}
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+function scrollToFound(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  if (!target.classList.contains('expanded')) target.classList.add('expanded');
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+}
+</script>
+
+</body>
+</html>

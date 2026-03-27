@@ -312,3 +312,12 @@ Once launched, use **Google Analytics 4** (free) for accurate first-party data. 
 ---
 
 *Last updated: 2024-12-28*
+
+### DoE MEASUR (Manufacturing Energy Assessment Software for Utility Reduction)
+- **Type:** Open-source desktop/web software suite from the US Department of Energy
+- **Focus:** Industrial energy systems (pumps, fans, compressed air, process heating, steam)
+- **Pros:** Deep, rigorous, government-backed validation; excellent source for heavy industrial formulas and property data; completely free and open source.
+- **Cons:** Very traditional government/academic UX; extremely poor documentation of the underlying physics engines; almost zero progressive disclosure (users are thrown into massive forms immediately); heavy learning curve.
+- **Threat Level:** Low (completely different target audience and UX paradigm)
+- **Opportunity:** Serve as a gold-mine reference for backend physics and fluid property validation, while providing a vastly superior, progressive, web-first UX.
+

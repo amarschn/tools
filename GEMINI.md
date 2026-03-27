@@ -17,6 +17,13 @@ For comprehensive guidance on:
 
 Repository-level plan documents in `/plans/` must use `YYYY-MM-DD_short_slug.md` filenames and include a matching `Date: YYYY-MM-DD` line immediately below the H1 title. Use ISO dates so plans sort chronologically.
 
+## Branch Workflow
+
+- Keep `main` stable and deployable.
+- Do non-trivial work on `task/<short-name>` branches.
+- Use one task branch per piece of work, and reuse it across computers instead of creating separate machine-specific branches.
+- Push task branches frequently and merge back to `main` only after verification.
+
 ## Essential Commands
 
 ### Local Development

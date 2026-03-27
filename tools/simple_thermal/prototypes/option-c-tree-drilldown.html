@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option C: Dependency Tree</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --bg-card: #fff; --text: #1a1a2e; --text-light: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --border: #e5e7eb;
+    --success: #16a34a; --danger: #dc2626;
+    --tree-line: #cbd5e1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 1.2rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 24px; }
+
+  .tree { padding-left: 0; }
+  .tree ul { list-style: none; padding-left: 28px; position: relative; }
+  .tree ul::before {
+    content: ''; position: absolute; left: 12px; top: 0; bottom: 16px;
+    width: 1px; background: var(--tree-line);
+  }
+  .tree li { position: relative; padding: 4px 0; }
+  .tree li::before {
+    content: ''; position: absolute; left: -16px; top: 18px;
+    width: 16px; height: 1px; background: var(--tree-line);
+  }
+  .tree > ul > li::before { display: none; }
+  .tree > ul { padding-left: 0; }
+  .tree > ul::before { display: none; }
+
+  .node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    transition: all 0.15s; font-size: 0.88rem;
+  }
+  .node:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node.expanded { border-color: var(--accent); background: var(--accent-light); }
+  .node .name { color: var(--text-light); font-size: 0.8rem; }
+  .node .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .node .arrow { font-size: 0.65rem; color: var(--text-light); transition: transform 0.2s; }
+  .node.expanded .arrow { transform: rotate(90deg); }
+  .node.leaf { cursor: default; }
+  .node.leaf:hover { border-color: var(--border); background: var(--bg-card); }
+  .node.leaf .arrow { display: none; }
+
+  .node-detail {
+    display: none; margin: 6px 0 8px 0; padding: 12px 16px;
+    background: #f1f5f9; border-radius: 8px; border-left: 3px solid var(--accent);
+    font-size: 0.85rem; line-height: 1.8; max-width: 600px;
+  }
+  .node.expanded + .node-detail { display: block; }
+
+  .eq-line { font-family: Georgia, serif; }
+  .ref-line { font-size: 0.78rem; color: var(--text-light); font-style: italic; margin-top: 4px; }
+  .separator { margin: 20px 0; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<h1>Option C: Dependency Tree with Drill-Down</h1>
+<p class="subtitle">The calculation is shown as a tree that mirrors its actual dependency structure. Click any node to expand its derivation in-place. Child nodes show what feeds into a parent. You can drill down as deep as you want.</p>
+
+<div class="tree">
+<ul>
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">▶</span>
+      <span class="name">Junction Temp</span>
+      <span class="val" style="color:var(--danger)">T<sub>j</sub> = 89.1 °C</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">T<sub>j</sub> = T<sub>case</sub> + Q · R<sub>θ,jc</sub> = 74.1 + 50.0 × 0.3000 = <strong>89.1 °C</strong></span><br>
+      <span class="eq-line">Margin: T<sub>j,max</sub> − T<sub>j</sub> = 100.0 − 89.1 = <strong>10.9 °C</strong> ✓</span>
+    </div>
+    <ul>
+      <li>
+        <div class="node" onclick="toggleNode(this)">
+          <span class="arrow">▶</span>
+          <span class="name">Case Temp</span>
+          <span class="val">T<sub>case</sub> = 74.1 °C</span>
+        </div>
+        <div class="node-detail">
+          <span class="eq-line">T<sub>case</sub> = T<sub>base,eff</sub> + Q · R<sub>θ,cs</sub> = 49.1 + 50.0 × 0.5000 = <strong>74.1 °C</strong></span>
+        </div>
+        <ul>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">▶</span>
+              <span class="name">Effective Base Temp</span>
+              <span class="val">T<sub>base,eff</sub> = 49.1 °C</span>
+            </div>
+            <div class="node-detail">
+              <span class="eq-line">T<sub>base,eff</sub> = T<sub>b</sub> + Q · R<sub>sp</sub> = 42.2 + 50.0 × 0.1385 = <strong>49.1 °C</strong></span>
+            </div>
+            <ul>
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">▶</span>
+                  <span class="name">Base Temp</span>
+                  <span class="val">T<sub>b</sub> = 42.2 °C</span>
+                </div>
+                <div class="node-detail">
+                  <span class="eq-line">Solved by bisection: η<sub>o</sub> · h<sub>eff</sub> · A<sub>t</sub> · (T<sub>b</sub> − T<sub>∞</sub>) = Q<sub>load</sub></span><br>
+                  <span class="eq-line">0.917 × 32.42 × 0.098 × 17.2 = <strong>50.0 W</strong> ⇒ T<sub>b</sub> = 42.2 °C</span>
+                </div>
+                <ul>
+                  <li>
+                    <div class="node" onclick="toggleNode(this)">
+                      <span class="arrow">▶</span>
+                      <span class="name">h<sub>conv</sub></span>
+                      <span class="val">31.67 W/m²K</span>
+                    </div>
+                    <div class="node-detail">
+                      <span class="eq-line">Re = ρ V<sub>ch</sub> D<sub>h</sub> / μ = 1.151 × 2.46 × 0.00804 / 1.88e-5 = <strong>1213</strong> (laminar)</span><br>
+                      <span class="eq-line">Gz = Re · Pr · D<sub>h</sub>/L = 1213 × 0.705 × 0.00804/0.1 = <strong>68.8</strong></span><br>
+                      <span class="eq-line">Nu = (7.54³ + (1.841 · Gz<sup>1/3</sup>)³)<sup>1/3</sup> = <strong>9.502</strong></span><br>
+                      <span class="eq-line">h<sub>conv</sub> = Nu · k<sub>air</sub> / D<sub>h</sub> = 9.50 × 0.0268 / 0.00804 = <strong>31.67 W/m²K</strong></span>
+                      <div class="ref-line">Muzychka/Yovanovich (2004). Developing laminar flow, Re < 2300.</div>
+                    </div>
+                    <ul>
+                      <li>
+                        <div class="node leaf">
+                          <span class="arrow">▶</span>
+                          <span class="name">Air at T<sub>film</sub></span>
+                          <span class="val">ρ=1.151, μ=1.88e-5, k=0.0268, Pr=0.705</span>
+                        </div>
+                      </li>
+                    </ul>
+                  </li>
+                  <li>
+                    <div class="node" onclick="toggleNode(this)">
+                      <span class="arrow">▶</span>
+                      <span class="name">h<sub>rad</sub></span>
+                      <span class="val">0.746 W/m²K</span>
+                    </div>
+                    <div class="node-detail">
+                      <span class="eq-line">h<sub>rad</sub> = ε σ (T<sub>s</sub>²+T<sub>∞</sub>²)(T<sub>s</sub>+T<sub>∞</sub>) · F<sub>eff</sub></span><br>
+                      <span class="eq-line">= 0.85 × 5.67e-8 × (315²+298²)(315+298) × 0.134 = <strong>0.746 W/m²K</strong></span><br>
+                      <span class="eq-line">F<sub>eff</sub> = s/(s+H) = 0.00464/(0.00464+0.030) = 0.134</span>
+                    </div>
+                  </li>
+                  <li>
+                    <div class="node" onclick="toggleNode(this)">
+                      <span class="arrow">▶</span>
+                      <span class="name">η<sub>o</sub></span>
+                      <span class="val">0.917</span>
+                    </div>
+                    <div class="node-detail">
+                      <span class="eq-line">h<sub>eff</sub> = 31.67 + 0.746 = 32.42 W/m²K</span><br>
+                      <span class="eq-line">m·L<sub>c</sub> = √(32.42×0.202 / 200×0.0001) × 0.0305 = 0.552</span><br>
+                      <span class="eq-line">η<sub>f</sub> = tanh(0.552)/0.552 = 0.910</span><br>
+                      <span class="eq-line">η<sub>o</sub> = 1 − (0.090/0.098)(1−0.910) = <strong>0.917</strong></span>
+                    </div>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">▶</span>
+                  <span class="name">Spreading R<sub>θ</sub></span>
+                  <span class="val">R<sub>sp</sub> = 0.1396 K/W</span>
+                </div>
+                <div class="node-detail">
+                  <span class="eq-line">ε = √(A<sub>s</sub>/A<sub>p</sub>) = √(4.0/80) = 0.224</span><br>
+                  <span class="eq-line">τ = t/√A<sub>p</sub> = 5.0/√80 = 0.0559</span><br>
+                  <span class="eq-line">ψ = (1−ε)<sup>1.5</sup> / (ε·τ + (1−ε)<sup>1.5</sup>) = 0.990</span><br>
+                  <span class="eq-line">R<sub>sp</sub> = ψ/(k√πA<sub>s</sub>) = 0.990/(200×0.0354) = <strong>0.1396 K/W</strong></span>
+                  <div class="ref-line">Yovanovich, Muzychka, Culham (1999). Centered source, adiabatic edges.</div>
+                </div>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">▶</span>
+              <span class="name">Interface R<sub>θ,cs</sub></span>
+              <span class="val">0.5000 K/W</span>
+            </div>
+            <div class="node-detail">
+              <span class="eq-line">TIM mode: conductivity</span><br>
+              <span class="eq-line">R<sub>θ,cs</sub> = BLT / (k · A) = 0.0005 / (3.0 × 0.0004) = <strong>0.4167 K/W</strong></span>
+              <div class="ref-line">k = 3.0 W/m·K, BLT = 0.5 mm, A = source footprint = 4.0 cm²</div>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li>
+        <div class="node leaf">
+          <span class="arrow">▶</span>
+          <span class="name">R<sub>θ,jc</sub></span>
+          <span class="val">0.3000 K/W (input)</span>
+        </div>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<div class="separator"></div>
+
+<p style="font-size:0.85rem; color:var(--text-light); margin-bottom: 12px;"><strong>Independent results</strong> (not part of the junction temp chain):</p>
+
+<ul style="list-style:none; padding:0;">
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">▶</span>
+      <span class="name">Pressure Drop</span>
+      <span class="val">ΔP = 1.33 Pa</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">f = 24·P(β)/Re = 0.01644 (Shah & London, β=0.155)</span><br>
+      <span class="eq-line">K<sub>c</sub> = 0.42(1−σ²) = 0.143, K<sub>e</sub> = (1−σ)² = 0.035</span><br>
+      <span class="eq-line">ΔP = (f·L/D<sub>h</sub> + K<sub>c</sub> + K<sub>e</sub>) · ρV²/2 = <strong>1.33 Pa</strong></span>
+    </div>
+  </li>
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">▶</span>
+      <span class="name">Required Sink R<sub>θ</sub></span>
+      <span class="val">0.800 K/W (budget)</span>
+    </div>
+    <div class="node-detail">
+      <span class="eq-line">R<sub>req</sub> = (T<sub>j,max</sub>−T<sub>∞</sub>)/Q − R<sub>jc</sub> − R<sub>cs</sub></span><br>
+      <span class="eq-line">= (100−25)/50 − 0.30 − 0.50 = <strong>0.700 K/W</strong></span>
+    </div>
+  </li>
+</ul>
+
+</div>
+
+<script>
+function toggleNode(el) {
+  if (el.classList.contains('leaf')) return;
+  el.classList.toggle('expanded');
+}
+</script>
+
+</body>
+</html>
