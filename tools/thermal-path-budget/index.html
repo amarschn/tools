@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Thermal Path Budget Tool - Engineering Tools</title>
+    <meta name="description" content="Solve steady-state thermal resistance networks, identify bottlenecks, and size one segment to meet a temperature limit.">
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(248, 249, 251, 0.96);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 5%;
+        }
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 64px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-brand {
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: var(--text-color);
+            text-decoration: none;
+        }
+        .nav-link {
+            color: var(--text-light);
+            text-decoration: none;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }
+
+        .container {
+            width: 92%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 0 40px;
+        }
+        main.container { flex: 1 0 auto; }
+
+        h1 {
+            font-size: 2.25rem;
+            letter-spacing: -0.02em;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.375rem;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 1rem;
+        }
+        h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--secondary-color);
+            margin-bottom: 0.75rem;
+        }
+        h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 0.4rem;
+        }
+        p {
+            color: var(--text-light);
+            margin-bottom: 1em;
+        }
+        a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+        a:hover { text-decoration: underline; }
+
+        .tool-description {
+            max-width: 80ch;
+            margin-bottom: 1.5rem;
+            font-size: 1.03rem;
+        }
+
+        details > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section {
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            box-shadow: var(--shadow);
+        }
+        .purpose-section summary {
+            padding: 16px 24px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+        .purpose-section summary::after {
+            content: '[Expand]';
+            float: right;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+        .purpose-section[open] > summary::after {
+            content: '[Collapse]';
+        }
+        .purpose-content {
+            padding: 0 24px 24px;
+            border-top: 1px solid var(--border-color);
+        }
+        .purpose-content ul {
+            padding-left: 20px;
+            margin-bottom: 1rem;
+        }
+
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.92fr) minmax(480px, 1.08fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+        .sticky-card {
+            position: sticky;
+            top: 20px;
+        }
+
+        .scope-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--primary-light);
+            color: var(--secondary-color);
+            border: 1px solid var(--border-color);
+            margin-bottom: 1rem;
+            font-size: 0.86rem;
+            font-weight: 600;
+        }
+
+        .input-group { margin-bottom: 1.05rem; }
+        .input-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            font-size: 0.875rem;
+            color: var(--text-color);
+        }
+        .input-group input,
+        .input-group select,
+        .input-group textarea {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+        .input-group input:focus,
+        .input-group select:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: var(--text-color);
+        }
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .input-note {
+            color: var(--text-light);
+            font-size: 0.82rem;
+            margin-top: 6px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: var(--border-radius);
+            border: none;
+            background: var(--accent-color);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .btn-primary:hover { opacity: 0.92; }
+        .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        .segment-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .segment-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            background: var(--bg-card);
+        }
+        .segment-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .segment-path {
+            color: var(--text-light);
+            font-size: 0.82rem;
+            margin-bottom: 0;
+        }
+        .segment-tag {
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: var(--primary-light);
+            color: var(--secondary-color);
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .segment-card.unknown {
+            border-color: var(--warning-color);
+            box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.08);
+        }
+        .segment-title-input {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .expert-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--secondary-color);
+        }
+        .expert-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+        .expert-only { display: none; }
+        body.expert-mode .expert-only { display: block; }
+        body.expert-mode .expert-only.expert-only-grid { display: grid; }
+
+        .results-placeholder {
+            padding: 22px;
+            border-radius: 10px;
+            border: 1px dashed var(--border-color);
+            color: var(--text-light);
+            background: var(--primary-light);
+            margin-bottom: 18px;
+        }
+        .status-banner {
+            display: none;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+        .status-banner.acceptable {
+            background: #ecfdf5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        .status-banner.marginal {
+            background: #fffbeb;
+            border: 1px solid #d97706;
+            color: #92400e;
+        }
+        .status-banner.unacceptable,
+        .status-banner.invalid {
+            background: #fef2f2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        .status-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .status-body {
+            margin: 0;
+            color: inherit;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .result-item {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            background: var(--primary-light);
+        }
+        .result-label {
+            color: var(--text-light);
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+        .result-value {
+            color: var(--text-color);
+            font-weight: 700;
+            font-size: 1.22rem;
+            font-family: var(--font-mono);
+        }
+        .result-subtext {
+            margin-top: 6px;
+            color: var(--text-light);
+            font-size: 0.78rem;
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .score-chip,
+        .warning-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 11px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+        .score-chip.good_fit {
+            background: rgba(15, 118, 110, 0.12);
+            color: var(--success-color);
+        }
+        .score-chip.use_with_caution {
+            background: rgba(180, 83, 9, 0.12);
+            color: var(--warning-color);
+        }
+        .score-chip.better_in_other_tool {
+            background: rgba(185, 28, 28, 0.12);
+            color: var(--danger-color);
+        }
+        .warning-chip {
+            background: rgba(75, 85, 99, 0.08);
+            color: var(--secondary-color);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 18px;
+            padding-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .tab-link {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-light);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.84rem;
+            cursor: pointer;
+        }
+        .tab-link.active {
+            color: #fff;
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .section-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 16px;
+            background: var(--bg-card);
+        }
+        .section-card ul {
+            padding-left: 18px;
+            margin-bottom: 0;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        .data-table th,
+        .data-table td {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+        .data-table th {
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+        .data-table td {
+            color: var(--text-color);
+        }
+        .data-table td.mono {
+            font-family: var(--font-mono);
+        }
+
+        .diagram-shell {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            background: var(--bg-card);
+        }
+        .diagram-note {
+            color: var(--text-light);
+            font-size: 0.82rem;
+            margin-top: 10px;
+        }
+
+        .derivation-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: var(--bg-card);
+        }
+        .derivation-card summary {
+            padding: 14px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            list-style: none;
+        }
+        .derivation-card summary::-webkit-details-marker { display: none; }
+        .derivation-card summary::after {
+            content: '+';
+            margin-left: auto;
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+        .derivation-card[open] summary::after {
+            content: '-';
+        }
+        .derivation-body {
+            padding: 0 16px 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        .equation-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: var(--primary-light);
+            color: var(--secondary-color);
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .equation-block {
+            overflow-x: auto;
+            margin: 10px 0 12px;
+        }
+        .legend-list {
+            list-style: none;
+            padding-left: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 12px;
+            margin-top: 10px;
+        }
+        .legend-list li {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .footer {
+            padding: 18px 5%;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-card);
+        }
+        .footer p {
+            max-width: 1400px;
+            margin: 0 auto;
+            font-size: 0.88rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary-color: #f1f5f9;
+                --primary-light: #1e293b;
+                --secondary-color: #94a3b8;
+                --accent-color: #60a5fa;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f3f4f6;
+                --text-light: #9ca3af;
+                --border-color: #334155;
+                --bg-color: #0f172a;
+                --bg-card: #1e293b;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+                --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.4);
+            }
+            .loading-overlay {
+                background: rgba(15, 23, 42, 0.96);
+            }
+            .status-banner.acceptable {
+                background: rgba(16, 185, 129, 0.12);
+                border-color: #10b981;
+                color: #6ee7b7;
+            }
+            .status-banner.marginal {
+                background: rgba(217, 119, 6, 0.12);
+                border-color: #d97706;
+                color: #fcd34d;
+            }
+            .status-banner.unacceptable,
+            .status-banner.invalid {
+                background: rgba(239, 68, 68, 0.12);
+                border-color: #ef4444;
+                color: #fca5a5;
+            }
+        }
+
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+            .sticky-card { position: static; }
+        }
+
+        @media (max-width: 640px) {
+            .input-row { grid-template-columns: 1fr; }
+            .legend-list { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <a class="nav-brand" href="../../">Engineering Tools</a>
+            <a class="nav-link" href="../../">All tools</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="scope-chip">Current model: steady-state thermal resistance networks with one heat source and one ambient boundary</div>
+        <h1>Thermal Path Budget Tool</h1>
+        <p class="tool-description">
+            Solve lumped thermal networks when geometry is unknown, vendor resistances are all you have, or you want to see which segment is really eating the temperature budget before you commit to a sink design.
+        </p>
+
+        <details class="purpose-section">
+            <summary>Tool Purpose & Scope</summary>
+            <div class="purpose-content" id="readme-content">
+                <p>Loading README...</p>
+            </div>
+        </details>
+
+        <div class="tool-layout">
+            <section class="card sticky-card" aria-labelledby="model-heading">
+                <h2 id="model-heading">Model</h2>
+                <label class="expert-toggle">
+                    <input type="checkbox" id="expert-toggle"> Show advanced controls
+                </label>
+
+                <form id="calc-form">
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="template-select">Model Template</label>
+                            <select id="template-select"></select>
+                            <div class="input-note" id="template-note"></div>
+                        </div>
+                        <div class="input-group">
+                            <label for="workflow-select">Workflow</label>
+                            <select id="workflow-select">
+                                <option value="solve_temperatures">Analyze temperatures</option>
+                                <option value="solve_required_segment">Size one selected segment</option>
+                                <option value="budget_ambient_segment">Budget the ambient-side segment</option>
+                            </select>
+                            <div class="input-note">`Budget ambient-side segment` uses the template's recommended ambient-facing resistance as the unknown.</div>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="heat-input">Heat Input</label>
+                            <input type="number" id="heat-input" value="25" min="0.001" step="any">
+                            <div class="input-note">Positive heat injected into the source node.</div>
+                        </div>
+                        <div class="input-group">
+                            <label for="ambient-temperature">Reference Boundary Temperature</label>
+                            <input type="number" id="ambient-temperature" value="40" step="any">
+                            <div class="input-note">Usually ambient or inlet-air temperature.</div>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="target-node-select">Target Node</label>
+                            <select id="target-node-select"></select>
+                            <div class="input-note">Temperature limit applies to this node.</div>
+                        </div>
+                        <div class="input-group">
+                            <label for="target-temperature">Target Maximum Temperature</label>
+                            <input type="number" id="target-temperature" value="110" step="any">
+                            <div class="input-note">Used for status, margin, and sizing mode.</div>
+                        </div>
+                    </div>
+
+                    <div class="input-row" id="unknown-row">
+                        <div class="input-group">
+                            <label for="unknown-segment-select">Segment To Size</label>
+                            <select id="unknown-segment-select"></select>
+                        </div>
+                        <div class="input-group expert-only" style="display:none;">
+                            <label for="sensitivity-variation">Sensitivity Variation</label>
+                            <input type="number" id="sensitivity-variation" value="0.2" min="0.05" step="any">
+                            <div class="input-note">Fractional +/- sweep around the nominal segment resistance.</div>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Segments</h3>
+                        <p>The tool keeps the topology restrained on purpose. Pick how each segment is defined, then let the solver carry those resistances through the network.</p>
+                        <div class="segment-stack" id="segment-editor"></div>
+                    </div>
+
+                    <button class="btn-primary" id="calculate-btn" type="submit" disabled>Loading...</button>
+                </form>
+            </section>
+
+            <section class="card" aria-labelledby="results-heading">
+                <h2 id="results-heading">Results</h2>
+
+                <div class="results-placeholder" id="results-placeholder">
+                    Select a template, define the path resistances, and run the solve. The default workflow is aimed at the question "which segment is limiting the design right now?"
+                </div>
+
+                <div class="status-banner" id="status-banner">
+                    <div>
+                        <div class="status-title" id="status-title"></div>
+                        <p class="status-body" id="status-body"></p>
+                    </div>
+                </div>
+
+                <div class="results-grid" id="results-grid" style="display: none;"></div>
+                <div class="chip-row" id="chip-row"></div>
+
+                <div class="tabs">
+                    <button class="tab-link active" data-tab="results-tab" type="button">Results</button>
+                    <button class="tab-link" data-tab="math-tab" type="button">Math</button>
+                    <button class="tab-link" data-tab="background-tab" type="button">Background</button>
+                </div>
+
+                <div class="tab-content active" id="results-tab">
+                    <div class="section-card">
+                        <h3>Network Diagram</h3>
+                        <div class="diagram-shell">
+                            <svg id="network-diagram" width="100%" height="220" viewBox="0 0 760 220" role="img" aria-label="Thermal network diagram"></svg>
+                        </div>
+                        <p class="diagram-note" id="diagram-note">Run a solve to render the network and highlight the hottest node and dominant drop.</p>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Diagnosis</h3>
+                        <div id="diagnosis-content">
+                            <p>No diagnosis available yet.</p>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Sensitivity</h3>
+                        <div id="sensitivity-plot" style="height: 300px;"></div>
+                        <p class="diagram-note" id="sensitivity-note">The tool sweeps the dominant segment by default so you can see how strongly the hottest node responds.</p>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Node Temperatures</h3>
+                        <div id="node-table-shell"></div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Segment Breakdown</h3>
+                        <div id="segment-table-shell"></div>
+                        <div id="contribution-chart" style="height: 220px; margin-top: 12px;"></div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Warnings & Recommendations</h3>
+                        <div class="input-row">
+                            <div>
+                                <h4>Warnings</h4>
+                                <ul id="warning-list"></ul>
+                            </div>
+                            <div>
+                                <h4>Recommendations</h4>
+                                <ul id="recommendation-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3>Assumptions</h3>
+                        <ul id="assumption-list"></ul>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="math-tab">
+                    <div id="derivation-shell">
+                        <p>No derivations available yet.</p>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="background-tab">
+                    <div class="section-card">
+                        <h3>When this tool is a good fit</h3>
+                        <ul>
+                            <li>You know the path resistances from a datasheet, a previous test, or a rough estimate.</li>
+                            <li>You need node temperatures and bottleneck identification before sink geometry is finalized.</li>
+                            <li>You are comparing paths such as sink versus PCB, or interface options inside a fixed stack.</li>
+                        </ul>
+                    </div>
+                    <div class="section-card">
+                        <h3>When another tool is better</h3>
+                        <ul>
+                            <li>Use the heatsink designer when the sink geometry is known and sink-to-ambient performance is the real question.</li>
+                            <li>Use a spreader-plate style model when in-plane spreading inside a wall or plate is likely dominant.</li>
+                            <li>Use a transient RC model when pulse heating, startup windows, or soak time matter.</li>
+                        </ul>
+                    </div>
+                    <div class="section-card">
+                        <h3>Governing idea</h3>
+                        <p>This tool uses the thermal analog of a resistor network. Each segment is reduced to a scalar thermal resistance, each node carries a temperature, and the steady-state solve enforces heat balance at every unknown node.</p>
+                        <div class="equation-block">$$Q_{ij} = \frac{T_i - T_j}{R_{ij}}$$</div>
+                        <div class="equation-block">$$\sum_j \frac{T_i - T_j}{R_{ij}} = Q_i$$</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2026 Engineering Tools. All tools are for educational use. <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'thermal_networks';
+        let pyodideInstance = null;
+        let pyToolModule = null;
+        let lastResult = null;
+
+        const MODE_DEFAULTS = {
+            direct: {
+                resistance_k_per_w: 1.0,
+            },
+            tim_area_normalized: {
+                impedance_k_cm2_per_w: 0.35,
+                contact_area_m2: 0.0004,
+            },
+            tim_conductivity: {
+                bondline_thickness_m: 0.00015,
+                conductivity_w_per_mk: 3.0,
+                contact_area_m2: 0.0004,
+            },
+            simple_conduction_slab: {
+                thickness_m: 0.004,
+                conductivity_w_per_mk: 167.0,
+                cross_section_area_m2: 0.0012,
+            },
+            solved_unknown: {
+                initial_guess_k_per_w: 1.0,
+                lower_bound_k_per_w: 0.05,
+                upper_bound_k_per_w: 8.0,
+            },
+        };
+
+        const TEMPLATE_DEFS = {
+            package_to_sink: {
+                label: 'Package to sink',
+                note: 'Best when you know or can estimate package, interface, and sink-to-ambient resistance values.',
+                defaultTargetNodeId: 'junction',
+                recommendedUnknownSegmentId: 'r_sa',
+                nodes: [
+                    { id: 'junction', label: 'Junction', kind: 'internal', isSource: true },
+                    { id: 'case', label: 'Case', kind: 'internal' },
+                    { id: 'sink', label: 'Sink', kind: 'internal' },
+                    { id: 'ambient', label: 'Ambient', kind: 'boundary', isBoundary: true },
+                ],
+                segments: [
+                    { id: 'r_jc', label: 'Junction to case', from: 'junction', to: 'case', category: 'junction_to_case', defaultMode: 'direct' },
+                    { id: 'r_cs', label: 'Case to sink interface', from: 'case', to: 'sink', category: 'interface', defaultMode: 'tim_conductivity' },
+                    { id: 'r_sa', label: 'Sink to ambient', from: 'sink', to: 'ambient', category: 'sink_to_ambient', defaultMode: 'direct' },
+                ],
+            },
+            housing_wall_path: {
+                label: 'Housing / wall path',
+                note: 'Good for enclosure walls, flat housings, or chassis panels when the path is mostly interface + wall + ambient.',
+                defaultTargetNodeId: 'source',
+                recommendedUnknownSegmentId: 'r_wa',
+                nodes: [
+                    { id: 'source', label: 'Source', kind: 'internal', isSource: true },
+                    { id: 'interface', label: 'Interface node', kind: 'internal' },
+                    { id: 'wall', label: 'Wall / plate', kind: 'internal' },
+                    { id: 'ambient', label: 'Ambient', kind: 'boundary', isBoundary: true },
+                ],
+                segments: [
+                    { id: 'r_si', label: 'Source to interface', from: 'source', to: 'interface', category: 'interface', defaultMode: 'tim_area_normalized' },
+                    { id: 'r_iw', label: 'Interface to wall', from: 'interface', to: 'wall', category: 'conduction', defaultMode: 'simple_conduction_slab' },
+                    { id: 'r_wa', label: 'Wall to ambient', from: 'wall', to: 'ambient', category: 'sink_to_ambient', defaultMode: 'direct' },
+                ],
+            },
+            dual_path_to_ambient: {
+                label: 'Dual path to ambient',
+                note: 'Use this when one node rejects heat through two competing ambient-side paths, such as sink versus PCB.',
+                defaultTargetNodeId: 'source',
+                recommendedUnknownSegmentId: 'r_sink',
+                nodes: [
+                    { id: 'source', label: 'Source', kind: 'internal', isSource: true },
+                    { id: 'case', label: 'Case / split node', kind: 'internal' },
+                    { id: 'ambient', label: 'Ambient', kind: 'boundary', isBoundary: true },
+                ],
+                segments: [
+                    { id: 'r_sc', label: 'Source to case', from: 'source', to: 'case', category: 'junction_to_case', defaultMode: 'direct' },
+                    { id: 'r_sink', label: 'Case to sink path', from: 'case', to: 'ambient', category: 'sink_to_ambient', defaultMode: 'direct' },
+                    { id: 'r_pcb', label: 'Case to PCB path', from: 'case', to: 'ambient', category: 'parallel_path', defaultMode: 'direct' },
+                ],
+            },
+            simple_chain: {
+                label: 'Simple chain',
+                note: 'Quick budget for a single straight thermal path with three segments.',
+                defaultTargetNodeId: 'source',
+                recommendedUnknownSegmentId: 'r_3',
+                nodes: [
+                    { id: 'source', label: 'Source', kind: 'internal', isSource: true },
+                    { id: 'stage_1', label: 'Stage 1', kind: 'internal' },
+                    { id: 'stage_2', label: 'Stage 2', kind: 'internal' },
+                    { id: 'ambient', label: 'Ambient', kind: 'boundary', isBoundary: true },
+                ],
+                segments: [
+                    { id: 'r_1', label: 'Segment 1', from: 'source', to: 'stage_1', category: 'other', defaultMode: 'direct' },
+                    { id: 'r_2', label: 'Segment 2', from: 'stage_1', to: 'stage_2', category: 'other', defaultMode: 'direct' },
+                    { id: 'r_3', label: 'Segment 3', from: 'stage_2', to: 'ambient', category: 'sink_to_ambient', defaultMode: 'direct' },
+                ],
+            },
+            custom: {
+                label: 'Custom series chain',
+                note: 'A restrained custom mode: fixed series topology, editable segment labels, no free-form graph editing.',
+                defaultTargetNodeId: 'source',
+                recommendedUnknownSegmentId: 'r_3',
+                editableLabels: true,
+                nodes: [
+                    { id: 'source', label: 'Source', kind: 'internal', isSource: true },
+                    { id: 'stage_1', label: 'Node 1', kind: 'internal' },
+                    { id: 'stage_2', label: 'Node 2', kind: 'internal' },
+                    { id: 'ambient', label: 'Ambient', kind: 'boundary', isBoundary: true },
+                ],
+                segments: [
+                    { id: 'r_1', label: 'Custom segment 1', from: 'source', to: 'stage_1', category: 'other', defaultMode: 'direct' },
+                    { id: 'r_2', label: 'Custom segment 2', from: 'stage_1', to: 'stage_2', category: 'other', defaultMode: 'direct' },
+                    { id: 'r_3', label: 'Custom segment 3', from: 'stage_2', to: 'ambient', category: 'sink_to_ambient', defaultMode: 'direct' },
+                ],
+            },
+        };
+
+        const appState = {
+            templateId: 'package_to_sink',
+            workflow: 'solve_temperatures',
+            targetNodeId: 'junction',
+            unknownSegmentId: 'r_sa',
+            segments: {},
+        };
+
+        function cloneTemplateState(templateId) {
+            const template = TEMPLATE_DEFS[templateId];
+            const nextSegments = {};
+            template.segments.forEach((segment) => {
+                nextSegments[segment.id] = {
+                    label: segment.label,
+                    mode: segment.defaultMode,
+                    inputs: { ...MODE_DEFAULTS[segment.defaultMode] },
+                };
+            });
+            return nextSegments;
+        }
+
+        function resetTemplateState(templateId) {
+            const template = TEMPLATE_DEFS[templateId];
+            appState.templateId = templateId;
+            appState.targetNodeId = template.defaultTargetNodeId;
+            appState.unknownSegmentId = template.recommendedUnknownSegmentId;
+            appState.segments = cloneTemplateState(templateId);
+        }
+
+        function formatNumber(value, digits = 3) {
+            return Number.isFinite(value) ? value.toFixed(digits) : 'N/A';
+        }
+
+        function deepPlain(value) {
+            if (value instanceof Map) {
+                const objectValue = {};
+                value.forEach((entryValue, key) => {
+                    objectValue[key] = deepPlain(entryValue);
+                });
+                return objectValue;
+            }
+            if (Array.isArray(value)) {
+                return value.map((entry) => deepPlain(entry));
+            }
+            if (value && typeof value === 'object' && value.constructor === Object) {
+                const objectValue = {};
+                Object.entries(value).forEach(([key, entryValue]) => {
+                    objectValue[key] = deepPlain(entryValue);
+                });
+                return objectValue;
+            }
+            if (value && typeof value === 'object' && typeof value.toJs === 'function') {
+                return deepPlain(value.toJs({ dict_converter: Object.fromEntries }));
+            }
+            return value;
+        }
+
+        function typesetMath() {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        function renderReadmeMarkdown(markdown) {
+            const lines = markdown.split('\n');
+            let html = '';
+            let inList = false;
+
+            lines.forEach((line) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    return;
+                }
+
+                if (trimmed.startsWith('# ')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    html += `<h3>${trimmed.slice(2)}</h3>`;
+                    return;
+                }
+
+                if (trimmed.startsWith('## ')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    html += `<h4>${trimmed.slice(3)}</h4>`;
+                    return;
+                }
+
+                if (trimmed.startsWith('- ')) {
+                    if (!inList) {
+                        html += '<ul>';
+                        inList = true;
+                    }
+                    html += `<li>${trimmed.slice(2)}</li>`;
+                    return;
+                }
+
+                if (inList) {
+                    html += '</ul>';
+                    inList = false;
+                }
+                html += `<p>${trimmed}</p>`;
+            });
+
+            if (inList) {
+                html += '</ul>';
+            }
+            return html;
+        }
+
+        async function loadReadme() {
+            const content = document.getElementById('readme-content');
+            try {
+                const response = await fetch('./README.md');
+                const markdown = await response.text();
+                content.innerHTML = renderReadmeMarkdown(markdown);
+            } catch (error) {
+                content.innerHTML = '<p>Unable to load README content.</p>';
+            }
+        }
+
+        function buildTemplateOptions() {
+            const select = document.getElementById('template-select');
+            select.innerHTML = Object.entries(TEMPLATE_DEFS)
+                .map(([id, template]) => `<option value="${id}">${template.label}</option>`)
+                .join('');
+        }
+
+        function renderGeneralControls() {
+            const template = TEMPLATE_DEFS[appState.templateId];
+            document.getElementById('template-select').value = appState.templateId;
+            document.getElementById('workflow-select').value = appState.workflow;
+            document.getElementById('template-note').textContent = template.note;
+
+            const targetNodeSelect = document.getElementById('target-node-select');
+            targetNodeSelect.innerHTML = template.nodes
+                .filter((node) => !node.isBoundary)
+                .map((node) => `<option value="${node.id}">${node.label}</option>`)
+                .join('');
+            targetNodeSelect.value = appState.targetNodeId;
+
+            const unknownSelect = document.getElementById('unknown-segment-select');
+            unknownSelect.innerHTML = template.segments
+                .map((segment) => `<option value="${segment.id}">${segment.label}</option>`)
+                .join('');
+            unknownSelect.value = appState.unknownSegmentId;
+
+            const unknownRow = document.getElementById('unknown-row');
+            unknownRow.style.display = appState.workflow === 'solve_temperatures' ? 'none' : 'grid';
+        }
+
+        function renderSegmentEditor() {
+            const template = TEMPLATE_DEFS[appState.templateId];
+            const shell = document.getElementById('segment-editor');
+
+            shell.innerHTML = template.segments.map((segment) => {
+                const stateSegment = appState.segments[segment.id];
+                const isUnknown = appState.workflow !== 'solve_temperatures' && appState.unknownSegmentId === segment.id;
+                return `
+                    <div class="segment-card ${isUnknown ? 'unknown' : ''}" data-segment-id="${segment.id}">
+                        <div class="segment-head">
+                            <div>
+                                ${template.editableLabels
+                                    ? `<input class="segment-title-input" data-role="segment-label" data-segment-id="${segment.id}" value="${stateSegment.label}">`
+                                    : `<h4>${stateSegment.label}</h4>`
+                                }
+                                <p class="segment-path">${nodeLabel(template, segment.from)} -> ${nodeLabel(template, segment.to)}</p>
+                            </div>
+                            <div class="segment-tag">${segment.category.replaceAll('_', ' ')}</div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label>Resistance Mode</label>
+                                <select data-role="segment-mode" data-segment-id="${segment.id}" ${isUnknown ? 'disabled' : ''}>
+                                    ${['direct', 'tim_area_normalized', 'tim_conductivity', 'simple_conduction_slab'].map((mode) => `
+                                        <option value="${mode}" ${stateSegment.mode === mode ? 'selected' : ''}>${mode}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>${isUnknown ? 'Sizing Mode' : 'Definition Note'}</label>
+                                <input value="${isUnknown ? 'This segment will be solved to meet the target.' : definitionNote(stateSegment.mode)}" disabled>
+                            </div>
+                        </div>
+                        ${isUnknown ? renderUnknownInputs(segment.id, stateSegment.inputs) : renderModeInputs(segment.id, stateSegment.mode, stateSegment.inputs)}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function nodeLabel(template, nodeId) {
+            const node = template.nodes.find((entry) => entry.id === nodeId);
+            return node ? node.label : nodeId;
+        }
+
+        function definitionNote(mode) {
+            const notes = {
+                direct: 'Enter the lumped resistance directly.',
+                tim_area_normalized: 'Convert area-normalized TIM impedance into K/W.',
+                tim_conductivity: 'Use thickness, conductivity, and contact area.',
+                simple_conduction_slab: 'Approximate a 1D solid conduction path.',
+            };
+            return notes[mode] || '';
+        }
+
+        function renderUnknownInputs(segmentId, inputs) {
+            return `
+                <div class="input-group">
+                    <label>Initial Guess (K/W)</label>
+                    <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="initial_guess_k_per_w" value="${inputs.initial_guess_k_per_w ?? MODE_DEFAULTS.solved_unknown.initial_guess_k_per_w}">
+                </div>
+                <div class="input-row expert-only expert-only-grid" style="display:none;">
+                    <div class="input-group">
+                        <label>Lower Bound (K/W)</label>
+                        <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="lower_bound_k_per_w" value="${inputs.lower_bound_k_per_w ?? MODE_DEFAULTS.solved_unknown.lower_bound_k_per_w}">
+                    </div>
+                    <div class="input-group">
+                        <label>Upper Bound (K/W)</label>
+                        <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="upper_bound_k_per_w" value="${inputs.upper_bound_k_per_w ?? MODE_DEFAULTS.solved_unknown.upper_bound_k_per_w}">
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModeInputs(segmentId, mode, inputs) {
+            if (mode === 'direct') {
+                return `
+                    <div class="input-group">
+                        <label>Resistance (K/W)</label>
+                        <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="resistance_k_per_w" value="${inputs.resistance_k_per_w ?? MODE_DEFAULTS.direct.resistance_k_per_w}">
+                    </div>
+                `;
+            }
+            if (mode === 'tim_area_normalized') {
+                return `
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label>Impedance (K*cm^2/W)</label>
+                            <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="impedance_k_cm2_per_w" value="${inputs.impedance_k_cm2_per_w ?? MODE_DEFAULTS.tim_area_normalized.impedance_k_cm2_per_w}">
+                        </div>
+                        <div class="input-group">
+                            <label>Contact Area (m^2)</label>
+                            <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="contact_area_m2" value="${inputs.contact_area_m2 ?? MODE_DEFAULTS.tim_area_normalized.contact_area_m2}">
+                        </div>
+                    </div>
+                `;
+            }
+            if (mode === 'tim_conductivity') {
+                return `
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label>Bondline Thickness (m)</label>
+                            <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="bondline_thickness_m" value="${inputs.bondline_thickness_m ?? MODE_DEFAULTS.tim_conductivity.bondline_thickness_m}">
+                        </div>
+                        <div class="input-group">
+                            <label>Conductivity (W/m*K)</label>
+                            <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="conductivity_w_per_mk" value="${inputs.conductivity_w_per_mk ?? MODE_DEFAULTS.tim_conductivity.conductivity_w_per_mk}">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Contact Area (m^2)</label>
+                        <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="contact_area_m2" value="${inputs.contact_area_m2 ?? MODE_DEFAULTS.tim_conductivity.contact_area_m2}">
+                    </div>
+                `;
+            }
+            return `
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Thickness / Length (m)</label>
+                        <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="thickness_m" value="${inputs.thickness_m ?? MODE_DEFAULTS.simple_conduction_slab.thickness_m}">
+                    </div>
+                    <div class="input-group">
+                        <label>Conductivity (W/m*K)</label>
+                        <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="conductivity_w_per_mk" value="${inputs.conductivity_w_per_mk ?? MODE_DEFAULTS.simple_conduction_slab.conductivity_w_per_mk}">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Cross-Section Area (m^2)</label>
+                    <input type="number" step="any" data-role="segment-input" data-segment-id="${segmentId}" data-param="cross_section_area_m2" value="${inputs.cross_section_area_m2 ?? MODE_DEFAULTS.simple_conduction_slab.cross_section_area_m2}">
+                </div>
+            `;
+        }
+
+        function renderModelEditor() {
+            renderGeneralControls();
+            renderSegmentEditor();
+        }
+
+        function bindTabs() {
+            document.querySelectorAll('.tab-link').forEach((button) => {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-link').forEach((entry) => entry.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach((entry) => entry.classList.remove('active'));
+                    button.classList.add('active');
+                    document.getElementById(button.dataset.tab).classList.add('active');
+                    typesetMath();
+                    if (button.dataset.tab === 'results-tab') {
+                        const plotEl = document.getElementById('sensitivity-plot');
+                        if (plotEl && plotEl.data) {
+                            Plotly.Plots.resize(plotEl);
+                        }
+                    }
+                });
+            });
+        }
+
+        function bindFormEvents() {
+            document.getElementById('template-select').addEventListener('change', (event) => {
+                resetTemplateState(event.target.value);
+                renderModelEditor();
+            });
+            document.getElementById('workflow-select').addEventListener('change', (event) => {
+                appState.workflow = event.target.value;
+                if (appState.workflow === 'budget_ambient_segment') {
+                    appState.unknownSegmentId = TEMPLATE_DEFS[appState.templateId].recommendedUnknownSegmentId;
+                }
+                renderModelEditor();
+            });
+            document.getElementById('target-node-select').addEventListener('change', (event) => {
+                appState.targetNodeId = event.target.value;
+            });
+            document.getElementById('unknown-segment-select').addEventListener('change', (event) => {
+                appState.unknownSegmentId = event.target.value;
+                renderSegmentEditor();
+            });
+
+            document.getElementById('segment-editor').addEventListener('change', handleSegmentEdit);
+            document.getElementById('segment-editor').addEventListener('input', handleSegmentEdit);
+            document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+        }
+
+        function handleSegmentEdit(event) {
+            const segmentId = event.target.dataset.segmentId;
+            if (!segmentId) return;
+
+            if (event.target.dataset.role === 'segment-mode') {
+                appState.segments[segmentId].mode = event.target.value;
+                appState.segments[segmentId].inputs = { ...MODE_DEFAULTS[event.target.value] };
+                renderSegmentEditor();
+                return;
+            }
+
+            if (event.target.dataset.role === 'segment-label') {
+                appState.segments[segmentId].label = event.target.value;
+                return;
+            }
+
+            if (event.target.dataset.role === 'segment-input') {
+                const param = event.target.dataset.param;
+                appState.segments[segmentId].inputs[param] = event.target.value;
+            }
+        }
+
+        function buildModel() {
+            const template = TEMPLATE_DEFS[appState.templateId];
+            const heatInput = parseFloat(document.getElementById('heat-input').value);
+            const ambientTemperature = parseFloat(document.getElementById('ambient-temperature').value);
+            const targetTemperature = parseFloat(document.getElementById('target-temperature').value);
+            const variation = parseFloat(document.getElementById('sensitivity-variation').value);
+
+            const workflow = appState.workflow;
+            const analysisMode = workflow === 'solve_temperatures' ? 'solve_temperatures' : 'solve_required_segment';
+            const unknownSegmentId = workflow === 'budget_ambient_segment'
+                ? template.recommendedUnknownSegmentId
+                : appState.unknownSegmentId;
+
+            const nodes = template.nodes.map((node) => {
+                const payload = {
+                    id: node.id,
+                    label: node.label,
+                    kind: node.kind,
+                    heat_input_w: node.isSource ? heatInput : 0.0,
+                    fixed_temperature_c: node.isBoundary ? ambientTemperature : null,
+                    max_temperature_c: node.id === appState.targetNodeId ? targetTemperature : null,
+                    notes: '',
+                    tags: node.isSource ? ['source'] : node.isBoundary ? ['boundary'] : [],
+                };
+                return payload;
+            });
+
+            const segments = template.segments.map((segment) => {
+                const stateSegment = appState.segments[segment.id];
+                const isUnknown = analysisMode === 'solve_required_segment' && unknownSegmentId === segment.id;
+                return {
+                    id: segment.id,
+                    label: stateSegment.label,
+                    from_node_id: segment.from,
+                    to_node_id: segment.to,
+                    category: segment.category,
+                    mode: isUnknown ? 'solved_unknown' : stateSegment.mode,
+                    inputs: normalizeSegmentInputs(isUnknown ? 'solved_unknown' : stateSegment.mode, stateSegment.inputs),
+                    notes: '',
+                    tags: [],
+                };
+            });
+
+            return {
+                model: {
+                    schema_version: '1.0',
+                    template_id: appState.templateId,
+                    analysis_mode: analysisMode,
+                    network: {
+                        id: 'main_network',
+                        label: TEMPLATE_DEFS[appState.templateId].label,
+                        notes: '',
+                        nodes,
+                        segments,
+                    },
+                    solve_target: analysisMode === 'solve_required_segment'
+                        ? {
+                            target_node_id: appState.targetNodeId,
+                            target_type: 'max_temperature',
+                            target_value_c: targetTemperature,
+                            unknown_segment_id: unknownSegmentId,
+                        }
+                        : null,
+                    options: {
+                        sensitivity_segment_ids: [],
+                        sensitivity_variation_fraction: variation,
+                        sensitivity_points: 21,
+                    },
+                },
+                variation,
+            };
+        }
+
+        function normalizeSegmentInputs(mode, inputs) {
+            const clean = {};
+            Object.entries(inputs).forEach(([key, value]) => {
+                clean[key] = value === '' ? null : parseFloat(value);
+            });
+
+            if (mode === 'solved_unknown') {
+                return {
+                    initial_guess_k_per_w: clean.initial_guess_k_per_w ?? MODE_DEFAULTS.solved_unknown.initial_guess_k_per_w,
+                    lower_bound_k_per_w: clean.lower_bound_k_per_w ?? MODE_DEFAULTS.solved_unknown.lower_bound_k_per_w,
+                    upper_bound_k_per_w: clean.upper_bound_k_per_w ?? MODE_DEFAULTS.solved_unknown.upper_bound_k_per_w,
+                };
+            }
+            if (mode === 'direct') {
+                return {
+                    resistance_k_per_w: clean.resistance_k_per_w,
+                };
+            }
+            if (mode === 'tim_area_normalized') {
+                return {
+                    impedance_k_cm2_per_w: clean.impedance_k_cm2_per_w,
+                    contact_area_m2: clean.contact_area_m2,
+                };
+            }
+            if (mode === 'tim_conductivity') {
+                return {
+                    bondline_thickness_m: clean.bondline_thickness_m,
+                    conductivity_w_per_mk: clean.conductivity_w_per_mk,
+                    contact_area_m2: clean.contact_area_m2,
+                };
+            }
+            return {
+                thickness_m: clean.thickness_m,
+                conductivity_w_per_mk: clean.conductivity_w_per_mk,
+                cross_section_area_m2: clean.cross_section_area_m2,
+            };
+        }
+
+        async function pythonCall(functionName, ...args) {
+            const pyArgs = args.map((arg) => pyodideInstance.toPy(arg));
+            try {
+                const proxy = pyToolModule[functionName](...pyArgs);
+                const result = deepPlain(proxy.toJs({ dict_converter: Object.fromEntries }));
+                proxy.destroy();
+                return result;
+            } finally {
+                pyArgs.forEach((arg) => {
+                    if (arg && typeof arg.destroy === 'function') {
+                        arg.destroy();
+                    }
+                });
+            }
+        }
+
+        async function handleCalculate(event) {
+            event.preventDefault();
+            const button = document.getElementById('calculate-btn');
+            button.disabled = true;
+            button.textContent = 'Calculating...';
+
+            try {
+                const payload = buildModel();
+                const validation = await pythonCall('validate_thermal_network_model', payload.model);
+                if (!validation.is_valid) {
+                    renderInvalidState(validation.errors, validation.warnings);
+                    return;
+                }
+
+                const result = await pythonCall('solve_thermal_network', payload.model);
+                lastResult = result;
+                renderResults(result);
+
+                const sensitivitySegmentId = result.diagnosis.first_improvement_target_id || result.summary.dominant_segment_id;
+                const sensitivity = await pythonCall(
+                    'generate_thermal_network_sensitivity',
+                    payload.model,
+                    [sensitivitySegmentId],
+                    payload.variation,
+                    21
+                );
+                renderSensitivity(sensitivity, sensitivitySegmentId);
+            } catch (error) {
+                renderInvalidState([error.message], []);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Calculate';
+            }
+        }
+
+        function renderInvalidState(errors, warnings) {
+            document.getElementById('results-placeholder').style.display = 'block';
+            document.getElementById('results-placeholder').innerHTML = `
+                <strong>Model is not solvable yet.</strong>
+                <ul>${errors.map((error) => `<li>${error}</li>`).join('')}</ul>
+                ${warnings.length ? `<p><strong>Warnings:</strong> ${warnings.join(' | ')}</p>` : ''}
+            `;
+            document.getElementById('status-banner').style.display = 'none';
+            document.getElementById('results-grid').style.display = 'none';
+            document.getElementById('chip-row').innerHTML = '';
+            document.getElementById('diagnosis-content').innerHTML = '<p>No diagnosis available yet.</p>';
+            document.getElementById('node-table-shell').innerHTML = '';
+            document.getElementById('segment-table-shell').innerHTML = '';
+            document.getElementById('derivation-shell').innerHTML = '<p>No derivations available yet.</p>';
+            document.getElementById('warning-list').innerHTML = '';
+            document.getElementById('recommendation-list').innerHTML = '';
+            document.getElementById('assumption-list').innerHTML = '';
+            document.getElementById('network-diagram').innerHTML = '';
+            const plotEl = document.getElementById('sensitivity-plot');
+            if (plotEl && plotEl.data) {
+                Plotly.purge(plotEl);
+            }
+        }
+
+        function renderResults(result) {
+            document.getElementById('results-placeholder').style.display = 'none';
+
+            const banner = document.getElementById('status-banner');
+            banner.style.display = 'block';
+            banner.className = `status-banner ${result.status}`;
+            document.getElementById('status-title').textContent = statusTitle(result.status);
+            document.getElementById('status-body').textContent = statusBody(result);
+
+            const summary = result.summary;
+            const summaryCards = [
+                { label: 'Hottest Node', value: `${formatNumber(summary.hottest_temperature_c, 1)} C`, subtext: summary.hottest_node_label },
+                { label: 'Effective Total R', value: `${formatNumber(summary.effective_total_resistance_k_per_w, 3)} K/W`, subtext: `${formatNumber(summary.total_applied_heat_w, 1)} W applied` },
+                { label: 'Target Margin', value: summary.margin_to_limit_c === null ? 'N/A' : `${formatNumber(summary.margin_to_limit_c, 1)} C`, subtext: summary.controlling_limit_node_id || 'No active limit' },
+                { label: 'Dominant Segment', value: `${formatNumber(summary.dominant_segment_contribution_pct, 1)}%`, subtext: summary.dominant_segment_label },
+            ];
+            if (summary.sized_unknown_resistance_k_per_w !== null) {
+                summaryCards.push({
+                    label: 'Required Segment R',
+                    value: `${formatNumber(summary.sized_unknown_resistance_k_per_w, 3)} K/W`,
+                    subtext: summary.sized_unknown_segment_id,
+                });
+            }
+            const grid = document.getElementById('results-grid');
+            grid.style.display = 'grid';
+            grid.innerHTML = summaryCards.map((card) => `
+                <div class="result-item">
+                    <div class="result-label">${card.label}</div>
+                    <div class="result-value">${card.value}</div>
+                    <div class="result-subtext">${card.subtext}</div>
+                </div>
+            `).join('');
+
+            renderChips(result);
+            renderDiagnosis(result);
+            renderNodeTable(result.nodes);
+            renderSegmentTable(result.segments);
+            renderContributionChart(result.segments, result.summary);
+            renderLists(result.warnings, result.recommendations, result.assumptions);
+            renderDerivations(result.derivations);
+            renderDiagram(result.diagram_payload, result.summary);
+            typesetMath();
+        }
+
+        function renderChips(result) {
+            const shell = document.getElementById('chip-row');
+            const chips = [
+                `<span class="score-chip ${result.applicability.status}">${result.applicability.score_label}</span>`,
+            ];
+            result.applicability.flags.forEach((flag) => {
+                chips.push(`<span class="warning-chip">${flag}</span>`);
+            });
+            if (result.applicability.routing_suggestion) {
+                chips.push(`<span class="warning-chip">${result.applicability.routing_suggestion}</span>`);
+            }
+            shell.innerHTML = chips.join('');
+        }
+
+        function renderDiagnosis(result) {
+            const diagnosis = result.diagnosis;
+            const shell = document.getElementById('diagnosis-content');
+            shell.innerHTML = `
+                <p><strong>First improvement target:</strong> ${diagnosis.first_improvement_target_label}</p>
+                <p><strong>Why it matters:</strong> ${diagnosis.first_improvement_reason}</p>
+                <p><strong>Current drop:</strong> ${formatNumber(diagnosis.dominant_segment_delta_t_c, 2)} C across the dominant segment, or ${formatNumber(diagnosis.dominant_segment_contribution_pct, 1)}% of the total rise.</p>
+                ${diagnosis.required_improvement_summary ? `<p><strong>Sizing result:</strong> ${diagnosis.required_improvement_summary}</p>` : ''}
+            `;
+        }
+
+        function renderNodeTable(nodes) {
+            const shell = document.getElementById('node-table-shell');
+            shell.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Node</th>
+                            <th>Temperature</th>
+                            <th>Heat Input</th>
+                            <th>Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${nodes.map((node) => `
+                            <tr>
+                                <td>${node.label}</td>
+                                <td class="mono">${formatNumber(node.temperature_c, 2)} C</td>
+                                <td class="mono">${formatNumber(node.heat_input_w, 2)} W</td>
+                                <td class="mono">${node.margin_to_max_c === null ? 'N/A' : `${formatNumber(node.margin_to_max_c, 2)} C`}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderSegmentTable(segments) {
+            const sorted = [...segments].sort((a, b) => b.contribution_pct - a.contribution_pct);
+            const shell = document.getElementById('segment-table-shell');
+            shell.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Segment</th>
+                            <th>Mode</th>
+                            <th>Resistance</th>
+                            <th>Heat Flow</th>
+                            <th>Delta T</th>
+                            <th>Contribution</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sorted.map((segment) => `
+                            <tr class="segment-row-link" data-segment-id="${segment.id}" title="Click to see derivation">
+                                <td>${segment.label}</td>
+                                <td>${segment.mode}</td>
+                                <td class="mono">${formatNumber(segment.resolved_resistance_k_per_w, 4)} K/W</td>
+                                <td class="mono">${formatNumber(segment.heat_flow_w, 3)} W</td>
+                                <td class="mono">${formatNumber(segment.delta_t_c, 3)} C</td>
+                                <td class="mono">${formatNumber(segment.contribution_pct, 1)}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            shell.querySelectorAll('.segment-row-link').forEach((row) => {
+                row.style.cursor = 'pointer';
+                row.addEventListener('click', () => {
+                    const segId = row.dataset.segmentId;
+                    document.querySelectorAll('.tab-link').forEach((t) => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach((t) => t.classList.remove('active'));
+                    document.querySelector('[data-tab="math-tab"]').classList.add('active');
+                    document.getElementById('math-tab').classList.add('active');
+                    const target = document.querySelector(`.derivation-card[data-derivation-id="drv_${segId}_resistance"]`);
+                    if (target) {
+                        document.querySelectorAll('.derivation-card').forEach((c) => c.removeAttribute('open'));
+                        target.setAttribute('open', '');
+                        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        typesetMath();
+                    }
+                });
+            });
+        }
+
+        function renderContributionChart(segments, summary) {
+            const sorted = [...segments].sort((a, b) => b.delta_t_c - a.delta_t_c);
+            const labels = sorted.map((s) => s.label);
+            const deltaTs = sorted.map((s) => s.delta_t_c);
+            const colors = sorted.map((s) => s.id === summary.dominant_segment_id ? '#b91c1c' : '#475569');
+
+            Plotly.newPlot(
+                document.getElementById('contribution-chart'),
+                [{
+                    y: labels,
+                    x: deltaTs,
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: { color: colors },
+                    text: deltaTs.map((v) => `${v.toFixed(2)} C`),
+                    textposition: 'outside',
+                    hovertemplate: '%{y}: %{x:.3f} C<extra></extra>',
+                }],
+                {
+                    margin: { t: 8, r: 60, b: 36, l: 160 },
+                    xaxis: { title: 'Temperature drop (C)', gridcolor: 'var(--border-color, #e5e7eb)' },
+                    yaxis: { autorange: 'reversed' },
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: 'Helvetica Neue, sans-serif', color: 'var(--text-color, #111827)', size: 12 },
+                },
+                { responsive: true }
+            );
+        }
+
+        function renderLists(warnings, recommendations, assumptions) {
+            document.getElementById('warning-list').innerHTML = (warnings.length ? warnings : ['No active warnings.'])
+                .map((item) => `<li>${item}</li>`).join('');
+            document.getElementById('recommendation-list').innerHTML = (recommendations.length ? recommendations : ['No recommendations yet.'])
+                .map((item) => `<li>${item}</li>`).join('');
+            document.getElementById('assumption-list').innerHTML = assumptions
+                .map((item) => `<li>${item}</li>`).join('');
+        }
+
+        function renderDerivations(derivations) {
+            const shell = document.getElementById('derivation-shell');
+            shell.innerHTML = derivations.map((derivation) => `
+                <details class="derivation-card" data-derivation-id="${derivation.id}">
+                    <summary>
+                        <span class="equation-tag">${derivation.equation_number}</span>
+                        <span>${derivation.title}</span>
+                    </summary>
+                    <div class="derivation-body">
+                        <div class="equation-block">$$${derivation.equation_latex}$$</div>
+                        <div class="equation-block">$$${derivation.substitution_latex}$$</div>
+                        <ul class="legend-list">
+                            ${derivation.variable_legend.map((item) => `
+                                <li><strong>${item.symbol}</strong>: ${item.meaning} (${item.units})</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </details>
+            `).join('');
+
+            shell.querySelectorAll('.derivation-card').forEach((card) => {
+                card.addEventListener('toggle', () => {
+                    if (card.open) {
+                        shell.querySelectorAll('.derivation-card').forEach((other) => {
+                            if (other !== card) other.removeAttribute('open');
+                        });
+                        typesetMath();
+                    }
+                });
+            });
+        }
+
+        function renderDiagram(diagramPayload, summary) {
+            const svg = document.getElementById('network-diagram');
+            const note = document.getElementById('diagram-note');
+            if (!diagramPayload || !diagramPayload.nodes || !diagramPayload.nodes.length) {
+                svg.innerHTML = '';
+                note.textContent = 'Run a solve to render the network.';
+                return;
+            }
+
+            const width = 760;
+            const height = 220;
+            const marginX = 70;
+            const ranks = [...new Set(diagramPayload.nodes.map((node) => node.rank))].sort((a, b) => a - b);
+            const rankStep = ranks.length > 1 ? (width - 2 * marginX) / (ranks.length - 1) : 1;
+            const nodePositions = {};
+
+            diagramPayload.nodes.forEach((node) => {
+                const x = marginX + ranks.indexOf(node.rank) * rankStep;
+                const y = 110;
+                nodePositions[node.id] = { x, y };
+            });
+
+            const edgeOffsets = {};
+            diagramPayload.edges.forEach((edge) => {
+                const key = [edge.from_node_id, edge.to_node_id].sort().join('|');
+                edgeOffsets[key] = edgeOffsets[key] || 0;
+                edge.offsetIndex = edgeOffsets[key];
+                edgeOffsets[key] += 1;
+            });
+
+            const edgeMarkup = diagramPayload.edges.map((edge) => {
+                const from = nodePositions[edge.from_node_id];
+                const to = nodePositions[edge.to_node_id];
+                const key = [edge.from_node_id, edge.to_node_id].sort().join('|');
+                const count = edgeOffsets[key];
+                const offset = count > 1 ? (-18 + edge.offsetIndex * 36) : 0;
+                const midX = (from.x + to.x) / 2;
+                const midY = 110 + offset;
+                return `
+                    <path d="M ${from.x + 56} ${from.y + offset} Q ${midX} ${midY} ${to.x - 56} ${to.y + offset}" fill="none" stroke="#94a3b8" stroke-width="2"></path>
+                    <text x="${midX}" y="${midY - 8}" text-anchor="middle" fill="#475569" font-size="12">${formatNumber(edge.resolved_resistance_k_per_w, 3)} K/W</text>
+                `;
+            }).join('');
+
+            const nodeMarkup = diagramPayload.nodes.map((node) => {
+                const pos = nodePositions[node.id];
+                const fill = node.is_hottest ? '#b91c1c' : node.is_reference ? '#0f766e' : '#111827';
+                const tempFill = node.is_hottest ? '#7f1d1d' : '#334155';
+                return `
+                    <rect x="${pos.x - 56}" y="${pos.y - 30}" width="112" height="60" rx="12" fill="#fff" stroke="${fill}" stroke-width="${node.is_hottest || node.is_reference ? 2.5 : 1.5}"></rect>
+                    <text x="${pos.x}" y="${pos.y - 6}" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="600">${node.label}</text>
+                    <text x="${pos.x}" y="${pos.y + 14}" text-anchor="middle" fill="${tempFill}" font-size="12">${formatNumber(node.temperature_c, 1)} C</text>
+                `;
+            }).join('');
+
+            svg.innerHTML = `
+                <defs>
+                    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                        <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"></path>
+                    </marker>
+                </defs>
+                ${edgeMarkup.replace(/stroke="#94a3b8"/g, 'stroke="#94a3b8" marker-end="url(#arrow)"')}
+                ${nodeMarkup}
+            `;
+
+            note.textContent = `The hottest node is ${summary.hottest_node_label} at ${formatNumber(summary.hottest_temperature_c, 1)} C. ${summary.dominant_segment_label} currently consumes the largest share of the rise.`;
+        }
+
+        function renderSensitivity(sensitivity, segmentId) {
+            const plot = document.getElementById('sensitivity-plot');
+            if (!sensitivity.series || !sensitivity.series.length) {
+                plot.innerHTML = '';
+                return;
+            }
+            const series = sensitivity.series[0];
+            Plotly.newPlot(
+                plot,
+                [
+                    {
+                        x: series.x_resistance_k_per_w,
+                        y: series.y_hottest_temperature_c,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { color: '#111827', width: 2.5 },
+                        name: series.segment_label,
+                    },
+                ],
+                {
+                    margin: { t: 18, r: 14, b: 48, l: 56 },
+                    xaxis: { title: 'Segment resistance (K/W)', gridcolor: '#e5e7eb' },
+                    yaxis: { title: 'Hottest node temperature (C)', gridcolor: '#e5e7eb' },
+                    paper_bgcolor: '#ffffff',
+                    plot_bgcolor: '#ffffff',
+                    font: { family: 'Helvetica Neue, sans-serif', color: '#111827' },
+                },
+                { responsive: true }
+            );
+            document.getElementById('sensitivity-note').textContent = `Sensitivity sweep for ${series.segment_label}. Lowering this resistance shifts the hottest-node temperature the fastest in the current model.`;
+        }
+
+        function statusTitle(status) {
+            const titles = {
+                acceptable: 'Model meets the active temperature limit',
+                marginal: 'Model is close to the active temperature limit',
+                unacceptable: 'Model exceeds the active temperature limit',
+                invalid: 'Model is invalid',
+            };
+            return titles[status] || 'Model result';
+        }
+
+        function statusBody(result) {
+            if (result.summary.margin_to_limit_c === null) {
+                return 'The network solved successfully, but no controlling limit was active for a pass/fail decision.';
+            }
+            const margin = formatNumber(result.summary.margin_to_limit_c, 1);
+            return `Margin to the selected limit: ${margin} C at ${result.summary.hottest_node_label}.`;
+        }
+
+        async function main() {
+            buildTemplateOptions();
+            resetTemplateState('package_to_sink');
+            renderModelEditor();
+            bindFormEvents();
+            bindTabs();
+
+            const expertToggle = document.getElementById('expert-toggle');
+            if (localStorage.getItem('thermal_path_expert') === 'true') {
+                expertToggle.checked = true;
+                document.body.classList.add('expert-mode');
+            }
+            expertToggle.addEventListener('change', () => {
+                document.body.classList.toggle('expert-mode', expertToggle.checked);
+                localStorage.setItem('thermal_path_expert', expertToggle.checked);
+            });
+
+            await loadReadme();
+
+            try {
+                document.getElementById('loading-text').textContent = 'Loading Pyodide...';
+                pyodideInstance = await loadPyodide();
+
+                document.getElementById('loading-text').textContent = 'Loading thermal network solver...';
+                await pyodideInstance.runPythonAsync(`
+                    from pyodide.http import pyfetch
+
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py?v=${Date.now()}')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+
+                    import ${TOOL_MODULE_NAME}
+                `);
+                pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+                document.getElementById('calculate-btn').disabled = false;
+                document.getElementById('calculate-btn').textContent = 'Calculate';
+                document.getElementById('loading-overlay').classList.add('hidden');
+            } catch (error) {
+                document.getElementById('loading-text').textContent = `Failed to load tool: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>
