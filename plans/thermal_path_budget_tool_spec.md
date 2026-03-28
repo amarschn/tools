@@ -159,10 +159,10 @@ This is the right disclosure frame for the tool. It is more useful than presenti
 The first shipped version should support:
 
 - steady-state only,
-- one ambient boundary temperature,
-- one or more heat inputs at defined nodes,
+- one fixed-temperature reference boundary node,
+- one positive heat-input node in the user-facing v1 templates,
 - series chains,
-- simple parallel branches,
+- simple parallel branches that split and rejoin once,
 - node temperature solve,
 - segment temperature-drop breakdown,
 - required-resistance solve for one selected unknown segment,
@@ -174,6 +174,8 @@ The first shipped version should support:
 
 Do not put these into v1:
 
+- multiple independent heat-input nodes in a single user-facing model,
+- multiple fixed-temperature boundary nodes in one solve,
 - fully arbitrary graph editing,
 - transient capacitance / RC dynamics,
 - automatic geometry inference,
@@ -274,6 +276,23 @@ Support these modes:
 - `Compare two path options`
 
 This avoids forcing every user into the same target language.
+
+### Step 2A — Map workflow modes to backend solve modes
+
+The frontend workflow should be broader than the backend API.
+
+For MVP, map the user-facing workflows to the canonical backend like this:
+
+- `Analyze temperatures`
+  - backend `analysis_mode = "solve_temperatures"`
+- `Size one segment for a target`
+  - backend `analysis_mode = "solve_required_segment"`
+- `Budget required sink resistance`
+  - backend `analysis_mode = "solve_required_segment"` on a template that includes the sink-to-ambient segment
+- `Compare two path options`
+  - frontend convenience mode only; run two separate canonical solves and compare their payloads side-by-side
+
+This keeps the backend contract small while still allowing a more helpful product workflow.
 
 ### Step 3 — Define nodes and segments
 
@@ -379,19 +398,27 @@ Suggested structure:
 
 ```python
 {
-    "mode": "analyze_temperatures",
-    "ambient_temperature": 40.0,
-    "nodes": [
-        {"id": "source", "label": "Junction", "heat_w": 25.0, "fixed_temperature_c": None},
-        {"id": "case", "label": "Case"},
-        {"id": "sink", "label": "Sink Base"},
-        {"id": "ambient", "label": "Ambient", "fixed_temperature_c": 40.0},
-    ],
-    "segments": [
-        {"id": "r_jc", "from": "source", "to": "case", "mode": "direct", "r_theta_k_per_w": 0.4},
-        {"id": "r_cs", "from": "case", "to": "sink", "mode": "tim_conductivity", ...},
-        {"id": "r_sa", "from": "sink", "to": "ambient", "mode": "direct", "r_theta_k_per_w": 2.0},
-    ],
+    "schema_version": "1.0",
+    "template_id": "package_to_sink",
+    "analysis_mode": "solve_temperatures",
+    "network": {
+        "id": "main_network",
+        "label": "Package to sink budget",
+        "notes": "",
+        "nodes": [
+            {"id": "source", "label": "Junction", "heat_input_w": 25.0},
+            {"id": "case", "label": "Case"},
+            {"id": "sink", "label": "Sink Base"},
+            {"id": "ambient", "label": "Ambient", "kind": "boundary", "fixed_temperature_c": 40.0},
+        ],
+        "segments": [
+            {"id": "r_jc", "from_node_id": "source", "to_node_id": "case", "mode": "direct", "inputs": {"resistance_k_per_w": 0.4}},
+            {"id": "r_cs", "from_node_id": "case", "to_node_id": "sink", "mode": "tim_conductivity", "inputs": {...}},
+            {"id": "r_sa", "from_node_id": "sink", "to_node_id": "ambient", "mode": "direct", "inputs": {"resistance_k_per_w": 2.0}},
+        ],
+    },
+    "solve_target": None,
+    "options": {...},
 }
 ```
 
@@ -422,13 +449,21 @@ This tool becomes much more useful if segment resistances can be defined in more
   - user enters impedance per area and contact area
 - `tim_conductivity`
   - user enters thickness, conductivity, and contact area
-- `derived_from_total_and_other_segments`
-  - used for required-resistance budgeting results
+- `simple_conduction_slab`
+  - user enters thickness, conductivity, and cross-sectional area for a 1D slab or bar
+
+### Required-resistance sizing rule
+
+Required-resistance budgeting in MVP should not be represented as a separate user-entered segment mode.
+
+Instead:
+
+- the solve uses `analysis_mode = "solve_required_segment"`,
+- one segment is marked as the unknown to size,
+- and the solved payload reports the required value and supporting derivations.
 
 ### Good early extensions
 
-- `simple_conduction_slab`
-  - `R = t / (k A)`
 - `lookup_from_datasheet`
   - convenience mode backed by a preset library later
 
@@ -459,6 +494,7 @@ This is one of the key advantages of the generic path tool: it can translate bet
 - Node temperature table
 - Segment drop / contribution table
 - Bottleneck diagnosis
+- Applicability scorecard
 - Sensitivity chart
 
 ### Math tab sections
@@ -524,6 +560,7 @@ If the network changes, the diagram, tables, export, and derivation views must a
 - dominant bottleneck segment
 - required maximum `R_theta` for the selected segment
 - margin to each node limit
+- applicability status and routing suggestion
 - warnings about unsupported abstraction or missing data
 
 ### Disclosure outputs
@@ -654,18 +691,15 @@ These examples are important because they teach users how to map physical hardwa
 
 ---
 
-## 19. Open Questions for Implementation
+## 19. MVP Decisions After Schema Review
 
-These should be resolved before coding begins:
+The schema pass closes the most important MVP ambiguities:
 
-1. Should custom networks in v1 allow arbitrary node linking, or only approved topology templates?
-   Recommendation: topology templates plus a restrained custom mode.
-2. Should the first version permit more than one heat-input node?
-   Recommendation: yes, but keep one input as the default template.
-3. How should unknown-segment sizing work when multiple node limits are defined?
-   Recommendation: v1 should size against one selected controlling limit only and report other margins secondarily.
-4. Should radiation be a first-class segment type in v1?
-   Recommendation: no. Treat it later or let users enter an equivalent `R_theta` directly.
+1. Custom networks in v1 should use a restrained custom mode, not an arbitrary graph editor.
+2. The user-facing v1 workflow should expose one positive heat-input node and one fixed-temperature reference boundary node only, even if the canonical schema later grows beyond that.
+3. Unknown-segment sizing should target one selected controlling temperature limit and report all other margins secondarily.
+4. Radiation should not be a first-class v1 segment mode; users may enter an equivalent `R_theta` directly when needed.
+5. `Compare two path options` should be implemented as two separate canonical solves, not a third backend analysis mode.
 
 ---
 

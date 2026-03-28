@@ -158,11 +158,32 @@ The canonical input model should use this shape:
 - Identifies the frontend template or `"custom"`.
 - Used for reporting and applicability messaging, not for solving.
 
+### Recommended MVP `template_id` values
+
+The v1 frontend should standardize on this template set:
+
+- `"simple_chain"`
+- `"package_to_sink"`
+- `"housing_wall_path"`
+- `"dual_path_to_ambient"`
+- `"custom"`
+
+Validation should reject unknown template ids in MVP unless the implementation explicitly feature-flags them.
+
 `analysis_mode : str`
 - Required.
 - Allowed MVP values:
   - `"solve_temperatures"`
   - `"solve_required_segment"`
+
+### Frontend workflow mapping
+
+The product may expose a broader set of user-facing workflows, but they should map to the canonical backend modes like this:
+
+- `Analyze temperatures` -> `"solve_temperatures"`
+- `Size one segment for a target` -> `"solve_required_segment"`
+- `Budget required sink resistance` -> `"solve_required_segment"` with the sink-to-ambient segment selected as the unknown
+- `Compare two path options` -> two separate canonical solves in the frontend, not a third backend mode
 
 `network : dict`
 - Required.
@@ -245,6 +266,7 @@ Each node must conform to:
 - A node may have both `heat_input_w` and `max_temperature_c`.
 - A node with `fixed_temperature_c` is not solved as an unknown temperature.
 - Node ids must be unique.
+- The user-facing MVP should expose exactly one positive `heat_input_w` node and exactly one fixed-temperature boundary node.
 
 ---
 
@@ -593,11 +615,14 @@ Recommended shape:
 These should make the model unsolvable:
 
 - missing required top-level fields
+- unknown `template_id` for the supported MVP template library
 - duplicate node ids
 - duplicate segment ids
 - segment references nonexistent node ids
 - zero or negative resolved resistance inputs
 - no fixed-temperature node
+- more than one fixed-temperature node in the user-facing MVP
+- more than one positive heat-input node in the user-facing MVP
 - disconnected network
 - more than one `solved_unknown` segment in MVP
 - `"solve_required_segment"` without a valid `solve_target`
@@ -607,12 +632,12 @@ These should make the model unsolvable:
 
 These should allow solving but surface caution:
 
-- only one heat-input node expected by the chosen template, but several were provided
 - no node temperature limits defined
 - very large resistance ratios that may make one branch negligible
 - model likely better served by another tool
 - conduction slab used where spreading effects may dominate
 - boundary node marked as internal or vice versa
+- custom topology used where a standard template may be clearer
 
 ### Normalization
 
@@ -636,6 +661,9 @@ Recommended top-level shape:
     "status": "acceptable",
     "mode": "solve_temperatures",
     "summary": {...},
+    "diagnosis": {...},
+    "applicability": {...},
+    "reporting_basis": {...},
     "nodes": [...],
     "segments": [...],
     "parallel_groups": [...],
@@ -663,6 +691,15 @@ Recommended top-level shape:
 
 `summary : dict`
 - High-level result fields for headline cards.
+
+`diagnosis : dict`
+- Action-oriented interpretation for the default Results view.
+
+`applicability : dict`
+- Model-fit assessment, caution flags, and routing guidance.
+
+`reporting_basis : dict`
+- Explicit conventions used for headline values such as effective total resistance and contribution percentages.
 
 `nodes : list[dict]`
 - Solved node results.
@@ -738,6 +775,91 @@ Recommended `summary` shape:
 - `margin_to_limit_c`
 - `sized_unknown_segment_id`
 - `sized_unknown_resistance_k_per_w`
+
+### Summary reporting convention
+
+For MVP, define:
+
+`effective_total_resistance_k_per_w = (hottest_temperature_c - reference_temperature_c) / total_applied_heat_w`
+
+Because the user-facing MVP is restricted to one positive heat-input node and one fixed-temperature reference boundary node, this headline value remains unambiguous.
+
+If future revisions relax those constraints, the payload should either:
+
+- document the convention used in `reporting_basis`, or
+- set the headline effective resistance to `None` when no honest single number exists.
+
+### Diagnosis payload
+
+Recommended shape:
+
+```python
+{
+    "dominant_segment_id": "r_sa",
+    "dominant_segment_label": "Sink to ambient",
+    "dominant_segment_delta_t_c": 38.2,
+    "dominant_segment_contribution_pct": 61.3,
+    "first_improvement_target_id": "r_sa",
+    "first_improvement_target_label": "Sink to ambient",
+    "first_improvement_reason": "Largest contribution to total temperature rise.",
+    "required_improvement_summary": "Reduce sink-to-ambient resistance to 1.50 K/W or below to meet the selected limit."
+}
+```
+
+Recommended diagnosis fields:
+
+- `dominant_segment_id`
+- `dominant_segment_label`
+- `dominant_segment_delta_t_c`
+- `dominant_segment_contribution_pct`
+- `first_improvement_target_id`
+- `first_improvement_target_label`
+- `first_improvement_reason`
+
+Conditional diagnosis fields:
+
+- `required_improvement_summary`
+
+### Applicability payload
+
+Recommended shape:
+
+```python
+{
+    "status": "good_fit",
+    "score_label": "Good fit",
+    "flags": [],
+    "routing_suggestion": None
+}
+```
+
+Recommended applicability fields:
+
+- `status`
+- `score_label`
+- `flags`
+- `routing_suggestion`
+
+Recommended MVP `status` values:
+
+- `"good_fit"`
+- `"use_with_caution"`
+- `"better_in_other_tool"`
+
+### Reporting basis payload
+
+Recommended shape:
+
+```python
+{
+    "reference_boundary_node_id": "ambient",
+    "positive_heat_input_node_ids": ["junction"],
+    "effective_total_resistance_definition": "(T_hottest - T_ref) / Q_total_positive",
+    "contribution_definition": "100 * abs(delta_t_c) / total_temperature_rise_c"
+}
+```
+
+This object prevents the frontend or exported reports from implying conventions that were never actually defined.
 
 ---
 
@@ -1019,6 +1141,8 @@ The frontend should follow this flow:
 6. Render all result views from the returned payload.
 7. Optionally call `generate_thermal_network_sensitivity()` using the same normalized model.
 
+If the UI offers `Compare two path options`, it should perform steps 1-7 twice using two independent canonical models, then render the comparison from the two solved payloads.
+
 ### Important rule
 
 The frontend should not:
@@ -1040,6 +1164,9 @@ At minimum export:
 
 - `normalized_model`
 - `summary`
+- `diagnosis`
+- `applicability`
+- `reporting_basis`
 - `nodes`
 - `segments`
 - `parallel_groups`
@@ -1067,6 +1194,7 @@ When implementation starts, tests should cover:
 - disconnected network validation
 - no boundary node validation
 - solved payload completeness
+- diagnosis / applicability / reporting-basis completeness
 - derivation object completeness
 
 The first test suite should verify not just temperatures, but also payload shape and disclosure completeness.
@@ -1078,10 +1206,12 @@ The first test suite should verify not just temperatures, but also payload shape
 To keep the first implementation controlled, the MVP should impose these limits:
 
 - one connected network only
-- at least one fixed-temperature boundary node
+- exactly one fixed-temperature boundary node in the user-facing v1
+- exactly one positive heat-input node in the user-facing v1
 - one unknown segment at most
 - no arbitrary nonlinear segment models
 - no radiation segment mode
+- restrained custom topologies only
 - compare-two-models handled by the frontend as two separate solves
 
 These limits should be explicit in the UI and the docs.

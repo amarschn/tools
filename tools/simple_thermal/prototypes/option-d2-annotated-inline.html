@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option D2: Annotated Equations with Inline Glossary</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --bg-card: #fff; --text: #1a1a2e; --text-light: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --border: #e5e7eb;
+    --success: #16a34a; --danger: #dc2626;
+    --tree-line: #cbd5e1;
+    --found-bg: #f0fdf4; --found-border: #86efac;
+    --note-bg: #f8fafc; --note-border: #cbd5e1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 900px; margin: 0 auto; line-height: 1.5; }
+  h1 { font-size: 1.2rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 24px; line-height: 1.6; }
+  h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  h3 { font-size: 0.92rem; margin-bottom: 8px; }
+
+  /* Foundation cards */
+  .foundation { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
+  @media (max-width: 640px) { .foundation { grid-template-columns: 1fr; } }
+
+  .found-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; cursor: pointer; user-select: none; transition: all 0.15s;
+  }
+  .found-card:hover { border-color: var(--accent); }
+  .found-card.expanded { background: var(--found-bg); border-color: var(--found-border); }
+  .found-card .card-header { display: flex; justify-content: space-between; align-items: center; }
+  .found-card .card-label { font-size: 0.82rem; color: var(--text-light); }
+  .found-card .card-value { font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .found-card .card-arrow { font-size: 0.6rem; color: var(--text-light); transition: transform 0.2s; }
+  .found-card.expanded .card-arrow { transform: rotate(90deg); }
+  .found-card .card-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.84rem; line-height: 1.8; }
+  .found-card.expanded .card-body { display: block; }
+
+  /* Equation display with annotations */
+  .eq-block {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; margin: 8px 0;
+  }
+  .eq-context {
+    font-size: 0.82rem; color: var(--text-light); margin-bottom: 8px; line-height: 1.5;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .eq-main {
+    font-family: Georgia, serif; font-size: 1.05rem; line-height: 2.2;
+    padding: 8px 0;
+  }
+  .eq-subst {
+    font-family: Georgia, serif; font-size: 0.92rem; line-height: 2.0;
+    color: var(--text); padding: 4px 0 8px 0;
+    border-top: 1px dashed var(--border); margin-top: 4px;
+  }
+  .eq-result { font-weight: 700; }
+
+  /* Hoverable variables */
+  .v {
+    position: relative; cursor: help;
+    border-bottom: 1px dotted var(--accent); color: var(--accent);
+    font-family: Georgia, serif; white-space: nowrap;
+  }
+  .v:hover { color: #1e40af; }
+  .v .vdef {
+    display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #f1f5f9; font-family: -apple-system, sans-serif;
+    font-size: 0.78rem; line-height: 1.5; padding: 8px 12px; border-radius: 6px;
+    width: max-content; max-width: 280px; z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    pointer-events: none;
+  }
+  .v .vdef::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #1e293b;
+  }
+  .v:hover .vdef { display: block; }
+  .vdef strong { color: #93c5fd; }
+
+  /* Applicability badge */
+  .app-badge {
+    display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px;
+    border-radius: 10px; margin-left: 8px; vertical-align: middle;
+  }
+  .app-badge.ok { background: #dcfce7; color: #166534; }
+  .app-badge.warn { background: #fef3c7; color: #92400e; }
+  .app-badge.bad { background: #fee2e2; color: #991b1b; }
+
+  /* Tree */
+  .tree ul { list-style: none; padding-left: 28px; position: relative; }
+  .tree ul::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 16px; width: 1px; background: var(--tree-line); }
+  .tree li { position: relative; padding: 4px 0; }
+  .tree li::before { content: ''; position: absolute; left: -16px; top: 18px; width: 16px; height: 1px; background: var(--tree-line); }
+  .tree > ul { padding-left: 0; }
+  .tree > ul::before, .tree > ul > li::before { display: none; }
+
+  .node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    transition: all 0.15s; font-size: 0.88rem;
+  }
+  .node:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node.expanded { border-color: var(--accent); background: var(--accent-light); }
+  .node .name { color: var(--text-light); font-size: 0.8rem; }
+  .node .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .node .arrow { font-size: 0.65rem; color: var(--text-light); transition: transform 0.2s; }
+  .node.expanded .arrow { transform: rotate(90deg); }
+  .node.leaf { cursor: default; opacity: 0.85; }
+  .node.leaf:hover { border-color: var(--border); background: var(--bg-card); }
+  .node.leaf .arrow { display: none; }
+
+  .node-detail {
+    display: none; margin: 6px 0 8px 0; max-width: 700px;
+  }
+  .node.expanded + .node-detail { display: block; }
+
+  .fpill {
+    display: inline-block; font-size: 0.78rem; padding: 2px 8px;
+    background: var(--found-bg); border: 1px solid var(--found-border);
+    border-radius: 4px; color: #166534; cursor: pointer;
+    text-decoration: none; margin: 0 2px;
+  }
+  .fpill:hover { background: #dcfce7; }
+
+  .separator { margin: 24px 0 20px 0; }
+
+  /* Interpretation callout */
+  .interp {
+    background: #f0f9ff; border-left: 3px solid #60a5fa; border-radius: 0 6px 6px 0;
+    padding: 8px 14px; font-size: 0.84rem; margin-top: 8px; line-height: 1.6;
+  }
+  .interp strong { color: #1e40af; }
+
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5); }
+    100% { box-shadow: 0 0 0 4px transparent; }
+  }
+  .flash { animation: flash 1.2s ease-out; }
+</style>
+</head>
+<body>
+
+<h1>Option D2: Annotated Equations with Inline Glossary</h1>
+<p class="subtitle">Every variable in every equation is <span class="v" style="font-size:inherit;">hoverable<span class="vdef">Like this! Each variable shows its name, meaning, value, and units on hover.</span></span> &mdash; hover to see what it means, its value, and units. Equations include a context line explaining <em>why</em> the approach was chosen, plus an applicability badge. The goal: you should never have to leave the equation to understand it.</p>
+
+<h2>Building Blocks</h2>
+
+<div class="foundation">
+  <!-- Convection -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-hconv">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Convection Coefficient</div>
+        <div class="card-value">h<sub>conv</sub> = 31.67 W/m&sup2;K <span class="app-badge ok">within range</span></div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="eq-block">
+        <div class="eq-context">
+          Laminar developing flow in rectangular ducts. Selected because Re = 1213 &lt; 2300 and channels are short enough (Gz = 68.8) that entry effects boost heat transfer above the fully-developed value.
+        </div>
+        <div class="eq-main">
+          <span class="v">Nu<span class="vdef"><strong>Nusselt number</strong><br>Dimensionless heat transfer coefficient. Higher = better convection. Fully-developed limit for this geometry is 7.54.<br><strong>Value: 9.50</strong></span></span>
+          = (<span class="v">7.54<span class="vdef"><strong>Fully-developed Nu</strong><br>Asymptotic Nusselt number for a rectangular duct with one pair of insulated walls. This is the "floor" &mdash; entry effects can only make it higher.</span></span>&sup3;
+          + (1.841 &middot; <span class="v">Gz<span class="vdef"><strong>Graetz number</strong><br>Gz = Re&middot;Pr&middot;D<sub>h</sub>/L<br>Measures how "thermally undeveloped" the flow is. Large Gz = short channel or fast flow = stronger entry effects.<br><strong>Value: 68.8</strong></span></span><sup>1/3</sup>)&sup3;)<sup>1/3</sup>
+        </div>
+        <div class="eq-subst">
+          = (429 + (1.841 &times; 4.10)&sup3;)<sup>1/3</sup> = (429 + 5428)<sup>1/3</sup> = <span class="eq-result">9.50</span>
+        </div>
+        <div class="eq-main" style="margin-top:4px;">
+          <span class="v">h<sub>conv</sub><span class="vdef"><strong>Convection coefficient</strong><br>Heat transferred per unit area per degree of temperature difference between fin surface and air.<br><strong>Value: 31.67 W/m&sup2;K</strong></span></span>
+          = <span class="v">Nu<span class="vdef"><strong>Nusselt number</strong><br>Value: 9.50</span></span>
+          &middot; <span class="v">k<sub>air</sub><span class="vdef"><strong>Air thermal conductivity</strong><br>How well air conducts heat. Evaluated at film temperature (33.6 °C).<br><strong>Value: 0.0268 W/m&middot;K</strong></span></span>
+          / <span class="v">D<sub>h</sub><span class="vdef"><strong>Hydraulic diameter</strong><br>D<sub>h</sub> = 2sH/(s+H) &mdash; effective diameter of the rectangular fin channel.<br><strong>Value: 8.04 mm</strong></span></span>
+          = 9.50 &times; 0.0268 / 0.00804 = <span class="eq-result">31.67 W/m&sup2;K</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fin Efficiency -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-eta">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Fin &amp; Surface Efficiency</div>
+        <div class="card-value">&eta;<sub>f</sub> = 91.0%, &eta;<sub>o</sub> = 91.7% <span class="app-badge ok">healthy</span></div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="eq-block">
+        <div class="eq-context">
+          Standard 1D fin model (tanh formula). A fin's tip is cooler than its root because heat must conduct along it. Efficiency measures what fraction of the fin area is thermally "useful." At 91%, these fins are working well &mdash; below ~70% means you're adding metal for diminishing returns.
+        </div>
+        <div class="eq-main">
+          <span class="v">&eta;<sub>f</sub><span class="vdef"><strong>Fin efficiency</strong><br>Fraction of fin area that's thermally effective. 1.0 = fin is isothermal (impossible). Lower values mean the tip is much cooler than the root.<br><strong>Value: 0.910 (91.0%)</strong></span></span>
+          = tanh(<span class="v">m<span class="vdef"><strong>Fin parameter</strong><br>m = &radic;(h<sub>eff</sub>&middot;P / k&middot;A<sub>c</sub>)<br>Balances convection from surface vs. conduction along fin. Larger m = faster temperature decay along fin.<br><strong>Value: 18.1 m<sup>-1</sup></strong></span></span> &middot;
+          <span class="v">L<sub>c</sub><span class="vdef"><strong>Corrected fin length</strong><br>L<sub>c</sub> = fin height + t/2 (adds half-thickness to account for tip area).<br><strong>Value: 30.5 mm</strong></span></span>)
+          / (m &middot; L<sub>c</sub>)
+        </div>
+        <div class="eq-subst">
+          = tanh(18.1 &times; 0.0305) / (18.1 &times; 0.0305) = tanh(0.552) / 0.552 = 0.500 / 0.552 = <span class="eq-result">0.910</span>
+        </div>
+        <div class="eq-main" style="margin-top:8px;">
+          <span class="v">&eta;<sub>o</sub><span class="vdef"><strong>Overall surface efficiency</strong><br>Weighted average of fin efficiency and exposed base (which is at 100% effectiveness). This is the number that scales the total heat rejection.<br><strong>Value: 0.917 (91.7%)</strong></span></span>
+          = 1 &minus;
+          (<span class="v">A<sub>f</sub><span class="vdef"><strong>Total fin area</strong><br>Sum of all fin side faces and tips.<br><strong>Value: 0.090 m&sup2;</strong></span></span>
+          / <span class="v">A<sub>t</sub><span class="vdef"><strong>Total exposed area</strong><br>Fin area + exposed base between fins.<br><strong>Value: 0.098 m&sup2;</strong></span></span>)
+          &middot; (1 &minus; &eta;<sub>f</sub>)
+        </div>
+        <div class="eq-subst">
+          = 1 &minus; (0.090/0.098)(1&minus;0.910) = 1 &minus; 0.918 &times; 0.090 = <span class="eq-result">0.917</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Friction -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-friction">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Friction &amp; Losses</div>
+        <div class="card-value">f = 0.01644, K<sub>c</sub> = 0.143, K<sub>e</sub> = 0.035</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="eq-block">
+        <div class="eq-context">
+          Three sources of pressure loss: wall friction along the channel (dominant), contraction at channel entry, and expansion at exit. Together they determine how much pressure the airflow must overcome to pass through the heatsink.
+        </div>
+        <div class="eq-main">
+          <span class="v">f<span class="vdef"><strong>Darcy friction factor</strong><br>Dimensionless wall shear. Found from f&middot;Re product for rectangular ducts (Shah &amp; London).<br><strong>Value: 0.01644</strong></span></span>
+          = (<span class="v">f&middot;Re<span class="vdef"><strong>f&middot;Re product</strong><br>For laminar flow in rectangular ducts, f&middot;Re depends only on channel aspect ratio &beta; = s/H. Uses polynomial from Shah &amp; London (1978).<br><strong>Value: 19.93</strong></span></span>)
+          / <span class="v">Re<span class="vdef"><strong>Reynolds number</strong><br>Re = &rho;VD<sub>h</sub>/&mu;. Determines laminar vs. turbulent regime.<br><strong>Value: 1213 (laminar)</strong></span></span>
+          = 19.93 / 1213 = <span class="eq-result">0.01644</span>
+        </div>
+        <div class="eq-main" style="margin-top:6px;">
+          <span class="v">K<sub>c</sub><span class="vdef"><strong>Contraction loss</strong><br>Pressure lost as air accelerates from open approach into narrower fin gaps. Uses Kays &amp; London (1984) model.<br><strong>Value: 0.143</strong></span></span>
+          = 0.42(1 &minus; <span class="v">&sigma;<span class="vdef"><strong>Open-area ratio</strong><br>&sigma; = A<sub>open</sub>/A<sub>frontal</sub>. Fraction of the heatsink's face that is open channel (vs. blocked by fin material).<br><strong>Value: 0.813</strong></span></span>&sup2;)
+          = 0.42 &times; 0.339 = <span class="eq-result">0.143</span>
+        </div>
+        <div class="eq-main" style="margin-top:4px;">
+          <span class="v">K<sub>e</sub><span class="vdef"><strong>Expansion loss</strong><br>Pressure lost as air decelerates exiting the channels (Borda-Carnot sudden expansion).<br><strong>Value: 0.035</strong></span></span>
+          = (1 &minus; &sigma;)&sup2; = 0.187&sup2; = <span class="eq-result">0.035</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Air Properties -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-air">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Air Properties</div>
+        <div class="card-value">T<sub>film</sub> = 33.6 °C <span class="app-badge ok">valid range</span></div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="eq-block">
+        <div class="eq-context">
+          All air properties evaluated at film temperature (average of base and ambient). Uses Sutherland-law fits which are accurate within 1.5% from 200&ndash;700 K. Current T<sub>film</sub> = 307 K is comfortably in range.
+        </div>
+        <div class="eq-main">
+          <span class="v">T<sub>film</sub><span class="vdef"><strong>Film temperature</strong><br>Average of surface and freestream temperatures. The standard reference point for evaluating fluid properties in convection correlations.<br><strong>Value: 33.6 °C (306.8 K)</strong></span></span>
+          = (<span class="v">T<sub>b</sub><span class="vdef"><strong>Base temperature</strong><br>Average heatsink base temperature (solved iteratively).<br><strong>Value: 42.2 °C</strong></span></span>
+          + <span class="v">T<sub>&infin;</sub><span class="vdef"><strong>Ambient temperature</strong><br>Bulk air temperature away from the heatsink (user input).<br><strong>Value: 25.0 °C</strong></span></span>) / 2
+          = (42.2 + 25.0) / 2 = <span class="eq-result">33.6 °C</span>
+        </div>
+        <div style="margin-top:10px; font-size:0.84rem; display:grid; grid-template-columns:auto 1fr auto; gap:2px 16px; line-height:1.8;">
+          <span style="font-family:Georgia,serif;">&rho;</span><span style="color:var(--text-light);">density</span><span>1.151 kg/m&sup3;</span>
+          <span style="font-family:Georgia,serif;">&mu;</span><span style="color:var(--text-light);">dynamic viscosity</span><span>1.878e-5 Pa&middot;s</span>
+          <span style="font-family:Georgia,serif;">k<sub>air</sub></span><span style="color:var(--text-light);">thermal conductivity</span><span>0.0268 W/m&middot;K</span>
+          <span style="font-family:Georgia,serif;">c<sub>p</sub></span><span style="color:var(--text-light);">specific heat</span><span>1007 J/kg&middot;K</span>
+          <span style="font-family:Georgia,serif;">Pr</span><span style="color:var(--text-light);">Prandtl number</span><span>0.705</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="separator"></div>
+
+<h2>Results</h2>
+
+<div class="tree">
+<ul>
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Junction Temp</span>
+      <span class="val" style="color:var(--danger)">T<sub>j</sub> = 89.1 °C</span>
+    </div>
+    <div class="node-detail">
+      <div class="eq-block">
+        <div class="eq-context">Hottest point in the package. Built up from the case temperature plus the internal junction-to-case resistance.</div>
+        <div class="eq-main">
+          <span class="v">T<sub>j</sub><span class="vdef"><strong>Junction temperature</strong><br>Peak temperature inside the source/package. Must stay below the rated limit.<br><strong>Value: 89.1 °C</strong> (limit: 100 °C)</span></span>
+          = <span class="v">T<sub>case</sub><span class="vdef"><strong>Case temperature</strong><br>Outer mounting surface of the package.<br><strong>Value: 74.1 °C</strong></span></span>
+          + <span class="v">Q<span class="vdef"><strong>Heat load</strong><br>Total power dissipated by the source (user input).<br><strong>Value: 50.0 W</strong></span></span>
+          &middot; <span class="v">R<sub>&theta;,jc</sub><span class="vdef"><strong>Junction-to-case resistance</strong><br>Internal thermal resistance of the package, from hotspot to mounting surface (user input or datasheet value).<br><strong>Value: 0.30 K/W</strong></span></span>
+        </div>
+        <div class="eq-subst">
+          = 74.1 + 50.0 &times; 0.30 = <span class="eq-result">89.1 °C</span> &nbsp; (margin: 10.9 °C &#10003;)
+        </div>
+      </div>
+      <div class="interp">
+        <strong>10.9 °C of margin.</strong> The upstream path (interface + junction-to-case) consumes 49.1 °C of the 75 °C total budget. The heatsink only uses 17.2 °C. The bottleneck is the interface, not the sink.
+      </div>
+    </div>
+    <ul>
+      <li>
+        <div class="node" onclick="toggleNode(this)">
+          <span class="arrow">&#9654;</span>
+          <span class="name">Case Temp</span>
+          <span class="val">T<sub>case</sub> = 74.1 °C</span>
+        </div>
+        <div class="node-detail">
+          <div class="eq-block">
+            <div class="eq-context">Temperature at the package mounting surface, after heat crosses the TIM into the heatsink base.</div>
+            <div class="eq-main">
+              <span class="v">T<sub>case</sub><span class="vdef"><strong>Case temperature</strong><br>Outer surface where heat enters the interface material.<br><strong>Value: 74.1 °C</strong></span></span>
+              = <span class="v">T<sub>base,eff</sub><span class="vdef"><strong>Effective base temperature</strong><br>Local base temperature under the source (average base + spreading penalty).<br><strong>Value: 49.1 °C</strong></span></span>
+              + <span class="v">Q<span class="vdef"><strong>Heat load</strong><br>Value: 50.0 W</span></span>
+              &middot; <span class="v">R<sub>&theta;,cs</sub><span class="vdef"><strong>Case-to-sink resistance</strong><br>Thermal resistance of the interface material (TIM). Depends on bondline thickness, TIM conductivity, and contact area.<br><strong>Value: 0.50 K/W</strong></span></span>
+            </div>
+            <div class="eq-subst">
+              = 49.1 + 50.0 &times; 0.50 = <span class="eq-result">74.1 °C</span>
+            </div>
+          </div>
+          <div class="interp">
+            <strong>25 °C consumed by the interface alone</strong> &mdash; the largest single drop in the thermal path. Reducing TIM bondline thickness or using higher-conductivity compound would have the biggest impact.
+          </div>
+        </div>
+        <ul>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Base Temp (solved)</span>
+              <span class="val">T<sub>b</sub> = 42.2 °C</span>
+            </div>
+            <div class="node-detail">
+              <div class="eq-block">
+                <div class="eq-context">Found by iteration: the solver adjusts T<sub>b</sub> until total heat rejected by fins and exposed base equals the heat load. This is the core energy balance.</div>
+                <div class="eq-main">
+                  <span class="v">Q<span class="vdef"><strong>Heat load</strong><br>Value: 50.0 W</span></span>
+                  = <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-eta')">&eta;<sub>o</sub></span>
+                  &middot; (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> + h<sub>rad</sub>)
+                  &middot; <span class="v">A<sub>t</sub><span class="vdef"><strong>Total exposed area</strong><br>All fin faces + exposed base between fins.<br><strong>Value: 0.098 m&sup2;</strong></span></span>
+                  &middot; (<span class="v">T<sub>b</sub><span class="vdef"><strong>Base temperature</strong><br>Solved iteratively. The unknown in this equation.<br><strong>Value: 42.2 °C</strong></span></span>
+                  &minus; <span class="v">T<sub>&infin;</sub><span class="vdef"><strong>Ambient air temperature</strong><br>Value: 25.0 °C</span></span>)
+                </div>
+                <div class="eq-subst">
+                  50.0 = 0.917 &times; 32.42 &times; 0.098 &times; (T<sub>b</sub> &minus; 25.0) &rArr; &Delta;T = 17.2 °C &rArr; T<sub>b</sub> = <span class="eq-result">42.2 °C</span>
+                </div>
+                <div class="eq-subst">
+                  R<sub>&theta;,sink</sub> = &Delta;T/Q = 17.2/50 = <span class="eq-result">0.344 K/W</span> &nbsp; (budget: 0.700 K/W &mdash; passes with 51% margin)
+                </div>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li><div class="node leaf"><span class="arrow">&#9654;</span><span class="name">R<sub>&theta;,jc</sub></span><span class="val">0.300 K/W (input)</span></div></li>
+    </ul>
+  </li>
+</ul>
+
+<div style="margin-top: 16px;"></div>
+
+<ul style="list-style:none; padding:0;">
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Pressure Drop</span>
+      <span class="val">&Delta;P = 1.33 Pa</span>
+    </div>
+    <div class="node-detail">
+      <div class="eq-block">
+        <div class="eq-context">Total pressure loss = friction along channel walls + contraction at entry + expansion at exit. All three terms are needed to predict the system operating point.</div>
+        <div class="eq-main">
+          <span class="v">&Delta;P<span class="vdef"><strong>Pressure drop</strong><br>Total static pressure loss across the heatsink. A fan must deliver at least this much pressure at the required flow rate.<br><strong>Value: 1.33 Pa</strong></span></span>
+          = (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">f</span> &middot;
+          <span class="v">L<span class="vdef"><strong>Channel length</strong><br>= base length in flow direction.<br><strong>Value: 100 mm</strong></span></span> /
+          <span class="v">D<sub>h</sub><span class="vdef"><strong>Hydraulic diameter</strong><br>Value: 8.04 mm</span></span>
+          + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>c</sub></span>
+          + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>e</sub></span>)
+          &middot; <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-air')">&rho;</span>
+          &middot; V<sub>ch</sub>&sup2; / 2
+        </div>
+        <div class="eq-subst">
+          = (0.01644 &times; 12.44 + 0.143 + 0.035) &times; 1.151 &times; 2.46&sup2; / 2 = <span class="eq-result">1.33 Pa</span>
+        </div>
+      </div>
+      <div class="interp">
+        Very low pressure drop. Even small 40 mm axial fans typically deliver 10&ndash;30 Pa. This heatsink is not flow-limited.
+      </div>
+    </div>
+  </li>
+</ul>
+</div>
+
+<script>
+function toggleNode(el) {
+  if (el.classList.contains('leaf')) return;
+  el.classList.toggle('expanded');
+}
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+function scrollToFound(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  if (!target.classList.contains('expanded')) target.classList.add('expanded');
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+}
+</script>
+
+</body>
+</html>

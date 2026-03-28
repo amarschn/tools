@@ -2146,10 +2146,25 @@ def analyze_plate_fin_heatsink(
     _eta_o_dag = final_state["overall_efficiency"]
 
     # Base temperature (energy balance)
+    _r_margin_pct = (
+        100.0 * (required_r_sink - sink_r_theta) / required_r_sink
+        if required_r_sink > 1e-6 else 0.0
+    )
     _base_node: Dict[str, Any] = {
         "id": "base_temp",
         "label": "Base Temp",
         "value": f"T<sub>b</sub> = {base_temperature:.1f} °C",
+        "context": (
+            f"The average base temperature is found by iteration: the solver "
+            f"adjusts T<sub>b</sub> until total heat rejected equals the "
+            f"{heat_load:.1f} W load. At <strong>{base_temperature:.1f} °C</strong> "
+            f"the sink runs {_delta_t_dag:.1f} °C above ambient. "
+            f"The resulting <strong>R<sub>sink</sub> = {sink_r_theta:.3f} K/W</strong> "
+            + (f"is well under the {required_r_sink:.3f} K/W budget "
+               f"({_r_margin_pct:.0f}% margin)."
+               if sink_r_theta < required_r_sink
+               else f"exceeds the {required_r_sink:.3f} K/W budget.")
+        ),
         "steps": [
             ("Solved: η<sub>o</sub> · h<sub>eff</sub> · A<sub>t</sub> · "
              "(T<sub>b</sub> − T<sub>∞</sub>) = Q"),
@@ -2161,6 +2176,30 @@ def analyze_plate_fin_heatsink(
              f"{_delta_t_dag:.1f}/{heat_load:.1f} = "
              f"<strong>{sink_r_theta:.3f} K/W</strong>"),
         ],
+        "var_legend": [
+            {"sym": "η<sub>o</sub>",
+             "desc": f"Overall surface efficiency — {_eta_o_dag:.1%}. "
+                     "Accounts for fins being cooler at tips than roots."},
+            {"sym": "h<sub>conv</sub>",
+             "desc": f"Convection coefficient — "
+                     f"{flow_state['convection_coefficient']:.2f} W/m²K."},
+            {"sym": "h<sub>rad</sub>",
+             "desc": f"Radiation coefficient — "
+                     f"{final_state['radiation_coefficient']:.3f} W/m²K."},
+            {"sym": "A<sub>t</sub>",
+             "desc": f"Total exposed area (fins + base) — "
+                     f"{geometry.total_area:.5f} m²."},
+            {"sym": "T<sub>∞</sub>",
+             "desc": f"Ambient air temperature — "
+                     f"{ambient_temperature:.1f} °C (input)."},
+        ],
+        "limits": [
+            "Assumes an isothermal base. Valid for aluminum with moderate "
+            "loads, but breaks down when a small source sits on a large "
+            "thin base — hence the separate spreading correction.",
+            f"Air properties evaluated at film temperature "
+            f"({film_t:.1f} °C). Large ΔT (>80 °C) may reduce accuracy.",
+        ],
         "foundation_refs": [
             {"id": "fin_eff", "label": "η<sub>o</sub>"},
             {"id": "h_conv", "label": "h<sub>conv</sub>"},
@@ -2171,10 +2210,18 @@ def analyze_plate_fin_heatsink(
 
     # Build the chain above base temperature
     if spreading_r > 1e-6:
+        _sp_delta_t = spreading_r * heat_load
         _spreading_node: Dict[str, Any] = {
             "id": "spreading_r",
             "label": "Spreading R<sub>θ</sub>",
             "value": f"{spreading_r:.4f} K/W",
+            "context": (
+                f"Spreading resistance accounts for the extra temperature "
+                f"rise because heat must fan out from a small source into a "
+                f"larger base. At {heat_load:.1f} W this adds "
+                f"<strong>{_sp_delta_t:.1f} °C</strong> to the base "
+                f"temperature under the source."
+            ),
             "steps": [
                 (f"ε = √(A<sub>s</sub>/A<sub>p</sub>) = "
                  f"√({_src_area:.6f}/{_plate_area:.6f}) = "
@@ -2189,6 +2236,22 @@ def analyze_plate_fin_heatsink(
                  f"√(π × {_src_area:.6f})) = "
                  f"<strong>{spreading_r:.4f} K/W</strong>"),
             ],
+            "var_legend": [
+                {"sym": "ε", "desc": "Ratio of source to base characteristic "
+                 "lengths. Small ε = large spreading penalty."},
+                {"sym": "τ", "desc": "Normalized base thickness. Thicker base "
+                 "= more room for heat to spread laterally."},
+                {"sym": "ψ", "desc": "Dimensionless spreading parameter from "
+                 "the Yovanovich/Muzychka/Culham analytical model."},
+                {"sym": "k", "desc": f"Base material conductivity — "
+                 f"{material_conductivity:.1f} W/m·K."},
+            ],
+            "limits": [
+                "Assumes a single centered rectangular source. Off-center "
+                "or multiple sources need a different approach.",
+                "Assumes the base is thermally thick enough to spread. Very "
+                "thin bases (<2 mm) may not have room for lateral conduction.",
+            ],
             "foundation_refs": [],
             "children": [],
             "reference": "Yovanovich, Muzychka, Culham (1999).",
@@ -2200,11 +2263,27 @@ def analyze_plate_fin_heatsink(
                 f"T<sub>base,eff</sub> = "
                 f"{effective_base_temperature:.1f} °C"
             ),
+            "context": (
+                f"This is the temperature the source actually sees — the "
+                f"average base temperature plus the extra rise from heat "
+                f"spreading. The spreading penalty adds "
+                f"<strong>{_sp_delta_t:.1f} °C</strong> above the "
+                f"{base_temperature:.1f} °C average base."
+            ),
             "steps": [
                 (f"T<sub>base,eff</sub> = T<sub>b</sub> + Q · R<sub>sp</sub>"
                  f" = {base_temperature:.1f} + {heat_load:.1f} × "
                  f"{spreading_r:.4f} = "
                  f"<strong>{effective_base_temperature:.1f} °C</strong>"),
+            ],
+            "var_legend": [
+                {"sym": "T<sub>b</sub>",
+                 "desc": f"Average base temperature — "
+                         f"{base_temperature:.1f} °C, from the energy "
+                         f"balance solution."},
+                {"sym": "R<sub>sp</sub>",
+                 "desc": f"Spreading resistance — {spreading_r:.4f} K/W. "
+                         f"Penalty for a small source on a larger base."},
             ],
             "foundation_refs": [],
             "children": [_base_node, _spreading_node],
@@ -2272,11 +2351,59 @@ def analyze_plate_fin_heatsink(
             "(entered directly as thermal impedance)"
         )
 
+    _tim_delta_t = interface_resistance * heat_load
+    # Build var_legend based on TIM mode
+    _tim_var_legend: List[Dict[str, str]] = []
+    if _tim_mode == "area_normalized":
+        _tim_var_legend = [
+            {"sym": "R″",
+             "desc": f"Area-normalized TIM resistance — "
+                     f"{_ti.get('area_resistance', 0.0):.2f} K·cm²/W "
+                     f"(from datasheet)."},
+            {"sym": "A",
+             "desc": "Contact area between source and heatsink base."},
+        ]
+    elif _tim_mode == "conductivity":
+        _tim_var_legend = [
+            {"sym": "k",
+             "desc": f"TIM thermal conductivity — "
+                     f"{_ti.get('conductivity', 0.0):.2f} W/m·K."},
+            {"sym": "BLT",
+             "desc": f"Bondline thickness — "
+                     f"{_ti.get('bondline_mm', 0.0):.3f} mm. "
+                     f"Thinner = lower resistance."},
+            {"sym": "A",
+             "desc": "Contact area between source and heatsink base."},
+        ]
+    elif _tim_mode == "absolute":
+        _tim_var_legend = [
+            {"sym": "R<sub>θ,cs</sub>",
+             "desc": f"Entered directly as {interface_resistance:.4f} K/W."},
+        ]
+
     _interface_node: Dict[str, Any] = {
         "id": "interface_r",
         "label": "Interface R<sub>θ,cs</sub>",
         "value": f"{interface_resistance:.4f} K/W",
+        "context": (
+            f"The thermal interface material (TIM) between the component "
+            f"and the heatsink base contributes "
+            f"<strong>{interface_resistance:.4f} K/W</strong> to the path. "
+            f"At {heat_load:.1f} W this causes a "
+            f"<strong>{_tim_delta_t:.1f} °C</strong> temperature rise."
+        ) if _tim_mode != "none" else (
+            "No TIM specified — the interface resistance is zero."
+        ),
         "steps": _tim_steps,
+        "var_legend": _tim_var_legend if _tim_var_legend else None,
+        "interpretation": (
+            f"Three levers to reduce interface resistance: "
+            f"(1) use a higher-conductivity TIM, "
+            f"(2) reduce the bondline thickness, "
+            f"(3) increase the contact area. "
+            f"Currently the TIM accounts for "
+            f"<strong>{_tim_delta_t:.1f} °C</strong> of the total budget."
+        ) if _tim_mode != "none" and interface_resistance > 1e-6 else None,
         "foundation_refs": [],
         "children": [],
         "tim_derivation": True,
@@ -2289,16 +2416,40 @@ def analyze_plate_fin_heatsink(
     _case_ref_label = (
         "T<sub>base,eff</sub>" if spreading_r > 1e-6 else "T<sub>b</sub>"
     )
+    _case_rise = case_temperature - ambient_temperature
     _case_node: Dict[str, Any] = {
         "id": "case_temp",
         "label": "Case Temp",
         "value": f"T<sub>case</sub> = {case_temperature:.1f} °C",
+        "context": (
+            f"The component mounting surface temperature. This is the "
+            f"effective base temperature plus the rise through the "
+            f"thermal interface material — "
+            f"<strong>{_case_rise:.1f} °C</strong> above ambient."
+        ),
         "steps": [
             (f"T<sub>case</sub> = {_case_ref_label} + Q · R<sub>θ,cs</sub>"
              f" = {_case_ref_temp:.1f} + {heat_load:.1f} × "
              f"{interface_resistance:.4f} = "
              f"<strong>{case_temperature:.1f} °C</strong>"),
         ],
+        "var_legend": [
+            {"sym": _case_ref_label,
+             "desc": f"Temperature at the heatsink side of the "
+                     f"interface — {_case_ref_temp:.1f} °C."},
+            {"sym": "R<sub>θ,cs</sub>",
+             "desc": f"Case-to-sink interface resistance — "
+                     f"{interface_resistance:.4f} K/W."},
+        ],
+        "interpretation": (
+            f"The TIM adds {_tim_delta_t:.1f} °C to the path. "
+            + (f"This is a significant fraction of the total "
+               f"{_case_rise:.1f} °C rise — improving the TIM would "
+               f"have meaningful impact."
+               if _tim_delta_t > 0.3 * _case_rise and _case_rise > 1
+               else f"The TIM contribution is modest relative to the "
+                    f"overall {_case_rise:.1f} °C rise.")
+        ) if interface_resistance > 1e-6 else None,
         "foundation_refs": [],
         "children": [_above_base, _interface_node],
     }
@@ -2314,11 +2465,47 @@ def analyze_plate_fin_heatsink(
         })
 
     _margin_sym = "✓" if temperature_margin >= 0 else "✗"
+    # Identify the bottleneck for interpretation
+    _r_total = sink_r_theta + interface_resistance + junction_to_case_resistance
+    _bottleneck_parts: List[str] = []
+    if _r_total > 1e-6:
+        _pct_sink = 100.0 * sink_r_theta / _r_total
+        _pct_tim = 100.0 * interface_resistance / _r_total
+        _pct_jc = 100.0 * junction_to_case_resistance / _r_total
+        _bottleneck_parts.append(
+            f"R<sub>sink</sub> = {sink_r_theta:.3f} K/W ({_pct_sink:.0f}%)")
+        if interface_resistance > 1e-6:
+            _bottleneck_parts.append(
+                f"R<sub>cs</sub> = {interface_resistance:.4f} K/W "
+                f"({_pct_tim:.0f}%)")
+        if junction_to_case_resistance > 1e-6:
+            _bottleneck_parts.append(
+                f"R<sub>jc</sub> = {junction_to_case_resistance:.4f} K/W "
+                f"({_pct_jc:.0f}%)")
+        # Find which is dominant
+        _max_r = max(sink_r_theta, interface_resistance,
+                     junction_to_case_resistance)
+        if abs(_max_r - sink_r_theta) < 1e-8:
+            _bottleneck_name = "the heatsink itself"
+        elif abs(_max_r - interface_resistance) < 1e-8:
+            _bottleneck_name = "the thermal interface"
+        else:
+            _bottleneck_name = "the junction-to-case path"
+
     _junction_node: Dict[str, Any] = {
         "id": "junction_temp",
         "label": "Junction Temp",
         "value": f"T<sub>j</sub> = {junction_temperature:.1f} °C",
         "status": status,
+        "context": (
+            f"The peak junction temperature — the number that must stay "
+            f"below {target_junction_temperature:.1f} °C. Currently at "
+            f"<strong>{junction_temperature:.1f} °C</strong> with "
+            + (f"<strong>{temperature_margin:.1f} °C of margin</strong>."
+               if temperature_margin >= 0
+               else f"<strong>{abs(temperature_margin):.1f} °C over "
+                    f"limit</strong>.")
+        ),
         "steps": [
             (f"T<sub>j</sub> = T<sub>case</sub> + Q · R<sub>θ,jc</sub>"
              f" = {case_temperature:.1f} + {heat_load:.1f} × "
@@ -2329,6 +2516,24 @@ def analyze_plate_fin_heatsink(
              f"{junction_temperature:.1f} = "
              f"<strong>{temperature_margin:.1f} °C</strong> {_margin_sym}"),
         ],
+        "var_legend": [
+            {"sym": "T<sub>case</sub>",
+             "desc": f"Case (mounting surface) temperature — "
+                     f"{case_temperature:.1f} °C."},
+            {"sym": "R<sub>θ,jc</sub>",
+             "desc": f"Junction-to-case resistance — "
+                     f"{junction_to_case_resistance:.4f} K/W (input from "
+                     f"component datasheet)."},
+            {"sym": "T<sub>j,max</sub>",
+             "desc": f"Maximum allowable junction temperature — "
+                     f"{target_junction_temperature:.1f} °C (input)."},
+        ],
+        "interpretation": (
+            f"Thermal budget breakdown: "
+            + ", ".join(_bottleneck_parts)
+            + f". The dominant resistance is {_bottleneck_name} — "
+            f"that is where to focus improvement efforts."
+        ) if _r_total > 1e-6 else None,
         "foundation_refs": [],
         "children": _junction_children,
     }
@@ -2339,10 +2544,20 @@ def analyze_plate_fin_heatsink(
     # Pressure drop
     if airflow_mode != "natural" and flow_state["reynolds_number"] > 0:
         _dp_val = flow_state["pressure_drop"]
+        _v_ch = flow_state["channel_velocity"]
+        _dp_char = (
+            "high" if _dp_val > 50 else "moderate" if _dp_val > 10 else "low"
+        )
         _standalone_nodes.append({
             "id": "pressure_drop",
             "label": "Pressure Drop",
             "value": f"ΔP = {_dp_val:.2f} Pa",
+            "context": (
+                f"Total pressure loss through the fin channels — "
+                f"<strong>{_dp_val:.2f} Pa</strong> ({_dp_char}). "
+                f"Includes friction along the channel plus contraction/"
+                f"expansion losses at the inlet and exit."
+            ),
             "steps": [
                 ("ΔP = (f · L/D<sub>h</sub> + K<sub>c</sub> + K<sub>e</sub>)"
                  " · ρ · V<sub>ch</sub>²/2"),
@@ -2350,8 +2565,20 @@ def analyze_plate_fin_heatsink(
                  f"{geometry.hydraulic_diameter:.5f} + "
                  f"{_dag_Kc:.3f} + {_dag_Ke:.4f}) × "
                  f"{props_final.density:.3f} × "
-                 f"{flow_state['channel_velocity']:.3f}² / 2 = "
+                 f"{_v_ch:.3f}² / 2 = "
                  f"<strong>{_dp_val:.2f} Pa</strong>"),
+            ],
+            "var_legend": [
+                {"sym": "f", "desc": f"Friction factor — {_dag_f:.5f}. "
+                 "Depends on Re and channel aspect ratio."},
+                {"sym": "L/D<sub>h</sub>",
+                 "desc": f"Channel length-to-hydraulic-diameter ratio — "
+                         f"{geometry.base_length / geometry.hydraulic_diameter:.1f}."},
+                {"sym": "V<sub>ch</sub>",
+                 "desc": f"Channel velocity — {_v_ch:.2f} m/s."},
+                {"sym": "K<sub>c</sub>, K<sub>e</sub>",
+                 "desc": f"Contraction and expansion loss coefficients — "
+                         f"{_dag_Kc:.3f}, {_dag_Ke:.4f}."},
             ],
             "foundation_refs": [
                 {"id": "friction", "label": "f, K<sub>c</sub>, K<sub>e</sub>"},
@@ -2365,6 +2592,7 @@ def analyze_plate_fin_heatsink(
             "id": "pressure_drop",
             "label": "Pressure Drop",
             "value": f"ΔP = {flow_state['pressure_drop']:.2f} Pa",
+            "context": "No forced airflow — pressure drop is not applicable.",
             "steps": [
                 "ΔP = 0 Pa (natural convection — no forced pressure drop)",
             ],
@@ -2373,10 +2601,20 @@ def analyze_plate_fin_heatsink(
         })
 
     # Required sink Rθ
+    _r_margin_abs = required_r_sink - sink_r_theta
     _standalone_nodes.append({
         "id": "required_sink_r",
         "label": "Required Sink R<sub>θ</sub>",
         "value": f"{required_r_sink:.3f} K/W (budget)",
+        "context": (
+            f"The maximum allowable sink resistance to keep T<sub>j</sub> "
+            f"below {target_junction_temperature:.1f} °C. The actual sink "
+            f"resistance is {sink_r_theta:.3f} K/W — "
+            + (f"<strong>{_r_margin_abs:.3f} K/W under budget</strong>."
+               if _r_margin_abs >= 0
+               else f"<strong>{abs(_r_margin_abs):.3f} K/W over budget"
+                    f"</strong>.")
+        ),
         "steps": [
             (f"R<sub>req</sub> = (T<sub>j,max</sub> − T<sub>∞</sub>)/Q "
              f"− R<sub>jc</sub> − R<sub>cs</sub> = "
@@ -2399,6 +2637,16 @@ def analyze_plate_fin_heatsink(
         100.0 * final_state["radiation_heat"]
         / max(final_state["heat_rejected"], 1e-12)
     )
+    _conv_dominant = _conv_pct_dag > 80
+    _rad_dominant = _rad_pct_dag > 30
+    _split_context = (
+        "Convection dominates, as expected for forced flow."
+        if _conv_dominant and airflow_mode != "natural"
+        else "Radiation contributes a significant fraction — typical "
+             "for natural convection or low-velocity forced flow."
+        if _rad_dominant
+        else "Both convection and radiation contribute meaningfully."
+    )
     _standalone_nodes.append({
         "id": "heat_split",
         "label": "Heat Split",
@@ -2407,6 +2655,10 @@ def analyze_plate_fin_heatsink(
             f"({_conv_pct_dag:.0f}%), "
             f"Q<sub>rad</sub> = {final_state['radiation_heat']:.1f} W "
             f"({_rad_pct_dag:.0f}%)"
+        ),
+        "context": (
+            f"How the total {final_state['heat_rejected']:.1f} W is split "
+            f"between convection and radiation. {_split_context}"
         ),
         "steps": [
             (f"Q<sub>conv</sub> = η<sub>o</sub> · h<sub>conv</sub> · "

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option D3: Narrative Walkthrough</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --bg-card: #fff; --text: #1a1a2e; --text-light: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --border: #e5e7eb;
+    --success: #16a34a; --danger: #dc2626;
+    --tree-line: #cbd5e1;
+    --found-bg: #f0fdf4; --found-border: #86efac;
+    --story-bg: #fafafa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 900px; margin: 0 auto; line-height: 1.5; }
+  h1 { font-size: 1.2rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 24px; line-height: 1.6; }
+  h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  /* Foundation cards (compact — values only, expand for narrative) */
+  .foundation { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
+  @media (max-width: 640px) { .foundation { grid-template-columns: 1fr; } }
+
+  .found-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; cursor: pointer; user-select: none; transition: all 0.15s;
+  }
+  .found-card:hover { border-color: var(--accent); }
+  .found-card.expanded { background: var(--found-bg); border-color: var(--found-border); }
+  .found-card .card-header { display: flex; justify-content: space-between; align-items: center; }
+  .found-card .card-label { font-size: 0.82rem; color: var(--text-light); }
+  .found-card .card-value { font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .found-card .card-arrow { font-size: 0.6rem; color: var(--text-light); transition: transform 0.2s; }
+  .found-card.expanded .card-arrow { transform: rotate(90deg); }
+  .found-card .card-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .found-card.expanded .card-body { display: block; }
+
+  /* Narrative step */
+  .story {
+    border-left: 3px solid var(--border); margin: 0 0 0 12px; padding: 0 0 0 20px;
+  }
+  .story-step {
+    position: relative; margin-bottom: 20px;
+  }
+  .story-step::before {
+    content: ''; position: absolute; left: -26px; top: 8px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--border); border: 2px solid var(--bg);
+  }
+  .story-step.active::before { background: var(--accent); }
+  .story-step.result::before { background: var(--success); }
+
+  .step-question {
+    font-size: 0.88rem; font-weight: 600; color: var(--accent); margin-bottom: 6px;
+    cursor: pointer; user-select: none;
+  }
+  .step-question:hover { color: #1e40af; }
+  .step-question .toggle { font-size: 0.65rem; margin-right: 6px; display: inline-block; transition: transform 0.2s; }
+  .story-step.open .step-question .toggle { transform: rotate(90deg); }
+
+  .step-answer {
+    display: none; font-size: 0.84rem; line-height: 1.7; color: var(--text);
+    padding: 8px 0 4px 0;
+  }
+  .story-step.open .step-answer { display: block; }
+
+  .step-prose { margin-bottom: 8px; }
+
+  .step-math {
+    background: #f1f5f9; border-radius: 6px; padding: 10px 14px;
+    font-family: Georgia, serif; font-size: 0.88rem; line-height: 2.0;
+    margin: 6px 0;
+  }
+  .step-math .result { font-weight: 700; }
+
+  .step-so-what {
+    background: #fffbeb; border-left: 3px solid #fcd34d; border-radius: 0 6px 6px 0;
+    padding: 8px 12px; font-size: 0.82rem; line-height: 1.6; margin-top: 6px;
+    color: #78350f;
+  }
+
+  .step-limits {
+    font-size: 0.8rem; color: var(--text-light); margin-top: 6px;
+    padding: 6px 10px; background: #fef2f2; border-radius: 4px;
+    display: none;
+  }
+  .step-limits.visible { display: block; }
+  .limits-toggle {
+    font-size: 0.78rem; color: var(--text-light); cursor: pointer;
+    text-decoration: underline; margin-top: 4px; display: inline-block;
+  }
+  .limits-toggle:hover { color: var(--danger); }
+
+  /* Tree */
+  .tree ul { list-style: none; padding-left: 28px; position: relative; }
+  .tree ul::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 16px; width: 1px; background: var(--tree-line); }
+  .tree li { position: relative; padding: 4px 0; }
+  .tree li::before { content: ''; position: absolute; left: -16px; top: 18px; width: 16px; height: 1px; background: var(--tree-line); }
+  .tree > ul { padding-left: 0; }
+  .tree > ul::before, .tree > ul > li::before { display: none; }
+
+  .node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    transition: all 0.15s; font-size: 0.88rem;
+  }
+  .node:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node.expanded { border-color: var(--accent); background: var(--accent-light); }
+  .node .name { color: var(--text-light); font-size: 0.8rem; }
+  .node .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .node .arrow { font-size: 0.65rem; color: var(--text-light); transition: transform 0.2s; }
+  .node.expanded .arrow { transform: rotate(90deg); }
+  .node.leaf { cursor: default; opacity: 0.85; }
+  .node.leaf:hover { border-color: var(--border); background: var(--bg-card); }
+  .node.leaf .arrow { display: none; }
+
+  .node-detail { display: none; margin: 6px 0 8px 0; max-width: 700px; }
+  .node.expanded + .node-detail { display: block; }
+
+  .fpill {
+    display: inline-block; font-size: 0.78rem; padding: 2px 8px;
+    background: var(--found-bg); border: 1px solid var(--found-border);
+    border-radius: 4px; color: #166534; cursor: pointer;
+    text-decoration: none; margin: 0 2px;
+  }
+  .fpill:hover { background: #dcfce7; }
+
+  .separator { margin: 24px 0 20px 0; }
+
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5); }
+    100% { box-shadow: 0 0 0 4px transparent; }
+  }
+  .flash { animation: flash 1.2s ease-out; }
+</style>
+</head>
+<body>
+
+<h1>Option D3: Narrative Walkthrough</h1>
+<p class="subtitle">Each result tells a story: start with the engineering question, get the answer in plain language, then optionally drill into the math and its limits. Building blocks use the same question-driven format. The idea: <em>read as far as you need, then stop</em>. Every level is self-contained.</p>
+
+<h2>Building Blocks</h2>
+
+<div class="foundation">
+  <!-- Convection -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-hconv">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Convection Coefficient</div>
+        <div class="card-value">h<sub>conv</sub> = 31.67 W/m&sup2;K</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="story">
+        <div class="story-step open">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> How well does air pull heat from the fin surfaces?</div>
+          <div class="step-answer">
+            <div class="step-prose">
+              Each fin channel acts like a small rectangular duct. Air enters at one end, warms as it flows along the hot fin walls, and exits the other side. The convection coefficient <em>h</em> measures how efficiently this happens: higher <em>h</em> means less temperature difference needed to reject a given amount of heat.
+            </div>
+            <div class="step-prose">
+              Here the flow is <strong>laminar</strong> (Re = 1213) and the channels are short enough that the thermal boundary layer never fully develops. That's actually helpful &mdash; the "entry effect" boosts heat transfer above the fully-developed limit. The solver uses the <strong>Muzychka &amp; Yovanovich (2004)</strong> correlation, which smoothly blends the two regimes.
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Show me the math</div>
+          <div class="step-answer">
+            <div class="step-math">
+              Gz = Re &middot; Pr &middot; D<sub>h</sub>/L = 1213 &times; 0.705 &times; 0.00804/0.10 = <span class="result">68.8</span><br>
+              Nu = (7.54&sup3; + (1.841 &middot; Gz<sup>1/3</sup>)&sup3;)<sup>1/3</sup> = <span class="result">9.50</span><br>
+              h<sub>conv</sub> = Nu &middot; k<sub>air</sub> / D<sub>h</sub> = 9.50 &times; 0.0268 / 0.00804 = <span class="result">31.67 W/m&sup2;K</span>
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-light); margin-top:6px;">
+              <strong>Gz</strong> (Graetz number) = how thermally undeveloped the flow is. High Gz = stronger entry effects, higher Nu.<br>
+              <strong>Nu</strong> (Nusselt number) = dimensionless heat transfer. The 7.54 term is the fully-developed floor; the Gz term adds entry-region boost.<br>
+              <strong>D<sub>h</sub></strong> = hydraulic diameter of the rectangular channel = 2sH/(s+H) = 8.04 mm.
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> When would this be wrong?</div>
+          <div class="step-answer">
+            <div class="step-prose" style="color: #991b1b;">
+              <ul style="margin-left:16px;">
+                <li><strong>Crossflow or angled approach:</strong> This correlation assumes air enters aligned with the channel axis. If air hits the fins from the side, the actual h could be significantly different.</li>
+                <li><strong>Impingement cooling:</strong> Air blowing straight down onto the fin tips is a completely different flow regime &mdash; this model doesn't apply.</li>
+                <li><strong>Very short channels</strong> (L/D<sub>h</sub> &lt; 5): Entry-region correlations become less reliable when the channel is shorter than a few hydraulic diameters.</li>
+                <li><strong>Non-uniform fin spacing:</strong> The model assumes all channels are identical. Warped or inconsistent fin spacing breaks this assumption.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fin Efficiency -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-eta">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Fin &amp; Surface Efficiency</div>
+        <div class="card-value">&eta;<sub>f</sub> = 91.0%, &eta;<sub>o</sub> = 91.7%</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="story">
+        <div class="story-step open">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Are the fins actually doing their job?</div>
+          <div class="step-answer">
+            <div class="step-prose">
+              Yes &mdash; <strong>91% efficient</strong>. A fin works by conducting heat from its root (attached to the base) out to its tip, where it's convected to the air. But the tip is always cooler than the root because heat has to travel through the metal. Fin efficiency measures how much of the fin's area is thermally "useful" compared to an idealized fin at uniform base temperature.
+            </div>
+            <div class="step-so-what">
+              At 91%, these fins are well-sized. You could make them taller for more area, but efficiency would drop. Rule of thumb: below ~70% efficiency, you're adding metal for diminishing returns. These fins still have room.
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Show me the math</div>
+          <div class="step-answer">
+            <div class="step-math">
+              m = &radic;(h<sub>eff</sub> &middot; P / (k &middot; A<sub>c</sub>)) = &radic;(32.42 &times; 0.202 / (200 &times; 1.0e-4)) = <span class="result">18.1 m<sup>-1</sup></span><br>
+              m &middot; L<sub>c</sub> = 18.1 &times; 0.0305 = <span class="result">0.552</span><br>
+              &eta;<sub>f</sub> = tanh(0.552) / 0.552 = <span class="result">0.910</span><br><br>
+              &eta;<sub>o</sub> = 1 &minus; (A<sub>f</sub>/A<sub>t</sub>)(1 &minus; &eta;<sub>f</sub>) = 1 &minus; (0.090/0.098)(0.090) = <span class="result">0.917</span>
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-light); margin-top:6px;">
+              <strong>m</strong> = fin parameter. Captures the balance between how fast heat convects away (h) vs. how fast it conducts along the fin (k&middot;A<sub>c</sub>). Bigger m = steeper temperature drop along the fin.<br>
+              <strong>L<sub>c</sub></strong> = corrected fin length (height + half thickness for tip convection) = 30.5 mm.<br>
+              <strong>&eta;<sub>o</sub></strong> = overall surface efficiency. Blends fin efficiency with the exposed base (which is at 100% effectiveness).
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> When would this be wrong?</div>
+          <div class="step-answer">
+            <div class="step-prose" style="color: #991b1b;">
+              <ul style="margin-left:16px;">
+                <li><strong>Bonded or press-fit fins:</strong> There's contact resistance at the fin root that this model ignores. Only extruded (integral) fins have perfect root contact.</li>
+                <li><strong>Very thin fins:</strong> Manufacturing tolerances may cause actual cross-section to differ from nominal.</li>
+                <li><strong>Non-uniform h:</strong> The model assumes uniform convection over the entire fin surface, but h actually varies along the channel length.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Friction -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-friction">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Friction &amp; Losses</div>
+        <div class="card-value">f = 0.01644, K<sub>c</sub> = 0.143, K<sub>e</sub> = 0.035</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="story">
+        <div class="story-step open">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> What resists the airflow?</div>
+          <div class="step-answer">
+            <div class="step-prose">
+              Three things slow the air down:
+            </div>
+            <div style="font-size:0.84rem; margin:8px 0 4px 0;">
+              <strong style="color:#2563eb;">1. Channel wall friction</strong> (dominant) &mdash; viscous drag along the full length of the fin channel walls. Depends on channel aspect ratio and flow regime.<br><br>
+              <strong style="color:#2563eb;">2. Contraction at entry</strong> (K<sub>c</sub> = 0.143) &mdash; air accelerates from the open approach area into narrower fin gaps, losing pressure in the process.<br><br>
+              <strong style="color:#2563eb;">3. Expansion at exit</strong> (K<sub>e</sub> = 0.035) &mdash; air decelerates back to the downstream region. Some kinetic energy is lost as turbulent mixing.
+            </div>
+            <div class="step-so-what">
+              Together these produce 1.33 Pa of pressure drop &mdash; trivially low. The friction component dominates here because the channels are relatively long compared to their diameter (L/D<sub>h</sub> = 12.4).
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Show me the math</div>
+          <div class="step-answer">
+            <div class="step-math">
+              &beta; = s/H = 0.00464/0.030 = 0.155 (channel aspect ratio)<br>
+              f&middot;Re = 24(1 &minus; 1.355&beta; + 1.947&beta;&sup2; &minus; ...) = 19.93<br>
+              f = 19.93/1213 = <span class="result">0.01644</span><br><br>
+              &sigma; = A<sub>open</sub>/A<sub>frontal</sub> = 0.813<br>
+              K<sub>c</sub> = 0.42(1&minus;&sigma;&sup2;) = <span class="result">0.143</span> &nbsp; (Kays &amp; London)<br>
+              K<sub>e</sub> = (1&minus;&sigma;)&sup2; = <span class="result">0.035</span> &nbsp; (Borda-Carnot)
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-light); margin-top:6px;">
+              <strong>&beta;</strong> = channel aspect ratio (spacing/height). Controls the f&middot;Re product via Shah &amp; London polynomial.<br>
+              <strong>&sigma;</strong> = open-area ratio. What fraction of the heatsink frontal face is open channel vs. solid fin.<br>
+              <strong>K<sub>c</sub></strong> = contraction (entry) loss. From Kays &amp; London (1984) for abrupt contraction into parallel plates.<br>
+              <strong>K<sub>e</sub></strong> = expansion (exit) loss. Borda-Carnot model for sudden expansion.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Air Properties -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-air">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Air Properties</div>
+        <div class="card-value">T<sub>film</sub> = 33.6 °C (306.8 K)</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="story">
+        <div class="story-step open">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> What are the air conditions?</div>
+          <div class="step-answer">
+            <div class="step-prose">
+              Air properties (density, viscosity, conductivity) are evaluated at the <strong>film temperature</strong> &mdash; the average of the heatsink base and the ambient air. This is the standard approach in convection correlations because it best represents the boundary layer where heat transfer happens.
+            </div>
+            <div style="font-size:0.84rem; display:grid; grid-template-columns:auto 1fr auto; gap:2px 16px; line-height:2; margin-top:8px;">
+              <span style="font-family:Georgia,serif;">&rho;</span><span>density</span><span><strong>1.151 kg/m&sup3;</strong></span>
+              <span style="font-family:Georgia,serif;">&mu;</span><span>dynamic viscosity</span><span><strong>1.878e-5 Pa&middot;s</strong></span>
+              <span style="font-family:Georgia,serif;">k<sub>air</sub></span><span>thermal conductivity</span><span><strong>0.0268 W/m&middot;K</strong></span>
+              <span style="font-family:Georgia,serif;">Pr</span><span>Prandtl number</span><span><strong>0.705</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="separator"></div>
+
+<h2>Results</h2>
+
+<div class="tree">
+<ul>
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Junction Temp</span>
+      <span class="val" style="color:var(--danger)">T<sub>j</sub> = 89.1 °C</span>
+    </div>
+    <div class="node-detail">
+      <div class="story">
+        <div class="story-step result open">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Will the source overheat?</div>
+          <div class="step-answer">
+            <div class="step-prose">
+              <strong>No &mdash; 10.9 °C of margin.</strong> The predicted junction temperature (89.1 °C) is safely below the 100 °C limit. But the margin is modest. Where is the temperature budget being spent?
+            </div>
+            <div style="font-size:0.84rem; margin:10px 0; line-height:1.8;">
+              <div style="display:grid; grid-template-columns:1fr auto auto; gap:2px 16px; padding:4px 0;">
+                <span>Heatsink (ambient &rarr; base)</span><span>17.2 °C</span><span style="color:var(--text-light);">23%</span>
+                <span>Spreading (base &rarr; effective base)</span><span>6.9 °C</span><span style="color:var(--text-light);">9%</span>
+                <span style="font-weight:600;color:var(--danger);">Interface / TIM (eff. base &rarr; case)</span><span style="font-weight:600;">25.0 °C</span><span style="font-weight:600;color:var(--danger);">33%</span>
+                <span>Junction-to-case (case &rarr; junction)</span><span>15.0 °C</span><span style="color:var(--text-light);">20%</span>
+                <span style="color:var(--success);">Remaining margin</span><span style="color:var(--success);">10.9 °C</span><span style="color:var(--success);">15%</span>
+              </div>
+            </div>
+            <div class="step-so-what">
+              The <strong>interface material</strong> is the single biggest consumer of temperature budget (33%). Improving TIM conductivity, reducing bondline thickness, or increasing contact area would recover more margin than any change to the heatsink geometry.
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Show me the math</div>
+          <div class="step-answer">
+            <div class="step-math">
+              T<sub>j</sub> = T<sub>case</sub> + Q &middot; R<sub>&theta;,jc</sub> = 74.1 + 50.0 &times; 0.30 = <span class="result">89.1 °C</span><br>
+              Margin = T<sub>j,max</sub> &minus; T<sub>j</sub> = 100.0 &minus; 89.1 = <span class="result">10.9 °C</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul>
+      <li>
+        <div class="node" onclick="toggleNode(this)">
+          <span class="arrow">&#9654;</span>
+          <span class="name">Case Temp</span>
+          <span class="val">T<sub>case</sub> = 74.1 °C</span>
+        </div>
+        <div class="node-detail">
+          <div class="story">
+            <div class="story-step open">
+              <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> How hot is the package mounting surface?</div>
+              <div class="step-answer">
+                <div class="step-prose">
+                  <strong>74.1 °C</strong> &mdash; built up from the effective base temperature (49.1 °C) plus 25 °C across the thermal interface. That 25 °C interface drop is the <strong>largest single penalty</strong> in the entire thermal path.
+                </div>
+                <div class="step-math">
+                  T<sub>case</sub> = T<sub>base,eff</sub> + Q &middot; R<sub>&theta;,cs</sub> = 49.1 + 50.0 &times; 0.50 = <span class="result">74.1 °C</span>
+                </div>
+              </div>
+            </div>
+            <div class="story-step">
+              <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Why is the interface resistance so high?</div>
+              <div class="step-answer">
+                <div class="step-prose">
+                  R<sub>&theta;,cs</sub> = 0.50 K/W comes from: <strong>0.5 mm bondline</strong> of TIM with <strong>3.0 W/m&middot;K conductivity</strong> over a <strong>400 mm&sup2; contact area</strong>. The contact area is quite small, which amplifies the resistance. If the contact area were doubled (e.g., larger package tab), R<sub>&theta;,cs</sub> would halve.
+                </div>
+                <div class="step-math">
+                  R<sub>&theta;,cs</sub> = BLT / (k<sub>TIM</sub> &middot; A<sub>contact</sub>) = 0.0005 / (3.0 &times; 0.0004) = <span class="result">0.417 K/W</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Base Temp (solved)</span>
+              <span class="val">T<sub>b</sub> = 42.2 °C</span>
+            </div>
+            <div class="node-detail">
+              <div class="story">
+                <div class="story-step open">
+                  <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Can the heatsink reject 50 W?</div>
+                  <div class="step-answer">
+                    <div class="step-prose">
+                      <strong>Yes, comfortably.</strong> The solver finds that at T<sub>b</sub> = 42.2 °C (only 17.2 °C above ambient), the fins and exposed base reject exactly 50 W. The resulting sink resistance is <strong>0.344 K/W</strong>, well under the 0.700 K/W budget &mdash; meaning the heatsink has <strong>51% margin</strong> on its own.
+                    </div>
+                    <div class="step-so-what">
+                      The heatsink is oversized for the thermal load. The design is constrained by the upstream path (interface + R<sub>jc</sub>), not by the sink itself. Making the heatsink bigger won't help much &mdash; fix the interface first.
+                    </div>
+                  </div>
+                </div>
+                <div class="story-step">
+                  <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Show me the math</div>
+                  <div class="step-answer">
+                    <div class="step-math">
+                      Q = <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-eta')">&eta;<sub>o</sub></span> &middot;
+                      (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> + h<sub>rad</sub>) &middot;
+                      A<sub>t</sub> &middot; (T<sub>b</sub> &minus; T<sub>&infin;</sub>)<br>
+                      50.0 = 0.917 &times; 32.42 &times; 0.098 &times; (T<sub>b</sub> &minus; 25.0)<br>
+                      &rArr; &Delta;T = 17.2 °C &rArr; T<sub>b</sub> = <span class="result">42.2 °C</span><br><br>
+                      R<sub>&theta;,sink</sub> = &Delta;T / Q = 17.2 / 50 = <span class="result">0.344 K/W</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li><div class="node leaf"><span class="arrow">&#9654;</span><span class="name">R<sub>&theta;,jc</sub></span><span class="val">0.300 K/W (input)</span></div></li>
+    </ul>
+  </li>
+</ul>
+
+<div style="margin-top: 16px;"></div>
+
+<ul style="list-style:none; padding:0;">
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Pressure Drop</span>
+      <span class="val">&Delta;P = 1.33 Pa</span>
+    </div>
+    <div class="node-detail">
+      <div class="story">
+        <div class="story-step open">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Will the heatsink choke the airflow?</div>
+          <div class="step-answer">
+            <div class="step-prose">
+              <strong>No.</strong> At 1.33 Pa, this heatsink creates negligible flow resistance. For context, typical small axial fans deliver 10&ndash;30 Pa, and even passive natural convection can drive a few Pa through a chimney effect. The flow is not limiting the thermal performance here.
+            </div>
+            <div class="step-so-what">
+              Because pressure drop is so low, you could add more fins (reducing spacing) without worrying about choking the flow. That would increase surface area and improve heat rejection &mdash; though with this design the bottleneck is the interface, not the sink.
+            </div>
+          </div>
+        </div>
+        <div class="story-step">
+          <div class="step-question" onclick="toggleStep(this)"><span class="toggle">&#9654;</span> Show me the math</div>
+          <div class="step-answer">
+            <div class="step-math">
+              &Delta;P = (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">f</span> &middot; L/D<sub>h</sub>
+              + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>c</sub></span>
+              + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>e</sub></span>)
+              &middot; <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-air')">&rho;</span>
+              &middot; V<sub>ch</sub>&sup2; / 2<br>
+              = (0.01644 &times; 0.10/0.00804 + 0.143 + 0.035) &times; 1.151 &times; 2.46&sup2; / 2 = <span class="result">1.33 Pa</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </li>
+</ul>
+</div>
+
+<script>
+function toggleNode(el) {
+  if (el.classList.contains('leaf')) return;
+  el.classList.toggle('expanded');
+}
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+function toggleStep(el) {
+  el.closest('.story-step').classList.toggle('open');
+}
+function scrollToFound(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  if (!target.classList.contains('expanded')) target.classList.add('expanded');
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option D1: Why → What → How</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --bg-card: #fff; --text: #1a1a2e; --text-light: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --border: #e5e7eb;
+    --success: #16a34a; --danger: #dc2626;
+    --tree-line: #cbd5e1;
+    --found-bg: #f0fdf4; --found-border: #86efac;
+    --why-bg: #fffbeb; --why-border: #fcd34d; --why-accent: #92400e;
+    --how-bg: #f0f9ff; --how-border: #93c5fd; --how-accent: #1e40af;
+    --limits-bg: #fef2f2; --limits-border: #fca5a5; --limits-accent: #991b1b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 900px; margin: 0 auto; line-height: 1.5; }
+  h1 { font-size: 1.2rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 24px; line-height: 1.6; }
+  h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  /* Foundation section */
+  .foundation { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
+  @media (max-width: 640px) { .foundation { grid-template-columns: 1fr; } }
+
+  .found-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; cursor: pointer; user-select: none; transition: all 0.15s;
+  }
+  .found-card:hover { border-color: var(--accent); }
+  .found-card.expanded { background: var(--found-bg); border-color: var(--found-border); }
+  .found-card .card-header { display: flex; justify-content: space-between; align-items: center; }
+  .found-card .card-label { font-size: 0.82rem; color: var(--text-light); }
+  .found-card .card-value { font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .found-card .card-arrow { font-size: 0.6rem; color: var(--text-light); transition: transform 0.2s; }
+  .found-card.expanded .card-arrow { transform: rotate(90deg); }
+  .found-card .card-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .found-card.expanded .card-body { display: block; }
+
+  /* Disclosure depth tabs inside cards */
+  .depth-tabs { display: flex; gap: 0; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .depth-tab {
+    padding: 5px 12px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    border: none; background: none; color: var(--text-light);
+    border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .depth-tab:hover { color: var(--text); }
+  .depth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .depth-panel { display: none; font-size: 0.84rem; line-height: 1.8; }
+  .depth-panel.active { display: block; }
+
+  /* Why panel */
+  .why-box {
+    background: var(--why-bg); border-left: 3px solid var(--why-border);
+    border-radius: 0 6px 6px 0; padding: 10px 14px; font-size: 0.84rem; line-height: 1.7;
+  }
+  .why-box .why-label { font-weight: 600; color: var(--why-accent); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+
+  /* How/math panel */
+  .math-box {
+    background: var(--how-bg); border-left: 3px solid var(--how-border);
+    border-radius: 0 6px 6px 0; padding: 10px 14px; font-size: 0.84rem; line-height: 1.8;
+  }
+  .math-box .math-label { font-weight: 600; color: var(--how-accent); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+
+  /* Limits panel */
+  .limits-box {
+    background: var(--limits-bg); border-left: 3px solid var(--limits-border);
+    border-radius: 0 6px 6px 0; padding: 10px 14px; font-size: 0.84rem; line-height: 1.7;
+  }
+  .limits-box .limits-label { font-weight: 600; color: var(--limits-accent); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+
+  /* Variable definitions */
+  .var-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.82rem; }
+  .var-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .var-table td:first-child { font-weight: 600; white-space: nowrap; width: 100px; font-family: Georgia, serif; }
+  .var-table td:nth-child(2) { color: var(--text-light); }
+  .var-table td:last-child { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+  /* Tree section */
+  .tree ul { list-style: none; padding-left: 28px; position: relative; }
+  .tree ul::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 16px; width: 1px; background: var(--tree-line); }
+  .tree li { position: relative; padding: 4px 0; }
+  .tree li::before { content: ''; position: absolute; left: -16px; top: 18px; width: 16px; height: 1px; background: var(--tree-line); }
+  .tree > ul { padding-left: 0; }
+  .tree > ul::before, .tree > ul > li::before { display: none; }
+
+  .node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    transition: all 0.15s; font-size: 0.88rem;
+  }
+  .node:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node.expanded { border-color: var(--accent); background: var(--accent-light); }
+  .node .name { color: var(--text-light); font-size: 0.8rem; }
+  .node .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .node .arrow { font-size: 0.65rem; color: var(--text-light); transition: transform 0.2s; }
+  .node.expanded .arrow { transform: rotate(90deg); }
+  .node.leaf { cursor: default; opacity: 0.85; }
+  .node.leaf:hover { border-color: var(--border); background: var(--bg-card); }
+  .node.leaf .arrow { display: none; }
+
+  .node-detail {
+    display: none; margin: 6px 0 8px 0; padding: 0;
+    max-width: 680px;
+  }
+  .node.expanded + .node-detail { display: block; }
+
+  .fpill {
+    display: inline-block; font-size: 0.78rem; padding: 2px 8px;
+    background: var(--found-bg); border: 1px solid var(--found-border);
+    border-radius: 4px; color: #166534; cursor: pointer;
+    text-decoration: none; margin-left: 2px;
+  }
+  .fpill:hover { background: #dcfce7; }
+
+  .eq-line { font-family: Georgia, serif; }
+  .separator { margin: 24px 0 20px 0; }
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5); }
+    100% { box-shadow: 0 0 0 4px transparent; }
+  }
+  .flash { animation: flash 1.2s ease-out; }
+</style>
+</head>
+<body>
+
+<h1>Option D1: Why &rarr; What &rarr; How</h1>
+<p class="subtitle">Each building block and result has three disclosure layers: <strong>Why</strong> (physical reasoning and context), <strong>What</strong> (the equation with values substituted), and <strong>Limits</strong> (when this breaks down). Click the tabs inside each card to switch layers. This approach leads with engineering reasoning rather than raw math.</p>
+
+<h2>Building Blocks</h2>
+
+<div class="foundation">
+  <!-- Air Properties -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-air">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Air Properties</div>
+        <div class="card-value">T<sub>film</sub> = 33.6 °C (306.8 K)</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="depth-tabs">
+        <button class="depth-tab active" onclick="event.stopPropagation();switchTab(this,'why')">Why</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'what')">What</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'limits')">Limits</button>
+      </div>
+      <div class="depth-panel active" data-depth="why">
+        <div class="why-box">
+          <div class="why-label">Why this matters</div>
+          Air viscosity, density, and thermal conductivity all change with temperature. The solver evaluates them at the <strong>film temperature</strong> &mdash; the average of the base and ambient &mdash; because that best represents the conditions where heat transfer actually happens inside the fin channels.
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="what">
+        <div class="math-box">
+          <div class="math-label">Calculation</div>
+          <span class="eq-line">T<sub>film</sub> = (T<sub>b</sub> + T<sub>&infin;</sub>)/2 = (42.2 + 25.0)/2 = <strong>33.6 °C</strong></span><br>
+          <span class="eq-line">&rho; = p/(R<sub>air</sub>&middot;T) = 101325/(287.1 &times; 306.8) = <strong>1.151 kg/m&sup3;</strong></span><br>
+          <span class="eq-line">&mu; via Sutherland law = <strong>1.878&times;10<sup>-5</sup> Pa&middot;s</strong></span><br>
+          <span class="eq-line">k<sub>air</sub> via Sutherland-type fit = <strong>0.0268 W/m&middot;K</strong></span><br>
+          <span class="eq-line">Pr = &mu;&middot;c<sub>p</sub>/k = <strong>0.705</strong></span>
+          <table class="var-table" style="margin-top:10px;">
+            <tr><td>T<sub>b</sub></td><td>Average base temperature (solved)</td><td>42.2 °C</td></tr>
+            <tr><td>T<sub>&infin;</sub></td><td>Ambient / inlet air temperature (input)</td><td>25.0 °C</td></tr>
+            <tr><td>&rho;</td><td>Air density</td><td>1.151 kg/m&sup3;</td></tr>
+            <tr><td>&mu;</td><td>Dynamic viscosity</td><td>1.878e-5 Pa&middot;s</td></tr>
+            <tr><td>k<sub>air</sub></td><td>Thermal conductivity of air</td><td>0.0268 W/m&middot;K</td></tr>
+            <tr><td>Pr</td><td>Prandtl number (ratio of momentum to thermal diffusivity)</td><td>0.705</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="limits">
+        <div class="limits-box">
+          <div class="limits-label">When this breaks down</div>
+          <ul style="margin:4px 0 0 16px;">
+            <li>Sutherland fits are valid <strong>200&ndash;700 K</strong>. Current film temperature (307 K) is well within range.</li>
+            <li>At altitudes above ~3000 m, the assumed sea-level pressure (101.3 kPa) will overpredict density. Adjust ambient pressure if needed.</li>
+            <li>Film temperature averaging is a standard approximation. For very large &Delta;T (&gt;80 °C), property variation across the boundary layer becomes significant.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Convection Coefficient -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-hconv">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Convection Coefficient</div>
+        <div class="card-value">h<sub>conv</sub> = 31.67 W/m&sup2;K</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="depth-tabs">
+        <button class="depth-tab active" onclick="event.stopPropagation();switchTab(this,'why')">Why</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'what')">What</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'limits')">Limits</button>
+      </div>
+      <div class="depth-panel active" data-depth="why">
+        <div class="why-box">
+          <div class="why-label">Why this correlation</div>
+          The fin channels are treated as rectangular ducts with flow entering from one end. Because the flow is <strong>laminar</strong> (Re = 1213 &lt; 2300) and the channels are relatively short, the thermal boundary layer hasn't fully developed by the exit. The <strong>Muzychka &amp; Yovanovich (2004)</strong> correlation handles this developing-flow regime &mdash; it blends the fully-developed limit (Nu &rarr; 7.54 for long ducts) with a higher entry-region value that depends on the Graetz number. Short channels get more credit for entry effects, which is physically correct.
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="what">
+        <div class="math-box">
+          <div class="math-label">Calculation</div>
+          <span class="eq-line">Gz = Re &middot; Pr &middot; D<sub>h</sub>/L = 1213 &times; 0.705 &times; 0.00804 / 0.10 = <strong>68.8</strong></span><br>
+          <span class="eq-line">Nu = (7.54&sup3; + (1.841 &middot; Gz<sup>1/3</sup>)&sup3;)<sup>1/3</sup> = (429 + 5428)<sup>1/3</sup> = <strong>9.50</strong></span><br>
+          <span class="eq-line">h<sub>conv</sub> = Nu &middot; k<sub>air</sub> / D<sub>h</sub> = 9.50 &times; 0.0268 / 0.00804 = <strong>31.67 W/m&sup2;K</strong></span>
+          <table class="var-table" style="margin-top:10px;">
+            <tr><td>Gz</td><td>Graetz number &mdash; ratio of thermal entry length to channel length. High Gz = entry effects dominate.</td><td>68.8</td></tr>
+            <tr><td>Nu</td><td>Nusselt number &mdash; dimensionless heat transfer. Higher Nu = better convection.</td><td>9.50</td></tr>
+            <tr><td>D<sub>h</sub></td><td>Hydraulic diameter of fin channel = 2sH/(s+H)</td><td>8.04 mm</td></tr>
+            <tr><td>L</td><td>Fin length in flow direction (= base length)</td><td>100 mm</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="limits">
+        <div class="limits-box">
+          <div class="limits-label">When this breaks down</div>
+          <ul style="margin:4px 0 0 16px;">
+            <li>This correlation assumes <strong>channel-aligned flow</strong> &mdash; air enters one end and exits the other. Crossflow, impingement, or angled approach invalidate it.</li>
+            <li>Assumes <strong>isothermal walls</strong> (constant fin temperature). Real fins have a temperature gradient &mdash; fin efficiency corrects for this separately.</li>
+            <li>At Re &gt; 2300 the solver switches to the Gnielinski turbulent correlation. The transition zone (2300&ndash;3500) uses a blend.</li>
+            <li>Does not account for fin-tip flow spilling or inter-channel mixing in very short, widely-spaced fins.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fin & Surface Efficiency -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-eta">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Fin &amp; Surface Efficiency</div>
+        <div class="card-value">&eta;<sub>f</sub> = 91.0%, &eta;<sub>o</sub> = 91.7%</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="depth-tabs">
+        <button class="depth-tab active" onclick="event.stopPropagation();switchTab(this,'why')">Why</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'what')">What</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'limits')">Limits</button>
+      </div>
+      <div class="depth-panel active" data-depth="why">
+        <div class="why-box">
+          <div class="why-label">Why this matters</div>
+          A fin's tip is always cooler than its root because heat has to conduct along the fin before it can convect away. <strong>Fin efficiency</strong> (&eta;<sub>f</sub>) captures this penalty: 91% means the average fin temperature is 91% as effective as if the whole fin were at base temperature. <strong>Surface efficiency</strong> (&eta;<sub>o</sub>) blends this with the exposed base area (which is at full temperature) to give a single effectiveness for the entire heat-rejecting surface. When &eta;<sub>f</sub> drops below ~70%, adding more fin height is giving diminishing returns.
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="what">
+        <div class="math-box">
+          <div class="math-label">Calculation</div>
+          <span class="eq-line">h<sub>eff</sub> = <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> + h<sub>rad</sub> = 31.67 + 0.746 = <strong>32.42 W/m&sup2;K</strong></span><br>
+          <span class="eq-line">m = &radic;(h<sub>eff</sub> &middot; P / (k &middot; A<sub>c</sub>)) = &radic;(32.42 &times; 0.202 / (200 &times; 0.0001)) = <strong>18.1 m<sup>-1</sup></strong></span><br>
+          <span class="eq-line">m &middot; L<sub>c</sub> = 18.1 &times; 0.0305 = <strong>0.552</strong></span><br>
+          <span class="eq-line">&eta;<sub>f</sub> = tanh(0.552) / 0.552 = 0.500 / 0.552 = <strong>0.910</strong></span><br>
+          <span class="eq-line">&eta;<sub>o</sub> = 1 &minus; (A<sub>f</sub>/A<sub>t</sub>)(1&minus;&eta;<sub>f</sub>) = 1 &minus; (0.090/0.098)(1&minus;0.910) = <strong>0.917</strong></span>
+          <table class="var-table" style="margin-top:10px;">
+            <tr><td>m</td><td>Fin parameter &mdash; balances conduction along fin vs. convection from surface</td><td>18.1 m<sup>-1</sup></td></tr>
+            <tr><td>L<sub>c</sub></td><td>Corrected fin length (fin height + half thickness, for tip convection)</td><td>30.5 mm</td></tr>
+            <tr><td>P</td><td>Fin perimeter (per unit depth into page)</td><td>0.202 m</td></tr>
+            <tr><td>A<sub>c</sub></td><td>Fin cross-section area (thickness &times; depth)</td><td>1.0e-4 m&sup2;</td></tr>
+            <tr><td>k</td><td>Fin material conductivity (aluminum)</td><td>200 W/m&middot;K</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="limits">
+        <div class="limits-box">
+          <div class="limits-label">When this breaks down</div>
+          <ul style="margin:4px 0 0 16px;">
+            <li>Uses the classic <strong>tanh</strong> fin model, which assumes 1D conduction along the fin and uniform h over all surfaces. Real h varies with position.</li>
+            <li>Assumes the <strong>base is isothermal</strong>. If spreading resistance is large, the base under the source is hotter than the edges, and local fin efficiency varies.</li>
+            <li>For bonded or press-fit fins, <strong>contact resistance at the fin root</strong> adds a penalty not captured here. Only integral (extruded) fins have perfect root contact.</li>
+            <li>Very thin fins (&lt;0.5 mm) may have manufacturing tolerances that affect cross-section area.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Friction & Losses -->
+  <div class="found-card" onclick="toggleCard(this)" id="fc-friction">
+    <div class="card-header">
+      <div>
+        <div class="card-label">Friction &amp; Losses</div>
+        <div class="card-value">f = 0.01644, K<sub>c</sub> = 0.143, K<sub>e</sub> = 0.035</div>
+      </div>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="depth-tabs">
+        <button class="depth-tab active" onclick="event.stopPropagation();switchTab(this,'why')">Why</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'what')">What</button>
+        <button class="depth-tab" onclick="event.stopPropagation();switchTab(this,'limits')">Limits</button>
+      </div>
+      <div class="depth-panel active" data-depth="why">
+        <div class="why-box">
+          <div class="why-label">Why these three terms</div>
+          Pressure drop through the fin array has three components: <strong>friction along the channel walls</strong> (the dominant term in long channels), <strong>contraction loss</strong> (K<sub>c</sub>) as air accelerates from the open approach into narrower fin gaps, and <strong>expansion loss</strong> (K<sub>e</sub>) as it decelerates at the exit. All three matter for predicting how much airflow a fan can push through &mdash; or equivalently, how much flow the heatsink "costs" the system.
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="what">
+        <div class="math-box">
+          <div class="math-label">Calculation</div>
+          <span class="eq-line">&beta; = s/H = 0.00464/0.030 = 0.155 (channel aspect ratio)</span><br>
+          <span class="eq-line">f&middot;Re = 24(1 &minus; 1.355&beta; + 1.947&beta;&sup2; &minus; ...) = 19.93</span><br>
+          <span class="eq-line">f = 19.93 / 1213 = <strong>0.01644</strong></span><br>
+          <span class="eq-line">&sigma; = A<sub>open</sub>/A<sub>frontal</sub> = 0.813</span><br>
+          <span class="eq-line">K<sub>c</sub> = 0.42(1&minus;&sigma;&sup2;) = 0.42 &times; 0.339 = <strong>0.143</strong></span><br>
+          <span class="eq-line">K<sub>e</sub> = (1&minus;&sigma;)&sup2; = 0.187&sup2; = <strong>0.035</strong></span>
+          <table class="var-table" style="margin-top:10px;">
+            <tr><td>&beta;</td><td>Channel aspect ratio (spacing / height)</td><td>0.155</td></tr>
+            <tr><td>&sigma;</td><td>Open-area ratio &mdash; fraction of frontal area that is open channel</td><td>0.813</td></tr>
+            <tr><td>K<sub>c</sub></td><td>Contraction (entry) loss coefficient</td><td>0.143</td></tr>
+            <tr><td>K<sub>e</sub></td><td>Expansion (exit) loss coefficient (Borda-Carnot)</td><td>0.035</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="depth-panel" data-depth="limits">
+        <div class="limits-box">
+          <div class="limits-label">When this breaks down</div>
+          <ul style="margin:4px 0 0 16px;">
+            <li>The f&middot;Re product assumes <strong>fully developed laminar flow</strong> in a rectangular duct. For very short channels (L/D<sub>h</sub> &lt; 10), developing-flow friction is higher.</li>
+            <li>K<sub>c</sub> uses a simplified constant (0.42) from Kays &amp; London. Real contraction losses depend on exact inlet geometry (sharp-edge vs. rounded).</li>
+            <li>K<sub>e</sub> uses the Borda-Carnot sudden-expansion model. Gradual diffusers would have lower loss.</li>
+            <li>These losses assume all channels receive <strong>equal flow</strong>. Non-uniform approach velocity or partial blockage will change the distribution.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="separator"></div>
+
+<h2>Results</h2>
+
+<div class="tree">
+<ul>
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Junction Temp</span>
+      <span class="val" style="color:var(--danger)">T<sub>j</sub> = 89.1 °C</span>
+    </div>
+    <div class="node-detail">
+      <div class="why-box" style="margin-bottom:8px;">
+        <div class="why-label">What this means</div>
+        The predicted hottest point in the source/package is <strong>89.1 °C</strong>, which is <strong>10.9 °C below</strong> the 100 °C limit. This margin comes entirely from the upstream thermal path &mdash; the junction-to-case and case-to-sink resistances consume most of the available temperature budget before the heatsink even starts working.
+      </div>
+      <div class="math-box">
+        <div class="math-label">Equation</div>
+        <span class="eq-line">T<sub>j</sub> = T<sub>case</sub> + Q &middot; R<sub>&theta;,jc</sub> = 74.1 + 50.0 &times; 0.30 = <strong>89.1 °C</strong></span><br>
+        <span class="eq-line">Margin = 100.0 &minus; 89.1 = <strong>10.9 °C</strong> &#10003;</span>
+      </div>
+    </div>
+    <ul>
+      <li>
+        <div class="node" onclick="toggleNode(this)">
+          <span class="arrow">&#9654;</span>
+          <span class="name">Case Temp</span>
+          <span class="val">T<sub>case</sub> = 74.1 °C</span>
+        </div>
+        <div class="node-detail">
+          <div class="why-box" style="margin-bottom:8px;">
+            <div class="why-label">What this means</div>
+            The mounting surface where the package meets the thermal interface material reaches 74.1 °C. The <strong>25 °C rise from base to case</strong> is driven entirely by the interface material (TIM) &mdash; this is the single largest temperature drop in the whole path, consuming more budget than the heatsink itself.
+          </div>
+          <div class="math-box">
+            <div class="math-label">Equation</div>
+            <span class="eq-line">T<sub>case</sub> = T<sub>base,eff</sub> + Q &middot; R<sub>&theta;,cs</sub> = 49.1 + 50.0 &times; 0.50 = <strong>74.1 °C</strong></span>
+          </div>
+        </div>
+        <ul>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Effective Base</span>
+              <span class="val">T<sub>base,eff</sub> = 49.1 °C</span>
+            </div>
+            <div class="node-detail">
+              <div class="why-box" style="margin-bottom:8px;">
+                <div class="why-label">What this means</div>
+                Because the heat source is smaller than the base, the metal directly under the source runs hotter than the base average. The effective base temperature accounts for this <strong>spreading penalty</strong> &mdash; a 6.9 °C rise above the average base temperature.
+              </div>
+              <div class="math-box">
+                <div class="math-label">Equation</div>
+                <span class="eq-line">T<sub>base,eff</sub> = T<sub>b</sub> + Q &middot; R<sub>sp</sub> = 42.2 + 50.0 &times; 0.139 = <strong>49.1 °C</strong></span>
+              </div>
+            </div>
+            <ul>
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">&#9654;</span>
+                  <span class="name">Base Temp</span>
+                  <span class="val">T<sub>b</sub> = 42.2 °C</span>
+                </div>
+                <div class="node-detail">
+                  <div class="why-box" style="margin-bottom:8px;">
+                    <div class="why-label">What this means</div>
+                    The average base temperature is found by iteration: the solver adjusts T<sub>b</sub> until the total heat rejected by the fins and base exactly equals the heat load. At 42.2 °C, the sink runs only 17.2 °C above ambient &mdash; the heatsink itself is doing its job well. The <strong>sink thermal resistance</strong> (0.344 K/W) is well under the required budget (0.700 K/W).
+                  </div>
+                  <div class="math-box">
+                    <div class="math-label">Equation</div>
+                    <span class="eq-line">
+                      <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-eta')">&eta;<sub>o</sub></span> &middot;
+                      (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-hconv')">h<sub>conv</sub></span> + h<sub>rad</sub>) &middot; A<sub>t</sub> &middot; (T<sub>b</sub>&minus;T<sub>&infin;</sub>) = Q
+                    </span><br>
+                    <span class="eq-line">0.917 &times; 32.42 &times; 0.098 &times; 17.2 = <strong>50.0 W</strong> &rArr; T<sub>b</sub> = 42.2 °C</span><br>
+                    <span class="eq-line">R<sub>&theta;,sink</sub> = &Delta;T/Q = 17.2/50 = <strong>0.344 K/W</strong></span>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Interface R<sub>&theta;,cs</sub></span>
+              <span class="val">0.500 K/W</span>
+            </div>
+            <div class="node-detail">
+              <div class="why-box" style="margin-bottom:8px;">
+                <div class="why-label">What this means</div>
+                The thermal interface material (TIM) between the package and the heatsink base contributes 0.500 K/W. At 50 W, this means <strong>25 °C is consumed just crossing the interface</strong>. This is the largest single resistance in the path. Improving the TIM (thinner bondline, higher conductivity, or larger contact area) would be the highest-impact change.
+              </div>
+              <div class="math-box">
+                <div class="math-label">Equation</div>
+                <span class="eq-line">R<sub>&theta;,cs</sub> = BLT / (k<sub>TIM</sub> &middot; A<sub>contact</sub>) = 0.0005 / (3.0 &times; 0.0004) = <strong>0.417 K/W</strong></span>
+                <table class="var-table" style="margin-top:10px;">
+                  <tr><td>BLT</td><td>Bondline thickness (gap between surfaces)</td><td>0.5 mm</td></tr>
+                  <tr><td>k<sub>TIM</sub></td><td>TIM thermal conductivity</td><td>3.0 W/m&middot;K</td></tr>
+                  <tr><td>A<sub>contact</sub></td><td>Contact area where TIM is applied</td><td>400 mm&sup2;</td></tr>
+                </table>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li><div class="node leaf"><span class="arrow">&#9654;</span><span class="name">R<sub>&theta;,jc</sub></span><span class="val">0.300 K/W (input)</span></div></li>
+    </ul>
+  </li>
+</ul>
+
+<div style="margin-top: 16px;"></div>
+
+<ul style="list-style:none; padding:0;">
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Pressure Drop</span>
+      <span class="val">&Delta;P = 1.33 Pa</span>
+    </div>
+    <div class="node-detail">
+      <div class="why-box" style="margin-bottom:8px;">
+        <div class="why-label">What this means</div>
+        The heatsink creates 1.33 Pa of flow resistance. This is very low &mdash; even a small fan can easily overcome this. In a fan-curve system, this determines where the operating point falls: lower pressure drop means more airflow delivered.
+      </div>
+      <div class="math-box">
+        <div class="math-label">Equation</div>
+        <span class="eq-line">&Delta;P = (<span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">f</span>&middot;L/D<sub>h</sub> + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>c</sub></span> + <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-friction')">K<sub>e</sub></span>) &middot; <span class="fpill" onclick="event.stopPropagation();scrollToFound('fc-air')">&rho;</span> &middot; V<sub>ch</sub>&sup2;/2</span><br>
+        <span class="eq-line">= (0.01644 &times; 0.10/0.00804 + 0.143 + 0.035) &times; 1.151 &times; 2.46&sup2;/2 = <strong>1.33 Pa</strong></span>
+      </div>
+    </div>
+  </li>
+</ul>
+</div>
+
+<script>
+function toggleNode(el) {
+  if (el.classList.contains('leaf')) return;
+  el.classList.toggle('expanded');
+}
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+function switchTab(btn, depth) {
+  const card = btn.closest('.card-body');
+  card.querySelectorAll('.depth-tab').forEach(t => t.classList.remove('active'));
+  card.querySelectorAll('.depth-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  card.querySelector(`.depth-panel[data-depth="${depth}"]`).classList.add('active');
+}
+function scrollToFound(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  if (!target.classList.contains('expanded')) target.classList.add('expanded');
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option D1 Revised: Results-First with Inline Disclosure</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --bg-card: #fff; --text: #1a1a2e; --text-light: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --border: #e5e7eb;
+    --success: #16a34a; --danger: #dc2626;
+    --tree-line: #cbd5e1;
+    --found-bg: #f0fdf4; --found-border: #86efac;
+    --warn-bg: #fffbeb; --warn-border: #fcd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 900px; margin: 0 auto; line-height: 1.5; }
+  h1 { font-size: 1.2rem; margin-bottom: 6px; }
+  .subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 24px; line-height: 1.6; }
+  h2 { font-size: 0.95rem; margin-bottom: 12px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  /* ── Tree ── */
+  .tree ul { list-style: none; padding-left: 28px; position: relative; }
+  .tree ul::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 16px; width: 1px; background: var(--tree-line); }
+  .tree li { position: relative; padding: 4px 0; }
+  .tree li::before { content: ''; position: absolute; left: -16px; top: 18px; width: 16px; height: 1px; background: var(--tree-line); }
+  .tree > ul { padding-left: 0; }
+  .tree > ul::before, .tree > ul > li::before { display: none; }
+
+  .node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    transition: all 0.15s; font-size: 0.88rem;
+  }
+  .node:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node.expanded { border-color: var(--accent); background: var(--accent-light); }
+  .node .name { color: var(--text-light); font-size: 0.8rem; }
+  .node .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .node .arrow { font-size: 0.65rem; color: var(--text-light); transition: transform 0.2s; }
+  .node.expanded .arrow { transform: rotate(90deg); }
+  .node.leaf { cursor: default; opacity: 0.85; }
+  .node.leaf:hover { border-color: var(--border); background: var(--bg-card); }
+  .node.leaf .arrow { display: none; }
+
+  /* ── Expanded detail panel ── */
+  .node-detail {
+    display: none; margin: 6px 0 8px 0; max-width: 700px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 18px; font-size: 0.84rem; line-height: 1.7;
+  }
+  .node.expanded + .node-detail { display: block; }
+
+  /* Context = the plain-english "what and why" */
+  .detail-context { margin-bottom: 10px; }
+
+  /* Equation block */
+  .detail-eq {
+    background: #f1f5f9; border-radius: 6px; padding: 10px 14px;
+    font-family: Georgia, serif; font-size: 0.9rem; line-height: 2.0;
+    margin: 8px 0;
+  }
+  .detail-eq .result { font-weight: 700; }
+
+  /* Variable legend (compact) */
+  .var-legend {
+    display: grid; grid-template-columns: auto 1fr; gap: 1px 12px;
+    font-size: 0.8rem; line-height: 1.7; margin: 8px 0;
+    padding: 8px 12px; border-left: 2px solid var(--border);
+  }
+  .var-legend dt { font-family: Georgia, serif; font-weight: 600; white-space: nowrap; }
+  .var-legend dd { color: var(--text-light); margin: 0; }
+
+  /* Applicability note */
+  .detail-limits {
+    font-size: 0.8rem; color: var(--text-light); margin-top: 8px;
+    padding: 6px 10px; background: #fef2f2; border-radius: 4px; border-left: 2px solid #fca5a5;
+  }
+  .detail-limits summary { cursor: pointer; color: #991b1b; font-weight: 500; font-size: 0.78rem; }
+  .detail-limits summary:hover { text-decoration: underline; }
+  .detail-limits ul { margin: 4px 0 0 16px; }
+  .detail-limits li { margin-bottom: 2px; }
+
+  /* Interpretation callout */
+  .detail-interp {
+    background: var(--warn-bg); border-left: 3px solid var(--warn-border);
+    border-radius: 0 6px 6px 0; padding: 8px 12px; font-size: 0.82rem;
+    margin-top: 8px; color: #78350f; line-height: 1.6;
+  }
+
+  /* ── Foundation reference pills ── */
+  .fpill {
+    display: inline-block; font-size: 0.78rem; padding: 2px 8px;
+    background: var(--found-bg); border: 1px solid var(--found-border);
+    border-radius: 4px; color: #166534; cursor: pointer;
+    text-decoration: none; margin: 0 1px;
+  }
+  .fpill:hover { background: #dcfce7; }
+
+  /* ── Reference section (building blocks, compact) ── */
+  .ref-section { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .ref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  @media (max-width: 640px) { .ref-grid { grid-template-columns: 1fr; } }
+
+  .ref-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; font-size: 0.84rem;
+  }
+  .ref-card .ref-label { font-size: 0.78rem; color: var(--text-light); margin-bottom: 2px; }
+  .ref-card .ref-value { font-weight: 600; font-size: 0.92rem; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+  .ref-card details { font-size: 0.82rem; line-height: 1.7; }
+  .ref-card summary { cursor: pointer; color: var(--accent); font-size: 0.8rem; font-weight: 500; }
+  .ref-card summary:hover { text-decoration: underline; }
+  .ref-card .ref-detail-body { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+  .separator { margin: 20px 0; }
+
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5); }
+    100% { box-shadow: 0 0 0 4px transparent; }
+  }
+  .flash { animation: flash 1.2s ease-out; }
+</style>
+</head>
+<body>
+
+<h1>Option D1 Revised: Results-First</h1>
+<p class="subtitle">The results tree is primary. Each node expands to show context, equation, variable legend, and limits in a single flowing panel — no tabs. Shared building blocks (air properties, coefficients) live in a compact reference section below, linked via green pills.</p>
+
+<h2>Thermal Path</h2>
+
+<div class="tree">
+<ul>
+  <!-- JUNCTION TEMP -->
+  <li>
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Junction Temp</span>
+      <span class="val" style="color:var(--danger)">T<sub>j</sub> = 89.1 °C</span>
+    </div>
+    <div class="node-detail">
+      <div class="detail-context">
+        The predicted hottest point in the source/package is <strong>89.1 °C</strong>, which is <strong>10.9 °C below the 100 °C limit</strong>. The margin is modest — most of the temperature budget is consumed by the upstream path (interface + R<sub>jc</sub>), not the heatsink.
+      </div>
+      <div class="detail-eq">
+        T<sub>j</sub> = T<sub>case</sub> + Q &middot; R<sub>&theta;,jc</sub> = 74.1 + 50.0 &times; 0.30 = <span class="result">89.1 °C</span>
+      </div>
+      <dl class="var-legend">
+        <dt>T<sub>case</sub></dt><dd>Package mounting surface temperature — 74.1 °C (see below)</dd>
+        <dt>Q</dt><dd>Heat load — 50.0 W (input)</dd>
+        <dt>R<sub>&theta;,jc</sub></dt><dd>Junction-to-case resistance — 0.30 K/W (input, from package datasheet)</dd>
+      </dl>
+      <div class="detail-interp">
+        <strong>Where the budget goes:</strong> Heatsink uses 17.2 °C (23%), spreading 6.9 °C (9%), interface 25.0 °C (33%), R<sub>jc</sub> 15.0 °C (20%), leaving 10.9 °C margin (15%). The interface is the bottleneck.
+      </div>
+    </div>
+    <ul>
+      <!-- CASE TEMP -->
+      <li>
+        <div class="node" onclick="toggleNode(this)">
+          <span class="arrow">&#9654;</span>
+          <span class="name">Case Temp</span>
+          <span class="val">T<sub>case</sub> = 74.1 °C</span>
+        </div>
+        <div class="node-detail">
+          <div class="detail-context">
+            The outer mounting surface reaches <strong>74.1 °C</strong>. The 25 °C rise from effective base to case is driven entirely by the thermal interface material (TIM) — this is the <strong>single largest temperature drop</strong> in the path.
+          </div>
+          <div class="detail-eq">
+            T<sub>case</sub> = T<sub>base,eff</sub> + Q &middot; R<sub>&theta;,cs</sub> = 49.1 + 50.0 &times; 0.50 = <span class="result">74.1 °C</span>
+          </div>
+          <dl class="var-legend">
+            <dt>T<sub>base,eff</sub></dt><dd>Effective base temp under the source (base + spreading) — 49.1 °C</dd>
+            <dt>R<sub>&theta;,cs</sub></dt><dd>Case-to-sink resistance from TIM — 0.50 K/W</dd>
+          </dl>
+          <div class="detail-interp">
+            Reducing TIM bondline thickness or using higher-conductivity compound would have more impact than any heatsink geometry change.
+          </div>
+        </div>
+        <ul>
+          <!-- EFFECTIVE BASE -->
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Effective Base</span>
+              <span class="val">T<sub>base,eff</sub> = 49.1 °C</span>
+            </div>
+            <div class="node-detail">
+              <div class="detail-context">
+                Because the heat source (20 &times; 20 mm) is smaller than the base (100 &times; 70 mm), the metal directly under the source runs hotter than the base average. The <strong>spreading penalty</strong> adds 6.9 °C.
+              </div>
+              <div class="detail-eq">
+                T<sub>base,eff</sub> = T<sub>b</sub> + Q &middot; R<sub>sp</sub> = 42.2 + 50.0 &times; 0.139 = <span class="result">49.1 °C</span>
+              </div>
+              <dl class="var-legend">
+                <dt>R<sub>sp</sub></dt><dd>Spreading resistance — 0.139 K/W. Depends on source-to-base area ratio, base thickness, and conductivity. Uses the Yovanovich/Muzychka/Culham (1999) model.</dd>
+              </dl>
+              <details class="detail-limits">
+                <summary>Applicability limits</summary>
+                <ul>
+                  <li>Assumes a single centered rectangular source. Off-center or multiple sources need a different approach.</li>
+                  <li>Assumes the base is thermally thick enough to spread. Very thin bases (&lt; 2 mm) may not have room for lateral conduction.</li>
+                </ul>
+              </details>
+            </div>
+            <ul>
+              <!-- BASE TEMP (solved) -->
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">&#9654;</span>
+                  <span class="name">Base Temp</span>
+                  <span class="val">T<sub>b</sub> = 42.2 °C</span>
+                </div>
+                <div class="node-detail">
+                  <div class="detail-context">
+                    The average base temperature is found by iteration: the solver adjusts T<sub>b</sub> until total heat rejected by the fins and exposed base equals the 50 W load. At <strong>42.2 °C</strong> the sink runs only 17.2 °C above ambient. The resulting <strong>R<sub>sink</sub> = 0.344 K/W</strong> is well under the 0.700 K/W budget.
+                  </div>
+                  <div class="detail-eq">
+                    Q = <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-eta')">&eta;<sub>o</sub></span> &middot;
+                    (<span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-hconv')">h<sub>conv</sub></span>
+                    + <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-hrad')">h<sub>rad</sub></span>) &middot;
+                    A<sub>t</sub> &middot; (T<sub>b</sub> &minus; T<sub>&infin;</sub>)<br>
+                    50.0 = 0.917 &times; 32.42 &times; 0.098 &times; (T<sub>b</sub> &minus; 25.0)<br>
+                    &rArr; &Delta;T = 17.2 °C &rArr; T<sub>b</sub> = <span class="result">42.2 °C</span><br>
+                    R<sub>&theta;,sink</sub> = &Delta;T/Q = 17.2/50 = <span class="result">0.344 K/W</span>
+                  </div>
+                  <dl class="var-legend">
+                    <dt>&eta;<sub>o</sub></dt><dd>Overall surface efficiency — 91.7%. Accounts for fins being cooler at tips than roots. <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-eta')">details</span></dd>
+                    <dt>h<sub>conv</sub></dt><dd>Convection coefficient — 31.67 W/m&sup2;K. From developing laminar flow correlation. <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-hconv')">details</span></dd>
+                    <dt>h<sub>rad</sub></dt><dd>Radiation coefficient — 0.746 W/m&sup2;K. Linearized Stefan-Boltzmann with fin view factor. <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-hrad')">details</span></dd>
+                    <dt>A<sub>t</sub></dt><dd>Total exposed area (fins + base between fins) — 0.098 m&sup2;</dd>
+                    <dt>T<sub>&infin;</sub></dt><dd>Ambient air temperature — 25.0 °C (input)</dd>
+                  </dl>
+                  <details class="detail-limits">
+                    <summary>Applicability limits</summary>
+                    <ul>
+                      <li>Assumes an isothermal base. Valid for aluminum with moderate loads, but breaks down when a small source sits on a large thin base — hence the separate spreading correction above.</li>
+                      <li>The solver iterates air properties at the film temperature (T<sub>b</sub>+T<sub>&infin;</sub>)/2, so large &Delta;T (&gt;80 °C) may reduce accuracy.</li>
+                    </ul>
+                  </details>
+                </div>
+              </li>
+              <!-- SPREADING Rθ -->
+              <li>
+                <div class="node" onclick="toggleNode(this)">
+                  <span class="arrow">&#9654;</span>
+                  <span class="name">Spreading R<sub>&theta;</sub></span>
+                  <span class="val">0.139 K/W</span>
+                </div>
+                <div class="node-detail">
+                  <div class="detail-context">
+                    Spreading resistance accounts for the extra temperature rise because heat must fan out from a small source into a larger base. The smaller the source relative to the base, the larger this penalty.
+                  </div>
+                  <div class="detail-eq">
+                    &epsilon; = &radic;(A<sub>s</sub>/A<sub>p</sub>) = 0.224 &nbsp; (source-to-base area ratio)<br>
+                    &tau; = t/&radic;A<sub>p</sub> = 0.056 &nbsp; (base thickness parameter)<br>
+                    &psi; = 0.990 &nbsp; (dimensionless spreading function)<br>
+                    R<sub>sp</sub> = &psi;/(k&middot;&radic;(&pi;&middot;A<sub>s</sub>)) = 0.990/(200 &times; 0.035) = <span class="result">0.139 K/W</span>
+                  </div>
+                  <dl class="var-legend">
+                    <dt>&epsilon;</dt><dd>Ratio of source to base characteristic lengths. Small &epsilon; = large spreading penalty.</dd>
+                    <dt>&tau;</dt><dd>Normalized base thickness. Thicker base = more room for heat to spread laterally.</dd>
+                    <dt>&psi;</dt><dd>Dimensionless spreading parameter from the Yovanovich/Muzychka/Culham (1999) analytical model.</dd>
+                    <dt>k</dt><dd>Base material conductivity — 200 W/m&middot;K (aluminum)</dd>
+                  </dl>
+                </div>
+              </li>
+            </ul>
+          </li>
+          <!-- INTERFACE Rθ,cs -->
+          <li>
+            <div class="node" onclick="toggleNode(this)">
+              <span class="arrow">&#9654;</span>
+              <span class="name">Interface R<sub>&theta;,cs</sub></span>
+              <span class="val">0.500 K/W</span>
+            </div>
+            <div class="node-detail">
+              <div class="detail-context">
+                The thermal interface material (TIM) between package and base contributes <strong>0.500 K/W</strong> — consuming 25 °C at 50 W. This is the largest single resistance in the path.
+              </div>
+              <div class="detail-eq">
+                R<sub>&theta;,cs</sub> = BLT / (k<sub>TIM</sub> &middot; A<sub>contact</sub>) = 0.0005 / (3.0 &times; 0.0004) = <span class="result">0.417 K/W</span>
+              </div>
+              <dl class="var-legend">
+                <dt>BLT</dt><dd>Bondline thickness — 0.5 mm. Thinner = lower resistance, but harder to control.</dd>
+                <dt>k<sub>TIM</sub></dt><dd>TIM thermal conductivity — 3.0 W/m&middot;K. Typical thermal paste. Pads, greases, and solder range from 1 to 80+ W/m&middot;K.</dd>
+                <dt>A<sub>contact</sub></dt><dd>Contact area — 400 mm&sup2; (20 &times; 20 mm source footprint).</dd>
+              </dl>
+              <div class="detail-interp">
+                Three levers to reduce this: thinner bondline, higher-k TIM material, or larger contact area. Of these, switching from paste (3 W/m&middot;K) to a gap pad (5&ndash;8 W/m&middot;K) or indium solder (80 W/m&middot;K) has the biggest single impact.
+              </div>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li><div class="node leaf"><span class="arrow">&#9654;</span><span class="name">R<sub>&theta;,jc</sub></span><span class="val">0.300 K/W (input)</span></div></li>
+    </ul>
+  </li>
+</ul>
+
+<div class="separator"></div>
+
+<!-- STANDALONE RESULTS -->
+<ul style="list-style:none; padding:0;">
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Sink Resistance</span>
+      <span class="val" style="color:var(--success)">R<sub>sink</sub> = 0.344 K/W &nbsp;(budget: 0.700)</span>
+    </div>
+    <div class="node-detail">
+      <div class="detail-context">
+        The heatsink's thermal resistance is <strong>less than half</strong> the required budget. The sink is not the limiting factor — the upstream path (interface + R<sub>jc</sub>) is.
+      </div>
+      <div class="detail-eq">
+        R<sub>&theta;,req</sub> = (T<sub>j,max</sub>&minus;T<sub>&infin;</sub>)/Q &minus; R<sub>jc</sub> &minus; R<sub>cs</sub> = (100&minus;25)/50 &minus; 0.30 &minus; 0.50 = <span class="result">0.700 K/W</span><br>
+        R<sub>&theta;,sink</sub> = (T<sub>b</sub>&minus;T<sub>&infin;</sub>)/Q = 17.2/50 = <span class="result">0.344 K/W</span> &nbsp; &#10003;
+      </div>
+    </div>
+  </li>
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Pressure Drop</span>
+      <span class="val">&Delta;P = 1.33 Pa</span>
+    </div>
+    <div class="node-detail">
+      <div class="detail-context">
+        Very low — even small fans deliver 10&ndash;30 Pa. The heatsink is not flow-limited. Three loss components: channel friction (dominant), contraction at entry, and expansion at exit.
+      </div>
+      <div class="detail-eq">
+        &Delta;P = (<span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-friction')">f</span>&middot;L/D<sub>h</sub>
+        + <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-friction')">K<sub>c</sub></span>
+        + <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-friction')">K<sub>e</sub></span>)
+        &middot; <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-air')">&rho;</span>
+        &middot; V<sub>ch</sub>&sup2;/2<br>
+        = (0.01644 &times; 12.44 + 0.143 + 0.035) &times; 1.151 &times; 2.46&sup2;/2 = <span class="result">1.33 Pa</span>
+      </div>
+      <dl class="var-legend">
+        <dt>V<sub>ch</sub></dt><dd>Channel velocity — 2.46 m/s (approach flow divided by open area)</dd>
+        <dt>L/D<sub>h</sub></dt><dd>Channel length-to-diameter ratio — 12.4</dd>
+      </dl>
+    </div>
+  </li>
+  <li style="margin-bottom:8px;">
+    <div class="node" onclick="toggleNode(this)">
+      <span class="arrow">&#9654;</span>
+      <span class="name">Heat Split</span>
+      <span class="val">Convection 47.7 W (95%) &nbsp;|&nbsp; Radiation 2.3 W (5%)</span>
+    </div>
+    <div class="node-detail">
+      <div class="detail-context">
+        In forced flow, convection dominates overwhelmingly. Radiation contributes only 5% here. In natural convection the radiation share is typically 15&ndash;40%.
+      </div>
+      <div class="detail-eq">
+        Q<sub>conv</sub> = <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-eta')">&eta;<sub>o</sub></span> &middot;
+        <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-hconv')">h<sub>conv</sub></span> &middot;
+        A<sub>t</sub> &middot; &Delta;T = 0.917 &times; 31.67 &times; 0.098 &times; 17.2 = <span class="result">47.7 W</span><br>
+        Q<sub>rad</sub> = <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-eta')">&eta;<sub>o</sub></span> &middot;
+        <span class="fpill" onclick="event.stopPropagation();scrollToFound('ref-hrad')">h<sub>rad</sub></span> &middot;
+        A<sub>t</sub> &middot; &Delta;T = 0.917 &times; 0.746 &times; 0.098 &times; 17.2 = <span class="result">2.3 W</span>
+      </div>
+    </div>
+  </li>
+</ul>
+</div>
+
+<!-- ── REFERENCE VALUES (building blocks) ── -->
+<div class="ref-section">
+  <h2>Reference Values</h2>
+  <p style="font-size:0.82rem; color:var(--text-light); margin-bottom:12px;">Shared intermediate quantities used by multiple results above. Click "derivation" to see how each was calculated.</p>
+
+  <div class="ref-grid">
+    <div class="ref-card" id="ref-hconv">
+      <div class="ref-label">Convection Coefficient</div>
+      <div class="ref-value">h<sub>conv</sub> = 31.67 W/m&sup2;K</div>
+      <details>
+        <summary>derivation</summary>
+        <div class="ref-detail-body">
+          Laminar developing flow in rectangular ducts (Re = 1213 &lt; 2300). Uses <strong>Muzychka &amp; Yovanovich (2004)</strong> — blends the fully-developed limit (Nu = 7.54) with an entry-region boost for short channels.<br><br>
+          <span style="font-family:Georgia,serif;">
+            Gz = Re&middot;Pr&middot;D<sub>h</sub>/L = 1213 &times; 0.705 &times; 0.00804/0.10 = <strong>68.8</strong><br>
+            Nu = (7.54&sup3; + (1.841&middot;Gz<sup>1/3</sup>)&sup3;)<sup>1/3</sup> = <strong>9.50</strong><br>
+            h = Nu&middot;k<sub>air</sub>/D<sub>h</sub> = 9.50 &times; 0.0268/0.00804 = <strong>31.67</strong>
+          </span>
+          <div style="margin-top:8px; font-size:0.78rem; color:#991b1b;">
+            Assumes channel-aligned flow, isothermal walls. Does not apply to crossflow, impingement, or angled approach. At Re &gt; 2300 the solver switches to Gnielinski.
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="ref-card" id="ref-hrad">
+      <div class="ref-label">Radiation Coefficient</div>
+      <div class="ref-value">h<sub>rad</sub> = 0.746 W/m&sup2;K</div>
+      <details>
+        <summary>derivation</summary>
+        <div class="ref-detail-body">
+          Linearized Stefan-Boltzmann with an effective view factor for fin-to-fin radiation shielding.<br><br>
+          <span style="font-family:Georgia,serif;">
+            F<sub>eff</sub> = s/(s+H) = 0.00464/0.0346 = <strong>0.134</strong><br>
+            h<sub>rad</sub> = &epsilon;&middot;&sigma;&middot;(T<sub>s</sub>&sup2;+T<sub>&infin;</sub>&sup2;)(T<sub>s</sub>+T<sub>&infin;</sub>)&middot;F<sub>eff</sub> = <strong>0.746</strong>
+          </span>
+          <div style="margin-top:8px; font-size:0.78rem; color:var(--text-light);">
+            F<sub>eff</sub> = simplified view factor. Closely spaced tall fins see each other more than the environment, reducing net radiation.
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="ref-card" id="ref-eta">
+      <div class="ref-label">Fin &amp; Surface Efficiency</div>
+      <div class="ref-value">&eta;<sub>f</sub> = 91.0%, &eta;<sub>o</sub> = 91.7%</div>
+      <details>
+        <summary>derivation</summary>
+        <div class="ref-detail-body">
+          A fin's tip is cooler than its root. Efficiency captures this penalty. At 91%, these fins are well-sized — below ~70% means diminishing returns from taller fins.<br><br>
+          <span style="font-family:Georgia,serif;">
+            m = &radic;(h<sub>eff</sub>&middot;P/(k&middot;A<sub>c</sub>)) = <strong>18.1 m<sup>-1</sup></strong><br>
+            m&middot;L<sub>c</sub> = 18.1 &times; 0.0305 = <strong>0.552</strong><br>
+            &eta;<sub>f</sub> = tanh(0.552)/0.552 = <strong>0.910</strong><br>
+            &eta;<sub>o</sub> = 1&minus;(A<sub>f</sub>/A<sub>t</sub>)(1&minus;&eta;<sub>f</sub>) = <strong>0.917</strong>
+          </span>
+          <div style="margin-top:8px; font-size:0.78rem; color:#991b1b;">
+            Assumes uniform h over fin surface and perfect root contact (integral/extruded fins). Bonded or press-fit fins have additional root resistance.
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="ref-card" id="ref-friction">
+      <div class="ref-label">Friction &amp; Losses</div>
+      <div class="ref-value">f = 0.01644, K<sub>c</sub> = 0.143, K<sub>e</sub> = 0.035</div>
+      <details>
+        <summary>derivation</summary>
+        <div class="ref-detail-body">
+          Three components: wall friction (Shah &amp; London rectangular duct), contraction at entry (Kays &amp; London), expansion at exit (Borda-Carnot).<br><br>
+          <span style="font-family:Georgia,serif;">
+            &beta; = s/H = 0.155, &nbsp; f&middot;Re = 19.93, &nbsp; f = <strong>0.01644</strong><br>
+            &sigma; = 0.813, &nbsp; K<sub>c</sub> = 0.42(1&minus;&sigma;&sup2;) = <strong>0.143</strong><br>
+            K<sub>e</sub> = (1&minus;&sigma;)&sup2; = <strong>0.035</strong>
+          </span>
+        </div>
+      </details>
+    </div>
+
+    <div class="ref-card" id="ref-air">
+      <div class="ref-label">Air Properties</div>
+      <div class="ref-value">T<sub>film</sub> = 33.6 °C (306.8 K)</div>
+      <details>
+        <summary>derivation</summary>
+        <div class="ref-detail-body">
+          Evaluated at film temp = (T<sub>b</sub>+T<sub>&infin;</sub>)/2 = 33.6 °C. Sutherland-law fits, valid 200&ndash;700 K.<br><br>
+          <span style="font-family:Georgia,serif;">
+            &rho; = 1.151 kg/m&sup3;, &mu; = 1.878e-5 Pa&middot;s, k<sub>air</sub> = 0.0268 W/m&middot;K<br>
+            c<sub>p</sub> = 1007 J/kg&middot;K, Pr = 0.705, &nu; = 1.632e-5 m&sup2;/s
+          </span>
+        </div>
+      </details>
+    </div>
+
+    <div class="ref-card" id="ref-flow">
+      <div class="ref-label">Flow Regime</div>
+      <div class="ref-value">Re = 1213 (laminar), V<sub>ch</sub> = 2.46 m/s</div>
+      <details>
+        <summary>derivation</summary>
+        <div class="ref-detail-body">
+          <span style="font-family:Georgia,serif;">
+            A<sub>open</sub> = N<sub>ch</sub>&middot;s&middot;H = 14 &times; 0.00464 &times; 0.030 = 0.00195 m&sup2;<br>
+            V<sub>ch</sub> = V&#775;/A<sub>open</sub> = 0.00480/0.00195 = <strong>2.462 m/s</strong><br>
+            Re = &rho;&middot;V&middot;D<sub>h</sub>/&mu; = 1.151 &times; 2.46 &times; 0.00804/1.88e-5 = <strong>1213</strong> (&lt; 2300 &rarr; laminar)
+          </span>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleNode(el) {
+  if (el.classList.contains('leaf')) return;
+  el.classList.toggle('expanded');
+}
+function scrollToFound(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const details = target.querySelector('details');
+  if (details && !details.open) details.open = true;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+}
+</script>
+
+</body>
+</html>
