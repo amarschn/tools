@@ -266,6 +266,30 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
             1e3 / (math.pi / 180.0),
         ),
     },
+    "volumetric_flow_rate": {
+        "m^3/s": _linear_unit("m^3/s", "cubic metre per second", 1.0),
+        "m^3/h": _linear_unit("m^3/h", "cubic metre per hour", 1.0 / 3600.0),
+        "L/s": _linear_unit("L/s", "litre per second", 1e-3),
+        "L/min": _linear_unit("L/min", "litre per minute", 1e-3 / 60.0),
+        "L/h": _linear_unit("L/h", "litre per hour", 1e-3 / 3600.0),
+        "mL/min": _linear_unit("mL/min", "millilitre per minute", 1e-6 / 60.0),
+        "CFM": _linear_unit("CFM", "cubic foot per minute", 0.3048**3 / 60.0),
+        "ft^3/s": _linear_unit("ft^3/s", "cubic foot per second", 0.3048**3),
+        "gal_us/min": _linear_unit("gal_us/min", "US gallon per minute", 3.785411784e-3 / 60.0),
+        "gal_us/h": _linear_unit("gal_us/h", "US gallon per hour", 3.785411784e-3 / 3600.0),
+        "gal_imp/min": _linear_unit("gal_imp/min", "Imperial gallon per minute", 4.54609e-3 / 60.0),
+    },
+    "mass_flow_rate": {
+        "kg/s": _linear_unit("kg/s", "kilogram per second", 1.0),
+        "kg/h": _linear_unit("kg/h", "kilogram per hour", 1.0 / 3600.0),
+        "kg/min": _linear_unit("kg/min", "kilogram per minute", 1.0 / 60.0),
+        "g/s": _linear_unit("g/s", "gram per second", 1e-3),
+        "g/min": _linear_unit("g/min", "gram per minute", 1e-3 / 60.0),
+        "t/h": _linear_unit("t/h", "tonne per hour", 1e3 / 3600.0),
+        "lb/s": _linear_unit("lb/s", "pound per second", 0.45359237),
+        "lb/min": _linear_unit("lb/min", "pound per minute", 0.45359237 / 60.0),
+        "lb/h": _linear_unit("lb/h", "pound per hour", 0.45359237 / 3600.0),
+    },
 }
 
 
@@ -297,6 +321,8 @@ UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
         "voltage": "V",
         "linear_stiffness": "N/m",
         "rotational_stiffness": "N·m/rad",
+        "volumetric_flow_rate": "m^3/s",
+        "mass_flow_rate": "kg/s",
     },
     "MMGS": {
         # Millimetre-gram-second (common in mechanical CAD)
@@ -318,6 +344,8 @@ UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
         "voltage": "V",
         "linear_stiffness": "N/m",
         "rotational_stiffness": "N·m/rad",
+        "volumetric_flow_rate": "L/min",
+        "mass_flow_rate": "kg/h",
     },
     "IPS": {
         # Inch-pound-second (US customary)
@@ -339,6 +367,8 @@ UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
         "voltage": "V",
         "linear_stiffness": "lbf/in",
         "rotational_stiffness": "lbf·ft/deg",
+        "volumetric_flow_rate": "CFM",
+        "mass_flow_rate": "lb/h",
     },
 }
 

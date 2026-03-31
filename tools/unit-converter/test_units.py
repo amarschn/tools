@@ -80,6 +80,28 @@ class UnitConversionTests(unittest.TestCase):
         self.assertTrue(result["has_multiplier_only"])
         self.assertGreater(result["multiplier"], 0.0)
 
+    def test_volumetric_flow_cfm_to_m3s(self) -> None:
+        """CFM converts to cubic metres per second."""
+        # 1 CFM = (0.3048^3) / 60 m^3/s
+        m3s = units.convert_value("volumetric_flow_rate", "CFM", "m^3/s", 1.0)
+        self.assertAlmostEqual(m3s, 0.3048**3 / 60.0)
+
+    def test_volumetric_flow_lpm_to_gpm(self) -> None:
+        """Litres per minute to US gallons per minute."""
+        gpm = units.convert_value("volumetric_flow_rate", "L/min", "gal_us/min", 3.78541)
+        self.assertAlmostEqual(gpm, 1.0, places=3)
+
+    def test_mass_flow_kgs_to_lbh(self) -> None:
+        """Kilograms per second to pounds per hour."""
+        lbh = units.convert_value("mass_flow_rate", "kg/s", "lb/h", 1.0)
+        expected = 3600.0 / 0.45359237
+        self.assertAlmostEqual(lbh, expected, places=3)
+
+    def test_mass_flow_gmin_to_kgh(self) -> None:
+        """Grams per minute to kilograms per hour."""
+        kgh = units.convert_value("mass_flow_rate", "g/min", "kg/h", 100.0)
+        self.assertAlmostEqual(kgh, 6.0)
+
 
 if __name__ == "__main__":
     unittest.main()

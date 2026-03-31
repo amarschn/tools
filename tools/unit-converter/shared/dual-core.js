@@ -8,6 +8,7 @@ const BASE_UNITS = {
   pressure: "Pa",
   energy: "J",
   power: "W",
+  velocity: "m/s",
   density: "kg/m^3",
   temperature: "K",
   angle: "rad",
@@ -19,6 +20,8 @@ const BASE_UNITS = {
   radiation_dose: "Sv",
   linear_stiffness: "N/m",
   rotational_stiffness: "N·m/rad",
+  volumetric_flow_rate: "m^3/s",
+  mass_flow_rate: "kg/s",
 };
 
 const QUANTITY_LABELS = {
@@ -31,6 +34,7 @@ const QUANTITY_LABELS = {
   pressure: "Pressure",
   energy: "Energy",
   power: "Power",
+  velocity: "Velocity",
   density: "Density",
   temperature: "Temperature",
   angle: "Angle",
@@ -42,6 +46,8 @@ const QUANTITY_LABELS = {
   radiation_dose: "Radiation Dose",
   linear_stiffness: "Linear Stiffness",
   rotational_stiffness: "Rotational Stiffness",
+  volumetric_flow_rate: "Volumetric Flow Rate",
+  mass_flow_rate: "Mass Flow Rate",
 };
 
 const DIMENSION_MAP = {
@@ -54,6 +60,7 @@ const DIMENSION_MAP = {
   pressure: "M·L⁻¹·T⁻²",
   energy: "M·L²·T⁻²",
   power: "M·L²·T⁻³",
+  velocity: "L·T⁻¹",
   density: "M·L⁻³",
   temperature: "Θ",
   angle: "—",
@@ -65,6 +72,8 @@ const DIMENSION_MAP = {
   radiation_dose: "L²·T⁻²",
   linear_stiffness: "M·T⁻²",
   rotational_stiffness: "M·L²·T⁻²",
+  volumetric_flow_rate: "L³·T⁻¹",
+  mass_flow_rate: "M·T⁻¹",
 };
 
 const QUANTITY_SYMBOLS = {
@@ -77,6 +86,7 @@ const QUANTITY_SYMBOLS = {
   pressure: "p",
   energy: "E",
   power: "P",
+  velocity: "v",
   density: "ρ",
   temperature: "T",
   angle: "θ",
@@ -88,6 +98,8 @@ const QUANTITY_SYMBOLS = {
   radiation_dose: "H",
   linear_stiffness: "k",
   rotational_stiffness: "k_θ",
+  volumetric_flow_rate: "Q",
+  mass_flow_rate: "ṁ",
 };
 
 const PROPERTY_NATURE = {
@@ -99,7 +111,8 @@ const PROPERTY_NATURE = {
   torque: "Extensive",
   pressure: "Intensive",
   energy: "Extensive",
-  power: "Intensive",
+  power: "Extensive",
+  velocity: "Intensive",
   density: "Intensive",
   temperature: "Intensive",
   angle: "Intensive",
@@ -109,8 +122,10 @@ const PROPERTY_NATURE = {
   capacitance: "Extensive",
   magnetic_flux_density: "Intensive",
   radiation_dose: "Intensive",
-  linear_stiffness: "Extensive",
-  rotational_stiffness: "Extensive",
+  linear_stiffness: "Intensive",
+  rotational_stiffness: "Intensive",
+  volumetric_flow_rate: "Extensive",
+  mass_flow_rate: "Extensive",
 };
 
 const ABSOLUTE_TEMPERATURE_UNITS = new Set(["K", "°R"]);
@@ -273,6 +288,34 @@ const COMPARABLES = {
     { label: "Steering column torsion bar", value: 1_000 * (180 / Math.PI) },
     { label: "Wind turbine yaw joint", value: 25_000 * (180 / Math.PI) },
     { label: "Large bearing mount", value: 100_000 * (180 / Math.PI) },
+  ],
+  velocity: [
+    { label: "Garden snail", value: 0.001 },
+    { label: "Walking pace", value: 1.4 },
+    { label: "Olympic sprinter", value: 10.4 },
+    { label: "Highway speed limit", value: 31.3 },
+    { label: "Commercial aircraft cruise", value: 250.0 },
+    { label: "Speed of sound (sea level)", value: 343.0 },
+    { label: "ISS orbital velocity", value: 7_660.0 },
+  ],
+  volumetric_flow_rate: [
+    { label: "IV drip", value: 1.67e-9 },
+    { label: "Kitchen faucet", value: 1.3e-4 },
+    { label: "Garden hose", value: 6.3e-4 },
+    { label: "Bathroom exhaust fan", value: 0.0236 },
+    { label: "Residential HVAC", value: 0.236 },
+    { label: "Server rack cooling (1 kW)", value: 0.047 },
+    { label: "Fire hydrant", value: 0.063 },
+    { label: "Industrial cooling tower", value: 4.7 },
+  ],
+  mass_flow_rate: [
+    { label: "Espresso extraction", value: 3.3e-4 },
+    { label: "Home gas meter (peak)", value: 2.8e-3 },
+    { label: "Car engine air intake (idle)", value: 0.005 },
+    { label: "Fire hose", value: 15.8 },
+    { label: "Jet engine (cruise)", value: 45.0 },
+    { label: "Industrial boiler", value: 2.8 },
+    { label: "Large river (avg discharge)", value: 16_800.0 },
   ],
 };
 
