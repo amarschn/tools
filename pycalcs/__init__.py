@@ -16,3 +16,4 @@ from . import pressure_vessels  # noqa: F401
 from . import rotor_stress  # noqa: F401
 from . import fracture_mechanics  # noqa: F401
 from . import thermal_networks  # noqa: F401
+from . import fan_curves  # noqa: F401

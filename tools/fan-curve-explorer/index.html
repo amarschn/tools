@@ -1,0 +1,2247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+    <title>Fan Curve Explorer &amp; Selector - Engineering Tools</title>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="/shared/json-ld.js"></script>
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --info-bg: #dbeafe;
+            --info-border: #3b82f6;
+            --success-bg: #d1fae5;
+            --success-border: #22c55e;
+            --warning-bg: #fef3c7;
+            --warning-border: #f59e0b;
+            --danger-bg: #fef2f2;
+            --danger-border: #ef4444;
+        }
+        @media (prefers-color-scheme: dark) {
+            body {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+                --info-bg: #1e3a5f;
+                --info-border: #3b82f6;
+                --success-bg: #052e16;
+                --success-border: #22c55e;
+                --warning-bg: #422006;
+                --warning-border: #f59e0b;
+                --danger-bg: #450a0a;
+                --danger-border: #ef4444;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { min-height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        p { color: var(--text-light); }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); }
+        h2 { font-size: 1.375rem; font-weight: 600; color: var(--primary-color); }
+        h3 { font-size: 1rem; font-weight: 600; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(248, 249, 251, 0.96);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 5%;
+        }
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .nav-brand {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .container {
+            width: 92%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 0 40px;
+        }
+        .tool-header {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+            gap: 20px;
+            margin-bottom: 24px;
+            align-items: start;
+        }
+        .tool-description {
+            margin-top: 10px;
+            font-size: 1.02rem;
+            max-width: 78ch;
+        }
+        .header-note {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 18px;
+            background: var(--bg-card);
+            box-shadow: var(--shadow);
+        }
+        .header-note strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--primary-color);
+        }
+
+        .workspace-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.92fr) minmax(560px, 1.08fr);
+            gap: 24px;
+            align-items: start;
+        }
+        .left-rail,
+        .main-workspace {
+            display: grid;
+            gap: 18px;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+        .card > h2 + p.subtle,
+        .card > .card-toolbar + p.subtle {
+            margin-top: 6px;
+        }
+        .card-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .toolbar-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .subtle {
+            font-size: 0.86rem;
+            color: var(--text-light);
+        }
+        .eyebrow {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .segmented {
+            display: inline-flex;
+            gap: 4px;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--primary-light);
+        }
+        .segmented button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .segmented button.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .input-group {
+            margin-bottom: 14px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.84rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .hint {
+            margin-top: 6px;
+            font-size: 0.76rem;
+            color: var(--text-light);
+            line-height: 1.45;
+        }
+        input[type="number"],
+        input[type="text"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-size: 0.95rem;
+            font-family: var(--font-sans);
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+        }
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+        }
+        .readonly-box {
+            min-height: 46px;
+            display: flex;
+            align-items: center;
+            padding: 11px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--primary-light);
+            font-family: var(--font-mono);
+            font-size: 0.92rem;
+        }
+        .inline-details {
+            margin-top: 12px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+        }
+        .inline-details summary {
+            list-style: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 12px;
+        }
+        .inline-details summary::-webkit-details-marker { display: none; }
+
+        .btn-primary,
+        .btn-secondary {
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.15s ease, background-color 0.15s ease;
+        }
+        .btn-primary {
+            border: none;
+            background: var(--accent-color);
+            color: var(--bg-card);
+            padding: 12px 18px;
+            width: 100%;
+        }
+        .btn-primary:hover { opacity: 0.92; }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-color);
+            padding: 9px 12px;
+        }
+        .btn-secondary:hover { background: var(--primary-light); }
+
+        .problem-preview {
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            background: var(--primary-light);
+            font-size: 0.85rem;
+            color: var(--text-color);
+        }
+
+        .picker,
+        .import-panel {
+            margin-bottom: 16px;
+            padding: 14px;
+            border-radius: 8px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+        }
+        .picker-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .picker-card {
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            cursor: pointer;
+        }
+        .picker-card:hover {
+            border-color: var(--accent-color);
+        }
+        .picker-card strong {
+            display: block;
+            font-size: 0.88rem;
+            margin-bottom: 4px;
+        }
+
+        .candidate-list {
+            display: grid;
+            gap: 12px;
+        }
+        .candidate-card {
+            padding: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            cursor: pointer;
+        }
+        .candidate-card.active {
+            border-color: var(--accent-color);
+            box-shadow: inset 0 0 0 1px var(--accent-color);
+        }
+        .candidate-header {
+            display: grid;
+            grid-template-columns: 14px minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .candidate-swatch {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        .candidate-header input[type="text"] {
+            padding: 8px 10px;
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+        .icon-button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 4px 6px;
+        }
+        .icon-button:hover { color: var(--danger-color); }
+        .candidate-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .candidate-meta-grid label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .candidate-meta-grid input,
+        .candidate-meta-grid select {
+            padding: 8px 10px;
+            font-size: 0.82rem;
+        }
+        .slider-block {
+            padding: 12px;
+            background: var(--primary-light);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 8px;
+            font-size: 0.83rem;
+            font-weight: 600;
+        }
+        .slider-value {
+            font-family: var(--font-mono);
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-color);
+        }
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.72rem;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+        .candidate-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .tag {
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: var(--primary-light);
+            font-size: 0.72rem;
+            color: var(--text-light);
+        }
+        .tag.arch {
+            background: var(--info-bg);
+            color: var(--info-border);
+        }
+
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .active-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            line-height: 1.2;
+        }
+        .status-pill {
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        .status-pill.met {
+            background: var(--success-bg);
+            color: var(--success-color);
+            border: 1px solid var(--success-border);
+        }
+        .status-pill.not-met {
+            background: var(--warning-bg);
+            color: var(--warning-color);
+            border: 1px solid var(--warning-border);
+        }
+        .status-pill.blocking {
+            background: var(--danger-bg);
+            color: var(--danger-color);
+            border: 1px solid var(--danger-border);
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+            gap: 10px;
+        }
+        .metric-card {
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: var(--primary-light);
+        }
+        .metric-label {
+            display: block;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+        .metric-value {
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        .assumption-row {
+            margin-top: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .assumption-chip {
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            font-size: 0.76rem;
+            color: var(--text-light);
+        }
+        .summary-placeholder {
+            color: var(--text-light);
+            padding: 12px 0;
+        }
+
+        .chart-plot {
+            width: 100%;
+            min-height: 440px;
+        }
+        .plot-caption {
+            margin-top: 12px;
+            font-size: 0.84rem;
+            color: var(--text-light);
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: var(--primary-light);
+        }
+
+        .workspace-bottom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+        .warning-stack {
+            display: grid;
+            gap: 8px;
+        }
+        .warning-item {
+            padding: 12px 14px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            font-size: 0.84rem;
+        }
+        .warning-item.blocking {
+            background: var(--danger-bg);
+            border-color: var(--danger-border);
+            color: var(--danger-color);
+        }
+        .warning-item.caution {
+            background: var(--warning-bg);
+            border-color: var(--warning-border);
+            color: var(--warning-color);
+        }
+        .warning-item.info {
+            background: var(--info-bg);
+            border-color: var(--info-border);
+            color: var(--info-border);
+        }
+        .warning-tier {
+            font-weight: 700;
+            margin-right: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.72rem;
+        }
+        .equation-stack {
+            display: grid;
+            gap: 12px;
+        }
+        .equation-card {
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: var(--primary-light);
+        }
+        .equation-card .equation-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            margin-bottom: 8px;
+        }
+        .equation-body {
+            overflow-x: auto;
+            color: var(--text-color);
+        }
+        .equation-note {
+            margin-top: 8px;
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        th {
+            text-align: left;
+            padding: 9px 10px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-family: var(--font-mono);
+        }
+        th button {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            padding: 0;
+        }
+        th button:hover,
+        th button.active-sort {
+            color: var(--text-color);
+        }
+        tbody tr {
+            cursor: pointer;
+        }
+        tbody tr:hover {
+            background: var(--primary-light);
+        }
+        tbody tr.active-row {
+            background: var(--info-bg);
+        }
+        tbody tr.top-ranked td:first-child {
+            font-weight: 700;
+        }
+        .source-chip {
+            display: inline-block;
+            padding: 3px 6px;
+            border-radius: 999px;
+            font-size: 0.66rem;
+            font-family: var(--font-sans);
+            font-weight: 700;
+        }
+        .source-chip.archetype {
+            background: var(--info-bg);
+            color: var(--info-border);
+        }
+        .source-chip.imported {
+            background: var(--primary-light);
+            color: var(--text-light);
+        }
+        .duty-yes { color: var(--success-color); font-weight: 700; }
+        .duty-no { color: var(--danger-color); font-weight: 700; }
+
+        .footer-details {
+            margin-top: 18px;
+        }
+        .footer-details summary {
+            list-style: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-color);
+            padding: 14px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+        }
+        .footer-details summary::-webkit-details-marker { display: none; }
+        .footer-details[open] summary {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        .footer-content {
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            background: var(--bg-card);
+            padding: 18px 20px;
+        }
+        .footer-content section + section {
+            margin-top: 20px;
+        }
+        .footer-content ul {
+            margin: 8px 0 0 18px;
+            color: var(--text-light);
+        }
+        .footer-content li {
+            margin-bottom: 4px;
+        }
+
+        footer {
+            padding: 24px 0 36px;
+            text-align: center;
+            color: var(--text-light);
+            font-size: 0.82rem;
+        }
+
+        @media (max-width: 1100px) {
+            .tool-header,
+            .workspace-layout,
+            .workspace-bottom {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 700px) {
+            .input-row,
+            .candidate-meta-grid {
+                grid-template-columns: 1fr;
+            }
+            .summary-header,
+            .card-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .metrics-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 520px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading fan tool...</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="/tools/" class="nav-brand">Engineering Tools</a>
+            <span class="subtle">Fan selection workspace</span>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div class="tool-header">
+            <div>
+                <h1>Fan Curve Explorer &amp; Selector</h1>
+                <p class="tool-description">
+                    Compare axial, mixed-flow, and centrifugal candidates against either a quick duty point or a defined system curve.
+                    Keep operating point, assumptions, plot, and comparison matrix visible in one workspace.
+                </p>
+            </div>
+            <div class="header-note">
+                <strong>Use archetypes to learn. Use imported vendor data to decide.</strong>
+                <p>
+                    Synthetic archetypes are for architecture-level intuition only. For real selections, import manufacturer curve data
+                    with the correct pressure basis, reference density, and speed.
+                </p>
+            </div>
+        </div>
+
+        <div class="workspace-layout">
+            <aside class="left-rail">
+                <section class="card">
+                    <h2>Problem Definition</h2>
+                    <p class="subtle">Choose how the system is defined, then keep the pressure basis and air state explicit.</p>
+
+                    <div class="input-group" style="margin-top:14px;">
+                        <label>System Definition Mode</label>
+                        <div class="segmented problem-mode">
+                            <button type="button" class="active" data-system-mode="quick-duty" onclick="setSystemMode('quick-duty')">Quick Duty Point</button>
+                            <button type="button" data-system-mode="direct-k" onclick="setSystemMode('direct-k')">Known System Curve</button>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="duty-flow">Target Flow</label>
+                            <input type="number" id="duty-flow" value="0.04" step="any" min="0">
+                            <div class="hint">Target airflow used for the comparison check and duty-margin calculation.</div>
+                        </div>
+                        <div class="input-group">
+                            <label for="flow-unit">Flow Unit</label>
+                            <select id="flow-unit">
+                                <option value="m3/s" selected>m&sup3;/s</option>
+                                <option value="CFM">CFM</option>
+                                <option value="m3/h">m&sup3;/h</option>
+                                <option value="L/s">L/s</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="pressure-basis">Pressure Basis</label>
+                            <select id="pressure-basis">
+                                <option value="static" selected>Static pressure basis</option>
+                                <option value="total">Total pressure basis</option>
+                            </select>
+                            <div class="hint">Fan data and system requirement must share the same basis or the comparison is invalid.</div>
+                        </div>
+                        <div class="input-group">
+                            <label for="pressure-unit">Pressure Unit</label>
+                            <select id="pressure-unit">
+                                <option value="Pa" selected>Pa</option>
+                                <option value="in_wg">in. w.g.</option>
+                                <option value="kPa">kPa</option>
+                                <option value="mmH2O">mmH&#x2082;O</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="quick-duty-panel">
+                        <div class="input-group">
+                            <label for="duty-pressure">Target Pressure at Target Flow</label>
+                            <input type="number" id="duty-pressure" value="50" step="any" min="0">
+                            <div class="hint">Use when you know a required duty point but not the full system resistance coefficient.</div>
+                        </div>
+                    </div>
+
+                    <div id="direct-k-panel" style="display:none;">
+                        <div class="input-group">
+                            <label for="system-k">System Resistance Coefficient, K (Pa/(m&sup3;/s)&sup2;)</label>
+                            <input type="number" id="system-k" value="31250" step="any" min="0">
+                            <div class="hint">Use when you know the system curve directly. The duty pressure is then computed at the target flow.</div>
+                        </div>
+                        <div class="input-group">
+                            <label>Computed Pressure at Target Flow</label>
+                            <div class="readonly-box" id="computed-duty-pressure">50.0 Pa</div>
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="dp-fixed">Fixed Loss, &Delta;P<sub>fixed</sub> (Pa)</label>
+                            <input type="number" id="dp-fixed" value="0" step="any" min="0">
+                            <div class="hint">Constant losses such as a fixed filter or coil term.</div>
+                        </div>
+                        <div class="input-group">
+                            <label for="margin">Installation Margin (Pa)</label>
+                            <input type="number" id="margin" value="0" step="any" min="0">
+                            <div class="hint">Extra allowance for fouling, system effect, or design conservatism.</div>
+                        </div>
+                    </div>
+
+                    <details class="inline-details">
+                        <summary>Air State &amp; Energy Context</summary>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="temperature">Temperature (&deg;C)</label>
+                                <input type="number" id="temperature" value="20" step="any">
+                            </div>
+                            <div class="input-group">
+                                <label for="elevation">Elevation (m)</label>
+                                <input type="number" id="elevation" value="0" step="any" min="0">
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="density-override">Density Override (kg/m&sup3;)</label>
+                            <input type="number" id="density-override" value="" step="any" placeholder="Leave blank to auto-compute">
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="op-hours">Operating Hours / Year</label>
+                                <input type="number" id="op-hours" value="8760" step="any" min="0">
+                            </div>
+                            <div class="input-group">
+                                <label for="elec-rate">Electricity Rate ($/kWh)</label>
+                                <input type="number" id="elec-rate" value="0.12" step="any" min="0">
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="problem-preview" id="problem-preview">
+                        Quick-duty mode: the tool will infer a quadratic system curve through your target point.
+                    </div>
+
+                    <button type="button" class="btn-primary" id="calculate-btn" onclick="recalculate()" disabled style="margin-top:16px;">Recalculate Workspace</button>
+                </section>
+
+                <section class="card">
+                    <div class="card-toolbar">
+                        <div>
+                            <h2>Candidates</h2>
+                            <p class="subtle">Load archetypes to compare curve families, then import vendor data with explicit metadata.</p>
+                        </div>
+                        <div class="toolbar-buttons">
+                            <button type="button" class="btn-secondary" onclick="toggleLibraryPicker()">Load Archetype</button>
+                            <button type="button" class="btn-secondary" onclick="toggleImportPanel()">Import Curve</button>
+                        </div>
+                    </div>
+
+                    <div id="library-picker" class="picker" hidden></div>
+
+                    <div id="import-panel" class="import-panel" hidden>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="import-name">Candidate Name</label>
+                                <input type="text" id="import-name" value="Imported Fan">
+                            </div>
+                            <div class="input-group">
+                                <label for="import-pressure-basis">Candidate Pressure Basis</label>
+                                <select id="import-pressure-basis">
+                                    <option value="static" selected>Static</option>
+                                    <option value="total">Total</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="import-ref-rpm">Reference Speed (RPM)</label>
+                                <input type="number" id="import-ref-rpm" value="1000" step="any" min="1">
+                            </div>
+                            <div class="input-group">
+                                <label for="import-ref-density">Reference Density (kg/m&sup3;)</label>
+                                <input type="number" id="import-ref-density" value="1.225" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="csv-flow-unit">Flow Unit</label>
+                                <select id="csv-flow-unit">
+                                    <option value="m3/s">m&sup3;/s</option>
+                                    <option value="CFM">CFM</option>
+                                    <option value="m3/h">m&sup3;/h</option>
+                                    <option value="L/s">L/s</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="csv-pressure-unit">Pressure Unit</label>
+                                <select id="csv-pressure-unit">
+                                    <option value="Pa">Pa</option>
+                                    <option value="in_wg">in. w.g.</option>
+                                    <option value="kPa">kPa</option>
+                                    <option value="mmH2O">mmH&#x2082;O</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="csv-power-unit">Power Unit</label>
+                                <select id="csv-power-unit">
+                                    <option value="W" selected>W</option>
+                                    <option value="kW">kW</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="csv-eff-format">Efficiency Column</label>
+                                <select id="csv-eff-format">
+                                    <option value="auto" selected>Auto-detect (% or fraction)</option>
+                                    <option value="percent">Percent</option>
+                                    <option value="fraction">Fraction</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="csv-input">Curve Data</label>
+                            <textarea id="csv-input" placeholder="Columns: flow, pressure[, power][, efficiency]&#10;0.00, 150, 10, 0.00&#10;0.02, 130, 18, 0.45&#10;0.04, 100, 24, 0.63"></textarea>
+                            <div class="hint">
+                                Two columns are required: flow and pressure. A third power column enables power and cost comparison. A fourth efficiency column is optional.
+                            </div>
+                        </div>
+                        <button type="button" class="btn-primary" onclick="addFanFromCSV()">Add Imported Candidate</button>
+                    </div>
+
+                    <div id="fan-cards-container" class="candidate-list"></div>
+                </section>
+            </aside>
+
+            <section class="main-workspace">
+                <section class="card">
+                    <div class="summary-header">
+                        <div>
+                            <div class="eyebrow">Active Candidate</div>
+                            <div class="active-name" id="active-fan-name">Load a fan to start</div>
+                            <p class="subtle" id="active-fan-context">The active candidate will drive the summary, assumptions, and derivation panels.</p>
+                        </div>
+                        <div class="status-pill blocking" id="status-pill">Waiting</div>
+                    </div>
+
+                    <div id="summary-placeholder" class="summary-placeholder">
+                        A professional comparison starts with one explicit problem definition and at least one candidate curve.
+                    </div>
+
+                    <div id="summary-content" style="display:none;">
+                        <div class="metrics-grid">
+                            <div class="metric-card"><span class="metric-label">Operating Flow</span><div class="metric-value" id="metric-flow">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Operating Pressure</span><div class="metric-value" id="metric-pressure">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Shaft Power</span><div class="metric-value" id="metric-power">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Electrical Power</span><div class="metric-value" id="metric-electrical">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Efficiency</span><div class="metric-value" id="metric-efficiency">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Annual Cost</span><div class="metric-value" id="metric-cost">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Operating Speed</span><div class="metric-value" id="metric-speed">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Duty Margin</span><div class="metric-value" id="metric-margin">&mdash;</div></div>
+                            <div class="metric-card"><span class="metric-label">Peak Proximity</span><div class="metric-value" id="metric-peak">&mdash;</div></div>
+                        </div>
+                        <div class="assumption-row" id="assumption-row"></div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="card-toolbar">
+                        <div>
+                            <h2>Analysis Workspace</h2>
+                            <p class="subtle">The active result, curve plot, and comparison matrix stay on the same screen. Click a curve or row to change the active fan.</p>
+                        </div>
+                        <div class="toolbar-buttons">
+                            <div class="segmented">
+                                <button type="button" class="active" data-chart-mode="pressure" onclick="setChartMode('pressure')">Pressure</button>
+                                <button type="button" data-chart-mode="power" onclick="setChartMode('power')">Power</button>
+                                <button type="button" data-chart-mode="efficiency" onclick="setChartMode('efficiency')">Efficiency</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="analysis-plot" class="chart-plot"></div>
+                    <div id="plot-caption" class="plot-caption">
+                        Pressure mode compares fan and system curves. Filled markers are stable operating points; open red markers indicate unstable intersections.
+                    </div>
+                </section>
+
+                <div class="workspace-bottom">
+                    <section class="card">
+                        <h2>Active Candidate Assumptions</h2>
+                        <p class="subtle">Warnings are shown per candidate rather than merged into anonymous page-level noise.</p>
+                        <div id="active-warnings" class="warning-stack" style="margin-top:14px;"></div>
+                    </section>
+
+                    <section class="card">
+                        <h2>Method &amp; Derivation</h2>
+                        <p class="subtle">Equations are shown in SI units so the substituted math remains dimensionally correct.</p>
+                        <div id="derivation-sections" class="equation-stack" style="margin-top:14px;"></div>
+                    </section>
+                </div>
+
+                <section class="card">
+                    <div class="card-toolbar">
+                        <div>
+                            <h2>Candidate Comparison</h2>
+                            <p class="subtle">Use ranking for the decision criterion you care about, or click a column header for a local sort.</p>
+                        </div>
+                        <div class="toolbar-buttons">
+                            <div class="input-group" style="margin-bottom:0; min-width: 220px;">
+                                <label for="rank-by">Rank By</label>
+                                <select id="rank-by">
+                                    <option value="">Manual / insertion order</option>
+                                    <option value="lowest_shaft_power">Lowest Shaft Power</option>
+                                    <option value="lowest_annual_cost">Lowest Annual Cost</option>
+                                    <option value="highest_efficiency">Highest Efficiency at Duty</option>
+                                    <option value="most_duty_margin">Most Duty Margin</option>
+                                    <option value="most_stable">Most Stable Intersection</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th><button type="button" id="sort-title" onclick="setSort('title')">Fan</button></th>
+                                    <th>Source</th>
+                                    <th><button type="button" id="sort-meets_duty" onclick="setSort('meets_duty')">Duty</button></th>
+                                    <th><button type="button" id="sort-operating_flow" onclick="setSort('operating_flow')">Flow</button></th>
+                                    <th><button type="button" id="sort-operating_pressure" onclick="setSort('operating_pressure')">Pressure</button></th>
+                                    <th><button type="button" id="sort-shaft_power_w" onclick="setSort('shaft_power_w')">Power</button></th>
+                                    <th><button type="button" id="sort-operating_efficiency" onclick="setSort('operating_efficiency')">Efficiency</button></th>
+                                    <th><button type="button" id="sort-duty_margin_pressure" onclick="setSort('duty_margin_pressure')">Duty Margin</button></th>
+                                    <th><button type="button" id="sort-annual_energy_cost" onclick="setSort('annual_energy_cost')">Cost / yr</button></th>
+                                    <th><button type="button" id="sort-intersection_angle_deg" onclick="setSort('intersection_angle_deg')">Stability</button></th>
+                                    <th><button type="button" id="sort-warning_tier" onclick="setSort('warning_tier')">Warning Tier</button></th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-tbody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <details class="footer-details">
+            <summary>Methodology, Fan Families, and References</summary>
+            <div class="footer-content">
+                <section>
+                    <h3>How the tool solves the problem</h3>
+                    <p>
+                        The tool scales each candidate to the selected speed and density, constructs the active system curve, solves all
+                        fan/system intersections, then selects the stable operating point for reporting. Duty margin is checked at the target
+                        flow, not at the operating point, because that is the actual selection question.
+                    </p>
+                </section>
+                <section>
+                    <h3>How to compare architectures correctly</h3>
+                    <ul>
+                        <li>Axial fans favor high flow and low pressure.</li>
+                        <li>Backward-curved centrifugal fans favor efficiency and non-overloading power behavior.</li>
+                        <li>Forward-curved centrifugal fans can create dual-intersection instability in the hump region.</li>
+                        <li>Mixed-flow fans sit between axial and centrifugal behavior and are useful when footprint and pressure both matter.</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Pressure basis and efficiency</h3>
+                    <p>
+                        The tool does not convert static and total pressure automatically because that requires velocity information. A basis
+                        mismatch is therefore treated as a blocking validity error. Efficiency is computed using the candidate's own basis only
+                        when power data is available and the comparison basis matches.
+                    </p>
+                </section>
+                <section>
+                    <h3>References</h3>
+                    <ul>
+                        <li>ANSI/AMCA 210-25: Laboratory methods of testing fans.</li>
+                        <li>AMCA Publication 201-23: Fans and Systems.</li>
+                        <li>U.S. DOE Improving Fan System Performance Sourcebook.</li>
+                        <li><a href="https://www.energy.gov/sites/default/files/2014/05/f16/fan_sourcebook.pdf" target="_blank" rel="noopener">DOE Fan Sourcebook (PDF)</a>.</li>
+                        <li><a href="https://www.amca.org/certify/amca-certified-rating-program-search.html" target="_blank" rel="noopener">AMCA Certified Ratings Search</a>.</li>
+                    </ul>
+                </section>
+            </div>
+        </details>
+    </main>
+
+    <footer>
+        Fan archetype curves are synthetic educational data, not real products.
+    </footer>
+
+    <script>
+    const TOOL_MODULE_NAME = 'fan_curves';
+    const FAN_COLORS = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2', '#be185d', '#65a30d'];
+
+    const state = {
+        fans: [],
+        activeFanId: null,
+        nextFanId: 1,
+        library: [],
+        results: null,
+        systemMode: 'quick-duty',
+        chartMode: 'pressure',
+        sortKey: null,
+        sortDir: 'desc',
+    };
+
+    let pyodideInstance = null;
+    let pyToolModule = null;
+    let recalcTimer = null;
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function toPlain(value) {
+        if (value == null) return value;
+        if (Array.isArray(value)) return value.map(toPlain);
+        if (value instanceof Map) {
+            const out = {};
+            for (const [k, v] of value.entries()) out[k] = toPlain(v);
+            return out;
+        }
+        if (typeof value.toJs === 'function') {
+            const plain = value.toJs({ dict_converter: Object.fromEntries });
+            if (typeof value.destroy === 'function') value.destroy();
+            return toPlain(plain);
+        }
+        if (typeof value === 'object') {
+            const out = {};
+            for (const [k, v] of Object.entries(value)) out[k] = toPlain(v);
+            return out;
+        }
+        return value;
+    }
+
+    function flowFactorForUnit(unit) {
+        return unit === 'm3/s' ? 1 : unit === 'CFM' ? 4.71947443e-4 : unit === 'm3/h' ? 1 / 3600 : 1e-3;
+    }
+
+    function pressureFactorForUnit(unit) {
+        return unit === 'Pa' ? 1 : unit === 'in_wg' ? 249.08891 : unit === 'kPa' ? 1000 : 9.80665;
+    }
+
+    function powerFactorForUnit(unit) {
+        return unit === 'kW' ? 1000 : 1;
+    }
+
+    function formatNumber(value, digits = 3) {
+        if (value == null || !isFinite(value)) return '—';
+        return Number(value).toFixed(digits);
+    }
+
+    function chartTheme() {
+        const cs = getComputedStyle(document.body);
+        return {
+            bg: cs.getPropertyValue('--bg-card').trim(),
+            text: cs.getPropertyValue('--text-color').trim(),
+            grid: cs.getPropertyValue('--border-color').trim(),
+            muted: cs.getPropertyValue('--text-light').trim(),
+        };
+    }
+
+    function typesetMath() {
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetPromise().catch(() => {});
+        }
+    }
+
+    function scheduleRecalculate(delay = 150) {
+        updateProblemPreview();
+        if (!pyToolModule || state.fans.length === 0) return;
+        clearTimeout(recalcTimer);
+        recalcTimer = setTimeout(() => recalculate(), delay);
+    }
+
+    function bindAutoInputs() {
+        const immediateIds = ['flow-unit', 'pressure-unit', 'pressure-basis', 'rank-by'];
+        const delayedIds = ['duty-flow', 'duty-pressure', 'system-k', 'dp-fixed', 'margin', 'temperature', 'elevation', 'density-override', 'op-hours', 'elec-rate'];
+
+        immediateIds.forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                if (id === 'rank-by') {
+                    state.sortKey = null;
+                    state.sortDir = 'desc';
+                }
+                scheduleRecalculate(0);
+            });
+        });
+        delayedIds.forEach(id => {
+            document.getElementById(id).addEventListener('input', () => scheduleRecalculate());
+            document.getElementById(id).addEventListener('change', () => scheduleRecalculate(0));
+        });
+    }
+
+    function setSystemMode(mode) {
+        state.systemMode = mode;
+        document.querySelectorAll('[data-system-mode]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.systemMode === mode);
+        });
+        document.getElementById('quick-duty-panel').style.display = mode === 'quick-duty' ? 'block' : 'none';
+        document.getElementById('direct-k-panel').style.display = mode === 'direct-k' ? 'block' : 'none';
+        updateProblemPreview();
+        scheduleRecalculate(0);
+    }
+
+    function setChartMode(mode) {
+        state.chartMode = mode;
+        document.querySelectorAll('[data-chart-mode]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.chartMode === mode);
+        });
+        renderPlot();
+    }
+
+    function toggleLibraryPicker() {
+        const picker = document.getElementById('library-picker');
+        picker.hidden = !picker.hidden;
+    }
+
+    function toggleImportPanel() {
+        const panel = document.getElementById('import-panel');
+        panel.hidden = !panel.hidden;
+    }
+
+    function setSort(key) {
+        if (state.sortKey === key) {
+            state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.sortKey = key;
+            const defaultDir = {
+                title: 'asc',
+                meets_duty: 'desc',
+                warning_tier: 'asc',
+            };
+            state.sortDir = defaultDir[key] || 'desc';
+        }
+        renderComparisonTable();
+    }
+
+    async function main() {
+        bindAutoInputs();
+        updateProblemPreview();
+        const loadingText = document.getElementById('loading-text');
+        try {
+            loadingText.textContent = 'Loading Pyodide...';
+            pyodideInstance = await loadPyodide();
+
+            loadingText.textContent = 'Loading fan solver...';
+            await pyodideInstance.runPythonAsync(`
+from pyodide.http import pyfetch
+response = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py?v=${Date.now()}')
+with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+    f.write(await response.string())
+import ${TOOL_MODULE_NAME}
+            `);
+            pyToolModule = pyodideInstance.globals.get(TOOL_MODULE_NAME);
+
+            loadingText.textContent = 'Loading fan library...';
+            state.library = toPlain(pyToolModule.get_library_summary()) || [];
+            buildLibraryPicker();
+
+            addFanFromLibrary('medium-axial-120mm');
+            document.getElementById('calculate-btn').disabled = false;
+            document.getElementById('loading-overlay').classList.add('hidden');
+            recalculate();
+        } catch (error) {
+            console.error(error);
+            loadingText.textContent = 'Failed to load tool: ' + error.message;
+        }
+    }
+
+    function buildLibraryPicker() {
+        const picker = document.getElementById('library-picker');
+        picker.innerHTML = '<div class="picker-grid"></div>';
+        const grid = picker.firstElementChild;
+        state.library.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'picker-card';
+            card.innerHTML = `
+                <strong>${escapeHtml(item.title)}</strong>
+                <div class="subtle">${escapeHtml(item.description || 'Synthetic educational archetype')}</div>
+            `;
+            card.addEventListener('click', () => {
+                addFanFromLibrary(item.candidate_id);
+                picker.hidden = true;
+                scheduleRecalculate(0);
+            });
+            grid.appendChild(card);
+        });
+    }
+
+    function addFanFromLibrary(archetypeId) {
+        const fan = toPlain(pyToolModule.get_fan_archetype(archetypeId));
+        if (!fan) return;
+        fan.pressure_curve = toPlain(fan.pressure_curve);
+        fan.power_curve = fan.power_curve ? toPlain(fan.power_curve) : null;
+        fan.efficiency_curve = fan.efficiency_curve ? toPlain(fan.efficiency_curve) : null;
+        fan.candidate_id = 'fan-' + state.nextFanId++;
+        fan._color = FAN_COLORS[state.fans.length % FAN_COLORS.length];
+        fan._source_label = 'Archetype';
+        state.fans.push(fan);
+        state.activeFanId = fan.candidate_id;
+        renderFanCards();
+    }
+
+    function addFanFromCSV() {
+        const name = document.getElementById('import-name').value.trim() || `Imported Fan ${state.nextFanId}`;
+        const flowUnit = document.getElementById('csv-flow-unit').value;
+        const pressureUnit = document.getElementById('csv-pressure-unit').value;
+        const powerUnit = document.getElementById('csv-power-unit').value;
+        const efficiencyFormat = document.getElementById('csv-eff-format').value;
+        const text = document.getElementById('csv-input').value.trim();
+        if (!text) return;
+
+        const flowFactor = flowFactorForUnit(flowUnit);
+        const pressureFactor = pressureFactorForUnit(pressureUnit);
+        const powerFactor = powerFactorForUnit(powerUnit);
+        const lines = text.split('\n').filter(line => line.trim());
+
+        const pressureCurve = [];
+        const powerCurve = [];
+        const efficiencyCurve = [];
+        let powerCount = 0;
+        let effCount = 0;
+
+        for (const line of lines) {
+            const parts = line.split(/[,\t]+/).map(part => parseFloat(part.trim()));
+            if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) continue;
+
+            const flow = parts[0] * flowFactor;
+            const pressure = parts[1] * pressureFactor;
+            pressureCurve.push([flow, pressure]);
+
+            if (parts.length >= 3 && !Number.isNaN(parts[2])) {
+                powerCurve.push([flow, parts[2] * powerFactor]);
+                powerCount += 1;
+            }
+            if (parts.length >= 4 && !Number.isNaN(parts[3])) {
+                let efficiency = parts[3];
+                if (efficiencyFormat === 'percent' || (efficiencyFormat === 'auto' && efficiency > 1.0)) {
+                    efficiency /= 100.0;
+                }
+                efficiencyCurve.push([flow, efficiency]);
+                effCount += 1;
+            }
+        }
+
+        if (pressureCurve.length < 3) {
+            alert('Need at least three valid flow-pressure points.');
+            return;
+        }
+
+        const fan = {
+            candidate_id: 'fan-' + state.nextFanId++,
+            title: name,
+            source_type: 'imported',
+            archetype_note: null,
+            reference_speed_rpm: parseFloat(document.getElementById('import-ref-rpm').value) || 1000,
+            operating_speed_rpm: parseFloat(document.getElementById('import-ref-rpm').value) || 1000,
+            reference_density_kg_m3: parseFloat(document.getElementById('import-ref-density').value) || 1.225,
+            pressure_basis: document.getElementById('import-pressure-basis').value,
+            pressure_curve: pressureCurve.sort((a, b) => a[0] - b[0]),
+            power_curve: powerCount === pressureCurve.length ? powerCurve.sort((a, b) => a[0] - b[0]) : null,
+            efficiency_curve: effCount === pressureCurve.length ? efficiencyCurve.sort((a, b) => a[0] - b[0]) : null,
+            _color: FAN_COLORS[state.fans.length % FAN_COLORS.length],
+            _source_label: 'Imported',
+        };
+
+        state.fans.push(fan);
+        state.activeFanId = fan.candidate_id;
+        document.getElementById('csv-input').value = '';
+        renderFanCards();
+        toggleImportPanel();
+        scheduleRecalculate(0);
+    }
+
+    function removeFan(fanId) {
+        state.fans = state.fans.filter(fan => fan.candidate_id !== fanId);
+        if (state.activeFanId === fanId) {
+            state.activeFanId = state.fans.length ? state.fans[0].candidate_id : null;
+        }
+        renderFanCards();
+        if (state.fans.length) {
+            scheduleRecalculate(0);
+        } else {
+            clearResults();
+        }
+    }
+
+    function setActiveFan(fanId) {
+        state.activeFanId = fanId;
+        renderFanCards();
+        renderWorkspace();
+    }
+
+    function updateFanText(fanId, value) {
+        const fan = state.fans.find(item => item.candidate_id === fanId);
+        if (!fan) return;
+        fan.title = value;
+        if (state.results) {
+            renderActiveSummary();
+            renderComparisonTable();
+            renderPlot();
+        }
+    }
+
+    function updateFanField(fanId, field, value) {
+        const fan = state.fans.find(item => item.candidate_id === fanId);
+        if (!fan) return;
+        fan[field] = value;
+        scheduleRecalculate();
+    }
+
+    function updateFanNumber(fanId, field, value, minimum = null) {
+        const fan = state.fans.find(item => item.candidate_id === fanId);
+        if (!fan) return;
+        const parsed = parseFloat(value);
+        if (!Number.isFinite(parsed)) return;
+        fan[field] = minimum != null ? Math.max(minimum, parsed) : parsed;
+        if (field === 'reference_speed_rpm' && (!Number.isFinite(fan.operating_speed_rpm) || fan.operating_speed_rpm <= 0)) {
+            fan.operating_speed_rpm = fan.reference_speed_rpm;
+        }
+        renderFanCards();
+        scheduleRecalculate();
+    }
+
+    function updateFanSpeed(fanId, value) {
+        const fan = state.fans.find(item => item.candidate_id === fanId);
+        if (!fan) return;
+        const parsed = parseFloat(value);
+        if (!Number.isFinite(parsed)) return;
+        fan.operating_speed_rpm = parsed;
+        scheduleRecalculate(0);
+    }
+
+    function renderFanCards() {
+        const container = document.getElementById('fan-cards-container');
+        container.innerHTML = '';
+
+        state.fans.forEach(fan => {
+            const isActive = fan.candidate_id === state.activeFanId;
+            const isArchetype = fan.source_type === 'library-archetype';
+            const maxFlow = fan.pressure_curve && fan.pressure_curve.length ? Math.max(...fan.pressure_curve.map(point => point[0])) : null;
+            const speedMin = Math.max(50, Math.round(fan.reference_speed_rpm * 0.3));
+            const speedMax = Math.max(speedMin + 50, Math.round(fan.reference_speed_rpm * 2.0));
+
+            const card = document.createElement('div');
+            card.className = 'candidate-card' + (isActive ? ' active' : '');
+            card.innerHTML = `
+                <div class="candidate-header">
+                    <div class="candidate-swatch" style="background:${fan._color}"></div>
+                    <input type="text" value="${escapeHtml(fan.title)}" aria-label="Candidate name"
+                        onchange="updateFanText('${fan.candidate_id}', this.value)">
+                    <button type="button" class="icon-button" onclick="event.stopPropagation(); removeFan('${fan.candidate_id}')">&times;</button>
+                </div>
+                <div class="candidate-meta-grid">
+                    <div>
+                        <label>Basis</label>
+                        <select onchange="updateFanField('${fan.candidate_id}', 'pressure_basis', this.value)">
+                            <option value="static" ${fan.pressure_basis === 'static' ? 'selected' : ''}>Static</option>
+                            <option value="total" ${fan.pressure_basis === 'total' ? 'selected' : ''}>Total</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Ref RPM</label>
+                        <input type="number" value="${fan.reference_speed_rpm}" step="any" min="1"
+                            onchange="updateFanNumber('${fan.candidate_id}', 'reference_speed_rpm', this.value, 1)">
+                    </div>
+                    <div>
+                        <label>Ref density</label>
+                        <input type="number" value="${fan.reference_density_kg_m3}" step="any" min="0.1"
+                            onchange="updateFanNumber('${fan.candidate_id}', 'reference_density_kg_m3', this.value, 0.1)">
+                    </div>
+                </div>
+                <div class="slider-block">
+                    <div class="slider-header">
+                        <span>Operating speed</span>
+                        <span class="slider-value" id="speed-label-${fan.candidate_id}">${formatNumber(fan.operating_speed_rpm, 0)} RPM</span>
+                    </div>
+                    <input type="range" min="${speedMin}" max="${speedMax}" value="${fan.operating_speed_rpm}" step="10"
+                        oninput="document.getElementById('speed-number-${fan.candidate_id}').value=this.value; document.getElementById('speed-label-${fan.candidate_id}').textContent=this.value + ' RPM'; updateFanSpeed('${fan.candidate_id}', this.value)">
+                    <div class="slider-labels">
+                        <span>${speedMin}</span>
+                        <span>Ref ${formatNumber(fan.reference_speed_rpm, 0)}</span>
+                        <span>${speedMax}</span>
+                    </div>
+                    <input type="number" id="speed-number-${fan.candidate_id}" value="${fan.operating_speed_rpm}" step="10" min="${speedMin}" max="${speedMax}"
+                        style="margin-top:8px; font-size:0.82rem; padding:8px 10px;"
+                        onchange="updateFanSpeed('${fan.candidate_id}', this.value)">
+                </div>
+                <div class="candidate-tags">
+                    <span class="tag ${isArchetype ? 'arch' : ''}">${escapeHtml(fan._source_label || (isArchetype ? 'Archetype' : 'Imported'))}</span>
+                    <span class="tag">${fan.pressure_curve ? fan.pressure_curve.length : 0} pressure pts</span>
+                    <span class="tag">${fan.power_curve ? fan.power_curve.length + ' power pts' : 'No power data'}</span>
+                    <span class="tag">${fan.efficiency_curve ? fan.efficiency_curve.length + ' eff pts' : 'Efficiency derived / unavailable'}</span>
+                    ${maxFlow != null ? `<span class="tag">Q<sub>max</sub> ${formatNumber(maxFlow, 3)} m³/s</span>` : ''}
+                </div>
+            `;
+            card.addEventListener('click', event => {
+                if (!event.target.closest('input, select, button')) {
+                    setActiveFan(fan.candidate_id);
+                }
+            });
+            container.appendChild(card);
+        });
+    }
+
+    function readSystemDefinition() {
+        const flowUnit = document.getElementById('flow-unit').value;
+        const pressureUnit = document.getElementById('pressure-unit').value;
+        const dutyFlow = (parseFloat(document.getElementById('duty-flow').value) || 0) * flowFactorForUnit(flowUnit);
+        const dpFixed = parseFloat(document.getElementById('dp-fixed').value) || 0;
+        const margin = parseFloat(document.getElementById('margin').value) || 0;
+        const pressureBasis = document.getElementById('pressure-basis').value;
+
+        let dutyPressure = 0;
+        let kCoefficient = 0;
+        let sourceMode = 'duty-point-inferred';
+
+        if (state.systemMode === 'quick-duty') {
+            dutyPressure = (parseFloat(document.getElementById('duty-pressure').value) || 0) * pressureFactorForUnit(pressureUnit);
+            if (dutyFlow > 0) {
+                kCoefficient = pyToolModule.infer_system_k(dutyFlow, dutyPressure, dpFixed, margin);
+            }
+        } else {
+            sourceMode = 'direct-k';
+            kCoefficient = parseFloat(document.getElementById('system-k').value) || 0;
+            if (dutyFlow > 0) {
+                dutyPressure = pyToolModule.system_pressure_at_flow(dutyFlow, kCoefficient, dpFixed, margin);
+            }
+        }
+
+        return {
+            flowUnit,
+            pressureUnit,
+            pressureBasis,
+            dutyFlow,
+            dutyPressure,
+            dpFixed,
+            margin,
+            kCoefficient,
+            sourceMode,
+        };
+    }
+
+    function computeOperatingDensity() {
+        const override = parseFloat(document.getElementById('density-override').value);
+        if (Number.isFinite(override) && override > 0) return override;
+        const temperature = parseFloat(document.getElementById('temperature').value) || 20;
+        const elevation = parseFloat(document.getElementById('elevation').value) || 0;
+        return pyToolModule.compute_air_density(temperature, elevation);
+    }
+
+    function updateProblemPreview() {
+        const preview = document.getElementById('problem-preview');
+        if (!pyToolModule) {
+            preview.textContent = state.systemMode === 'quick-duty'
+                ? 'Quick-duty mode: the tool will infer a quadratic system curve through your target point.'
+                : 'Known-system mode: the tool will use your entered K directly.';
+            return;
+        }
+
+        try {
+            const system = readSystemDefinition();
+            const density = computeOperatingDensity();
+            const displayPressure = system.dutyPressure / pressureFactorForUnit(system.pressureUnit);
+            document.getElementById('computed-duty-pressure').textContent = `${formatNumber(displayPressure, 2)} ${system.pressureUnit}`;
+
+            if (state.systemMode === 'quick-duty') {
+                preview.innerHTML = `Quick-duty mode: inferred <strong>K = ${formatNumber(system.kCoefficient, 1)}</strong> Pa/(m&sup3;/s)&sup2; from the target point. Operating density = <strong>${formatNumber(density, 3)}</strong> kg/m&sup3;.`;
+            } else {
+                preview.innerHTML = `Known-system mode: using <strong>K = ${formatNumber(system.kCoefficient, 1)}</strong> Pa/(m&sup3;/s)&sup2; with a computed duty pressure of <strong>${formatNumber(displayPressure, 2)} ${system.pressureUnit}</strong> at the target flow.`;
+            }
+        } catch (error) {
+            preview.textContent = 'Problem definition is currently invalid: ' + error.message;
+            document.getElementById('computed-duty-pressure').textContent = 'Invalid definition';
+        }
+    }
+
+    async function recalculate() {
+        if (!pyToolModule || state.fans.length === 0) return;
+        const button = document.getElementById('calculate-btn');
+        button.disabled = true;
+        button.textContent = 'Recalculating...';
+
+        try {
+            const system = readSystemDefinition();
+            const density = computeOperatingDensity();
+            const operatingHours = parseFloat(document.getElementById('op-hours').value) || 8760;
+            const electricityRate = parseFloat(document.getElementById('elec-rate').value) || 0.12;
+            const rankingCriterion = document.getElementById('rank-by').value || null;
+
+            const fanListProxy = pyodideInstance.toPy(state.fans);
+            const comparison = toPlain(
+                pyToolModule.compare_fans(
+                    fanListProxy,
+                    system.dutyFlow,
+                    system.dutyPressure,
+                    system.kCoefficient,
+                    system.dpFixed,
+                    system.margin,
+                    density,
+                    system.sourceMode,
+                    operatingHours,
+                    electricityRate,
+                    rankingCriterion,
+                    system.pressureBasis,
+                )
+            );
+            fanListProxy.destroy();
+
+            const results = Array.from(comparison.results || []).map(item => {
+                const result = toPlain(item);
+                result._fan = state.fans.find(fan => fan.candidate_id === result.candidate_id);
+                result.warnings = Array.from(result.warnings || []).map(toPlain);
+                return result;
+            });
+
+            const plotFanListProxy = pyodideInstance.toPy(state.fans);
+            const plotData = toPlain(
+                pyToolModule.generate_plot_data(
+                    plotFanListProxy,
+                    system.kCoefficient,
+                    system.dpFixed,
+                    system.margin,
+                    density,
+                    system.dutyFlow,
+                    system.dutyPressure,
+                )
+            );
+            plotFanListProxy.destroy();
+
+            state.results = {
+                ...system,
+                density,
+                operatingHours,
+                electricityRate,
+                rankingCriterion,
+                results,
+                resultMap: Object.fromEntries(results.map(result => [result.candidate_id, result])),
+                rankedOrder: Array.from(comparison.ranked_order || []),
+                plotData,
+            };
+
+            if (!state.activeFanId && results.length) {
+                state.activeFanId = results[0].candidate_id;
+            }
+            if (state.activeFanId && !state.results.resultMap[state.activeFanId] && results.length) {
+                state.activeFanId = results[0].candidate_id;
+            }
+
+            renderWorkspace();
+        } catch (error) {
+            console.error(error);
+            clearResults('Calculation error: ' + error.message);
+        }
+
+        button.disabled = false;
+        button.textContent = 'Recalculate Workspace';
+    }
+
+    function clearResults(message = 'Load a fan to start.') {
+        state.results = null;
+        document.getElementById('active-fan-name').textContent = 'Load a fan to start';
+        document.getElementById('active-fan-context').textContent = message;
+        document.getElementById('summary-placeholder').textContent = message;
+        document.getElementById('summary-placeholder').style.display = 'block';
+        document.getElementById('summary-content').style.display = 'none';
+        document.getElementById('status-pill').className = 'status-pill blocking';
+        document.getElementById('status-pill').textContent = 'Waiting';
+        document.getElementById('comparison-tbody').innerHTML = '';
+        document.getElementById('active-warnings').innerHTML = '<div class="subtle">Warnings will appear once a candidate is solved.</div>';
+        document.getElementById('derivation-sections').innerHTML = '<div class="subtle">Derivations will appear once a candidate is solved.</div>';
+        Plotly.purge('analysis-plot');
+    }
+
+    function renderWorkspace() {
+        renderActiveSummary();
+        renderWarnings();
+        renderDerivations();
+        renderComparisonTable();
+        renderPlot();
+    }
+
+    function renderActiveSummary() {
+        if (!state.results) {
+            clearResults();
+            return;
+        }
+
+        const result = state.results.resultMap[state.activeFanId];
+        if (!result) return;
+        const fan = result._fan;
+
+        document.getElementById('summary-placeholder').style.display = 'none';
+        document.getElementById('summary-content').style.display = 'block';
+        document.getElementById('active-fan-name').textContent = fan.title;
+        document.getElementById('active-fan-context').textContent = [
+            fan.source_type === 'library-archetype' ? 'Educational archetype' : 'Imported / user candidate',
+            `${fan.pressure_basis} basis`,
+            `ref ${formatNumber(fan.reference_density_kg_m3, 3)} kg/m³`,
+            `${formatNumber(fan.reference_speed_rpm, 0)} RPM ref`,
+        ].join(' · ');
+
+        const statusPill = document.getElementById('status-pill');
+        if (result.warning_tier === 'blocking') {
+            statusPill.className = 'status-pill blocking';
+            statusPill.textContent = 'Invalid / blocked';
+        } else if (result.meets_duty) {
+            statusPill.className = 'status-pill met';
+            statusPill.textContent = 'Duty met';
+        } else {
+            statusPill.className = 'status-pill not-met';
+            statusPill.textContent = 'Duty not met';
+        }
+
+        const flowUnit = state.results.flowUnit;
+        const pressureUnit = state.results.pressureUnit;
+        const flowFactor = flowFactorForUnit(flowUnit);
+        const pressureFactor = pressureFactorForUnit(pressureUnit);
+
+        document.getElementById('metric-flow').innerHTML = result.operating_flow != null ? `${formatNumber(result.operating_flow / flowFactor, 3)} ${flowUnit}` : 'N/A';
+        document.getElementById('metric-pressure').innerHTML = result.operating_pressure != null ? `${formatNumber(result.operating_pressure / pressureFactor, 2)} ${pressureUnit}` : 'N/A';
+        document.getElementById('metric-power').innerHTML = result.shaft_power_w != null ? `${formatNumber(result.shaft_power_w, 1)} W` : 'N/A';
+        document.getElementById('metric-electrical').innerHTML = result.electrical_power_w != null ? `${formatNumber(result.electrical_power_w, 1)} W` : 'N/A';
+        document.getElementById('metric-efficiency').innerHTML = result.operating_efficiency != null ? `${formatNumber(result.operating_efficiency * 100, 1)} %` : 'N/A';
+        document.getElementById('metric-cost').innerHTML = result.annual_energy_cost != null ? `$${formatNumber(result.annual_energy_cost, 2)} /yr` : 'N/A';
+        document.getElementById('metric-speed').innerHTML = result.operating_speed_rpm != null ? `${formatNumber(result.operating_speed_rpm, 0)} RPM` : 'N/A';
+        document.getElementById('metric-margin').innerHTML = result.duty_margin_pressure != null ? `${formatNumber(result.duty_margin_pressure / pressureFactor, 2)} ${pressureUnit}` : 'N/A';
+        document.getElementById('metric-peak').innerHTML = result.distance_from_peak_efficiency != null ? `${formatNumber(result.distance_from_peak_efficiency * 100, 0)} % of peak` : 'N/A';
+
+        const assumptions = [
+            `System: ${state.results.sourceMode === 'quick-duty' || state.results.sourceMode === 'duty-point-inferred' ? 'inferred from duty point' : 'user-defined K'}`,
+            `Basis: ${state.results.pressureBasis}`,
+            `Density: ${formatNumber(state.results.density, 3)} kg/m³`,
+            `Target: ${formatNumber(state.results.dutyFlow / flowFactor, 3)} ${flowUnit} @ ${formatNumber(state.results.dutyPressure / pressureFactor, 2)} ${pressureUnit}`,
+            `K: ${formatNumber(state.results.kCoefficient, 1)} Pa/(m³/s)²`,
+        ];
+        document.getElementById('assumption-row').innerHTML = assumptions.map(text => `<span class="assumption-chip">${escapeHtml(text)}</span>`).join('');
+    }
+
+    function renderWarnings() {
+        const container = document.getElementById('active-warnings');
+        if (!state.results) {
+            container.innerHTML = '<div class="subtle">Warnings will appear once a candidate is solved.</div>';
+            return;
+        }
+
+        const result = state.results.resultMap[state.activeFanId];
+        if (!result || !result.warnings || result.warnings.length === 0) {
+            container.innerHTML = '<div class="subtle">No warnings or assumptions were returned for the active candidate.</div>';
+            return;
+        }
+
+        container.innerHTML = result.warnings.map(warning => `
+            <div class="warning-item ${warning.tier}">
+                <span class="warning-tier">${warning.tier}</span>${escapeHtml(warning.message)}
+            </div>
+        `).join('');
+    }
+
+    function renderDerivations() {
+        const container = document.getElementById('derivation-sections');
+        if (!state.results) {
+            container.innerHTML = '<div class="subtle">Derivations will appear once a candidate is solved.</div>';
+            return;
+        }
+
+        const result = state.results.resultMap[state.activeFanId];
+        if (!result) return;
+
+        const fan = result._fan;
+        const fanProxy = pyodideInstance.toPy(fan);
+        const resultProxy = pyodideInstance.toPy({
+            operating_flow: result.operating_flow,
+            operating_pressure: result.operating_pressure,
+            shaft_power_w: result.shaft_power_w,
+            operating_efficiency: result.operating_efficiency,
+        });
+        const equationStrings = toPlain(
+            pyToolModule.format_equations(
+                fanProxy,
+                resultProxy,
+                state.results.kCoefficient,
+                state.results.dpFixed,
+                state.results.margin,
+                state.results.density,
+            )
+        ) || {};
+        fanProxy.destroy();
+        resultProxy.destroy();
+
+        const flowUnit = state.results.flowUnit;
+        const pressureUnit = state.results.pressureUnit;
+        const flowFactor = flowFactorForUnit(flowUnit);
+        const pressureFactor = pressureFactorForUnit(pressureUnit);
+
+        const blocks = [];
+        blocks.push(`
+            <div class="equation-card">
+                <div class="equation-title">Operating Point</div>
+                <div class="equation-body">
+                    ${result.operating_flow != null
+                        ? `$$Q_{op} = ${formatNumber(result.operating_flow, 4)}\\ \\mathrm{m^3/s}, \\quad \\Delta P_{op} = ${formatNumber(result.operating_pressure, 2)}\\ \\mathrm{Pa}$$`
+                        : 'No valid fan/system intersection was found for the active candidate.'}
+                </div>
+                <div class="equation-note">
+                    Display units: ${result.operating_flow != null ? `${formatNumber(result.operating_flow / flowFactor, 3)} ${flowUnit}` : 'N/A'} and
+                    ${result.operating_pressure != null ? `${formatNumber(result.operating_pressure / pressureFactor, 2)} ${pressureUnit}` : 'N/A'}.
+                </div>
+            </div>
+        `);
+
+        if (equationStrings.system_curve) {
+            blocks.push(`
+                <div class="equation-card">
+                    <div class="equation-title">System Curve</div>
+                    <div class="equation-body">$$${equationStrings.system_curve}$$</div>
+                    <div class="equation-note">Variables: \\(Q\\) is volumetric flow, \\(K\\) is the quadratic resistance coefficient, and \\(\\Delta P_{fixed}\\) is the constant loss term.</div>
+                </div>
+            `);
+        }
+
+        if (equationStrings.density_scaling) {
+            blocks.push(`
+                <div class="equation-card">
+                    <div class="equation-title">Density Scaling</div>
+                    <div class="equation-body">$$${equationStrings.density_scaling}$$</div>
+                    <div class="equation-note">Pressure and power are scaled linearly with density. Flow does not change under the incompressible approximation.</div>
+                </div>
+            `);
+        }
+
+        const speedTerms = [equationStrings.speed_flow, equationStrings.speed_pressure, equationStrings.speed_power].filter(Boolean);
+        if (speedTerms.length) {
+            blocks.push(`
+                <div class="equation-card">
+                    <div class="equation-title">Affinity Law Speed Scaling</div>
+                    <div class="equation-body">${speedTerms.map(term => `$$${term}$$`).join('')}</div>
+                    <div class="equation-note">Speed scaling is an approximation. It is most defensible near the tested reference speed and away from stall.</div>
+                </div>
+            `);
+        }
+
+        if (equationStrings.efficiency) {
+            blocks.push(`
+                <div class="equation-card">
+                    <div class="equation-title">Efficiency</div>
+                    <div class="equation-body">$$${equationStrings.efficiency}$$</div>
+                    <div class="equation-note">Efficiency is calculated in SI units using the matched pressure basis only.</div>
+                </div>
+            `);
+        } else {
+            blocks.push(`
+                <div class="equation-card">
+                    <div class="equation-title">Efficiency</div>
+                    <div class="equation-body">${result.shaft_power_w == null ? 'Power data is required to compute efficiency for the active candidate.' : 'No valid operating point is available, so efficiency is not reported.'}</div>
+                </div>
+            `);
+        }
+
+        container.innerHTML = blocks.join('');
+        typesetMath();
+    }
+
+    function warningTierRank(tier) {
+        return tier === 'blocking' ? 0 : tier === 'caution' ? 1 : tier === 'info' ? 2 : 3;
+    }
+
+    function getOrderedResults() {
+        if (!state.results) return [];
+        const results = [...state.results.results];
+        const resultMap = state.results.resultMap;
+        const rankBy = state.results.rankingCriterion;
+
+        if (state.sortKey) {
+            const key = state.sortKey;
+            const direction = state.sortDir === 'asc' ? 1 : -1;
+            results.sort((a, b) => {
+                let left;
+                let right;
+                if (key === 'title') {
+                    left = a._fan.title.toLowerCase();
+                    right = b._fan.title.toLowerCase();
+                } else if (key === 'warning_tier') {
+                    left = warningTierRank(a.warning_tier);
+                    right = warningTierRank(b.warning_tier);
+                } else if (key === 'meets_duty') {
+                    left = a.meets_duty ? 1 : 0;
+                    right = b.meets_duty ? 1 : 0;
+                } else {
+                    left = a[key];
+                    right = b[key];
+                }
+
+                if (left == null && right == null) return 0;
+                if (left == null) return 1;
+                if (right == null) return -1;
+                if (left < right) return -1 * direction;
+                if (left > right) return 1 * direction;
+                return 0;
+            });
+            return results;
+        }
+
+        if (rankBy && state.results.rankedOrder && state.results.rankedOrder.length) {
+            return state.results.rankedOrder.map(id => resultMap[id]).filter(Boolean);
+        }
+        return results;
+    }
+
+    function renderComparisonTable() {
+        const tbody = document.getElementById('comparison-tbody');
+        tbody.innerHTML = '';
+        document.querySelectorAll('th button').forEach(button => button.classList.remove('active-sort'));
+        if (state.sortKey) {
+            const activeButton = document.getElementById('sort-' + state.sortKey);
+            if (activeButton) activeButton.classList.add('active-sort');
+        }
+
+        if (!state.results) return;
+
+        const orderedResults = getOrderedResults();
+        const flowFactor = flowFactorForUnit(state.results.flowUnit);
+        const pressureFactor = pressureFactorForUnit(state.results.pressureUnit);
+
+        orderedResults.forEach((result, index) => {
+            const fan = result._fan;
+            const row = document.createElement('tr');
+            if (fan.candidate_id === state.activeFanId) row.classList.add('active-row');
+            if (!state.sortKey && state.results.rankingCriterion && index === 0) row.classList.add('top-ranked');
+            row.addEventListener('click', () => setActiveFan(fan.candidate_id));
+
+            const sourceClass = fan.source_type === 'library-archetype' ? 'archetype' : 'imported';
+            const sourceLabel = fan.source_type === 'library-archetype' ? 'Archetype' : 'Imported';
+            const dutyClass = result.meets_duty ? 'duty-yes' : 'duty-no';
+
+            row.innerHTML = `
+                <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${fan._color};margin-right:6px;vertical-align:middle;"></span>${escapeHtml(fan.title)}</td>
+                <td><span class="source-chip ${sourceClass}">${sourceLabel}</span></td>
+                <td class="${dutyClass}">${result.meets_duty ? 'Yes' : 'No'}</td>
+                <td>${result.operating_flow != null ? `${formatNumber(result.operating_flow / flowFactor, 3)} ${state.results.flowUnit}` : 'N/A'}</td>
+                <td>${result.operating_pressure != null ? `${formatNumber(result.operating_pressure / pressureFactor, 2)} ${state.results.pressureUnit}` : 'N/A'}</td>
+                <td>${result.shaft_power_w != null ? `${formatNumber(result.shaft_power_w, 1)} W` : 'N/A'}</td>
+                <td>${result.operating_efficiency != null ? `${formatNumber(result.operating_efficiency * 100, 1)} %` : 'N/A'}</td>
+                <td>${result.duty_margin_pressure != null ? `${formatNumber(result.duty_margin_pressure / pressureFactor, 2)} ${state.results.pressureUnit}` : 'N/A'}</td>
+                <td>${result.annual_energy_cost != null ? `$${formatNumber(result.annual_energy_cost, 2)}` : 'N/A'}</td>
+                <td>${result.intersection_angle_deg != null ? `${formatNumber(result.intersection_angle_deg, 1)}°` : 'N/A'}</td>
+                <td>${escapeHtml(result.warning_tier || 'clear')}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function renderPlot() {
+        const plotElement = document.getElementById('analysis-plot');
+        if (!state.results) {
+            Plotly.purge(plotElement);
+            return;
+        }
+
+        const theme = chartTheme();
+        const plotData = state.results.plotData || {};
+        const flowRange = Array.from(plotData.flow_range || []);
+        const fanCurves = Array.from(plotData.fan_curves || []);
+        const systemCurve = Array.from(plotData.system_curve || []);
+        const flowFactor = flowFactorForUnit(state.results.flowUnit);
+        const pressureFactor = pressureFactorForUnit(state.results.pressureUnit);
+
+        const traces = [];
+        let yTitle = '';
+        let caption = '';
+
+        if (state.chartMode === 'pressure') {
+            traces.push({
+                x: flowRange.map(flow => flow / flowFactor),
+                y: systemCurve.map(value => value / pressureFactor),
+                mode: 'lines',
+                name: state.results.sourceMode === 'direct-k' ? 'User-defined system curve' : 'Inferred system curve',
+                line: {
+                    color: theme.muted,
+                    dash: state.results.sourceMode === 'direct-k' ? 'solid' : 'dash',
+                    width: 2,
+                },
+                hovertemplate: `System curve<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Pressure: %{y:.2f} ${state.results.pressureUnit}<extra></extra>`,
+            });
+            yTitle = `Pressure (${state.results.pressureUnit})`;
+            caption = 'Pressure mode compares fan pressure curves to the active system curve. Filled markers are stable operating points; open red markers indicate unstable intersections.';
+        } else if (state.chartMode === 'power') {
+            yTitle = 'Power (W)';
+            caption = 'Power mode makes architecture differences visible: backward-curved fans tend to be non-overloading, while forward-curved fans typically overload toward higher flow.';
+        } else {
+            yTitle = 'Efficiency (%)';
+            caption = 'Efficiency mode shows whether the operating point sits near the best region of the curve rather than only reporting a single peak number.';
+        }
+
+        fanCurves.forEach(curve => {
+            const fan = state.fans.find(item => item.candidate_id === curve.candidate_id);
+            if (!fan) return;
+            const isActive = fan.candidate_id === state.activeFanId;
+            const xValues = flowRange.map(flow => flow / flowFactor);
+            const customData = xValues.map(() => fan.candidate_id);
+
+            if (state.chartMode === 'pressure') {
+                traces.push({
+                    x: xValues,
+                    y: Array.from(curve.pressure_values || []).map(value => value != null ? value / pressureFactor : null),
+                    customdata: customData,
+                    mode: 'lines',
+                    name: fan.title,
+                    line: {
+                        color: fan._color,
+                        width: isActive ? 3.5 : 2.3,
+                        dash: fan.source_type === 'library-archetype' ? 'dashdot' : 'solid',
+                    },
+                    opacity: fan.source_type === 'library-archetype' ? 0.8 : 1,
+                    hovertemplate: `${escapeHtml(fan.title)}<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Pressure: %{y:.2f} ${state.results.pressureUnit}<extra></extra>`,
+                });
+
+                if (curve.ghost_pressure_values) {
+                    traces.push({
+                        x: xValues,
+                        y: Array.from(curve.ghost_pressure_values).map(value => value != null ? value / pressureFactor : null),
+                        customdata: customData,
+                        mode: 'lines',
+                        name: `${fan.title} ref speed`,
+                        line: { color: fan._color, width: 1, dash: 'dot' },
+                        opacity: 0.3,
+                        showlegend: false,
+                        hoverinfo: 'skip',
+                    });
+                }
+
+                Array.from(curve.operating_points || []).forEach(point => {
+                    traces.push({
+                        x: [point.flow / flowFactor],
+                        y: [point.pressure / pressureFactor],
+                        customdata: [fan.candidate_id],
+                        mode: 'markers',
+                        name: point.is_stable ? 'Stable operating point' : 'Unstable operating point',
+                        marker: {
+                            size: point.is_stable ? 11 : 10,
+                            color: point.is_stable ? fan._color : 'transparent',
+                            line: { color: point.is_stable ? '#ffffff' : '#ef4444', width: point.is_stable ? 2 : 3 },
+                            symbol: point.is_stable ? 'circle' : 'circle-open',
+                        },
+                        showlegend: false,
+                        hovertemplate: `${escapeHtml(fan.title)}<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Pressure: %{y:.2f} ${state.results.pressureUnit}<br>${point.is_stable ? 'Stable' : 'Unstable'}<extra></extra>`,
+                    });
+                });
+            } else if (state.chartMode === 'power' && curve.power_values) {
+                traces.push({
+                    x: xValues,
+                    y: Array.from(curve.power_values).map(value => value != null ? value : null),
+                    customdata: customData,
+                    mode: 'lines',
+                    name: fan.title,
+                    line: {
+                        color: fan._color,
+                        width: isActive ? 3.5 : 2.3,
+                        dash: fan.source_type === 'library-archetype' ? 'dashdot' : 'solid',
+                    },
+                    hovertemplate: `${escapeHtml(fan.title)}<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Power: %{y:.1f} W<extra></extra>`,
+                });
+                const result = state.results.resultMap[fan.candidate_id];
+                if (result && result.operating_flow != null && result.shaft_power_w != null) {
+                    traces.push({
+                        x: [result.operating_flow / flowFactor],
+                        y: [result.shaft_power_w],
+                        customdata: [fan.candidate_id],
+                        mode: 'markers',
+                        marker: { size: 10, color: fan._color, line: { color: '#ffffff', width: 2 } },
+                        showlegend: false,
+                        hovertemplate: `${escapeHtml(fan.title)} operating point<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Power: %{y:.1f} W<extra></extra>`,
+                    });
+                }
+            } else if (state.chartMode === 'efficiency' && curve.efficiency_values) {
+                const effValues = Array.from(curve.efficiency_values).map(value => value != null ? value * 100 : null);
+                traces.push({
+                    x: xValues,
+                    y: effValues,
+                    customdata: customData,
+                    mode: 'lines',
+                    name: fan.title,
+                    line: {
+                        color: fan._color,
+                        width: isActive ? 3.5 : 2.3,
+                        dash: fan.source_type === 'library-archetype' ? 'dashdot' : 'solid',
+                    },
+                    hovertemplate: `${escapeHtml(fan.title)}<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Efficiency: %{y:.1f}%<extra></extra>`,
+                });
+
+                const peak = effValues.reduce((best, value, index) => value != null && (best == null || value > best.value) ? { value, index } : best, null);
+                if (peak) {
+                    traces.push({
+                        x: [xValues[peak.index]],
+                        y: [peak.value],
+                        customdata: [fan.candidate_id],
+                        mode: 'markers',
+                        marker: { size: 9, color: fan._color, symbol: 'diamond', line: { color: '#ffffff', width: 1.5 } },
+                        showlegend: false,
+                        hovertemplate: `${escapeHtml(fan.title)} peak efficiency<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Efficiency: %{y:.1f}%<extra></extra>`,
+                    });
+                }
+
+                const result = state.results.resultMap[fan.candidate_id];
+                if (result && result.operating_flow != null && result.operating_efficiency != null) {
+                    traces.push({
+                        x: [result.operating_flow / flowFactor],
+                        y: [result.operating_efficiency * 100],
+                        customdata: [fan.candidate_id],
+                        mode: 'markers',
+                        marker: { size: 10, color: fan._color, line: { color: '#ffffff', width: 2 } },
+                        showlegend: false,
+                        hovertemplate: `${escapeHtml(fan.title)} operating point<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Efficiency: %{y:.1f}%<extra></extra>`,
+                    });
+                }
+            }
+        });
+
+        if (state.chartMode === 'pressure' && plotData.duty_point) {
+            traces.push({
+                x: [plotData.duty_point.flow / flowFactor],
+                y: [plotData.duty_point.pressure / pressureFactor],
+                mode: 'markers',
+                name: 'Target duty point',
+                marker: { size: 13, color: '#f59e0b', symbol: 'x', line: { width: 2, color: '#92400e' } },
+                hovertemplate: `Target duty point<br>Flow: %{x:.3f} ${state.results.flowUnit}<br>Pressure: %{y:.2f} ${state.results.pressureUnit}<extra></extra>`,
+            });
+        }
+
+        const layout = {
+            plot_bgcolor: theme.bg,
+            paper_bgcolor: theme.bg,
+            font: { color: theme.text, family: "'Helvetica Neue', system-ui, sans-serif" },
+            xaxis: {
+                title: `Flow (${state.results.flowUnit})`,
+                gridcolor: theme.grid,
+                color: theme.text,
+                rangemode: 'tozero',
+            },
+            yaxis: {
+                title: yTitle,
+                gridcolor: theme.grid,
+                color: theme.text,
+                rangemode: 'tozero',
+            },
+            legend: { orientation: 'h', y: -0.18 },
+            margin: { l: 64, r: 24, t: 16, b: 68 },
+            hovermode: 'closest',
+        };
+
+        Plotly.react(plotElement, traces, layout, { responsive: true, displayModeBar: false });
+        if (plotElement.removeAllListeners) plotElement.removeAllListeners('plotly_click');
+        plotElement.on('plotly_click', event => {
+            const candidateId = event.points && event.points[0] ? event.points[0].customdata : null;
+            if (candidateId) setActiveFan(candidateId);
+        });
+
+        document.getElementById('plot-caption').textContent = caption;
+    }
+
+    main();
+    </script>
+</body>
+</html>
