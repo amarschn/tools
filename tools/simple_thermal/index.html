@@ -1911,14 +1911,32 @@
                     <div class="callout">
                         <p><strong>2D Trade Space:</strong> Sweep two parameters simultaneously to see feasibility regions and interaction effects.</p>
                     </div>
-                    <div class="input-row" style="margin-bottom:16px;">
+                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:16px;">
                         <div class="input-group">
                             <label for="sweep2d-xparam">X Parameter</label>
                             <select id="sweep2d-xparam"></select>
                         </div>
                         <div class="input-group">
+                            <label for="sweep2d-xmin">X Min</label>
+                            <input type="number" id="sweep2d-xmin" step="any">
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep2d-xmax">X Max</label>
+                            <input type="number" id="sweep2d-xmax" step="any">
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:16px;">
+                        <div class="input-group">
                             <label for="sweep2d-yparam">Y Parameter</label>
                             <select id="sweep2d-yparam"></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep2d-ymin">Y Min</label>
+                            <input type="number" id="sweep2d-ymin" step="any">
+                        </div>
+                        <div class="input-group">
+                            <label for="sweep2d-ymax">Y Max</label>
+                            <input type="number" id="sweep2d-ymax" step="any">
                         </div>
                     </div>
                     <div class="input-row" style="margin-bottom:16px;">
@@ -3980,6 +3998,7 @@
             sweepState.baselineInputs = gatherInputs();
             sweepState.baselineResults = results;
             populateSweepControls();
+            updateSweep2dBounds();
         }
 
         function populateSweepControls() {
@@ -4031,6 +4050,36 @@
             const ySelect = document.getElementById('sweep2d-yparam');
             if (!currentSelections.sweep2dY && ySelect.options.length > 1) ySelect.selectedIndex = 1;
             fillOutputSelect(document.getElementById('sweep2d-output'), currentSelections.sweep2dOutput);
+        }
+
+        function updateSweep2dBounds() {
+            const meta = sweepState.metadata;
+            if (!meta || !sweepState.baselineInputs) return;
+            const baseline = sweepState.baselineInputs;
+
+            const xParam = document.getElementById('sweep2d-xparam').value;
+            const yParam = document.getElementById('sweep2d-yparam').value;
+            if (!xParam || !yParam) return;
+
+            const xMeta = meta.parameters[xParam];
+            const yMeta = meta.parameters[yParam];
+            if (!xMeta || !yMeta) return;
+
+            const xScale = xMeta.display_scale || 1;
+            const yScale = yMeta.display_scale || 1;
+
+            const [xLow, xHigh] = getSweepBounds(baseline[xParam], xMeta, 0.5);
+            const [yLow, yHigh] = getSweepBounds(baseline[yParam], yMeta, 0.5);
+
+            const xMinEl = document.getElementById('sweep2d-xmin');
+            const xMaxEl = document.getElementById('sweep2d-xmax');
+            const yMinEl = document.getElementById('sweep2d-ymin');
+            const yMaxEl = document.getElementById('sweep2d-ymax');
+
+            xMinEl.value = parseFloat((xLow * xScale).toPrecision(4));
+            xMaxEl.value = parseFloat((xHigh * xScale).toPrecision(4));
+            yMinEl.value = parseFloat((yLow * yScale).toPrecision(4));
+            yMaxEl.value = parseFloat((yHigh * yScale).toPrecision(4));
         }
 
         function getSweepBaseline() {
@@ -4189,10 +4238,14 @@
                 const yMeta = sweepState.metadata.parameters[yParam];
                 const outputMeta = sweepState.metadata.outputs[outputKey];
 
-                const baseX = baseline[xParam];
-                const baseY = baseline[yParam];
-                const [xLow, xHigh] = getSweepBounds(baseX, xMeta, 0.5);
-                const [yLow, yHigh] = getSweepBounds(baseY, yMeta, 0.5);
+                const xScale = xMeta.display_scale || 1;
+                const yScale = yMeta.display_scale || 1;
+                const xLow = parseFloat(document.getElementById('sweep2d-xmin').value) / xScale;
+                const xHigh = parseFloat(document.getElementById('sweep2d-xmax').value) / xScale;
+                const yLow = parseFloat(document.getElementById('sweep2d-ymin').value) / yScale;
+                const yHigh = parseFloat(document.getElementById('sweep2d-ymax').value) / yScale;
+                if (!isFinite(xLow) || !isFinite(xHigh) || xLow >= xHigh) throw new Error('Invalid X bounds — min must be less than max.');
+                if (!isFinite(yLow) || !isFinite(yHigh) || yLow >= yHigh) throw new Error('Invalid Y bounds — min must be less than max.');
                 const xVals = Array.from({ length: resolution }, (_, i) => xLow + i * (xHigh - xLow) / (resolution - 1));
                 const yVals = Array.from({ length: resolution }, (_, i) => yLow + i * (yHigh - yLow) / (resolution - 1));
                 if (xMeta.integer) xVals.forEach((v, i) => { xVals[i] = Math.round(v); });
@@ -4205,8 +4258,6 @@
                 const contourResult = normalizeNestedDict(contourProxy.toJs({ dict_converter: Object.fromEntries }));
                 contourProxy.destroy();
 
-                const xScale = xMeta.display_scale || 1;
-                const yScale = yMeta.display_scale || 1;
                 const xDisp = contourResult.x_values.map(v => v * xScale);
                 const yDisp = contourResult.y_values.map(v => v * yScale);
 
@@ -4639,6 +4690,8 @@
                     populateSweepControls();
                     document.getElementById('sweep1d-run').addEventListener('click', runOneDSweep);
                     document.getElementById('sweep2d-run').addEventListener('click', runTwoDContour);
+                    document.getElementById('sweep2d-xparam').addEventListener('change', updateSweep2dBounds);
+                    document.getElementById('sweep2d-yparam').addEventListener('change', updateSweep2dBounds);
                 } catch (sweepErr) {
                     console.warn('Sweep metadata not available:', sweepErr.message);
                 }
