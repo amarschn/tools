@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype B: Drawer Workbench</title>
+    <link rel="stylesheet" href="./shared.css">
+    <style>
+        .action-grid {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .action-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+        .action-card button {
+            border: 1px solid var(--border-color);
+            background: var(--primary-light);
+            color: var(--text-color);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .candidate-strip {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            margin-top: 14px;
+            padding-bottom: 4px;
+        }
+        .candidate-pill {
+            min-width: 220px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 12px 14px;
+            background: var(--bg-card);
+            flex: 0 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay" id="overlay"></div>
+    <aside class="drawer" id="drawer">
+        <button class="drawer-close" id="drawer-close" type="button">Close detail</button>
+        <div class="eyebrow" id="drawer-eyebrow"></div>
+        <h2 class="drawer-title" id="drawer-title"></h2>
+        <p class="muted" id="drawer-copy"></p>
+        <div id="drawer-body"></div>
+    </aside>
+
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <a class="back-link" href="./index.html">Back to Prototype Index</a>
+                <h1 class="tool-title">Prototype B: Drawer Workbench</h1>
+                <p class="tool-copy">
+                    The main results page stays intentionally shallow. The user sees the decision and the
+                    most important hardware numbers immediately; everything else opens as a side drawer so
+                    the page itself never becomes a long scroll stack.
+                </p>
+                <div class="meta-row">
+                    <div class="meta-chip"><strong>Pattern</strong> Dashboard + detail drawer</div>
+                    <div class="meta-chip"><strong>Goal</strong> Minimize page height</div>
+                </div>
+            </div>
+        </div>
+
+        <section class="section-stack">
+            <section class="card hero-card">
+                <div class="eyebrow">Phase 0 Recommendation</div>
+                <h2 class="hero-title" id="hero-title"></h2>
+                <p class="hero-summary" id="hero-summary"></p>
+                <p class="hero-practical" id="hero-practical"></p>
+            </section>
+
+            <section class="card">
+                <div class="eyebrow">Immediate Checks</div>
+                <div class="pill-row" id="metric-strip"></div>
+            </section>
+
+            <section class="card">
+                <div class="eyebrow">Inspect A Topic</div>
+                <div class="action-grid" id="action-grid"></div>
+                <div class="candidate-strip" id="candidate-strip"></div>
+            </section>
+
+            <section class="card">
+                <div class="eyebrow">Takeaway</div>
+                <p class="tool-copy">
+                    This layout is strongest if the fan selector should feel more like a workbench than a report.
+                    It makes the “ask one question, inspect one detail, return to the summary” loop extremely cheap.
+                </p>
+            </section>
+        </section>
+    </main>
+
+    <script src="./mock-data.js"></script>
+    <script>
+        const data = window.FAN_SELECTOR_PROTOTYPE_DATA;
+        const drawer = document.getElementById('drawer');
+        const overlay = document.getElementById('overlay');
+
+        const drawerContent = {
+            packaging: {
+                eyebrow: 'Hardware',
+                title: 'Packaging and Nominal Size',
+                copy: data.hardware.wheelNote,
+                body: `
+                    <svg class="packaging-preview" viewBox="0 0 360 220" aria-label="Packaging preview">
+                        <rect x="0" y="0" width="360" height="220" rx="10" fill="#f4f5f7"></rect>
+                        <circle cx="118" cy="118" r="74" fill="rgba(86, 97, 110, 0.16)" stroke="#56616e" stroke-width="3"></circle>
+                        <circle cx="118" cy="118" r="48" fill="none" stroke="#6b7280" stroke-width="2.5" stroke-dasharray="8 6"></circle>
+                        <text x="214" y="86" fill="#111827" font-size="12" font-weight="700">Wheel 573 mm</text>
+                        <text x="214" y="108" fill="#6b7280" font-size="12">Passage 357 mm</text>
+                    </svg>
+                    <div class="rule-list" style="margin-top: 14px;">
+                        <div class="rule-item"><strong>Packaging signature</strong><span class="muted">${data.hardware.packagingSignature}</span></div>
+                        <div class="rule-item"><strong>Nominal sizes</strong><span class="muted">${data.hardware.sizeNote}</span></div>
+                    </div>
+                `,
+            },
+            drive: {
+                eyebrow: 'Practical Check',
+                title: 'Drive Fit',
+                copy: 'Use this when the screened RPM is the deciding reality constraint rather than pure aerodynamic fit.',
+                body: `
+                    <div class="equation">epsilon_N = min |(N - N_i) / N_i|</div>
+                    <div class="rule-list">
+                        <div class="rule-item"><strong>Current read</strong><span class="muted">${data.hardware.driveNote}</span></div>
+                        <div class="rule-item"><strong>What it implies</strong><span class="muted">This is still a workable selection, but it does not read like a drop-in direct-drive answer.</span></div>
+                    </div>
+                `,
+            },
+            acoustic: {
+                eyebrow: 'Practical Check',
+                title: 'Acoustic Risk',
+                copy: 'A comparative proxy, not a sound-power prediction.',
+                body: `
+                    <div class="equation">R_ac = 0.65 R_U + 0.20 R_V + 0.15 (1 - M)</div>
+                    <div class="rule-list">
+                        <div class="rule-item"><strong>Current read</strong><span class="muted">Tip speed is only 21.1 m/s, so this BC option stays in the low-risk bucket.</span></div>
+                        <div class="rule-item"><strong>Use</strong><span class="muted">This is a veto screen: if a candidate turns high-risk here, it deserves extra caution before anyone falls in love with its efficiency.</span></div>
+                    </div>
+                `,
+            },
+            alternatives: {
+                eyebrow: 'Comparison',
+                title: 'Alternatives',
+                copy: 'The main page keeps these compressed; the drawer is where you open the ranking back up.',
+                body: `
+                    <table class="candidate-table">
+                        <thead>
+                            <tr><th>Type</th><th>Fit</th><th>Practical read</th></tr>
+                        </thead>
+                        <tbody>
+                            ${data.candidates.map(candidate => `
+                                <tr>
+                                    <td><strong>${candidate.name}</strong><span class="mini-note">${candidate.speed}, ${candidate.drive}</span></td>
+                                    <td>${candidate.fit}</td>
+                                    <td>${candidate.note}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `,
+            },
+            technical: {
+                eyebrow: 'Technical Basis',
+                title: 'Decision Trace',
+                copy: 'The page stays calm because the equations live here, not in the overview.',
+                body: `
+                    <div class="details-list">
+                        ${data.trace.map(item => `
+                            <details open>
+                                <summary>${item.title}</summary>
+                                <div class="body">
+                                    <div class="equation">${item.equation}</div>
+                                    <p class="muted">${item.value}. ${item.explanation}</p>
+                                </div>
+                            </details>
+                        `).join('')}
+                    </div>
+                `,
+            },
+        };
+
+        function metricCard(metric) {
+            return `
+                <div class="metric-card">
+                    <span class="label">${metric.label}</span>
+                    <span class="value">${metric.value}</span>
+                    <p class="caption">${metric.caption}</p>
+                </div>
+            `;
+        }
+
+        function openDrawer(key) {
+            const content = drawerContent[key];
+            document.getElementById('drawer-eyebrow').textContent = content.eyebrow;
+            document.getElementById('drawer-title').textContent = content.title;
+            document.getElementById('drawer-copy').textContent = content.copy;
+            document.getElementById('drawer-body').innerHTML = content.body;
+            drawer.classList.add('open');
+            overlay.classList.add('open');
+        }
+
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            overlay.classList.remove('open');
+        }
+
+        function render() {
+            document.getElementById('hero-title').textContent = `${data.recommendation.type} leads the current screen`;
+            document.getElementById('hero-summary').textContent = data.recommendation.summary;
+            document.getElementById('hero-practical').textContent = data.recommendation.practical;
+            document.getElementById('metric-strip').innerHTML = data.metrics.map(metricCard).join('');
+            document.getElementById('action-grid').innerHTML = [
+                ['packaging', 'Packaging and nominal size', 'Wheel estimate, packaging signature, and the first hardware sizes to check.'],
+                ['drive', 'Drive fit', 'Whether the screened RPM looks like a standard direct-drive answer or a custom one.'],
+                ['acoustic', 'Acoustic risk', 'Comparative proxy from tip speed, passage velocity, and architecture margin.'],
+                ['alternatives', 'Alternative types', 'Compact ranking with one practical sentence per candidate.'],
+                ['technical', 'Technical basis', 'Equations, trace nodes, and the reason the score landed where it did.'],
+            ].map(item => `
+                <div class="action-card">
+                    <div>
+                        <strong>${item[1]}</strong>
+                        <div class="mini-note">${item[2]}</div>
+                    </div>
+                    <button type="button" data-drawer="${item[0]}">Open</button>
+                </div>
+            `).join('');
+            document.getElementById('candidate-strip').innerHTML = data.candidates.map(candidate => `
+                <div class="candidate-pill">
+                    <strong>${candidate.name}</strong>
+                    <div class="mini-note">${candidate.fit} fit, ${candidate.acoustic} acoustic, ${candidate.margin} margin</div>
+                    <p class="compact-note">${candidate.note}</p>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('[data-drawer]').forEach(button => {
+                button.addEventListener('click', () => openDrawer(button.dataset.drawer));
+            });
+        }
+
+        document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+        overlay.addEventListener('click', closeDrawer);
+
+        render();
+    </script>
+</body>
+</html>

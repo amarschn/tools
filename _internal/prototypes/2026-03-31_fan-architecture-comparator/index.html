@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fan Architecture Comparator | Internal Prototype</title>
+    <style>
+        :root {
+            --primary-color: #182126;
+            --primary-light: #f1eee7;
+            --secondary-color: #616d75;
+            --accent-color: #304841;
+            --signal-color: #8e6e34;
+            --success-color: #3f6154;
+            --warning-color: #8a6932;
+            --danger-color: #8a4a3d;
+            --text-color: #1f282d;
+            --text-light: #69737a;
+            --border-color: #d3cdc2;
+            --border-strong: #b7aea2;
+            --bg-color: #ece8e0;
+            --bg-card: #fffdf8;
+            --bg-muted: #f5f1ea;
+            --shadow: 0 1px 2px rgba(24, 33, 38, 0.06);
+            --shadow-lg: 0 10px 24px rgba(24, 33, 38, 0.08);
+            --border-radius: 12px;
+            --font-sans: "Helvetica Neue", "Avenir Next", "Univers", "Helvetica", Arial, sans-serif;
+            --font-mono: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+            --axial-color: #557b70;
+            --mixed-color: #8d6a31;
+            --radial-color: #4b5e7b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            color: var(--text-color);
+            background: var(--bg-color);
+            line-height: 1.45;
+            border-top: 5px solid var(--accent-color);
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        .shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+        }
+
+        .topbar-inner,
+        .main-layout,
+        .footer-inner {
+            width: min(1520px, 92vw);
+            margin: 0 auto;
+        }
+
+        .topbar-inner {
+            display: grid;
+            grid-template-columns: minmax(420px, 1.35fr) minmax(320px, 0.85fr);
+            gap: 28px;
+            align-items: start;
+            padding: 28px 0 24px;
+        }
+
+        .brand-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--secondary-color);
+        }
+
+        .brand-kicker::before {
+            content: "";
+            width: 38px;
+            height: 1px;
+            background: var(--border-strong);
+        }
+
+        .title-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            align-items: baseline;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 3vw, 3rem);
+            line-height: 1.02;
+            letter-spacing: -0.03em;
+            font-weight: 650;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 650;
+            letter-spacing: -0.01em;
+        }
+
+        h3 {
+            margin: 0 0 8px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: var(--secondary-color);
+        }
+
+        p {
+            margin: 0;
+            color: var(--text-light);
+        }
+
+        .revision-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: var(--bg-muted);
+        }
+
+        .subtitle {
+            max-width: 80ch;
+            font-size: 1rem;
+        }
+
+        .meta-panel {
+            background: var(--primary-color);
+            color: #eef2f4;
+            border-radius: var(--border-radius);
+            padding: 18px 18px 16px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .meta-panel-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .meta-panel-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #c5ced4;
+        }
+
+        .meta-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.76rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #eadcb8;
+        }
+
+        .meta-status::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--signal-color);
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 18px;
+        }
+
+        .meta-cell {
+            padding-top: 10px;
+            border-top: 1px solid rgba(238, 242, 244, 0.12);
+        }
+
+        .meta-label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #a1adb6;
+        }
+
+        .meta-value {
+            font-size: 0.94rem;
+            font-weight: 600;
+            color: #eef2f4;
+        }
+
+        .main-layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: minmax(320px, 0.82fr) minmax(680px, 1.18fr);
+            gap: 24px;
+            padding: 28px 0 34px;
+            align-items: start;
+        }
+
+        .left-rail,
+        .workspace {
+            display: grid;
+            gap: 18px;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .panel-note {
+            font-size: 0.86rem;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--secondary-color);
+        }
+
+        .eyebrow::before {
+            content: "";
+            width: 22px;
+            height: 1px;
+            background: var(--border-strong);
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .preset-button {
+            display: grid;
+            gap: 4px;
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-muted);
+            padding: 12px 13px;
+            cursor: pointer;
+            transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+        }
+
+        .preset-button:hover,
+        .preset-button:focus-visible {
+            outline: none;
+            transform: translateY(-1px);
+            border-color: var(--border-strong);
+            box-shadow: var(--shadow);
+        }
+
+        .preset-button.active {
+            border-color: var(--accent-color);
+            background: #f0ede5;
+            box-shadow: inset 0 0 0 1px rgba(48, 72, 65, 0.18);
+        }
+
+        .preset-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        .preset-copy {
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+
+        .input-group {
+            display: grid;
+            gap: 7px;
+            margin-bottom: 15px;
+        }
+
+        .input-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            font-size: 0.84rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 12px 13px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-card);
+            color: var(--text-color);
+        }
+
+        input[type="number"]:focus,
+        input[type="range"]:focus-visible {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .mode-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .mode-button {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--bg-muted);
+            color: var(--secondary-color);
+            padding: 8px 12px;
+            font-size: 0.79rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+        }
+
+        .mode-button:hover,
+        .mode-button:focus-visible {
+            outline: none;
+            transform: translateY(-1px);
+            border-color: var(--border-strong);
+        }
+
+        .mode-button.active {
+            border-color: var(--accent-color);
+            background: #f0ede5;
+            color: var(--text-color);
+            box-shadow: inset 0 0 0 1px rgba(48, 72, 65, 0.14);
+        }
+
+        .constraint-body[hidden] {
+            display: none;
+        }
+
+        .value-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .value-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--bg-muted);
+            border: 1px solid var(--border-color);
+            font-size: 0.78rem;
+            color: var(--secondary-color);
+        }
+
+        .slider-block {
+            padding: 14px 14px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 11px;
+            background: var(--bg-muted);
+            margin-bottom: 12px;
+        }
+
+        .slider-block:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+
+        .slider-label {
+            font-size: 0.84rem;
+            font-weight: 700;
+        }
+
+        .slider-value {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 0;
+            accent-color: var(--accent-color);
+        }
+
+        .slider-hint {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 7px;
+            font-size: 0.76rem;
+            color: var(--text-light);
+        }
+
+        .chart-wrap {
+            width: 100%;
+            background: var(--bg-muted);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        #envelope-chart {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .legend-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-muted);
+            font-size: 0.79rem;
+            color: var(--secondary-color);
+        }
+
+        .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .decision-panel {
+            background: #1f282d;
+            color: #ecf1f2;
+            border-color: rgba(31, 40, 45, 0.5);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .decision-panel p {
+            color: #c4d0d4;
+        }
+
+        .decision-hero {
+            display: grid;
+            grid-template-columns: minmax(320px, 1.15fr) minmax(220px, 0.85fr);
+            gap: 22px;
+            align-items: start;
+            margin-bottom: 18px;
+        }
+
+        .decision-hero h2 {
+            font-size: 1.4rem;
+            color: #f3f6f7;
+            margin-bottom: 10px;
+        }
+
+        .decision-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .metric-tile {
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .metric-kicker {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #a6b2b7;
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f3f6f7;
+        }
+
+        .decision-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .decision-action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 16px;
+            align-items: center;
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
+            color: #f3f6f7;
+            font-size: 0.84rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-decoration: none;
+            transition: background 140ms ease, transform 140ms ease;
+        }
+
+        .action-button:hover,
+        .action-button:focus-visible {
+            outline: none;
+            background: rgba(255, 255, 255, 0.14);
+            transform: translateY(-1px);
+        }
+
+        .decision-block {
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .decision-list {
+            margin: 0;
+            padding-left: 18px;
+            display: grid;
+            gap: 8px;
+            color: #d9e2e5;
+            font-size: 0.92rem;
+        }
+
+        .architecture-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .architecture-card {
+            display: grid;
+            gap: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-muted);
+            padding: 16px;
+            cursor: pointer;
+            transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+        }
+
+        .architecture-card:hover,
+        .architecture-card:focus-visible {
+            outline: none;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .architecture-card.active {
+            border-color: var(--accent-color);
+            box-shadow: inset 0 0 0 1px rgba(48, 72, 65, 0.18), var(--shadow);
+            background: #faf7f0;
+        }
+
+        .architecture-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: start;
+        }
+
+        .architecture-name {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .architecture-subtitle {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            margin-top: 3px;
+        }
+
+        .score-badge {
+            min-width: 62px;
+            text-align: center;
+            padding: 8px 10px;
+            border-radius: 999px;
+            font-size: 0.84rem;
+            font-weight: 800;
+            color: var(--bg-card);
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .status-chip.recommended {
+            background: rgba(63, 97, 84, 0.15);
+            color: var(--success-color);
+        }
+
+        .status-chip.conditional {
+            background: rgba(142, 110, 52, 0.14);
+            color: var(--warning-color);
+        }
+
+        .status-chip.stretch {
+            background: rgba(138, 74, 61, 0.12);
+            color: var(--danger-color);
+        }
+
+        .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            padding: 5px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            font-size: 0.76rem;
+            color: var(--secondary-color);
+        }
+
+        .metric-stack {
+            display: grid;
+            gap: 10px;
+        }
+
+        .metric-bar {
+            display: grid;
+            grid-template-columns: 120px 1fr 36px;
+            gap: 10px;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .metric-track {
+            position: relative;
+            height: 8px;
+            border-radius: 999px;
+            background: #e8e2d8;
+            overflow: hidden;
+        }
+
+        .metric-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            border-radius: 999px;
+        }
+
+        .mini-list {
+            margin: 0;
+            padding-left: 18px;
+            display: grid;
+            gap: 7px;
+            color: var(--text-light);
+            font-size: 0.82rem;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 740px;
+        }
+
+        th,
+        td {
+            padding: 12px 10px;
+            border-top: 1px solid var(--border-color);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--secondary-color);
+        }
+
+        td:first-child,
+        th:first-child {
+            width: 170px;
+            padding-left: 0;
+        }
+
+        tr:first-child td,
+        tr:first-child th {
+            border-top: none;
+        }
+
+        .table-chip {
+            display: inline-flex;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: var(--bg-muted);
+            border: 1px solid var(--border-color);
+            font-size: 0.76rem;
+            color: var(--secondary-color);
+        }
+
+        .footer-inner {
+            padding: 0 0 26px;
+        }
+
+        .footer-note {
+            font-size: 0.84rem;
+            color: var(--text-light);
+        }
+
+        .subtype-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .subtype-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            background: var(--bg-muted);
+            display: grid;
+            gap: 12px;
+        }
+
+        .subtype-card.lead {
+            border-color: var(--accent-color);
+            background: #faf7f0;
+            box-shadow: inset 0 0 0 1px rgba(48, 72, 65, 0.14);
+        }
+
+        .subtype-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: start;
+        }
+
+        .subtype-name {
+            font-size: 0.98rem;
+            font-weight: 700;
+        }
+
+        .subtype-score {
+            min-width: 58px;
+            text-align: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            color: var(--bg-card);
+            font-size: 0.82rem;
+            font-weight: 800;
+        }
+
+        .subtype-copy {
+            font-size: 0.84rem;
+            color: var(--text-light);
+        }
+
+        @media (max-width: 1180px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .architecture-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .subtype-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .topbar-inner,
+            .decision-hero,
+            .decision-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .preset-grid,
+            .decision-metrics {
+                grid-template-columns: 1fr;
+            }
+
+            .meta-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-bar {
+                grid-template-columns: 104px 1fr 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="topbar">
+            <div class="topbar-inner">
+                <section>
+                    <div class="brand-kicker">Internal Prototype</div>
+                    <div class="title-row">
+                        <h1>Fan Architecture Comparator</h1>
+                        <div class="revision-badge">March 31, 2026</div>
+                    </div>
+                    <p class="subtitle">
+                        Compare axial, mixed-flow, and radial fans as architecture families before you ask for vendor curves.
+                        The point of the tool is to make the tradeoffs explicit: flow, static pressure, packaging, contamination,
+                        acoustics, and lifecycle efficiency.
+                    </p>
+                </section>
+                <aside class="meta-panel">
+                    <div class="meta-panel-header">
+                        <div class="meta-panel-title">Prototype thesis</div>
+                        <div class="meta-status">Architecture first</div>
+                    </div>
+                    <div class="meta-grid">
+                        <div class="meta-cell">
+                            <span class="meta-label">What it is</span>
+                            <div class="meta-value">Duty-envelope triage</div>
+                        </div>
+                        <div class="meta-cell">
+                            <span class="meta-label">What it is not</span>
+                            <div class="meta-value">A final selector</div>
+                        </div>
+                        <div class="meta-cell">
+                            <span class="meta-label">Output</span>
+                            <div class="meta-value">Ranked architecture cards</div>
+                        </div>
+                        <div class="meta-cell">
+                            <span class="meta-label">Next branch</span>
+                            <div class="meta-value">Then load real curve data</div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </header>
+
+        <main class="main-layout">
+            <section class="left-rail">
+                <article class="panel">
+                    <div class="eyebrow">Use case presets</div>
+                    <div class="panel-header">
+                        <h2>Start with a problem shape</h2>
+                        <p class="panel-note">One duty point, one packaging story.</p>
+                    </div>
+                    <div class="preset-grid" id="preset-grid"></div>
+                    <p class="panel-note" style="margin-top: 12px;">
+                        These presets are intentionally opinionated. They make the architecture differences legible before a real fan library exists.
+                    </p>
+                </article>
+
+                <article class="panel">
+                    <div class="eyebrow">Duty point</div>
+                    <div class="panel-header">
+                        <h2>Define the air-side requirement</h2>
+                        <p class="panel-note">Keep this simple and explicit.</p>
+                    </div>
+                    <div class="input-group">
+                        <label for="flow-input">Required flow rate (m3/s)</label>
+                        <input type="number" id="flow-input" min="0.02" step="any" value="0.8">
+                        <div class="value-chip-row">
+                            <div class="value-chip" id="flow-chip-primary"></div>
+                            <div class="value-chip" id="flow-chip-secondary"></div>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="pressure-input">Required static pressure (Pa)</label>
+                        <input type="number" id="pressure-input" min="0" step="any" value="650">
+                        <div class="value-chip-row">
+                            <div class="value-chip" id="pressure-chip-primary"></div>
+                            <div class="value-chip" id="pressure-chip-secondary"></div>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="speed-input">Reference fan speed (RPM)</label>
+                        <input type="number" id="speed-input" min="100" step="any" value="1800">
+                        <div class="value-chip-row">
+                            <div class="value-chip" id="speed-chip-primary"></div>
+                            <div class="value-chip" id="speed-chip-secondary"></div>
+                        </div>
+                        <p class="panel-note">Used to compute specific speed, Cordier diameter, and the physics-side family fit.</p>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="eyebrow">Passage constraint</div>
+                    <div class="panel-header">
+                        <h2>Optional velocity or area check</h2>
+                        <p class="panel-note">Use this as geometry, not as another duty variable.</p>
+                    </div>
+                    <div class="mode-buttons" id="velocity-mode-buttons">
+                        <button type="button" class="mode-button active" data-velocity-mode="none">None</button>
+                        <button type="button" class="mode-button" data-velocity-mode="target_velocity">Target velocity</button>
+                        <button type="button" class="mode-button" data-velocity-mode="known_area">Known area</button>
+                    </div>
+                    <div class="constraint-body" id="velocity-mode-target" hidden>
+                        <div class="input-group">
+                            <label for="target-velocity-input">Target passage velocity (m/s)</label>
+                            <input type="number" id="target-velocity-input" min="0.5" step="any" value="12">
+                            <p class="panel-note">The tool infers required flow area from `A = Q / V` and checks whether the resulting passage geometry suits each architecture.</p>
+                        </div>
+                    </div>
+                    <div class="constraint-body" id="velocity-mode-area" hidden>
+                        <div class="input-group">
+                            <label for="known-area-input">Known passage area (m2)</label>
+                            <input type="number" id="known-area-input" min="0.001" step="any" value="0.067">
+                            <p class="panel-note">Use when the duct, grille, or outlet area is already fixed and you want the tool to compute the resulting velocity.</p>
+                        </div>
+                    </div>
+                    <div class="value-chip-row">
+                        <div class="value-chip" id="velocity-chip-primary">No velocity constraint</div>
+                        <div class="value-chip" id="velocity-chip-secondary"></div>
+                        <div class="value-chip" id="velocity-chip-tertiary"></div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="eyebrow">Project priorities</div>
+                    <div class="panel-header">
+                        <h2>Bias the comparison on purpose</h2>
+                        <p class="panel-note">These sliders do the non-curve work.</p>
+                    </div>
+
+                    <div class="slider-block">
+                        <div class="slider-row">
+                            <div class="slider-label">Inline packaging need</div>
+                            <div class="slider-value" id="inline-value"></div>
+                        </div>
+                        <input type="range" id="inline-input" min="0" max="100" step="1" value="85">
+                        <div class="slider-hint">
+                            <span>Plenum / side discharge okay</span>
+                            <span>Through-flow package is critical</span>
+                        </div>
+                    </div>
+
+                    <div class="slider-block">
+                        <div class="slider-row">
+                            <div class="slider-label">Dirty-air tolerance need</div>
+                            <div class="slider-value" id="contamination-value"></div>
+                        </div>
+                        <input type="range" id="contamination-input" min="0" max="100" step="1" value="40">
+                        <div class="slider-hint">
+                            <span>Clean air</span>
+                            <span>Dust / particulates matter</span>
+                        </div>
+                    </div>
+
+                    <div class="slider-block">
+                        <div class="slider-row">
+                            <div class="slider-label">Noise sensitivity</div>
+                            <div class="slider-value" id="noise-value"></div>
+                        </div>
+                        <input type="range" id="noise-input" min="0" max="100" step="1" value="55">
+                        <div class="slider-hint">
+                            <span>Noise can be managed later</span>
+                            <span>Acoustics are front-page</span>
+                        </div>
+                    </div>
+
+                    <div class="slider-block">
+                        <div class="slider-row">
+                            <div class="slider-label">Efficiency priority</div>
+                            <div class="slider-value" id="efficiency-value"></div>
+                        </div>
+                        <input type="range" id="efficiency-input" min="0" max="100" step="1" value="72">
+                        <div class="slider-hint">
+                            <span>First cost bias</span>
+                            <span>Lifecycle cost bias</span>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
+            <section class="workspace">
+                <article class="panel">
+                    <div class="eyebrow">Envelope view</div>
+                    <div class="panel-header">
+                        <h2>Where the duty sits by architecture</h2>
+                        <p class="panel-note" id="problem-summary"></p>
+                    </div>
+                    <div class="chart-wrap">
+                        <svg id="envelope-chart" viewBox="0 0 760 420" role="img" aria-label="Fan architecture envelope chart"></svg>
+                    </div>
+                    <div class="legend" id="chart-legend"></div>
+                </article>
+
+                <article class="panel decision-panel">
+                    <div class="eyebrow" style="color: #a9b5b9;">Current read</div>
+                    <div class="decision-hero">
+                        <div>
+                            <h2 id="recommendation-title"></h2>
+                            <p id="recommendation-copy"></p>
+                        </div>
+                        <div class="decision-metrics" id="recommendation-metrics"></div>
+                    </div>
+                    <div class="decision-grid">
+                        <div class="decision-block">
+                            <h3 style="color: #d6dee1;">Why it rose to the top</h3>
+                            <ul class="decision-list" id="recommendation-strengths"></ul>
+                        </div>
+                        <div class="decision-block">
+                            <h3 style="color: #d6dee1;">What to do next</h3>
+                            <ul class="decision-list" id="recommendation-next"></ul>
+                        </div>
+                    </div>
+                    <div class="decision-action-row">
+                        <a class="action-button" id="find-real-fans-link" href="/tools/fan-curve-explorer/">Find real fans in Curve Explorer</a>
+                        <p id="handoff-summary"></p>
+                    </div>
+                </article>
+
+                <article class="panel" id="radial-branch-panel" hidden>
+                    <div class="eyebrow">Radial split</div>
+                    <div class="panel-header">
+                        <h2>Forward-curved vs backward-curved</h2>
+                        <p class="panel-note" id="radial-branch-summary"></p>
+                    </div>
+                    <div class="subtype-grid" id="radial-branch-grid"></div>
+                </article>
+
+                <article class="panel">
+                    <div class="eyebrow">Architecture cards</div>
+                    <div class="panel-header">
+                        <h2>Keep the comparison side by side</h2>
+                        <p class="panel-note">Click a card to focus its envelope on the chart.</p>
+                    </div>
+                    <div class="architecture-grid" id="architecture-grid"></div>
+                </article>
+
+                <article class="panel">
+                    <div class="eyebrow">Transparent logic</div>
+                    <div class="panel-header">
+                        <h2>What the score is really comparing</h2>
+                        <p class="panel-note">If the future tool hides this table, users will stop trusting it.</p>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Criterion</th>
+                                    <th>Axial</th>
+                                    <th>Mixed-flow</th>
+                                    <th>Radial / centrifugal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="matrix-body"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+        </main>
+
+        <footer>
+            <div class="footer-inner">
+                <p class="footer-note">
+                    Internal R&amp;D only. The envelopes and scores are heuristics for architecture triage, not certified fan data.
+                    The right production handoff is: architecture choice first, vendor-curve comparison second.
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const architectures = [
+            {
+                id: "axial",
+                name: "Axial",
+                shortLower: "axial",
+                accent: "var(--axial-color)",
+                scoreColor: "#557b70",
+                subtitle: "High volume, low pressure, through-flow friendly",
+                summary: "Best when the system is low static pressure and the package wants straight-through airflow.",
+                comfortPressure: [0, 250],
+                hardPressureMax: 650,
+                comfortFlow: [0.2, 3.6],
+                hardFlowMax: 4.5,
+                nsMin: 2.0,
+                nsMax: 8.0,
+                nsOptimal: 3.5,
+                inlineSuitability: 0.95,
+                contaminationSuitability: 0.35,
+                acousticSuitability: 0.58,
+                efficiencySuitability: 0.62,
+                pressureBandLabel: "0-250 Pa comfort, fades by ~650 Pa",
+                flowBandLabel: "0.2-3.6 m3/s comfort",
+                nsBandLabel: "N_s 2.0-8.0 comfort",
+                nextBranch: [
+                    "If axial wins, the next filter is diameter and tip-speed: noise, guard depth, and RPM matter immediately.",
+                    "The production version should jump from here into vendor axial curves and stall-margin education."
+                ],
+                envelope: [
+                    [0.08, 45],
+                    [0.2, 220],
+                    [0.8, 390],
+                    [2.2, 420],
+                    [3.55, 270],
+                    [3.95, 60],
+                    [1.15, 15]
+                ],
+                labelPoint: [2.3, 340],
+                staticMatrix: {
+                    packaging: "Excellent for inline packages",
+                    contamination: "Weak in dusty air",
+                    acoustics: "Good only with generous diameter / low tip speed",
+                    efficiency: "Moderate ceiling"
+                }
+            },
+            {
+                id: "mixed",
+                name: "Mixed-flow",
+                shortLower: "mixed-flow",
+                accent: "var(--mixed-color)",
+                scoreColor: "#8d6a31",
+                subtitle: "Mid-pressure bridge for compact ducted systems",
+                summary: "Best when static pressure climbs past axial comfort but the project still wants an inline package.",
+                comfortPressure: [120, 900],
+                hardPressureMax: 1500,
+                comfortFlow: [0.1, 1.8],
+                hardFlowMax: 2.4,
+                nsMin: 0.8,
+                nsMax: 3.0,
+                nsOptimal: 1.8,
+                inlineSuitability: 0.82,
+                contaminationSuitability: 0.58,
+                acousticSuitability: 0.64,
+                efficiencySuitability: 0.73,
+                pressureBandLabel: "120-900 Pa comfort, fades by ~1500 Pa",
+                flowBandLabel: "0.1-1.8 m3/s comfort",
+                nsBandLabel: "N_s 0.8-3.0 comfort",
+                nextBranch: [
+                    "If mixed-flow wins, the next work is housing form, silencing, and where the system curve may drift with fouling.",
+                    "The production selector should compare mixed-flow vendor curves against the same duty before escalating to radial."
+                ],
+                envelope: [
+                    [0.06, 130],
+                    [0.15, 640],
+                    [0.48, 1140],
+                    [1.0, 1270],
+                    [1.86, 980],
+                    [2.2, 310],
+                    [0.62, 110]
+                ],
+                labelPoint: [1.18, 1100],
+                staticMatrix: {
+                    packaging: "Strong for compact inline ducting",
+                    contamination: "Moderate",
+                    acoustics: "Usually easier than small high-speed axial",
+                    efficiency: "Good balance"
+                }
+            },
+            {
+                id: "radial",
+                name: "Radial / centrifugal",
+                shortLower: "radial",
+                accent: "var(--radial-color)",
+                scoreColor: "#4b5e7b",
+                subtitle: "Pressure-heavy work, dirtier air, efficiency-first systems",
+                summary: "Best when static pressure is material, the airstream is less forgiving, or lifecycle energy dominates the decision.",
+                comfortPressure: [300, 2200],
+                hardPressureMax: 3200,
+                comfortFlow: [0.08, 2.7],
+                hardFlowMax: 3.5,
+                nsMin: 0.3,
+                nsMax: 1.5,
+                nsOptimal: 0.8,
+                inlineSuitability: 0.32,
+                contaminationSuitability: 0.84,
+                acousticSuitability: 0.52,
+                efficiencySuitability: 0.82,
+                pressureBandLabel: "300-2200 Pa comfort, fades by ~3200 Pa",
+                flowBandLabel: "0.08-2.7 m3/s comfort",
+                nsBandLabel: "N_s 0.3-1.5 comfort",
+                nextBranch: [
+                    "If radial wins, do not stop at 'centrifugal'. The next branch should split backward-curved vs forward-curved explicitly.",
+                    "The production tool should carry the user into vendor curves with a visible note about non-overloading power and hump-region stability."
+                ],
+                envelope: [
+                    [0.05, 410],
+                    [0.18, 1480],
+                    [0.72, 2460],
+                    [1.75, 2360],
+                    [2.9, 1260],
+                    [3.15, 280],
+                    [0.38, 180]
+                ],
+                labelPoint: [1.85, 2080],
+                staticMatrix: {
+                    packaging: "Weak when straight-through packaging is required",
+                    contamination: "Strong in dirty or restrictive systems",
+                    acoustics: "Depends heavily on wheel type and casing treatment",
+                    efficiency: "Highest ceiling"
+                }
+            }
+        ];
+
+        const presets = {
+            ventilation: {
+                label: "Open ventilation",
+                copy: "High flow, low static pressure",
+                flowM3s: 2.6,
+                pressurePa: 90,
+                inlineNeed: 0.92,
+                contaminationNeed: 0.2,
+                noiseSensitivity: 0.48,
+                efficiencyPriority: 0.38
+            },
+            duct_boost: {
+                label: "Duct boost",
+                copy: "Moderate flow, meaningful static pressure",
+                flowM3s: 0.8,
+                pressurePa: 650,
+                inlineNeed: 0.85,
+                contaminationNeed: 0.4,
+                noiseSensitivity: 0.55,
+                efficiencyPriority: 0.72
+            },
+            process_exhaust: {
+                label: "Process exhaust",
+                copy: "Dirty air and higher resistance",
+                flowM3s: 1.2,
+                pressurePa: 1600,
+                inlineNeed: 0.25,
+                contaminationNeed: 0.86,
+                noiseSensitivity: 0.34,
+                efficiencyPriority: 0.78
+            },
+            quiet_enclosure: {
+                label: "Quiet enclosure",
+                copy: "Compact package, sound matters",
+                flowM3s: 0.09,
+                pressurePa: 120,
+                inlineNeed: 0.95,
+                contaminationNeed: 0.12,
+                noiseSensitivity: 0.92,
+                efficiencyPriority: 0.5
+            }
+        };
+
+        const state = {
+            presetId: "duct_boost",
+            focusId: "mixed",
+            inputs: {
+                flowM3s: presets.duct_boost.flowM3s,
+                pressurePa: presets.duct_boost.pressurePa,
+                speedRpm: 1800,
+                velocityMode: "none",
+                targetVelocityMs: 12,
+                knownAreaM2: 0.067,
+                inlineNeed: presets.duct_boost.inlineNeed,
+                contaminationNeed: presets.duct_boost.contaminationNeed,
+                noiseSensitivity: presets.duct_boost.noiseSensitivity,
+                efficiencyPriority: presets.duct_boost.efficiencyPriority
+            }
+        };
+
+        const flowInput = document.getElementById("flow-input");
+        const pressureInput = document.getElementById("pressure-input");
+        const speedInput = document.getElementById("speed-input");
+        const targetVelocityInput = document.getElementById("target-velocity-input");
+        const knownAreaInput = document.getElementById("known-area-input");
+        const inlineInput = document.getElementById("inline-input");
+        const contaminationInput = document.getElementById("contamination-input");
+        const noiseInput = document.getElementById("noise-input");
+        const efficiencyInput = document.getElementById("efficiency-input");
+        const STANDARD_AIR_DENSITY = 1.204;
+        const CORDIER_A = 0.833;
+        const CORDIER_B = -0.524;
+        const CORDIER_C = 0.008;
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function formatNumber(value, digits = 0) {
+            return Number(value).toLocaleString(undefined, {
+                minimumFractionDigits: digits,
+                maximumFractionDigits: digits
+            });
+        }
+
+        function cfmFromM3s(value) {
+            return value * 2118.88;
+        }
+
+        function inWgFromPa(value) {
+            return value / 249.0889;
+        }
+
+        function priorityLabel(value, lowLabel, highLabel) {
+            if (value < 0.34) return lowLabel;
+            if (value < 0.67) return "Balanced";
+            return highLabel;
+        }
+
+        function describeNsZone(ns) {
+            if (ns < 0.45) return "deep forward-curved / radial-tip territory";
+            if (ns < 0.75) return "forward-curved / backward-curved overlap";
+            if (ns < 1.2) return "backward-curved / mixed-flow overlap";
+            if (ns < 2.0) return "mixed-flow dominant with backward-curved carryover";
+            if (ns < 3.0) return "mixed-flow / axial overlap";
+            return "axial-dominant territory";
+        }
+
+        function equivalentDiameterFromArea(areaM2) {
+            if (!(areaM2 > 0)) return 0;
+            return Math.sqrt((4 * areaM2) / Math.PI);
+        }
+
+        function rangeFitLog(value, minValue, maxValue, optimalValue) {
+            if (!(value > 0) || !(minValue > 0) || !(maxValue > minValue) || !(optimalValue > 0)) {
+                return 0;
+            }
+
+            const lnValue = Math.log(value);
+            const lnMin = Math.log(minValue);
+            const lnMax = Math.log(maxValue);
+            const lnOptimal = Math.log(optimalValue);
+            const range = Math.max(lnMax - lnMin, 0.01);
+
+            if (value >= minValue && value <= maxValue) {
+                const distance = Math.abs(lnValue - lnOptimal);
+                return clamp(1 - 0.18 * distance / range, 0.82, 1);
+            }
+
+            const outsideDistance = value < minValue ? (lnMin - lnValue) / range : (lnValue - lnMax) / range;
+            return clamp(0.72 - 0.45 * outsideDistance, 0.08, 0.72);
+        }
+
+        function computePhysics(inputs) {
+            const flow = inputs.flowM3s;
+            const pressure = inputs.pressurePa;
+            const speedRpm = inputs.speedRpm;
+            const omega = speedRpm * 2 * Math.PI / 60;
+            const deltaH = pressure / STANDARD_AIR_DENSITY;
+            const specificSpeed =
+                flow > 0 && pressure > 0 && speedRpm > 0
+                    ? omega * Math.sqrt(flow) / Math.pow(deltaH, 0.75)
+                    : 0;
+            const lnNs = specificSpeed > 0 ? Math.log(specificSpeed) : 0;
+            const specificDiameter =
+                specificSpeed > 0
+                    ? Math.exp(CORDIER_A + CORDIER_B * lnNs + CORDIER_C * lnNs * lnNs)
+                    : 0;
+            const predictedDiameterM =
+                specificSpeed > 0 && flow > 0 && deltaH > 0
+                    ? specificDiameter * Math.sqrt(flow) / Math.pow(deltaH, 0.25)
+                    : 0;
+
+            return {
+                omega,
+                specificSpeed,
+                specificDiameter,
+                predictedDiameterM,
+                nsZone: describeNsZone(specificSpeed)
+            };
+        }
+
+        function computeVelocityConstraint(inputs, physics) {
+            const inactive = {
+                active: false,
+                mode: "none",
+                areaM2: null,
+                equivalentDiameterM: null,
+                velocityMs: null,
+                diameterRatio: null,
+                summary: "No velocity constraint",
+                fits: {}
+            };
+
+            if (inputs.velocityMode === "none") {
+                return inactive;
+            }
+
+            let areaM2 = null;
+            let velocityMs = null;
+
+            if (inputs.velocityMode === "target_velocity" && inputs.targetVelocityMs > 0) {
+                velocityMs = inputs.targetVelocityMs;
+                areaM2 = inputs.flowM3s / velocityMs;
+            } else if (inputs.velocityMode === "known_area" && inputs.knownAreaM2 > 0) {
+                areaM2 = inputs.knownAreaM2;
+                velocityMs = inputs.flowM3s / areaM2;
+            } else {
+                return inactive;
+            }
+
+            const equivalentDiameterM = equivalentDiameterFromArea(areaM2);
+            const diameterRatio =
+                physics.predictedDiameterM > 0
+                    ? equivalentDiameterM / physics.predictedDiameterM
+                    : null;
+
+            const geometryPreferences = {
+                axial: { ratioMin: 0.85, ratioMax: 1.45, ratioOptimal: 1.08, velocityMin: 4, velocityMax: 14, velocityOptimal: 9 },
+                mixed: { ratioMin: 0.55, ratioMax: 1.05, ratioOptimal: 0.78, velocityMin: 6, velocityMax: 18, velocityOptimal: 12 },
+                radial: { ratioMin: 0.28, ratioMax: 0.85, ratioOptimal: 0.52, velocityMin: 8, velocityMax: 24, velocityOptimal: 16 }
+            };
+
+            const fits = Object.fromEntries(
+                Object.entries(geometryPreferences).map(([key, pref]) => {
+                    const ratioFit = diameterRatio != null
+                        ? rangeFitLog(diameterRatio, pref.ratioMin, pref.ratioMax, pref.ratioOptimal)
+                        : 0;
+                    const velocityFit = rangeFitLog(velocityMs, pref.velocityMin, pref.velocityMax, pref.velocityOptimal);
+                    return [
+                        key,
+                        {
+                            ratio: ratioFit,
+                            velocity: velocityFit,
+                            combined: 0.58 * ratioFit + 0.42 * velocityFit
+                        }
+                    ];
+                })
+            );
+
+            const summary =
+                inputs.velocityMode === "target_velocity"
+                    ? `Target velocity of ${formatNumber(velocityMs, 1)} m/s implies ${formatNumber(areaM2, 3)} m2 of passage area.`
+                    : `Known passage area of ${formatNumber(areaM2, 3)} m2 implies ${formatNumber(velocityMs, 1)} m/s bulk velocity.`;
+
+            return {
+                active: true,
+                mode: inputs.velocityMode,
+                areaM2,
+                equivalentDiameterM,
+                velocityMs,
+                diameterRatio,
+                summary,
+                fits
+            };
+        }
+
+        function comfortFit(value, comfortMin, comfortMax, hardMax, lowFloor, highFloor) {
+            if (value >= comfortMin && value <= comfortMax) {
+                return 1;
+            }
+
+            if (value < comfortMin) {
+                if (comfortMin <= 0) return 1;
+                const ratio = clamp(value / comfortMin, 0, 1);
+                return lowFloor + (1 - lowFloor) * Math.pow(ratio, 0.8);
+            }
+
+            if (value <= hardMax) {
+                const ratio = clamp((hardMax - value) / Math.max(hardMax - comfortMax, 1), 0, 1);
+                return highFloor + (1 - highFloor) * Math.pow(ratio, 0.9);
+            }
+
+            return highFloor * clamp(hardMax / Math.max(value, 1), 0, 1);
+        }
+
+        function scoreStatus(score, pressureHardMiss, flowHardMiss) {
+            if (pressureHardMiss || flowHardMiss || score < 58) return "stretch";
+            if (score >= 78) return "recommended";
+            return "conditional";
+        }
+
+        function buildStrengths(architecture, fits, inputs, physics, velocityConstraint) {
+            const strengths = [];
+
+            if (fits.ns >= 0.9) {
+                strengths.push(`At ${formatNumber(inputs.speedRpm, 0)} RPM, N_s = ${formatNumber(physics.specificSpeed, 2)} sits inside ${architecture.shortLower}'s natural range.`);
+            }
+
+            if (fits.pressure >= 0.9) {
+                strengths.push(`Pressure demand sits inside ${architecture.shortLower}'s comfortable band.`);
+            }
+
+            if (fits.flow >= 0.9) {
+                strengths.push("Flow demand lands in a natural operating window rather than at the edge.");
+            }
+
+            if (inputs.inlineNeed > 0.65 && architecture.inlineSuitability >= 0.75) {
+                strengths.push("The packaging story likes an inline or near-inline machine, which helps this architecture.");
+            }
+
+            if (inputs.contaminationNeed > 0.6 && architecture.contaminationSuitability >= 0.7) {
+                strengths.push("Dirty-air tolerance is a real project driver here, and this family handles that better.");
+            }
+
+            if (inputs.noiseSensitivity > 0.65 && architecture.acousticSuitability >= 0.6) {
+                strengths.push("Noise is a front-page requirement, and this family gives a workable path if diameter and speed are managed.");
+            }
+
+            if (inputs.efficiencyPriority > 0.65 && architecture.efficiencySuitability >= 0.72) {
+                strengths.push("Lifecycle efficiency is weighted heavily, and this architecture has a credible ceiling.");
+            }
+
+            if (velocityConstraint.active && fits.passage >= 0.84) {
+                strengths.push(`The implied passage geometry lines up cleanly with ${architecture.shortLower}'s preferred outlet / duct proportions.`);
+            }
+
+            if (!strengths.length) {
+                strengths.push("It is surviving mostly as the least-bad compromise across the current inputs.");
+            }
+
+            return strengths.slice(0, 3);
+        }
+
+        function buildCautions(architecture, fits, inputs, physics, velocityConstraint) {
+            const cautions = [];
+
+            if (fits.ns < 0.55) {
+                cautions.push(`At ${formatNumber(inputs.speedRpm, 0)} RPM, N_s = ${formatNumber(physics.specificSpeed, 2)} is outside this family's natural range.`);
+            }
+
+            if (fits.pressure < 0.55) {
+                cautions.push("Pressure demand is outside this architecture's comfortable zone.");
+            }
+
+            if (fits.flow < 0.55) {
+                cautions.push("Flow demand pushes this family toward the edge of its natural range.");
+            }
+
+            if (inputs.inlineNeed > 0.65 && architecture.inlineSuitability < 0.55) {
+                cautions.push("The package wants through-flow behavior, but this housing style resists that.");
+            }
+
+            if (inputs.contaminationNeed > 0.6 && architecture.contaminationSuitability < 0.5) {
+                cautions.push("The air stream looks dirty enough to make fouling or maintenance a concern.");
+            }
+
+            if (inputs.noiseSensitivity > 0.65 && architecture.acousticSuitability < 0.58) {
+                cautions.push("Noise sensitivity is high, so wheel size and tip speed would need extra care.");
+            }
+
+            if (inputs.efficiencyPriority > 0.65 && architecture.efficiencySuitability < 0.65) {
+                cautions.push("Efficiency is important here, and this architecture probably will not lead the pack.");
+            }
+
+            if (velocityConstraint.active && fits.passage < 0.58) {
+                cautions.push("The implied passage diameter / velocity pairing is awkward for this family, even if the duty point itself is workable.");
+            }
+
+            if (!cautions.length) {
+                cautions.push("No immediate structural mismatch, but real product curves still decide the final answer.");
+            }
+
+            return cautions.slice(0, 3);
+        }
+
+        function computeResults(physics, velocityConstraint) {
+            const inputs = state.inputs;
+            const rawPrefWeights = {
+                inline: 0.12 + inputs.inlineNeed,
+                contamination: 0.12 + inputs.contaminationNeed,
+                acoustic: 0.12 + inputs.noiseSensitivity,
+                efficiency: 0.12 + inputs.efficiencyPriority
+            };
+            const prefTotal = Object.values(rawPrefWeights).reduce((sum, value) => sum + value, 0);
+
+            return architectures
+                .map((architecture) => {
+                    const flowFit = comfortFit(
+                        inputs.flowM3s,
+                        architecture.comfortFlow[0],
+                        architecture.comfortFlow[1],
+                        architecture.hardFlowMax,
+                        0.45,
+                        0.08
+                    );
+                    const pressureFit = comfortFit(
+                        inputs.pressurePa,
+                        architecture.comfortPressure[0],
+                        architecture.comfortPressure[1],
+                        architecture.hardPressureMax,
+                        0.35,
+                        0.05
+                    );
+                    const nsFit = rangeFitLog(
+                        physics.specificSpeed,
+                        architecture.nsMin,
+                        architecture.nsMax,
+                        architecture.nsOptimal
+                    );
+                    const passageFit = velocityConstraint.active
+                        ? velocityConstraint.fits[architecture.id].combined
+                        : null;
+
+                    const pressureHardMiss = inputs.pressurePa > architecture.hardPressureMax;
+                    const flowHardMiss = inputs.flowM3s > architecture.hardFlowMax;
+
+                    const weights = velocityConstraint.active
+                        ? { pressure: 0.22, flow: 0.12, ns: 0.31, prefs: 0.23, passage: 0.12 }
+                        : { pressure: 0.24, flow: 0.14, ns: 0.34, prefs: 0.28, passage: 0 };
+
+                    const score =
+                        100 *
+                        (
+                            weights.pressure * pressureFit +
+                            weights.flow * flowFit +
+                            weights.ns * nsFit +
+                            weights.prefs * (
+                                (rawPrefWeights.inline / prefTotal) * architecture.inlineSuitability +
+                                (rawPrefWeights.contamination / prefTotal) * architecture.contaminationSuitability +
+                                (rawPrefWeights.acoustic / prefTotal) * architecture.acousticSuitability +
+                                (rawPrefWeights.efficiency / prefTotal) * architecture.efficiencySuitability
+                            ) +
+                            weights.passage * (passageFit ?? 0)
+                        ) *
+                        (pressureHardMiss ? 0.74 : 1) *
+                        (flowHardMiss ? 0.78 : 1);
+
+                    const roundedScore = Math.round(score);
+                    const status = scoreStatus(roundedScore, pressureHardMiss, flowHardMiss);
+                    const strengths = buildStrengths(architecture, { flow: flowFit, pressure: pressureFit, ns: nsFit, passage: passageFit }, inputs, physics, velocityConstraint);
+                    const cautions = buildCautions(architecture, { flow: flowFit, pressure: pressureFit, ns: nsFit, passage: passageFit }, inputs, physics, velocityConstraint);
+
+                    return {
+                        id: architecture.id,
+                        architecture,
+                        score: roundedScore,
+                        status,
+                        fits: {
+                            pressure: pressureFit,
+                            flow: flowFit,
+                            ns: nsFit,
+                            passage: passageFit,
+                            inline: architecture.inlineSuitability,
+                            contamination: architecture.contaminationSuitability,
+                            acoustic: architecture.acousticSuitability,
+                            efficiency: architecture.efficiencySuitability
+                        },
+                        strengths,
+                        cautions
+                    };
+                })
+                .sort((a, b) => b.score - a.score);
+        }
+
+        function statusLabel(status) {
+            if (status === "recommended") return "Recommended";
+            if (status === "conditional") return "Conditional";
+            return "Stretch";
+        }
+
+        function sliderDisplays() {
+            document.getElementById("inline-value").textContent = priorityLabel(
+                state.inputs.inlineNeed,
+                "Packaging-flexible",
+                "Inline-critical"
+            );
+            document.getElementById("contamination-value").textContent = priorityLabel(
+                state.inputs.contaminationNeed,
+                "Clean air",
+                "Dirty / particulate"
+            );
+            document.getElementById("noise-value").textContent = priorityLabel(
+                state.inputs.noiseSensitivity,
+                "Manage later",
+                "Acoustics first"
+            );
+            document.getElementById("efficiency-value").textContent = priorityLabel(
+                state.inputs.efficiencyPriority,
+                "First cost bias",
+                "Lifecycle bias"
+            );
+        }
+
+        function updateVelocityModeUI() {
+            document.querySelectorAll("[data-velocity-mode]").forEach((button) => {
+                button.classList.toggle("active", button.getAttribute("data-velocity-mode") === state.inputs.velocityMode);
+            });
+            document.getElementById("velocity-mode-target").hidden = state.inputs.velocityMode !== "target_velocity";
+            document.getElementById("velocity-mode-area").hidden = state.inputs.velocityMode !== "known_area";
+        }
+
+        function setVelocityMode(mode) {
+            state.inputs.velocityMode = mode;
+            updateVelocityModeUI();
+            render();
+        }
+
+        function updateSummaryChips(physics, velocityConstraint) {
+            const flow = state.inputs.flowM3s;
+            const pressure = state.inputs.pressurePa;
+            document.getElementById("flow-chip-primary").textContent = `${formatNumber(flow, 2)} m3/s`;
+            document.getElementById("flow-chip-secondary").textContent = `${formatNumber(cfmFromM3s(flow), 0)} CFM`;
+            document.getElementById("pressure-chip-primary").textContent = `${formatNumber(pressure, 0)} Pa`;
+            document.getElementById("pressure-chip-secondary").textContent = `${formatNumber(inWgFromPa(pressure), 2)} in.w.g.`;
+            document.getElementById("speed-chip-primary").textContent = `${formatNumber(state.inputs.speedRpm, 0)} RPM`;
+            document.getElementById("speed-chip-secondary").textContent = `${formatNumber((state.inputs.speedRpm * 2 * Math.PI) / 60, 1)} rad/s`;
+            if (velocityConstraint.active) {
+                document.getElementById("velocity-chip-primary").textContent = `${formatNumber(velocityConstraint.velocityMs, 1)} m/s passage velocity`;
+                document.getElementById("velocity-chip-secondary").textContent = `${formatNumber(velocityConstraint.areaM2, 3)} m2 area`;
+                document.getElementById("velocity-chip-tertiary").textContent = `${formatNumber(velocityConstraint.equivalentDiameterM * 1000, 0)} mm eq. diameter`;
+            } else {
+                document.getElementById("velocity-chip-primary").textContent = "No velocity constraint";
+                document.getElementById("velocity-chip-secondary").textContent = physics.predictedDiameterM > 0
+                    ? `Cordier wheel ${formatNumber(physics.predictedDiameterM * 1000, 0)} mm`
+                    : "";
+                document.getElementById("velocity-chip-tertiary").textContent = "";
+            }
+            document.getElementById("problem-summary").textContent =
+                `${formatNumber(flow, 2)} m3/s at ${formatNumber(pressure, 0)} Pa and ${formatNumber(state.inputs.speedRpm, 0)} RPM, ` +
+                `${priorityLabel(state.inputs.inlineNeed, "package-flexible", "inline-critical")} packaging, ` +
+                `${priorityLabel(state.inputs.efficiencyPriority, "capex-leaning", "efficiency-leaning")} priorities` +
+                `${velocityConstraint.active ? `, with ${formatNumber(velocityConstraint.velocityMs, 1)} m/s passage intent.` : "."}`;
+        }
+
+        function svgPoint(point, xMax, yMax, chart) {
+            const [x, y] = point;
+            const svgX = chart.left + (x / xMax) * chart.width;
+            const svgY = chart.top + chart.height - (y / yMax) * chart.height;
+            return [svgX, svgY];
+        }
+
+        function renderChart(results) {
+            const chart = { left: 74, top: 26, width: 626, height: 314 };
+            const xMax = Math.max(4.0, state.inputs.flowM3s * 1.35);
+            const yMax = Math.max(2600, state.inputs.pressurePa * 1.25);
+            const svg = document.getElementById("envelope-chart");
+            const focusId = state.focusId;
+
+            let markup = "";
+
+            for (let i = 0; i <= 6; i += 1) {
+                const x = chart.left + (i / 6) * chart.width;
+                const y = chart.top + (i / 6) * chart.height;
+                markup += `<line x1="${x}" y1="${chart.top}" x2="${x}" y2="${chart.top + chart.height}" stroke="#d8d2c6" stroke-width="1" />`;
+                markup += `<line x1="${chart.left}" y1="${y}" x2="${chart.left + chart.width}" y2="${y}" stroke="#d8d2c6" stroke-width="1" />`;
+            }
+
+            markup += `<rect x="${chart.left}" y="${chart.top}" width="${chart.width}" height="${chart.height}" fill="none" stroke="#b7aea2" stroke-width="1.5" />`;
+
+            for (let i = 0; i <= 6; i += 1) {
+                const flowTick = (xMax / 6) * i;
+                const pressureTick = yMax - (yMax / 6) * i;
+                const x = chart.left + (i / 6) * chart.width;
+                const y = chart.top + (i / 6) * chart.height;
+                markup += `<text x="${x}" y="${chart.top + chart.height + 26}" font-size="12" fill="#69737a" text-anchor="middle">${formatNumber(flowTick, flowTick < 1 ? 2 : 1)}</text>`;
+                markup += `<text x="${chart.left - 12}" y="${y + 4}" font-size="12" fill="#69737a" text-anchor="end">${formatNumber(pressureTick, 0)}</text>`;
+            }
+
+            markup += `<text x="${chart.left + chart.width / 2}" y="${chart.top + chart.height + 52}" font-size="13" fill="#1f282d" text-anchor="middle">Flow rate (m3/s)</text>`;
+            markup += `<text x="22" y="${chart.top + chart.height / 2}" font-size="13" fill="#1f282d" text-anchor="middle" transform="rotate(-90 22 ${chart.top + chart.height / 2})">Static pressure (Pa)</text>`;
+
+            results
+                .slice()
+                .reverse()
+                .forEach((result) => {
+                    const points = result.architecture.envelope
+                        .map((point) => svgPoint(point, xMax, yMax, chart).join(","))
+                        .join(" ");
+                    const [labelX, labelY] = svgPoint(result.architecture.labelPoint, xMax, yMax, chart);
+                    const isFocused = result.id === focusId;
+                    const strokeWidth = isFocused ? 3.5 : 2;
+                    const fillOpacity = isFocused ? 0.28 : 0.12;
+                    const strokeOpacity = isFocused ? 1 : 0.85;
+                    markup += `<polygon points="${points}" fill="${result.architecture.scoreColor}" fill-opacity="${fillOpacity}" stroke="${result.architecture.scoreColor}" stroke-width="${strokeWidth}" stroke-opacity="${strokeOpacity}" />`;
+                    markup += `<text x="${labelX}" y="${labelY}" font-size="13" font-weight="700" fill="${result.architecture.scoreColor}" text-anchor="middle">${result.architecture.name}</text>`;
+                });
+
+            const dutyPoint = svgPoint([state.inputs.flowM3s, state.inputs.pressurePa], xMax, yMax, chart);
+            markup += `<line x1="${dutyPoint[0]}" y1="${chart.top}" x2="${dutyPoint[0]}" y2="${chart.top + chart.height}" stroke="#1f282d" stroke-dasharray="5 5" stroke-width="1.2" />`;
+            markup += `<line x1="${chart.left}" y1="${dutyPoint[1]}" x2="${chart.left + chart.width}" y2="${dutyPoint[1]}" stroke="#1f282d" stroke-dasharray="5 5" stroke-width="1.2" />`;
+            markup += `<circle cx="${dutyPoint[0]}" cy="${dutyPoint[1]}" r="7" fill="#1f282d" />`;
+            markup += `<circle cx="${dutyPoint[0]}" cy="${dutyPoint[1]}" r="12" fill="none" stroke="#1f282d" stroke-opacity="0.28" stroke-width="2" />`;
+            markup += `<text x="${dutyPoint[0] + 14}" y="${dutyPoint[1] - 12}" font-size="13" font-weight="700" fill="#1f282d">Current duty</text>`;
+
+            svg.innerHTML = markup;
+
+            const legend = document.getElementById("chart-legend");
+            legend.innerHTML = results
+                .map((result) => {
+                    const activeText = result.id === focusId ? "Focused" : "Visible";
+                    return `
+                        <div class="legend-chip">
+                            <span class="legend-swatch" style="background:${result.architecture.scoreColor};"></span>
+                            <strong>${result.architecture.name}</strong>
+                            <span>${result.architecture.pressureBandLabel}</span>
+                            <span>${activeText}</span>
+                        </div>
+                    `;
+                })
+                .join("");
+        }
+
+        function computeRadialBranch(physics, velocityConstraint) {
+            const inputs = state.inputs;
+            const fcNsFit = rangeFitLog(physics.specificSpeed, 0.3, 1.2, 0.6);
+            const bcNsFit = rangeFitLog(physics.specificSpeed, 0.3, 1.5, 0.8);
+            const compactBias = physics.predictedDiameterM > 0.55 ? 0.72 : physics.predictedDiameterM > 0.4 ? 0.55 : 0.38;
+            const fcPassage = velocityConstraint.active ? velocityConstraint.fits.radial.combined + 0.06 * compactBias : compactBias;
+            const bcPassage = velocityConstraint.active ? velocityConstraint.fits.radial.combined + 0.08 * (inputs.efficiencyPriority) : 0.6;
+
+            const fcScore = Math.round(
+                100 * (
+                    0.42 * fcNsFit +
+                    0.18 * (1 - inputs.efficiencyPriority) +
+                    0.14 * (1 - inputs.contaminationNeed) +
+                    0.16 * fcPassage +
+                    0.10 * (inputs.speedRpm < 900 ? 1 : 0.45)
+                )
+            );
+
+            const bcScore = Math.round(
+                100 * (
+                    0.44 * bcNsFit +
+                    0.24 * inputs.efficiencyPriority +
+                    0.16 * inputs.contaminationNeed +
+                    0.10 * bcPassage +
+                    0.06 * (inputs.speedRpm >= 900 ? 0.8 : 0.45)
+                )
+            );
+
+            const fc = {
+                id: "centrifugal_fc",
+                name: "Forward-curved",
+                color: "#b45309",
+                score: fcScore,
+                copy: "Compact and low-speed friendly, but pressure hump and overloading behavior demand caution.",
+                bullets: [
+                    "Favors compact scroll packaging and lower nominal wheel speed.",
+                    "Useful when first cost and package volume matter more than peak efficiency.",
+                    "Watch the hump region and motor sizing; this is the stall-prone branch."
+                ]
+            };
+
+            const bc = {
+                id: "centrifugal_bc",
+                name: "Backward-curved",
+                color: "#4b5e7b",
+                score: bcScore,
+                copy: "Efficiency-first and non-overloading, with a larger wheel or faster-running package.",
+                bullets: [
+                    "Usually the right radial answer when efficiency and stability carry weight.",
+                    "Handles restrictive or dirtier systems better than forward-curved.",
+                    "Expect a physically larger or faster-running machine than the FC branch."
+                ]
+            };
+
+            const leader = bc.score >= fc.score ? bc : fc;
+            const runnerUp = leader.id === bc.id ? fc : bc;
+
+            return {
+                leader,
+                runnerUp,
+                summary:
+                    `At N_s = ${formatNumber(physics.specificSpeed, 2)}, the radial family splits toward ` +
+                    `${leader.name.toLowerCase()} because ${leader.id === "centrifugal_bc" ? "efficiency and stability outweigh compactness." : "compactness and lower-speed packaging matter more than peak efficiency."}`
+            };
+        }
+
+        function buildCurveExplorerHref(best, radialBranch, velocityConstraint) {
+            const params = new URLSearchParams();
+            params.set("source", "fan-type-selector");
+            params.set("flow_unit", "m3/s");
+            params.set("pressure_unit", "Pa");
+            params.set("pressure_basis", "static");
+            params.set("system_mode", "quick-duty");
+            params.set("duty_flow", String(state.inputs.flowM3s));
+            params.set("duty_pressure", String(state.inputs.pressurePa));
+            params.set("suggested_architecture", best.id);
+            if (best.id === "radial" && radialBranch) {
+                params.set("suggested_subtype", radialBranch.leader.id);
+            }
+            if (velocityConstraint.active) {
+                params.set("passage_velocity_ms", String(velocityConstraint.velocityMs));
+                params.set("passage_area_m2", String(velocityConstraint.areaM2));
+            }
+            return `/tools/fan-curve-explorer/?${params.toString()}`;
+        }
+
+        function renderDecisionPanel(results, physics, radialBranch, velocityConstraint) {
+            const best = results[0];
+            const runnerUp = results[1];
+            const title = document.getElementById("recommendation-title");
+            const copy = document.getElementById("recommendation-copy");
+            const strengths = document.getElementById("recommendation-strengths");
+            const next = document.getElementById("recommendation-next");
+            const metrics = document.getElementById("recommendation-metrics");
+            const link = document.getElementById("find-real-fans-link");
+            const handoffSummary = document.getElementById("handoff-summary");
+
+            title.textContent = `${best.architecture.name} is the current front-runner`;
+
+            let comparisonTail = "";
+            if (runnerUp) {
+                if (runnerUp.score >= best.score - 4) {
+                    comparisonTail = `${runnerUp.architecture.name} is still close enough that real vendor curves could flip the order.`;
+                } else {
+                    comparisonTail = `${runnerUp.architecture.name} is the main fallback if the project priorities shift.`;
+                }
+            }
+
+            copy.textContent =
+                `At ${formatNumber(state.inputs.flowM3s, 2)} m3/s, ${formatNumber(state.inputs.pressurePa, 0)} Pa, and ${formatNumber(state.inputs.speedRpm, 0)} RPM, ` +
+                `N_s = ${formatNumber(physics.specificSpeed, 2)} lands in ${physics.nsZone}. ` +
+                `Cordier D_s = ${formatNumber(physics.specificDiameter, 2)} implies a wheel around ${formatNumber(physics.predictedDiameterM * 1000, 0)} mm, ` +
+                `${velocityConstraint.active ? `${velocityConstraint.summary} ` : ""}` +
+                `and ${best.architecture.shortLower} leads because it balances that physics anchor with the current non-curve constraints. ` +
+                comparisonTail;
+
+            strengths.innerHTML = best.strengths.map((item) => `<li>${item}</li>`).join("");
+            next.innerHTML = best.architecture.nextBranch.map((item) => `<li>${item}</li>`).join("");
+
+            metrics.innerHTML = `
+                <div class="metric-tile">
+                    <span class="metric-kicker">Lead score</span>
+                    <div class="metric-value">${best.score}</div>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-kicker">Duty N<sub>s</sub></span>
+                    <div class="metric-value">${formatNumber(physics.specificSpeed, 2)}</div>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-kicker">Cordier D<sub>s</sub></span>
+                    <div class="metric-value">${formatNumber(physics.specificDiameter, 2)}</div>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-kicker">Predicted diameter</span>
+                    <div class="metric-value">${formatNumber(physics.predictedDiameterM * 1000, 0)} mm</div>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-kicker">${velocityConstraint.active ? "Passage check" : "Passage mode"}</span>
+                    <div class="metric-value">${velocityConstraint.active ? `${formatNumber(velocityConstraint.velocityMs, 1)} m/s · ${formatNumber(velocityConstraint.equivalentDiameterM * 1000, 0)} mm` : "Inactive"}</div>
+                </div>
+            `;
+
+            link.href = buildCurveExplorerHref(best, radialBranch, velocityConstraint);
+            link.textContent = best.id === "radial" ? "Find real fans and compare BC vs FC" : "Find real fans in Curve Explorer";
+            handoffSummary.textContent =
+                `Handoff carries the duty point and ${best.id === "radial" && radialBranch ? `${radialBranch.leader.name.toLowerCase()} as the suggested radial branch` : `${best.architecture.name.toLowerCase()} as the suggested family`} into the curve workspace.`;
+        }
+
+        function renderRadialBranch(results, physics, velocityConstraint) {
+            const panel = document.getElementById("radial-branch-panel");
+            const best = results[0];
+            if (!best || best.id !== "radial") {
+                panel.hidden = true;
+                return null;
+            }
+
+            const branch = computeRadialBranch(physics, velocityConstraint);
+            panel.hidden = false;
+            document.getElementById("radial-branch-summary").textContent = branch.summary;
+            document.getElementById("radial-branch-grid").innerHTML = [branch.leader, branch.runnerUp]
+                .map((subtype, index) => {
+                    const cardClass = index === 0 ? "subtype-card lead" : "subtype-card";
+                    return `
+                        <div class="${cardClass}">
+                            <div class="subtype-head">
+                                <div>
+                                    <div class="subtype-name">${subtype.name}</div>
+                                    <div class="subtype-copy">${subtype.copy}</div>
+                                </div>
+                                <div class="subtype-score" style="background:${subtype.color};">${subtype.score}</div>
+                            </div>
+                            <div class="tag-row">
+                                <div class="tag">${subtype.id === "centrifugal_bc" ? "Non-overloading power" : "Pressure hump risk"}</div>
+                                <div class="tag">${subtype.id === "centrifugal_bc" ? "Efficiency-first" : "Compact / cheap bias"}</div>
+                            </div>
+                            <ul class="mini-list">
+                                ${subtype.bullets.map((item) => `<li>${item}</li>`).join("")}
+                            </ul>
+                        </div>
+                    `;
+                })
+                .join("");
+            return branch;
+        }
+
+        function metricBar(label, value, color) {
+            const width = Math.round(value * 100);
+            return `
+                <div class="metric-bar">
+                    <div>${label}</div>
+                    <div class="metric-track">
+                        <div class="metric-fill" style="width:${width}%; background:${color};"></div>
+                    </div>
+                    <div>${width}</div>
+                </div>
+            `;
+        }
+
+        function renderArchitectureCards(results) {
+            const grid = document.getElementById("architecture-grid");
+            grid.innerHTML = results
+                .map((result) => {
+                    const cardClass = result.id === state.focusId ? "architecture-card active" : "architecture-card";
+                    return `
+                        <button type="button" class="${cardClass}" data-architecture="${result.id}">
+                            <div class="architecture-head">
+                                <div>
+                                    <div class="architecture-name">${result.architecture.name}</div>
+                                    <div class="architecture-subtitle">${result.architecture.subtitle}</div>
+                                </div>
+                                <div class="score-badge" style="background:${result.architecture.scoreColor};">${result.score}</div>
+                            </div>
+                            <div class="status-chip ${result.status}">${statusLabel(result.status)}</div>
+                            <p>${result.architecture.summary}</p>
+                            <div class="tag-row">
+                                <div class="tag">${result.architecture.pressureBandLabel}</div>
+                                <div class="tag">${result.architecture.flowBandLabel}</div>
+                                <div class="tag">${result.architecture.nsBandLabel}</div>
+                                ${result.fits.passage != null ? `<div class="tag">Passage fit ${Math.round(result.fits.passage * 100)}</div>` : ""}
+                            </div>
+                            <div class="metric-stack">
+                                ${metricBar("Pressure fit", result.fits.pressure, result.architecture.scoreColor)}
+                                ${metricBar("Flow fit", result.fits.flow, result.architecture.scoreColor)}
+                                ${metricBar("N_s fit", result.fits.ns, result.architecture.scoreColor)}
+                                ${result.fits.passage != null ? metricBar("Passage fit", result.fits.passage, result.architecture.scoreColor) : ""}
+                                ${metricBar("Packaging", result.fits.inline, result.architecture.scoreColor)}
+                                ${metricBar("Dirty air", result.fits.contamination, result.architecture.scoreColor)}
+                                ${metricBar("Acoustics", result.fits.acoustic, result.architecture.scoreColor)}
+                                ${metricBar("Efficiency", result.fits.efficiency, result.architecture.scoreColor)}
+                            </div>
+                            <div>
+                                <h3>Strengths</h3>
+                                <ul class="mini-list">
+                                    ${result.strengths.map((item) => `<li>${item}</li>`).join("")}
+                                </ul>
+                            </div>
+                            <div>
+                                <h3>Watchouts</h3>
+                                <ul class="mini-list">
+                                    ${result.cautions.map((item) => `<li>${item}</li>`).join("")}
+                                </ul>
+                            </div>
+                        </button>
+                    `;
+                })
+                .join("");
+
+            grid.querySelectorAll("[data-architecture]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    state.focusId = button.getAttribute("data-architecture");
+                    render();
+                });
+            });
+        }
+
+        function renderMatrix(results) {
+            const resultById = Object.fromEntries(results.map((result) => [result.id, result]));
+            const rows = [
+                {
+                    label: "Current fit",
+                    values: architectures.map((architecture) => {
+                        const result = resultById[architecture.id];
+                        return `<span class="table-chip">${result.score} · ${statusLabel(result.status)}</span>`;
+                    })
+                },
+                {
+                    label: "Pressure comfort",
+                    values: architectures.map((architecture) => architecture.pressureBandLabel)
+                },
+                {
+                    label: "Flow comfort",
+                    values: architectures.map((architecture) => architecture.flowBandLabel)
+                },
+                {
+                    label: "Specific speed",
+                    values: architectures.map((architecture) => architecture.nsBandLabel)
+                },
+                {
+                    label: "Passage geometry",
+                    values: [
+                        "Likes passage diameter near wheel diameter and lower bulk velocity",
+                        "Accepts moderate contraction and moderate velocity",
+                        "More tolerant of compact outlet area and higher bulk velocity"
+                    ]
+                },
+                {
+                    label: "Packaging",
+                    values: architectures.map((architecture) => architecture.staticMatrix.packaging)
+                },
+                {
+                    label: "Dirty air",
+                    values: architectures.map((architecture) => architecture.staticMatrix.contamination)
+                },
+                {
+                    label: "Noise posture",
+                    values: architectures.map((architecture) => architecture.staticMatrix.acoustics)
+                },
+                {
+                    label: "Efficiency",
+                    values: architectures.map((architecture) => architecture.staticMatrix.efficiency)
+                },
+                {
+                    label: "Next branch",
+                    values: [
+                        "Diameter, RPM, guard depth, stall margin",
+                        "Housing form, silencing, duct interaction",
+                        "Backward-curved vs forward-curved"
+                    ]
+                }
+            ];
+
+            document.getElementById("matrix-body").innerHTML = rows
+                .map((row) => {
+                    return `
+                        <tr>
+                            <td><strong>${row.label}</strong></td>
+                            <td>${row.values[0]}</td>
+                            <td>${row.values[1]}</td>
+                            <td>${row.values[2]}</td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+
+        function renderPresetButtons() {
+            const container = document.getElementById("preset-grid");
+            container.innerHTML = Object.entries(presets)
+                .map(([key, preset]) => {
+                    const activeClass = key === state.presetId ? "preset-button active" : "preset-button";
+                    return `
+                        <button type="button" class="${activeClass}" data-preset="${key}">
+                            <div class="preset-title">${preset.label}</div>
+                            <div class="preset-copy">${preset.copy}</div>
+                        </button>
+                    `;
+                })
+                .join("");
+
+            container.querySelectorAll("[data-preset]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    applyPreset(button.getAttribute("data-preset"));
+                });
+            });
+        }
+
+        function applyPreset(presetId) {
+            const preset = presets[presetId];
+            state.presetId = presetId;
+            state.inputs = {
+                flowM3s: preset.flowM3s,
+                pressurePa: preset.pressurePa,
+                speedRpm: 1800,
+                velocityMode: "none",
+                targetVelocityMs: 12,
+                knownAreaM2: 0.067,
+                inlineNeed: preset.inlineNeed,
+                contaminationNeed: preset.contaminationNeed,
+                noiseSensitivity: preset.noiseSensitivity,
+                efficiencyPriority: preset.efficiencyPriority
+            };
+            state.focusId = null;
+            syncInputsFromState();
+            render();
+        }
+
+        function syncInputsFromState() {
+            flowInput.value = state.inputs.flowM3s;
+            pressureInput.value = state.inputs.pressurePa;
+            speedInput.value = state.inputs.speedRpm;
+            targetVelocityInput.value = state.inputs.targetVelocityMs;
+            knownAreaInput.value = state.inputs.knownAreaM2;
+            inlineInput.value = Math.round(state.inputs.inlineNeed * 100);
+            contaminationInput.value = Math.round(state.inputs.contaminationNeed * 100);
+            noiseInput.value = Math.round(state.inputs.noiseSensitivity * 100);
+            efficiencyInput.value = Math.round(state.inputs.efficiencyPriority * 100);
+            updateVelocityModeUI();
+        }
+
+        function readInputs() {
+            state.inputs.flowM3s = clamp(Number(flowInput.value) || 0, 0.02, 6);
+            state.inputs.pressurePa = clamp(Number(pressureInput.value) || 0, 0, 4000);
+            state.inputs.speedRpm = clamp(Number(speedInput.value) || 0, 100, 6000);
+            state.inputs.targetVelocityMs = clamp(Number(targetVelocityInput.value) || 0, 0.5, 60);
+            state.inputs.knownAreaM2 = clamp(Number(knownAreaInput.value) || 0, 0.001, 10);
+            state.inputs.inlineNeed = clamp(Number(inlineInput.value) / 100, 0, 1);
+            state.inputs.contaminationNeed = clamp(Number(contaminationInput.value) / 100, 0, 1);
+            state.inputs.noiseSensitivity = clamp(Number(noiseInput.value) / 100, 0, 1);
+            state.inputs.efficiencyPriority = clamp(Number(efficiencyInput.value) / 100, 0, 1);
+        }
+
+        function render() {
+            renderPresetButtons();
+            sliderDisplays();
+            const physics = computePhysics(state.inputs);
+            const velocityConstraint = computeVelocityConstraint(state.inputs, physics);
+            updateSummaryChips(physics, velocityConstraint);
+            const results = computeResults(physics, velocityConstraint);
+            if (!state.focusId || !results.find((result) => result.id === state.focusId)) {
+                state.focusId = results[0].id;
+            }
+
+            renderChart(results);
+            const radialBranch = renderRadialBranch(results, physics, velocityConstraint);
+            renderDecisionPanel(results, physics, radialBranch, velocityConstraint);
+            renderArchitectureCards(results);
+            renderMatrix(results);
+        }
+
+        [flowInput, pressureInput, speedInput].forEach((input) => {
+            input.addEventListener("input", () => {
+                state.presetId = "";
+                readInputs();
+                render();
+            });
+        });
+
+        [inlineInput, contaminationInput, noiseInput, efficiencyInput].forEach((input) => {
+            input.addEventListener("input", () => {
+                state.presetId = "";
+                readInputs();
+                render();
+            });
+        });
+
+        [targetVelocityInput, knownAreaInput].forEach((input) => {
+            input.addEventListener("input", () => {
+                state.presetId = "";
+                readInputs();
+                render();
+            });
+        });
+
+        document.querySelectorAll("[data-velocity-mode]").forEach((button) => {
+            button.addEventListener("click", () => {
+                state.presetId = "";
+                readInputs();
+                setVelocityMode(button.getAttribute("data-velocity-mode"));
+            });
+        });
+
+        syncInputsFromState();
+        readInputs();
+        render();
+    </script>
+</body>
+</html>

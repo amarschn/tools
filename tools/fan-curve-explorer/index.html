@@ -1179,6 +1179,7 @@
         chartMode: 'pressure',
         sortKey: null,
         sortDir: 'desc',
+        handoffLabel: null,
     };
 
     let pyodideInstance = null;
@@ -1253,6 +1254,78 @@
         if (!pyToolModule || state.fans.length === 0) return;
         clearTimeout(recalcTimer);
         recalcTimer = setTimeout(() => recalculate(), delay);
+    }
+
+    function readLaunchPayloadFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const source = params.get('source');
+        if (source !== 'fan-type-selector' && source !== 'fan-architecture-comparator') {
+            return null;
+        }
+
+        const dutyFlow = parseFloat(params.get('duty_flow'));
+        const dutyPressure = parseFloat(params.get('duty_pressure'));
+        if (!Number.isFinite(dutyFlow) || !Number.isFinite(dutyPressure)) {
+            return null;
+        }
+
+        return {
+            source,
+            dutyFlow,
+            dutyPressure,
+            flowUnit: params.get('flow_unit') || 'm3/s',
+            pressureUnit: params.get('pressure_unit') || 'Pa',
+            pressureBasis: params.get('pressure_basis') || 'static',
+            systemMode: params.get('system_mode') || 'quick-duty',
+            architecture: params.get('suggested_architecture') || 'mixed',
+            subtype: params.get('suggested_subtype') || null,
+        };
+    }
+
+    function applyLaunchPayloadToInputs(payload) {
+        const flowUnit = ['m3/s', 'CFM', 'm3/h', 'L/s'].includes(payload.flowUnit) ? payload.flowUnit : 'm3/s';
+        const pressureUnit = ['Pa', 'in_wg', 'kPa', 'mmH2O'].includes(payload.pressureUnit) ? payload.pressureUnit : 'Pa';
+        const pressureBasis = ['static', 'total'].includes(payload.pressureBasis) ? payload.pressureBasis : 'static';
+        const systemMode = payload.systemMode === 'direct-k' ? 'direct-k' : 'quick-duty';
+
+        document.getElementById('flow-unit').value = flowUnit;
+        document.getElementById('pressure-unit').value = pressureUnit;
+        document.getElementById('pressure-basis').value = pressureBasis;
+        document.getElementById('duty-flow').value = payload.dutyFlow;
+        document.getElementById('duty-pressure').value = payload.dutyPressure;
+        setSystemMode(systemMode);
+
+        const familyLabel = payload.architecture === 'radial'
+            ? payload.subtype === 'centrifugal_fc'
+                ? 'radial family with a forward-curved suggestion'
+                : payload.subtype === 'centrifugal_bc'
+                    ? 'radial family with a backward-curved suggestion'
+                    : 'radial family'
+            : `${payload.architecture} family`;
+        state.handoffLabel = `Handoff loaded from the type selector with ${familyLabel}.`;
+    }
+
+    function seedFansForLaunchPayload(payload) {
+        const dutyFlow = payload.dutyFlow;
+        let archetypes = [];
+
+        if (payload.architecture === 'axial') {
+            archetypes = dutyFlow >= 0.5
+                ? ['mixed-flow', 'large-axial-500mm']
+                : ['mixed-flow', 'medium-axial-120mm'];
+        } else if (payload.architecture === 'mixed') {
+            archetypes = ['large-axial-500mm', 'bc-centrifugal', 'mixed-flow'];
+        } else if (payload.architecture === 'radial') {
+            if (payload.subtype === 'centrifugal_fc') {
+                archetypes = ['mixed-flow', 'bc-centrifugal', 'fc-centrifugal'];
+            } else {
+                archetypes = ['mixed-flow', 'fc-centrifugal', 'bc-centrifugal'];
+            }
+        } else {
+            archetypes = ['medium-axial-120mm'];
+        }
+
+        archetypes.forEach(archetypeId => addFanFromLibrary(archetypeId));
     }
 
     function bindAutoInputs() {
@@ -1340,7 +1413,13 @@ import ${TOOL_MODULE_NAME}
             state.library = toPlain(pyToolModule.get_library_summary()) || [];
             buildLibraryPicker();
 
-            addFanFromLibrary('medium-axial-120mm');
+            const launchPayload = readLaunchPayloadFromQuery();
+            if (launchPayload) {
+                applyLaunchPayloadToInputs(launchPayload);
+                seedFansForLaunchPayload(launchPayload);
+            } else {
+                addFanFromLibrary('medium-axial-120mm');
+            }
             document.getElementById('calculate-btn').disabled = false;
             document.getElementById('loading-overlay').classList.add('hidden');
             recalculate();
@@ -1651,6 +1730,9 @@ import ${TOOL_MODULE_NAME}
                 preview.innerHTML = `Quick-duty mode: inferred <strong>K = ${formatNumber(system.kCoefficient, 1)}</strong> Pa/(m&sup3;/s)&sup2; from the target point. Operating density = <strong>${formatNumber(density, 3)}</strong> kg/m&sup3;.`;
             } else {
                 preview.innerHTML = `Known-system mode: using <strong>K = ${formatNumber(system.kCoefficient, 1)}</strong> Pa/(m&sup3;/s)&sup2; with a computed duty pressure of <strong>${formatNumber(displayPressure, 2)} ${system.pressureUnit}</strong> at the target flow.`;
+            }
+            if (state.handoffLabel) {
+                preview.innerHTML += ` <strong>${escapeHtml(state.handoffLabel)}</strong>`;
             }
         } catch (error) {
             preview.textContent = 'Problem definition is currently invalid: ' + error.message;
