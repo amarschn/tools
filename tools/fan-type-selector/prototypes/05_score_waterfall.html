@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype E: Score Waterfall</title>
+    <link rel="stylesheet" href="./shared.css">
+    <style>
+        .verdict-strip {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .verdict-name {
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+        .verdict-tag {
+            font-size: 0.84rem;
+            color: var(--text-light);
+            padding: 4px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+        }
+        .verdict-because {
+            color: var(--text-light);
+            line-height: 1.55;
+            max-width: 60ch;
+            margin: 0 0 4px;
+        }
+
+        /* --- waterfall chart --- */
+        .waterfall {
+            display: grid;
+            gap: 0;
+            margin: 4px 0 0;
+        }
+        .wf-row {
+            display: grid;
+            grid-template-columns: 180px 1fr 48px;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .wf-row:last-child {
+            border-bottom: none;
+        }
+        .wf-row:hover {
+            background: var(--primary-light);
+            margin: 0 -18px;
+            padding-left: 18px;
+            padding-right: 18px;
+        }
+        .wf-row.expanded {
+            background: var(--primary-light);
+            margin: 0 -18px;
+            padding-left: 18px;
+            padding-right: 18px;
+        }
+        .wf-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .wf-name .type-dot-sm {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .wf-bar-area {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            height: 28px;
+        }
+        .wf-bar-track {
+            width: 100%;
+            height: 28px;
+            background: var(--primary-light);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+        .wf-segment {
+            height: 100%;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+        .wf-segment[data-label]:hover::after {
+            content: attr(data-label);
+            position: absolute;
+            top: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent-color);
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .wf-score {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.95rem;
+            text-align: right;
+        }
+
+        /* --- expanded detail panel --- */
+        .wf-detail {
+            display: none;
+            margin: 0 -18px;
+            padding: 0 18px 16px 18px;
+            background: var(--primary-light);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .wf-detail.visible {
+            display: block;
+        }
+        .wf-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-top: 6px;
+        }
+        @media (max-width: 600px) {
+            .wf-detail-grid { grid-template-columns: 1fr; }
+            .wf-row { grid-template-columns: 120px 1fr 40px; }
+        }
+        .wf-detail-col h4 {
+            margin: 0 0 8px;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-light);
+        }
+        .wf-detail-col p, .wf-detail-col li {
+            font-size: 0.86rem;
+            color: var(--text-light);
+            line-height: 1.5;
+            margin: 0 0 6px;
+        }
+        .wf-detail-col ul {
+            margin: 0;
+            padding-left: 16px;
+        }
+        .wf-kv {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.86rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .wf-kv:last-child {
+            border-bottom: none;
+        }
+        .wf-kv-label {
+            color: var(--text-light);
+        }
+        .wf-kv-value {
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        /* --- legend --- */
+        .legend-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+        .legend-swatch {
+            width: 14px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        /* --- score component colors --- */
+        .sc-ns { background: #3d85c6; }
+        .sc-eff { background: #6ba368; }
+        .sc-tip { background: #8e7cc3; }
+
+        /* --- deep disclosure (shared with D and F) --- */
+        .deep-disclosure {
+            margin-top: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            overflow: hidden;
+        }
+        .deep-disclosure summary {
+            padding: 10px 14px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+            list-style: none;
+        }
+        .deep-disclosure summary::-webkit-details-marker { display: none; }
+        .deep-disclosure summary::before {
+            content: '+ ';
+            font-family: var(--font-mono);
+        }
+        .deep-disclosure[open] summary::before {
+            content: '- ';
+        }
+        .deep-disclosure .dd-body {
+            border-top: 1px solid var(--border-color);
+            padding: 14px;
+        }
+        .eq-block {
+            display: block;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            margin: 8px 0;
+            overflow-x: auto;
+            line-height: 1.7;
+        }
+        .eq-block .eq-label {
+            display: block;
+            font-family: var(--font-sans);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-light);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .eq-block .eq-sub {
+            display: block;
+            color: var(--text-light);
+            font-size: 0.78rem;
+            margin-top: 4px;
+        }
+        .weight-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.84rem;
+            margin: 8px 0;
+        }
+        .weight-table th {
+            text-align: left;
+            padding: 8px 6px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-light);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .weight-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+        .weight-table .wt-mono {
+            font-family: var(--font-mono);
+            font-weight: 700;
+        }
+        .weight-table .wt-why {
+            color: var(--text-light);
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+        .dd-note {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            line-height: 1.5;
+            margin: 8px 0 0;
+        }
+
+        /* --- score decomposition table per candidate --- */
+        .score-decomp {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            margin: 8px 0;
+        }
+        .score-decomp th {
+            text-align: left;
+            padding: 6px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-light);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .score-decomp td {
+            padding: 6px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .score-decomp .sd-mono {
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+        .score-decomp .sd-bar-cell {
+            width: 80px;
+        }
+        .sd-bar {
+            height: 8px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <a class="back-link" href="./index.html">Back to Prototype Index</a>
+                <h1 class="tool-title">Prototype E: Score Waterfall</h1>
+                <p class="tool-copy">
+                    All four types on screen at once with stacked score bars showing <em>why</em> each
+                    scored the way it did. Click any row to expand hardware details, score decomposition,
+                    and the equations behind each component.
+                </p>
+                <div class="meta-row">
+                    <div class="meta-chip"><strong>Pattern</strong> Visual ranking + inline detail</div>
+                    <div class="meta-chip"><strong>Goal</strong> Make relative fitness instantly scannable</div>
+                </div>
+            </div>
+        </div>
+
+        <section class="section-stack">
+            <section class="card" style="padding: 20px;">
+                <div class="eyebrow">Phase 0 Recommendation</div>
+                <div class="verdict-strip">
+                    <span class="verdict-name" id="verdict-name"></span>
+                    <span class="verdict-tag" id="verdict-tag"></span>
+                </div>
+                <p class="verdict-because" id="verdict-because"></p>
+            </section>
+
+            <section class="card">
+                <div class="eyebrow">Score Breakdown — Click Any Row To Expand</div>
+                <div class="waterfall" id="waterfall"></div>
+                <div class="legend-row">
+                    <div class="legend-item"><span class="legend-swatch sc-ns"></span>Specific-speed fit (w=0.58)</div>
+                    <div class="legend-item"><span class="legend-swatch sc-eff"></span>Efficiency fit (w=0.27)</div>
+                    <div class="legend-item"><span class="legend-swatch sc-tip"></span>Tip-speed fit (w=0.15)</div>
+                </div>
+            </section>
+
+            <!-- Shared deep disclosures below the waterfall -->
+            <section class="card">
+                <details class="deep-disclosure" style="border:none; margin:0;">
+                    <summary>How the score formula works</summary>
+                    <div class="dd-body">
+                        <div class="eq-block">
+                            <span class="eq-label">Overall suitability score</span>
+                            S = w_N · S_N + w_η · S_η + w_U · S_U
+                            <span class="eq-sub">= 0.58 · S_N + 0.27 · S_η + 0.15 · S_U &nbsp;&nbsp;(no passage constraint active)</span>
+                        </div>
+                        <div class="eq-block">
+                            <span class="eq-label">N_s fit — log-space band fit</span>
+                            Inside band: &nbsp; S_N = clamp(1.0 − 0.18 · |ln(ω_s) − ln(ω_opt)| / bandwidth, 0.82, 1.0)
+                            <span class="eq-sub">Outside band: S_N = clamp(0.72 − 0.45 · outside_distance / bandwidth, 0.08, 0.72)</span>
+                        </div>
+                        <div class="eq-block">
+                            <span class="eq-label">Efficiency fit</span>
+                            S_η = clamp(η_estimated / 0.85, 0.2, 1.0)
+                            <span class="eq-sub">The 0.85 normalizer is the max typical peak efficiency across all fan families.</span>
+                        </div>
+                        <div class="eq-block">
+                            <span class="eq-label">Tip-speed fit (piecewise)</span>
+                            S_U = 1.0 if U ≤ 20 m/s | 0.9 if ≤ 35 | 0.75 if ≤ 50 | 0.55 if ≤ 65 | 0.55·(65/U) above
+                        </div>
+                    </div>
+                </details>
+
+                <details class="deep-disclosure" style="border:none; margin:8px 0 0;">
+                    <summary>Why these weights?</summary>
+                    <div class="dd-body">
+                        <table class="weight-table">
+                            <thead><tr><th>Component</th><th>Weight</th><th>Rationale</th></tr></thead>
+                            <tbody>
+                                <tr>
+                                    <td>Specific-speed fit</td>
+                                    <td class="wt-mono">0.58</td>
+                                    <td class="wt-why">Carries the most weight because fan-family selection is primarily a specific-speed screening problem. The architecture bands are defined around N_s.</td>
+                                </tr>
+                                <tr>
+                                    <td>Efficiency fit</td>
+                                    <td class="wt-mono">0.27</td>
+                                    <td class="wt-why">Separates credible families after the architecture is physically plausible. Should not override a bad family match.</td>
+                                </tr>
+                                <tr>
+                                    <td>Tip-speed fit</td>
+                                    <td class="wt-mono">0.15</td>
+                                    <td class="wt-why">Compact proxy for noise and mechanical realism — secondary screen, not the defining criterion.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="dd-note">With a passage constraint active, weights shift: N_s → 0.50, η → 0.22, U → 0.12, passage → 0.16. These are fixed heuristics.</p>
+                    </div>
+                </details>
+
+                <details class="deep-disclosure" style="border:none; margin:8px 0 0;">
+                    <summary>Where do the efficiency estimates come from?</summary>
+                    <div class="dd-body">
+                        <div class="eq-block">
+                            <span class="eq-label">Cordier efficiency correlation (Balje 1981)</span>
+                            η = 0.90 + 0.017·ln(ω_s) − 0.059·[ln(ω_s)]²
+                            <span class="eq-sub">At ω_s = 0.80: η = 0.90 + 0.017·(−0.223) − 0.059·(0.050) = 0.893</span>
+                        </div>
+                        <p class="dd-note">This is the theoretical peak total-to-total efficiency along the Cordier line.
+                        Each type has its own ceiling (BC: 85%, FC: 65%, Mixed: 84%, Axial: 82%) reflecting
+                        typical achievable values. The actual estimate is min(type ceiling, Cordier value)
+                        further scaled by the N_s fit factor.</p>
+                    </div>
+                </details>
+
+                <details class="deep-disclosure" style="border:none; margin:8px 0 0;">
+                    <summary>Specific speed and diameter equations</summary>
+                    <div class="dd-body">
+                        <div class="eq-block">
+                            <span class="eq-label">Specific speed</span>
+                            ω_s = ω · √Q / (ΔP / ρ)^(3/4)
+                            <span class="eq-sub">= (2π · 1097/60) · √1.00 / (500 / 1.204)^0.75 = 0.80</span>
+                        </div>
+                        <div class="eq-block">
+                            <span class="eq-label">Specific diameter (Cordier)</span>
+                            ln(δ_s) = 0.833 − 0.524·ln(ω_s) + 0.008·[ln(ω_s)]²
+                            <span class="eq-sub">Coefficients are a polynomial fit to the Balje 1981 dataset.</span>
+                        </div>
+                        <div class="eq-block">
+                            <span class="eq-label">Physical wheel diameter</span>
+                            D = δ_s · √Q / (ΔP / ρ)^(1/4)
+                            <span class="eq-sub">= 2.12 · √1.00 / (500/1.204)^0.25 = 0.573 m</span>
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="card">
+                <div class="eyebrow">Takeaway</div>
+                <p class="tool-copy">
+                    The stacked bars make relative scoring visual and immediate — you can see at a glance
+                    that BC wins on N_s fit and efficiency, while axial loses on tip speed. Clicking
+                    a row reveals per-candidate score decomposition. The shared disclosure blocks below
+                    explain the formulas and weights once, not repeated per candidate.
+                </p>
+            </section>
+        </section>
+    </main>
+
+    <script src="./mock-data.js"></script>
+    <script>
+        const data = window.FAN_SELECTOR_PROTOTYPE_DATA;
+
+        // Simulated score components matching actual backend logic
+        // S = 0.58·S_N + 0.27·S_η + 0.15·S_U
+        const scoreComponents = [
+            {
+                name: 'Backward-Curved Centrifugal', color: '#56616e', total: 85,
+                // Component raw scores
+                ns_raw: 0.98, eff_raw: 0.993, tip_raw: 0.90,
+                // Weighted contributions (sum = total/100)
+                ns_w: 0.568, eff_w: 0.268, tip_w: 0.135,
+                // Bar widths (percentage of 100)
+                ns_bar: 57, eff_bar: 27, tip_bar: 14,
+                wheel: '573 mm', speed: '1097 RPM', power: '0.59 kW', efficiency: '84.4%',
+                ns_value: '0.80', ns_band: '0.30–1.50 (opt 0.80)',
+                drive: 'Custom speed fit — nearest standard is 900 RPM',
+                acoustic_label: 'Low risk — 21.1 m/s tip speed',
+                margin_label: 'High — comfortably inside BC band',
+                packaging: '90-degree turn, deeper housing, compact face area',
+                strengths: ['Optimal N_s fit in the centrifugal range', 'Non-overloading power curve', 'Highest efficiency ceiling'],
+                cautions: ['Needs belt drive or VFD at 1097 RPM', 'Requires space for 90° inlet turn']
+            },
+            {
+                name: 'Mixed Flow', color: '#6ba368', total: 73,
+                ns_raw: 0.82, eff_raw: 0.982, tip_raw: 0.75,
+                ns_w: 0.476, eff_w: 0.265, tip_w: 0.113,
+                ns_bar: 48, eff_bar: 27, tip_bar: 11,
+                wheel: '429 mm', speed: '2470 RPM', power: '0.60 kW', efficiency: '83.5%',
+                ns_value: '0.80', ns_band: '0.80–3.00 (opt 1.80)',
+                drive: 'Near 3000 RPM induction motor range',
+                acoustic_label: 'Medium risk — higher tip speed than centrifugal',
+                margin_label: 'Moderate — near the edge of mixed-flow range',
+                packaging: 'Inline package, no 90-degree turn needed',
+                strengths: ['Inline installation — no turn required', 'Compact for the pressure rise'],
+                cautions: ['Operating near the bottom of mixed-flow range', 'Less pressure margin than centrifugal']
+            },
+            {
+                name: 'Axial', color: '#3d85c6', total: 61,
+                ns_raw: 0.55, eff_raw: 0.965, tip_raw: 0.42,
+                ns_w: 0.319, eff_w: 0.260, tip_w: 0.063,
+                ns_bar: 32, eff_bar: 26, tip_bar: 6,
+                wheel: '337 mm', speed: '4815 RPM', power: '0.61 kW', efficiency: '82.0%',
+                ns_value: '0.80', ns_band: '2.00–8.00 (opt 3.50)',
+                drive: 'High-speed drive required',
+                acoustic_label: 'High risk — 85 m/s tip speed is aggressive',
+                margin_label: 'Tight — N_s 0.80 is far below axial range',
+                packaging: 'Inline, smallest wheel but highest speed',
+                strengths: ['Smallest wheel diameter', 'Pure inline flow path'],
+                cautions: ['Pressure-loaded at this N_s', 'Likely noise problem', 'Stall margin concern']
+            },
+            {
+                name: 'Forward-Curved Centrifugal', color: '#c27b2b', total: 58,
+                ns_raw: 0.62, eff_raw: 0.766, tip_raw: 1.00,
+                ns_w: 0.360, eff_w: 0.207, tip_w: 0.150,
+                ns_bar: 36, eff_bar: 21, tip_bar: 15,
+                wheel: '664 mm', speed: '754 RPM', power: '0.77 kW', efficiency: '65.1%',
+                ns_value: '0.80', ns_band: '0.30–1.20 (opt 0.60)',
+                drive: 'Near 900 RPM — closest to a standard motor speed',
+                acoustic_label: 'Low risk — slow tip speed',
+                margin_label: 'Moderate — N_s is above FC sweet spot',
+                packaging: '90-degree turn, largest wheel but lowest speed',
+                strengths: ['Closest to standard motor speed', 'Low acoustic risk'],
+                cautions: ['Power-hump instability risk', 'Lowest efficiency of all candidates', 'Largest wheel']
+            }
+        ];
+
+        function render() {
+            const winner = scoreComponents[0];
+            document.getElementById('verdict-name').textContent = winner.name;
+            document.getElementById('verdict-tag').textContent = `${winner.total}% fit · ${winner.wheel} · ${winner.speed}`;
+            document.getElementById('verdict-because').textContent =
+                `Specific speed 0.80 puts this duty in the centrifugal zone. BC leads because it has the strongest N_s fit, ` +
+                `highest efficiency ceiling, and non-overloading power curve. Mixed Flow is the nearest fallback at 73%.`;
+
+            const wf = document.getElementById('waterfall');
+            wf.innerHTML = scoreComponents.map((c, idx) => {
+                const barSegments = [
+                    { cls: 'sc-ns', w: c.ns_bar, label: `N_s fit: ${c.ns_raw.toFixed(2)} × 0.58 = ${c.ns_w.toFixed(3)}` },
+                    { cls: 'sc-eff', w: c.eff_bar, label: `Efficiency: ${c.eff_raw.toFixed(2)} × 0.27 = ${c.eff_w.toFixed(3)}` },
+                    { cls: 'sc-tip', w: c.tip_bar, label: `Tip speed: ${c.tip_raw.toFixed(2)} × 0.15 = ${c.tip_w.toFixed(3)}` },
+                ];
+                return `
+                    <div class="wf-row" data-idx="${idx}" onclick="toggleDetail(${idx})">
+                        <div class="wf-name">
+                            <span class="type-dot-sm" style="background:${c.color}"></span>
+                            ${c.name}
+                        </div>
+                        <div class="wf-bar-area">
+                            <div class="wf-bar-track">
+                                ${barSegments.map(s => `<div class="wf-segment ${s.cls}" style="width:${s.w}%" data-label="${s.label}"></div>`).join('')}
+                            </div>
+                        </div>
+                        <div class="wf-score">${c.total}</div>
+                    </div>
+                    <div class="wf-detail" id="detail-${idx}">
+                        <div class="wf-detail-grid">
+                            <div class="wf-detail-col">
+                                <h4>Hardware</h4>
+                                <div class="wf-kv"><span class="wf-kv-label">Wheel</span><span class="wf-kv-value">${c.wheel}</span></div>
+                                <div class="wf-kv"><span class="wf-kv-label">Speed</span><span class="wf-kv-value">${c.speed}</span></div>
+                                <div class="wf-kv"><span class="wf-kv-label">Power</span><span class="wf-kv-value">${c.power}</span></div>
+                                <div class="wf-kv"><span class="wf-kv-label">Efficiency</span><span class="wf-kv-value">${c.efficiency}</span></div>
+                                <h4 style="margin-top: 12px;">Practical Checks</h4>
+                                <div class="wf-kv"><span class="wf-kv-label">Drive</span><span class="wf-kv-value" style="font-family:var(--font-sans);font-weight:400;max-width:220px;text-align:right;">${c.drive}</span></div>
+                                <div class="wf-kv"><span class="wf-kv-label">Acoustic</span><span class="wf-kv-value" style="font-family:var(--font-sans);font-weight:400;max-width:220px;text-align:right;">${c.acoustic_label}</span></div>
+                                <div class="wf-kv"><span class="wf-kv-label">Margin</span><span class="wf-kv-value" style="font-family:var(--font-sans);font-weight:400;max-width:220px;text-align:right;">${c.margin_label}</span></div>
+                                <div class="wf-kv"><span class="wf-kv-label">Packaging</span><span class="wf-kv-value" style="font-family:var(--font-sans);font-weight:400;max-width:220px;text-align:right;">${c.packaging}</span></div>
+                            </div>
+                            <div class="wf-detail-col">
+                                <h4>Score Decomposition</h4>
+                                <table class="score-decomp">
+                                    <thead><tr><th>Component</th><th>Raw</th><th>Weight</th><th>Contrib.</th><th class="sd-bar-cell"></th></tr></thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>N_s fit</td>
+                                            <td class="sd-mono">${c.ns_raw.toFixed(3)}</td>
+                                            <td class="sd-mono">0.58</td>
+                                            <td class="sd-mono">${c.ns_w.toFixed(3)}</td>
+                                            <td class="sd-bar-cell"><div class="sd-bar sc-ns" style="width:${c.ns_raw * 100}%"></div></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Efficiency</td>
+                                            <td class="sd-mono">${c.eff_raw.toFixed(3)}</td>
+                                            <td class="sd-mono">0.27</td>
+                                            <td class="sd-mono">${c.eff_w.toFixed(3)}</td>
+                                            <td class="sd-bar-cell"><div class="sd-bar sc-eff" style="width:${c.eff_raw * 100}%"></div></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tip speed</td>
+                                            <td class="sd-mono">${c.tip_raw.toFixed(3)}</td>
+                                            <td class="sd-mono">0.15</td>
+                                            <td class="sd-mono">${c.tip_w.toFixed(3)}</td>
+                                            <td class="sd-bar-cell"><div class="sd-bar sc-tip" style="width:${c.tip_raw * 100}%"></div></td>
+                                        </tr>
+                                        <tr style="font-weight:700; border-top: 2px solid var(--border-color);">
+                                            <td>Total</td>
+                                            <td></td>
+                                            <td></td>
+                                            <td class="sd-mono">${(c.ns_w + c.eff_w + c.tip_w).toFixed(3)}</td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <p style="font-size:0.78rem; color:var(--text-light); margin:6px 0 0;">
+                                    N_s band: ${c.ns_band}<br>
+                                    η_est / 0.85 = ${c.eff_raw.toFixed(3)}
+                                </p>
+
+                                <h4 style="margin-top: 12px;">Why it fits</h4>
+                                <ul>${c.strengths.map(s => `<li>${s}</li>`).join('')}</ul>
+                                <h4 style="margin-top: 12px;">Watchouts</h4>
+                                <ul>${c.cautions.map(s => `<li>${s}</li>`).join('')}</ul>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        let openIdx = null;
+
+        function toggleDetail(idx) {
+            const row = document.querySelector(`.wf-row[data-idx="${idx}"]`);
+            const detail = document.getElementById(`detail-${idx}`);
+            if (openIdx === idx) {
+                detail.classList.remove('visible');
+                row.classList.remove('expanded');
+                openIdx = null;
+            } else {
+                if (openIdx !== null) {
+                    document.getElementById(`detail-${openIdx}`).classList.remove('visible');
+                    document.querySelector(`.wf-row[data-idx="${openIdx}"]`).classList.remove('expanded');
+                }
+                detail.classList.add('visible');
+                row.classList.add('expanded');
+                openIdx = idx;
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>

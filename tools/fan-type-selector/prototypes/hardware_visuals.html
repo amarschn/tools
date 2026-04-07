@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardware Visual Prototypes</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f4f5;
+            color: #18181b;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .prototype-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+        }
+        .prototype-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .prototype-card h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #3f3f46;
+            margin-bottom: 0.5rem;
+        }
+        .prototype-card p {
+            margin-top: 0;
+            font-size: 0.9rem;
+            color: #71717a;
+            margin-bottom: 1.5rem;
+        }
+        svg {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #e4e4e7;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hardware Visual Prototypes</h1>
+        <p>Testing different visual layouts for the Hardware reference geometry preview.</p>
+        
+        <div class="prototype-grid" id="grid">
+            <!-- SVGs will be injected here -->
+        </div>
+    </div>
+
+    <script>
+        // Mock data
+        const data = {
+            comparison: [
+                {
+                    color: '#0ea5e9', // Blue
+                    short_name: 'Backward Curved',
+                    diameter_m: 0.450,
+                    passage_area_ratio: 0.85,
+                    reference_geometry: {
+                        section_type: 'inlet_eye_annulus',
+                        basis_label: 'Inlet Eye',
+                        flow_path_summary: 'Radial discharge after axial inlet',
+                        reference_outer_diameter_m: 0.350,
+                        reference_inner_diameter_m: 0.150,
+                        centerbody_label: 'Hub blockage',
+                        effective_flow_area_m2: 0.075
+                    }
+                }
+            ],
+            velocity_constraint: {
+                active: true,
+                equivalent_diameter_m: 0.400
+            }
+        };
+
+        const theme = {
+            text: '#18181b',
+            muted: '#71717a',
+            bg: '#ffffff'
+        };
+
+        function hexToRgba(hex, alpha) {
+            let r = parseInt(hex.slice(1, 3), 16),
+                g = parseInt(hex.slice(3, 5), 16),
+                b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function formatNumber(num, decimals) {
+            return num.toFixed(decimals);
+        }
+
+        // Shared drawing variables
+        const width = 450;
+        const height = 280;
+        const centerX = 160;
+        const centerY = 140;
+        const maxDisplayDiameter = 180;
+
+        const best = data.comparison[0];
+        const velocity = data.velocity_constraint;
+        const geometry = best.reference_geometry;
+        
+        const wheelDiameterMm = best.diameter_m * 1000;
+        const referenceOuterMm = geometry.reference_outer_diameter_m * 1000;
+        const referenceInnerMm = geometry.reference_inner_diameter_m * 1000;
+        const passageDiameterMm = velocity.active ? velocity.equivalent_diameter_m * 1000 : null;
+        
+        const scaleBasis = Math.max(wheelDiameterMm, referenceOuterMm, passageDiameterMm || 0, 1);
+        const scale = maxDisplayDiameter / scaleBasis;
+        
+        const wheelRadius = Math.max(12, wheelDiameterMm * scale * 0.5);
+        const referenceOuterRadius = Math.max(12, referenceOuterMm * scale * 0.5);
+        const referenceInnerRadius = Math.max(6, referenceInnerMm * scale * 0.5);
+        const passageRadius = passageDiameterMm ? Math.max(14, passageDiameterMm * scale * 0.5) : null;
+        
+        const mutedStroke = theme.muted;
+        const cutoutFill = theme.bg;
+
+        function renderCard(title, description, svgContent) {
+            return `
+                <div class="prototype-card">
+                    <h2>${title}</h2>
+                    <p>${description}</p>
+                    <svg viewBox="0 0 ${width} ${height}">
+                        ${svgContent}
+                    </svg>
+                </div>
+            `;
+        }
+
+        // --- Original (Baseline) ---
+        function renderOriginal() {
+            let shapes = '';
+            if (passageRadius) {
+                shapes += `
+                    <circle cx="${centerX}" cy="${centerY}" r="${passageRadius}" fill="none" stroke="${mutedStroke}" stroke-width="2.5" stroke-dasharray="8 6"></circle>
+                    <line x1="${centerX}" y1="${centerY - passageRadius - 10}" x2="${centerX + 120}" y2="${centerY - passageRadius - 10}" stroke="${mutedStroke}" stroke-width="1.5"></line>
+                    <text x="${centerX + 126}" y="${centerY - passageRadius - 6}" fill="${mutedStroke}" font-size="12" font-weight="600">Equivalent passage ${formatNumber(passageDiameterMm, 0)} mm</text>
+                `;
+            }
+
+            shapes += `
+                <circle cx="${centerX}" cy="${centerY}" r="${wheelRadius}" fill="none" stroke="${hexToRgba(best.color, 0.28)}" stroke-width="2"></circle>
+                <circle cx="${centerX}" cy="${centerY}" r="${referenceOuterRadius}" fill="${hexToRgba(best.color, 0.18)}" stroke="${best.color}" stroke-width="3"></circle>
+                <circle cx="${centerX}" cy="${centerY}" r="${referenceInnerRadius}" fill="${cutoutFill}" stroke="${best.color}" stroke-width="2"></circle>
+                
+                <line x1="${centerX}" y1="${centerY + wheelRadius + 12}" x2="${centerX + 120}" y2="${centerY + wheelRadius + 12}" stroke="${hexToRgba(best.color, 0.45)}" stroke-width="1.5"></line>
+                <text x="${centerX + 126}" y="${centerY + wheelRadius + 16}" fill="${hexToRgba(best.color, 0.8)}" font-size="12" font-weight="600">Wheel OD ${formatNumber(wheelDiameterMm, 0)} mm</text>
+                
+                <line x1="${centerX}" y1="${centerY + referenceOuterRadius + 2}" x2="${centerX + 120}" y2="${centerY + referenceOuterRadius + 2}" stroke="${best.color}" stroke-width="1.5"></line>
+                <text x="${centerX + 126}" y="${centerY + referenceOuterRadius + 6}" fill="${best.color}" font-size="12" font-weight="700">Inlet eye ${formatNumber(referenceOuterMm, 0)} mm</text>
+                
+                <line x1="${centerX}" y1="${centerY - referenceInnerRadius - 12}" x2="${centerX + 120}" y2="${centerY - referenceInnerRadius - 12}" stroke="${best.color}" stroke-width="1.2" stroke-dasharray="4 4"></line>
+                <text x="${centerX + 126}" y="${centerY - referenceInnerRadius - 8}" fill="${best.color}" font-size="12">${geometry.centerbody_label} ${formatNumber(referenceInnerMm, 0)} mm</text>
+            `;
+
+            let labels = `
+                <text x="20" y="30" fill="${theme.text}" font-size="13" font-weight="700">${geometry.basis_label} model</text>
+                <text x="20" y="48" fill="${theme.muted}" font-size="12">${geometry.flow_path_summary}</text>
+            `;
+
+            return `
+                ${labels}
+                <rect x="330" y="64" width="104" height="118" rx="14" fill="${hexToRgba(best.color, 0.08)}" stroke="${hexToRgba(best.color, 0.35)}" stroke-width="1.5"></rect>
+                <text x="348" y="90" fill="${theme.text}" font-size="12" font-weight="700">Lead type</text>
+                <text x="348" y="110" fill="${best.color}" font-size="14" font-weight="700">${best.short_name}</text>
+                <text x="348" y="134" fill="${theme.muted}" font-size="12">Eff. area</text>
+                <text x="348" y="150" fill="${theme.text}" font-size="12" font-weight="600">${formatNumber(geometry.effective_flow_area_m2, 3)} m²</text>
+                <text x="348" y="174" fill="${theme.muted}" font-size="12">Area ratio</text>
+                <text x="348" y="190" fill="${theme.text}" font-size="12" font-weight="600">${formatNumber(best.passage_area_ratio, 2)}</text>
+                ${shapes}
+            `;
+        }
+
+        // --- Prototype 1: Radial/Diagonal Leaders ---
+        function renderPrototype1() {
+            let shapes = '';
+            
+            // Defs for markers (arrows)
+            shapes += `
+                <defs>
+                    <marker id="arrow-muted" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="${mutedStroke}" />
+                    </marker>
+                    <marker id="arrow-primary" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="${best.color}" />
+                    </marker>
+                    <marker id="arrow-secondary" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="${hexToRgba(best.color, 0.6)}" />
+                    </marker>
+                </defs>
+            `;
+
+            if (passageRadius) {
+                shapes += `
+                    <circle cx="${centerX}" cy="${centerY}" r="${passageRadius}" fill="none" stroke="${mutedStroke}" stroke-width="2" stroke-dasharray="6 4"></circle>
+                    <path d="M ${centerX - passageRadius * 0.7} ${centerY - passageRadius * 0.7} L ${centerX - passageRadius - 20} ${centerY - passageRadius - 20} L ${centerX - passageRadius - 20 + 80} ${centerY - passageRadius - 20}" fill="none" stroke="${mutedStroke}" stroke-width="1.5"></path>
+                    <circle cx="${centerX - passageRadius * 0.7}" cy="${centerY - passageRadius * 0.7}" r="3" fill="${mutedStroke}"></circle>
+                    <text x="${centerX - passageRadius - 20}" y="${centerY - passageRadius - 25}" fill="${mutedStroke}" font-size="11" font-weight="600">Sys. Passage: ${formatNumber(passageDiameterMm, 0)} mm</text>
+                `;
+            }
+
+            shapes += `
+                <circle cx="${centerX}" cy="${centerY}" r="${wheelRadius}" fill="none" stroke="${hexToRgba(best.color, 0.28)}" stroke-width="2"></circle>
+                <circle cx="${centerX}" cy="${centerY}" r="${referenceOuterRadius}" fill="${hexToRgba(best.color, 0.15)}" stroke="${best.color}" stroke-width="3"></circle>
+                <circle cx="${centerX}" cy="${centerY}" r="${referenceInnerRadius}" fill="${cutoutFill}" stroke="${best.color}" stroke-width="2"></circle>
+                
+                <!-- Wheel OD Leader (Bottom Left) -->
+                <path d="M ${centerX - wheelRadius * 0.8} ${centerY + wheelRadius * 0.6} L ${centerX - wheelRadius - 20} ${centerY + wheelRadius + 20} L ${centerX - wheelRadius - 20 + 80} ${centerY + wheelRadius + 20}" fill="none" stroke="${hexToRgba(best.color, 0.45)}" stroke-width="1.5"></path>
+                <circle cx="${centerX - wheelRadius * 0.8}" cy="${centerY + wheelRadius * 0.6}" r="3" fill="${hexToRgba(best.color, 0.45)}"></circle>
+                <text x="${centerX - wheelRadius - 20}" y="${centerY + wheelRadius + 15}" fill="${hexToRgba(best.color, 0.8)}" font-size="11" font-weight="600">Wheel OD: ${formatNumber(wheelDiameterMm, 0)} mm</text>
+
+                <!-- Reference Outer Leader (Top Right) -->
+                <path d="M ${centerX + referenceOuterRadius * 0.85} ${centerY - referenceOuterRadius * 0.5} L ${centerX + referenceOuterRadius + 20} ${centerY - referenceOuterRadius - 20} L ${centerX + referenceOuterRadius + 20 + 80} ${centerY - referenceOuterRadius - 20}" fill="none" stroke="${best.color}" stroke-width="1.5"></path>
+                <circle cx="${centerX + referenceOuterRadius * 0.85}" cy="${centerY - referenceOuterRadius * 0.5}" r="3" fill="${best.color}"></circle>
+                <text x="${centerX + referenceOuterRadius + 20}" y="${centerY - referenceOuterRadius - 25}" fill="${best.color}" font-size="11" font-weight="700">Inlet Eye OD: ${formatNumber(referenceOuterMm, 0)} mm</text>
+
+                <!-- Reference Inner Leader (Bottom Right) -->
+                <path d="M ${centerX + referenceInnerRadius * 0.7} ${centerY + referenceInnerRadius * 0.7} L ${centerX + referenceInnerRadius + 30} ${centerY + referenceInnerRadius + 30} L ${centerX + referenceInnerRadius + 30 + 80} ${centerY + referenceInnerRadius + 30}" fill="none" stroke="${best.color}" stroke-width="1.2" stroke-dasharray="4 4"></path>
+                <circle cx="${centerX + referenceInnerRadius * 0.7}" cy="${centerY + referenceInnerRadius * 0.7}" r="3" fill="${best.color}"></circle>
+                <text x="${centerX + referenceInnerRadius + 30}" y="${centerY + referenceInnerRadius + 25}" fill="${best.color}" font-size="11">${geometry.centerbody_label}: ${formatNumber(referenceInnerMm, 0)} mm</text>
+            `;
+
+            let labels = `
+                <text x="20" y="30" fill="${theme.text}" font-size="13" font-weight="700">${geometry.basis_label} model</text>
+                <text x="20" y="48" fill="${theme.muted}" font-size="12">${geometry.flow_path_summary}</text>
+            `;
+
+            return `
+                ${labels}
+                <rect x="330" y="64" width="104" height="118" rx="14" fill="${hexToRgba(best.color, 0.08)}" stroke="${hexToRgba(best.color, 0.35)}" stroke-width="1.5"></rect>
+                <text x="348" y="90" fill="${theme.text}" font-size="12" font-weight="700">Lead type</text>
+                <text x="348" y="110" fill="${best.color}" font-size="14" font-weight="700">${best.short_name}</text>
+                <text x="348" y="134" fill="${theme.muted}" font-size="12">Eff. area</text>
+                <text x="348" y="150" fill="${theme.text}" font-size="12" font-weight="600">${formatNumber(geometry.effective_flow_area_m2, 3)} m²</text>
+                <text x="348" y="174" fill="${theme.muted}" font-size="12">Area ratio</text>
+                <text x="348" y="190" fill="${theme.text}" font-size="12" font-weight="600">${formatNumber(best.passage_area_ratio, 2)}</text>
+                ${shapes}
+            `;
+        }
+
+        // --- Prototype 2: Clean Dimension Lines (like engineering drawing) ---
+        function renderPrototype2() {
+            let shapes = '';
+            
+            shapes += `
+                <defs>
+                    <marker id="p2-arrow-muted" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="${mutedStroke}" />
+                    </marker>
+                    <marker id="p2-arrow-primary" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="${best.color}" />
+                    </marker>
+                    <marker id="p2-arrow-primary-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 10 0 L 0 5 L 10 10 z" fill="${best.color}" />
+                    </marker>
+                     <marker id="p2-arrow-secondary" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="${hexToRgba(best.color, 0.45)}" />
+                    </marker>
+                    <marker id="p2-arrow-secondary-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 10 0 L 0 5 L 10 10 z" fill="${hexToRgba(best.color, 0.45)}" />
+                    </marker>
+                </defs>
+            `;
+
+            // Draw centerlines
+            shapes += `
+                <line x1="${centerX - maxDisplayDiameter - 10}" y1="${centerY}" x2="${centerX + maxDisplayDiameter + 10}" y2="${centerY}" stroke="#d4d4d8" stroke-width="1" stroke-dasharray="10 4 2 4"></line>
+                <line x1="${centerX}" y1="${centerY - maxDisplayDiameter - 10}" x2="${centerX}" y2="${centerY + maxDisplayDiameter + 10}" stroke="#d4d4d8" stroke-width="1" stroke-dasharray="10 4 2 4"></line>
+            `;
+
+            // Draw circles
+            if (passageRadius) {
+                shapes += `<circle cx="${centerX}" cy="${centerY}" r="${passageRadius}" fill="none" stroke="${mutedStroke}" stroke-width="2" stroke-dasharray="6 4"></circle>`;
+            }
+            shapes += `
+                <circle cx="${centerX}" cy="${centerY}" r="${wheelRadius}" fill="none" stroke="${hexToRgba(best.color, 0.28)}" stroke-width="2"></circle>
+                <circle cx="${centerX}" cy="${centerY}" r="${referenceOuterRadius}" fill="${hexToRgba(best.color, 0.15)}" stroke="${best.color}" stroke-width="3"></circle>
+                <circle cx="${centerX}" cy="${centerY}" r="${referenceInnerRadius}" fill="${cutoutFill}" stroke="${best.color}" stroke-width="2"></circle>
+            `;
+
+            // Draw clean vertical dimensioning on the right side
+            const dimX = centerX + maxDisplayDiameter + 25;
+            
+            if (passageRadius) {
+                shapes += `
+                    <line x1="${centerX + passageRadius}" y1="${centerY}" x2="${dimX + 30}" y2="${centerY}" stroke="${mutedStroke}" stroke-width="0.5"></line>
+                    <line x1="${dimX + 30}" y1="${centerY - passageRadius}" x2="${dimX + 30}" y2="${centerY + passageRadius}" stroke="${mutedStroke}" stroke-width="1" marker-start="url(#p2-arrow-muted)" marker-end="url(#p2-arrow-muted)"></line>
+                    <text x="${dimX + 36}" y="${centerY}" fill="${mutedStroke}" font-size="11" alignment-baseline="middle">Passage: ${formatNumber(passageDiameterMm, 0)}</text>
+                `;
+            }
+
+            // Reference Outer (Inlet Eye)
+            shapes += `
+                <line x1="${centerX}" y1="${centerY - referenceOuterRadius}" x2="${dimX}" y2="${centerY - referenceOuterRadius}" stroke="${best.color}" stroke-width="0.5" stroke-dasharray="4 2"></line>
+                <line x1="${centerX}" y1="${centerY + referenceOuterRadius}" x2="${dimX}" y2="${centerY + referenceOuterRadius}" stroke="${best.color}" stroke-width="0.5" stroke-dasharray="4 2"></line>
+                <line x1="${dimX}" y1="${centerY - referenceOuterRadius}" x2="${dimX}" y2="${centerY + referenceOuterRadius}" stroke="${best.color}" stroke-width="1" marker-start="url(#p2-arrow-primary-start)" marker-end="url(#p2-arrow-primary)"></line>
+                <rect x="${dimX - 10}" y="${centerY - 8}" width="20" height="16" fill="${theme.bg}"></rect>
+                <text x="${dimX}" y="${centerY + 4}" fill="${best.color}" font-size="11" font-weight="700" text-anchor="middle">Eye: ${formatNumber(referenceOuterMm, 0)}</text>
+            `;
+
+            // Hub (Reference Inner)
+            shapes += `
+                <line x1="${centerX - referenceInnerRadius}" y1="${centerY}" x2="${centerX + referenceInnerRadius}" y2="${centerY}" stroke="${best.color}" stroke-width="1" marker-start="url(#p2-arrow-primary-start)" marker-end="url(#p2-arrow-primary)"></line>
+                <rect x="${centerX - 10}" y="${centerY - 8}" width="20" height="16" fill="${theme.bg}"></rect>
+                <text x="${centerX}" y="${centerY + 4}" fill="${best.color}" font-size="10" text-anchor="middle">Hub: ${formatNumber(referenceInnerMm, 0)}</text>
+            `;
+
+            // Wheel OD (Bottom)
+            const dimY = centerY + maxDisplayDiameter + 25;
+            shapes += `
+                <line x1="${centerX - wheelRadius}" y1="${centerY}" x2="${centerX - wheelRadius}" y2="${dimY}" stroke="${hexToRgba(best.color, 0.45)}" stroke-width="0.5" stroke-dasharray="4 2"></line>
+                <line x1="${centerX + wheelRadius}" y1="${centerY}" x2="${centerX + wheelRadius}" y2="${dimY}" stroke="${hexToRgba(best.color, 0.45)}" stroke-width="0.5" stroke-dasharray="4 2"></line>
+                <line x1="${centerX - wheelRadius}" y1="${dimY}" x2="${centerX + wheelRadius}" y2="${dimY}" stroke="${hexToRgba(best.color, 0.45)}" stroke-width="1" marker-start="url(#p2-arrow-secondary-start)" marker-end="url(#p2-arrow-secondary)"></line>
+                <rect x="${centerX - 35}" y="${dimY - 8}" width="70" height="16" fill="${theme.bg}"></rect>
+                <text x="${centerX}" y="${dimY + 4}" fill="${hexToRgba(best.color, 0.8)}" font-size="11" font-weight="600" text-anchor="middle">Wheel: ${formatNumber(wheelDiameterMm, 0)}</text>
+            `;
+
+            let labels = `
+                <text x="20" y="30" fill="${theme.text}" font-size="13" font-weight="700">${geometry.basis_label} model</text>
+                <text x="20" y="48" fill="${theme.muted}" font-size="12">${geometry.flow_path_summary}</text>
+            `;
+
+            // Move the lead type info card a bit higher or make it cleaner
+            return `
+                ${labels}
+                <rect x="330" y="20" width="104" height="118" rx="14" fill="${hexToRgba(best.color, 0.08)}" stroke="${hexToRgba(best.color, 0.35)}" stroke-width="1.5"></rect>
+                <text x="348" y="46" fill="${theme.text}" font-size="12" font-weight="700">Lead type</text>
+                <text x="348" y="66" fill="${best.color}" font-size="14" font-weight="700">${best.short_name}</text>
+                <text x="348" y="90" fill="${theme.muted}" font-size="12">Eff. area</text>
+                <text x="348" y="106" fill="${theme.text}" font-size="12" font-weight="600">${formatNumber(geometry.effective_flow_area_m2, 3)} m²</text>
+                <text x="348" y="130" fill="${theme.muted}" font-size="12">Area ratio</text>
+                <text x="348" y="146" fill="${theme.text}" font-size="12" font-weight="600">${formatNumber(best.passage_area_ratio, 2)}</text>
+                ${shapes}
+            `;
+        }
+
+        // --- Prototype 3: Legend based ---
+        function renderPrototype3() {
+            let shapes = '';
+            
+            if (passageRadius) {
+                shapes += `<circle cx="${centerX - 30}" cy="${centerY}" r="${passageRadius}" fill="none" stroke="${mutedStroke}" stroke-width="2.5" stroke-dasharray="6 4"></circle>`;
+            }
+            shapes += `
+                <circle cx="${centerX - 30}" cy="${centerY}" r="${wheelRadius}" fill="none" stroke="${hexToRgba(best.color, 0.35)}" stroke-width="2"></circle>
+                <circle cx="${centerX - 30}" cy="${centerY}" r="${referenceOuterRadius}" fill="${hexToRgba(best.color, 0.15)}" stroke="${best.color}" stroke-width="3"></circle>
+                <circle cx="${centerX - 30}" cy="${centerY}" r="${referenceInnerRadius}" fill="${cutoutFill}" stroke="${best.color}" stroke-width="2"></circle>
+            `;
+
+            let labels = `
+                <text x="20" y="30" fill="${theme.text}" font-size="13" font-weight="700">${geometry.basis_label} model</text>
+                <text x="20" y="48" fill="${theme.muted}" font-size="12">${geometry.flow_path_summary}</text>
+            `;
+
+            // Render a legend instead of on-drawing callouts
+            const legendX = centerX + maxDisplayDiameter - 40;
+            const legendY = centerY - 50;
+
+            let legend = `
+                <!-- Lead Type Card -->
+                <rect x="${legendX}" y="${legendY - 50}" width="140" height="70" rx="8" fill="${hexToRgba(best.color, 0.05)}" stroke="${hexToRgba(best.color, 0.3)}"></rect>
+                <text x="${legendX + 10}" y="${legendY - 30}" fill="${theme.text}" font-size="11" font-weight="700">Lead: <tspan fill="${best.color}">${best.short_name}</tspan></text>
+                <text x="${legendX + 10}" y="${legendY - 10}" fill="${theme.text}" font-size="11">Eff area: ${formatNumber(geometry.effective_flow_area_m2, 3)} m²</text>
+                <text x="${legendX + 10}" y="${legendY + 10}" fill="${theme.text}" font-size="11">Area ratio: ${formatNumber(best.passage_area_ratio, 2)}</text>
+
+                <!-- Legend Elements -->
+                <line x1="${legendX}" y1="${legendY + 45}" x2="${legendX + 20}" y2="${legendY + 45}" stroke="${best.color}" stroke-width="3"></line>
+                <text x="${legendX + 30}" y="${legendY + 49}" fill="${theme.text}" font-size="11" font-weight="700">Inlet Eye OD: ${formatNumber(referenceOuterMm, 0)} mm</text>
+
+                <line x1="${legendX}" y1="${legendY + 65}" x2="${legendX + 20}" y2="${legendY + 65}" stroke="${best.color}" stroke-width="2"></line>
+                <text x="${legendX + 30}" y="${legendY + 69}" fill="${theme.text}" font-size="11">${geometry.centerbody_label}: ${formatNumber(referenceInnerMm, 0)} mm</text>
+
+                <line x1="${legendX}" y1="${legendY + 85}" x2="${legendX + 20}" y2="${legendY + 85}" stroke="${hexToRgba(best.color, 0.45)}" stroke-width="2"></line>
+                <text x="${legendX + 30}" y="${legendY + 89}" fill="${theme.text}" font-size="11" font-weight="600">Wheel OD: ${formatNumber(wheelDiameterMm, 0)} mm</text>
+
+                <line x1="${legendX}" y1="${legendY + 105}" x2="${legendX + 20}" y2="${legendY + 105}" stroke="${mutedStroke}" stroke-width="2.5" stroke-dasharray="6 4"></line>
+                <text x="${legendX + 30}" y="${legendY + 109}" fill="${theme.text}" font-size="11" font-weight="600">Sys. Passage: ${formatNumber(passageDiameterMm, 0)} mm</text>
+            `;
+
+            return `
+                ${labels}
+                ${shapes}
+                ${legend}
+            `;
+        }
+
+        document.getElementById('grid').innerHTML = `
+            ${renderCard('Original', 'Leader lines overlapping, visually busy, straight horizontal text alignment.', renderOriginal())}
+            ${renderCard('Prototype 1: Radial Leaders', 'Leader lines draw out diagonally and point directly to the radii avoiding text overlap.', renderPrototype1())}
+            ${renderCard('Prototype 2: Engineering Dimensions', 'Classic drafting style with proper dimension arrows and orthogonal guides.', renderPrototype2())}
+            ${renderCard('Prototype 3: Clean Legend', 'Removes on-graphic text entirely in favor of a right-hand legend with matching line styles.', renderPrototype3())}
+        `;
+    </script>
+</body>
+</html>

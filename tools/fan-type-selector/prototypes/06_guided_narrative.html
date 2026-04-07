@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype F: Guided Narrative</title>
+    <link rel="stylesheet" href="./shared.css">
+    <style>
+        /* --- timeline spine --- */
+        .narrative {
+            position: relative;
+            display: grid;
+            gap: 0;
+            padding-left: 32px;
+        }
+        .narrative::before {
+            content: '';
+            position: absolute;
+            left: 11px;
+            top: 20px;
+            bottom: 20px;
+            width: 2px;
+            background: var(--border-color);
+        }
+
+        .n-step {
+            position: relative;
+            padding: 16px 0;
+        }
+        .n-step + .n-step {
+            border-top: none;
+        }
+        .n-dot {
+            position: absolute;
+            left: -32px;
+            top: 18px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.68rem;
+            font-weight: 700;
+            z-index: 2;
+        }
+        .n-step.complete .n-dot {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: #fff;
+        }
+        .n-step.active .n-dot {
+            border-color: var(--accent-color);
+            border-width: 3px;
+        }
+
+        .n-head {
+            margin-bottom: 8px;
+        }
+        .n-head h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+        .n-head .n-answer {
+            font-size: 0.92rem;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        /* --- expandable body --- */
+        .n-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.2s ease;
+            opacity: 0;
+        }
+        .n-step.open .n-body {
+            max-height: 2000px;
+            opacity: 1;
+        }
+        .n-toggle {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .n-toggle:hover {
+            color: var(--text-color);
+        }
+
+        .n-content {
+            padding: 10px 0 4px;
+        }
+        .n-content p {
+            margin: 0 0 10px;
+            color: var(--text-light);
+            line-height: 1.55;
+            max-width: 60ch;
+        }
+
+        /* --- ranking cards (compact) --- */
+        .rank-cards {
+            display: grid;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .rank-card {
+            display: grid;
+            grid-template-columns: 36px 1fr auto;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+        .rank-card.winner {
+            border-color: var(--accent-color);
+            border-width: 2px;
+        }
+        .rank-pos {
+            font-family: var(--font-mono);
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text-light);
+        }
+        .rank-card.winner .rank-pos {
+            color: var(--text-color);
+        }
+        .rank-info .rank-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .rank-info .rank-why {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+        .rank-score {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        .rank-meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+
+        /* --- key-value pairs inline --- */
+        .kv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .kv-item {
+            padding: 10px 12px;
+            border-radius: var(--border-radius);
+            background: var(--primary-light);
+        }
+        .kv-item .kv-label {
+            display: block;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            margin-bottom: 2px;
+        }
+        .kv-item .kv-value {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* --- callout --- */
+        .callout {
+            display: flex;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--callout-info-border);
+            background: var(--callout-info-bg);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            margin: 10px 0;
+        }
+        .callout-icon {
+            flex-shrink: 0;
+            font-size: 1rem;
+        }
+        .callout.warn {
+            border-color: var(--callout-warning-border);
+            background: var(--callout-warning-bg);
+        }
+
+        /* --- check list compact --- */
+        .checks {
+            margin: 10px 0;
+        }
+        .chk {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            padding: 7px 0;
+            font-size: 0.88rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .chk:last-child { border-bottom: none; }
+        .chk-status {
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+            font-size: 0.8rem;
+        }
+        .chk-status.ok { color: var(--success-color); }
+        .chk-status.flag { color: var(--warning-color); }
+        .chk-text strong {
+            margin-right: 4px;
+        }
+        .chk-text {
+            color: var(--text-light);
+        }
+
+        /* --- deep disclosure --- */
+        .deep-disclosure {
+            margin-top: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            overflow: hidden;
+        }
+        .deep-disclosure summary {
+            padding: 10px 14px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+            list-style: none;
+        }
+        .deep-disclosure summary::-webkit-details-marker { display: none; }
+        .deep-disclosure summary::before {
+            content: '+ ';
+            font-family: var(--font-mono);
+        }
+        .deep-disclosure[open] summary::before {
+            content: '- ';
+        }
+        .deep-disclosure .dd-body {
+            border-top: 1px solid var(--border-color);
+            padding: 14px;
+        }
+        .eq-block {
+            display: block;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--primary-light);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            margin: 8px 0;
+            overflow-x: auto;
+            line-height: 1.7;
+        }
+        .eq-block .eq-label {
+            display: block;
+            font-family: var(--font-sans);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-light);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .eq-block .eq-sub {
+            display: block;
+            color: var(--text-light);
+            font-size: 0.78rem;
+            margin-top: 4px;
+        }
+        .weight-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.84rem;
+            margin: 8px 0;
+        }
+        .weight-table th {
+            text-align: left;
+            padding: 8px 6px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-light);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .weight-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+        .weight-table .wt-mono {
+            font-family: var(--font-mono);
+            font-weight: 700;
+        }
+        .weight-table .wt-why {
+            color: var(--text-light);
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+        .dd-note {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            line-height: 1.5;
+            margin: 8px 0 0;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <a class="back-link" href="./index.html">Back to Prototype Index</a>
+                <h1 class="tool-title">Prototype F: Guided Narrative</h1>
+                <p class="tool-copy">
+                    Reads top-to-bottom like a decision memo: your input, what it means, how
+                    the types compare, what to check, and what to do next. Each step shows its
+                    conclusion on the fold line; expand only if you want the reasoning.
+                </p>
+                <div class="meta-row">
+                    <div class="meta-chip"><strong>Pattern</strong> Timeline narrative with inline expand</div>
+                    <div class="meta-chip"><strong>Goal</strong> Tell the story of the decision, not just the answer</div>
+                </div>
+            </div>
+        </div>
+
+        <section class="section-stack">
+            <section class="card" style="padding: 18px 18px 18px 50px;">
+                <div class="narrative" id="narrative"></div>
+            </section>
+
+            <section class="card">
+                <div class="eyebrow">Takeaway</div>
+                <p class="tool-copy">
+                    This reads like a short engineering memo. The user gets the conclusion at
+                    each step without expanding, but can open any step to see the supporting
+                    evidence — including equations with substituted values, weight rationale
+                    tables, and efficiency derivation. No tabs, no metric grid — just a linear
+                    decision story with arbitrary depth.
+                </p>
+            </section>
+        </section>
+    </main>
+
+    <script src="./mock-data.js"></script>
+    <script>
+        const data = window.FAN_SELECTOR_PROTOTYPE_DATA;
+
+        const steps = [
+            {
+                num: 1,
+                state: 'complete',
+                title: 'Your duty point',
+                answer: '1.00 m³/s at 500 Pa static — standard air',
+                body: `
+                    <div class="n-content">
+                        <div class="kv-grid">
+                            <div class="kv-item"><span class="kv-label">Volume Flow</span><span class="kv-value">1.00 m³/s</span></div>
+                            <div class="kv-item"><span class="kv-label">Pressure Rise</span><span class="kv-value">500 Pa (static)</span></div>
+                            <div class="kv-item"><span class="kv-label">Air Density</span><span class="kv-value">1.204 kg/m³</span></div>
+                            <div class="kv-item"><span class="kv-label">Constraint</span><span class="kv-value">None — free sizing</span></div>
+                        </div>
+                        <p>No RPM or diameter constraint is applied, so the tool is free to find each
+                        family's ideal operating point for this duty.</p>
+                    </div>
+                `
+            },
+            {
+                num: 2,
+                state: 'complete',
+                title: 'What the numbers mean',
+                answer: 'Specific speed 0.80 — this is centrifugal territory',
+                body: `
+                    <div class="n-content">
+                        <p>The tool converts flow and pressure into a dimensionless <strong>specific speed</strong>
+                        (N_s = 0.80). This single number is the primary architecture selector:</p>
+                        <div class="kv-grid">
+                            <div class="kv-item"><span class="kv-label">Specific Speed (ω_s)</span><span class="kv-value">0.80</span></div>
+                            <div class="kv-item"><span class="kv-label">Specific Diameter (δ_s)</span><span class="kv-value">2.12</span></div>
+                        </div>
+                        <p>At N_s = 0.80, the duty sits in the <strong>centrifugal range</strong> (0.30–1.50),
+                        just touches the bottom of the mixed-flow range (0.80–3.00), and is far below
+                        the axial range (2.00–8.00). This is why the tool immediately leans toward
+                        centrifugal architectures.</p>
+
+                        <details class="deep-disclosure">
+                            <summary>Equations and substitutions</summary>
+                            <div class="dd-body">
+                                <div class="eq-block">
+                                    <span class="eq-label">Specific speed</span>
+                                    ω_s = ω · √Q / (ΔP / ρ)^(3/4)
+                                    <span class="eq-sub">= (2π · 1097/60) · √1.00 / (500 / 1.204)^0.75 = 0.80</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Specific diameter (Cordier correlation)</span>
+                                    ln(δ_s) = 0.833 − 0.524·ln(ω_s) + 0.008·[ln(ω_s)]²
+                                    <span class="eq-sub">= 0.833 − 0.524·ln(0.80) + 0.008·[ln(0.80)]² = ln(2.12)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Wheel diameter from specific diameter</span>
+                                    D = δ_s · √Q / (ΔP / ρ)^(1/4)
+                                    <span class="eq-sub">= 2.12 · √1.00 / (500/1.204)^0.25 = 0.573 m</span>
+                                </div>
+                                <p class="dd-note">The Cordier line coefficients (0.833, −0.524, 0.008) are a polynomial fit
+                                to the Balje 1981 dataset relating optimal specific speed to specific diameter
+                                across turbomachinery families.</p>
+                            </div>
+                        </details>
+                    </div>
+                `
+            },
+            {
+                num: 3,
+                state: 'complete',
+                title: 'How the four types compare',
+                answer: 'BC Centrifugal leads at 85%; Mixed Flow is viable at 73%',
+                defaultOpen: true,
+                body: `
+                    <div class="n-content">
+                        <p>Each fan type is scored on specific-speed fit, efficiency, and tip speed
+                        using weighted components.</p>
+                        <div class="rank-cards">
+                            <div class="rank-card winner">
+                                <div class="rank-pos">1</div>
+                                <div class="rank-info">
+                                    <div class="rank-name">Backward-Curved Centrifugal</div>
+                                    <div class="rank-why">Best N_s fit, highest efficiency, non-overloading power curve</div>
+                                    <div class="rank-meta">
+                                        <span>573 mm</span><span>1097 RPM</span><span>84.4% eff</span><span>0.59 kW</span>
+                                    </div>
+                                </div>
+                                <div class="rank-score">85</div>
+                            </div>
+                            <div class="rank-card">
+                                <div class="rank-pos">2</div>
+                                <div class="rank-info">
+                                    <div class="rank-name">Mixed Flow</div>
+                                    <div class="rank-why">Inline fallback — no 90° turn, but near the bottom of its range</div>
+                                    <div class="rank-meta">
+                                        <span>429 mm</span><span>2470 RPM</span><span>83.5% eff</span><span>0.60 kW</span>
+                                    </div>
+                                </div>
+                                <div class="rank-score">73</div>
+                            </div>
+                            <div class="rank-card">
+                                <div class="rank-pos">3</div>
+                                <div class="rank-info">
+                                    <div class="rank-name">Axial</div>
+                                    <div class="rank-why">Pressure-loaded at this N_s; high speed and acoustic risk</div>
+                                    <div class="rank-meta">
+                                        <span>337 mm</span><span>4815 RPM</span><span>82.0% eff</span><span>0.61 kW</span>
+                                    </div>
+                                </div>
+                                <div class="rank-score">61</div>
+                            </div>
+                            <div class="rank-card">
+                                <div class="rank-pos">4</div>
+                                <div class="rank-info">
+                                    <div class="rank-name">Forward-Curved Centrifugal</div>
+                                    <div class="rank-why">Low efficiency, power-hump instability, but easiest drive fit</div>
+                                    <div class="rank-meta">
+                                        <span>664 mm</span><span>754 RPM</span><span>65.1% eff</span><span>0.77 kW</span>
+                                    </div>
+                                </div>
+                                <div class="rank-score">58</div>
+                            </div>
+                        </div>
+
+                        <details class="deep-disclosure">
+                            <summary>How the score is calculated</summary>
+                            <div class="dd-body">
+                                <div class="eq-block">
+                                    <span class="eq-label">Overall suitability score</span>
+                                    S = w_N · S_N + w_η · S_η + w_U · S_U
+                                    <span class="eq-sub">= 0.58 · S_N + 0.27 · S_η + 0.15 · S_U &nbsp;&nbsp;(no passage constraint active)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">N_s fit score (log-space band fit)</span>
+                                    Inside band: &nbsp; S_N = clamp(1.0 − 0.18 · |ln(ω_s) − ln(ω_opt)| / bandwidth, 0.82, 1.0)
+                                    <span class="eq-sub">Outside band: S_N = clamp(0.72 − 0.45 · outside_distance / bandwidth, 0.08, 0.72)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">BC Centrifugal substitution</span>
+                                    Band [0.30, 1.50], optimal 0.80, bandwidth = ln(1.50)−ln(0.30) = 1.609
+                                    <span class="eq-sub">S_N = clamp(1.0 − 0.18 · |ln(0.80)−ln(0.80)| / 1.609, 0.82, 1.0) = 1.000</span>
+                                    <span class="eq-sub">(N_s lands exactly on the optimal — perfect fit)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Axial substitution</span>
+                                    Band [2.00, 8.00], optimal 3.50, bandwidth = ln(8.00)−ln(2.00) = 1.386
+                                    <span class="eq-sub">outside_distance = (ln(2.00)−ln(0.80)) / 1.386 = 0.660</span>
+                                    <span class="eq-sub">S_N = clamp(0.72 − 0.45 · 0.660, 0.08, 0.72) = 0.423</span>
+                                    <span class="eq-sub">(N_s is well below axial range — heavy penalty)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Efficiency fit score</span>
+                                    S_η = clamp(η_estimated / 0.85, 0.2, 1.0)
+                                    <span class="eq-sub">BC: clamp(0.844 / 0.85, 0.2, 1.0) = 0.993</span>
+                                    <span class="eq-sub">FC: clamp(0.651 / 0.85, 0.2, 1.0) = 0.766</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Tip-speed fit score (piecewise)</span>
+                                    S_U = 1.0 &nbsp;(U ≤ 20 m/s) &nbsp;|&nbsp; 0.9 &nbsp;(≤ 35) &nbsp;|&nbsp; 0.75 &nbsp;(≤ 50) &nbsp;|&nbsp; 0.55 &nbsp;(≤ 65) &nbsp;|&nbsp; 0.55·(65/U)
+                                    <span class="eq-sub">BC: U = 21.1 m/s → 0.9 &nbsp;|&nbsp; Axial: U = 85 m/s → 0.55·(65/85) ≈ 0.42</span>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="deep-disclosure">
+                            <summary>Why these weights?</summary>
+                            <div class="dd-body">
+                                <table class="weight-table">
+                                    <thead><tr><th>Component</th><th>Weight</th><th>Rationale</th></tr></thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Specific-speed fit</td>
+                                            <td class="wt-mono">0.58</td>
+                                            <td class="wt-why">Carries the most weight because fan-family selection is primarily a specific-speed screening problem. The architecture bands are defined around N_s.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Efficiency fit</td>
+                                            <td class="wt-mono">0.27</td>
+                                            <td class="wt-why">Matters, but only after the architecture is physically plausible. Should separate credible families, not override a bad family match.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tip-speed fit</td>
+                                            <td class="wt-mono">0.15</td>
+                                            <td class="wt-why">Compact proxy for noise and mechanical realism — secondary screen, not the defining criterion.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <p class="dd-note">When a passage constraint is active, the weights redistribute:
+                                N_s fit → 0.50, efficiency → 0.22, tip speed → 0.12, passage fit → 0.16.
+                                These are fixed heuristics, not optimized parameters.</p>
+                            </div>
+                        </details>
+
+                        <details class="deep-disclosure">
+                            <summary>Where do the efficiency estimates come from?</summary>
+                            <div class="dd-body">
+                                <div class="eq-block">
+                                    <span class="eq-label">Cordier efficiency correlation (Balje 1981)</span>
+                                    η = 0.90 + 0.017·ln(ω_s) − 0.059·[ln(ω_s)]²
+                                    <span class="eq-sub">At ω_s = 0.80: η = 0.90 + 0.017·(−0.223) − 0.059·(0.050) = 0.893</span>
+                                </div>
+                                <p class="dd-note">This is the peak total-to-total efficiency along the Cordier line —
+                                the theoretical best for a well-designed machine at the given specific speed.
+                                Clamped to [0.20, 0.95].</p>
+                                <p class="dd-note">Each fan type has its own efficiency ceiling reflecting typical achievable values:</p>
+                                <div class="kv-grid">
+                                    <div class="kv-item"><span class="kv-label">BC Centrifugal</span><span class="kv-value">85%</span></div>
+                                    <div class="kv-item"><span class="kv-label">FC Centrifugal</span><span class="kv-value">65%</span></div>
+                                    <div class="kv-item"><span class="kv-label">Mixed Flow</span><span class="kv-value">84%</span></div>
+                                    <div class="kv-item"><span class="kv-label">Axial</span><span class="kv-value">82%</span></div>
+                                </div>
+                                <p class="dd-note">The actual estimate for each type is min(type ceiling, Cordier value),
+                                further adjusted by the N_s fit. BC blades convert shaft work to pressure rise more
+                                efficiently than FC blades, which trade efficiency for compact size and lower RPM.
+                                The normalizer S_η = η_est / 0.85 converts these into a 0–1 score so no single
+                                type dominates the ranking purely on efficiency.</p>
+                            </div>
+                        </details>
+                    </div>
+                `
+            },
+            {
+                num: 4,
+                state: 'complete',
+                title: 'Reality checks on the winner',
+                answer: 'Hardware is plausible; drive speed needs attention',
+                body: `
+                    <div class="n-content">
+                        <p>The BC centrifugal result implies specific hardware. These checks flag
+                        anything that might override the aerodynamic recommendation.</p>
+                        <div class="checks">
+                            <div class="chk">
+                                <span class="chk-status ok">&#10003;</span>
+                                <span class="chk-text"><strong>Wheel size:</strong> 573 mm — catalog sizes 560 and 630 mm bracket it well</span>
+                            </div>
+                            <div class="chk">
+                                <span class="chk-status flag">!</span>
+                                <span class="chk-text"><strong>Drive fit:</strong> 1097 RPM is not a standard motor speed — plan for belt drive, gearbox, or VFD</span>
+                            </div>
+                            <div class="chk">
+                                <span class="chk-status ok">&#10003;</span>
+                                <span class="chk-text"><strong>Acoustic risk:</strong> Low — 21.1 m/s tip speed is well below concern thresholds</span>
+                            </div>
+                            <div class="chk">
+                                <span class="chk-status ok">&#10003;</span>
+                                <span class="chk-text"><strong>Architecture margin:</strong> High — duty is centered in the BC band, not near an edge</span>
+                            </div>
+                            <div class="chk">
+                                <span class="chk-status flag">!</span>
+                                <span class="chk-text"><strong>Packaging:</strong> 90-degree turn and deeper housing — confirm the space envelope allows this</span>
+                            </div>
+                        </div>
+                        <div class="callout warn">
+                            <span class="callout-icon">&#9888;</span>
+                            <span>The drive speed is the main practical concern. If a direct-drive induction motor
+                            is required, FC centrifugal (754 RPM, near 900 RPM) might become more attractive
+                            despite its lower efficiency.</span>
+                        </div>
+
+                        <details class="deep-disclosure">
+                            <summary>Equations behind the hardware checks</summary>
+                            <div class="dd-body">
+                                <div class="eq-block">
+                                    <span class="eq-label">Tip speed</span>
+                                    U_tip = π · D · N / 60
+                                    <span class="eq-sub">= π · 0.573 · 1097 / 60 = 32.9 m/s (wheel OD tip speed)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Drive fit — deviation from nearest standard speed</span>
+                                    ε_N = min |N − N_i| / N_i &nbsp; over standard induction speeds
+                                    <span class="eq-sub">Nearest: 900 RPM → ε = |1097 − 900| / 900 = 0.219 (21.9% off → custom speed fit)</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Shaft power</span>
+                                    P_shaft = (Q · ΔP) / η
+                                    <span class="eq-sub">= (1.00 · 500) / 0.844 = 593 W = 0.59 kW</span>
+                                </div>
+                                <div class="eq-block">
+                                    <span class="eq-label">Architecture margin (band position)</span>
+                                    position = (ln(ω_s) − ln(ω_min)) / (ln(ω_max) − ln(ω_min))
+                                    <span class="eq-sub">BC band [0.30, 1.50]: (ln(0.80)−ln(0.30))/(ln(1.50)−ln(0.30)) = 0.61 → "High"</span>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                `
+            },
+            {
+                num: 5,
+                state: 'active',
+                title: 'Next step',
+                answer: 'Take the duty into the Curve Explorer with BC and FC loaded side by side',
+                body: `
+                    <div class="n-content">
+                        <p>This Phase 0 screen tells you which architecture family to investigate —
+                        not which specific fan to buy. The next step is to load real vendor curves
+                        for 560 mm and 630 mm BC centrifugal wheels and verify the operating point
+                        against actual stall and surge margins.</p>
+                        <div class="callout">
+                            <span class="callout-icon">&#8594;</span>
+                            <span>Load BC centrifugal and FC centrifugal curves side by side in the
+                            Curve Explorer to make the final subtype decision with real data.</span>
+                        </div>
+                    </div>
+                `
+            }
+        ];
+
+        function render() {
+            const narrative = document.getElementById('narrative');
+            narrative.innerHTML = steps.map(step => `
+                <div class="n-step ${step.state} ${step.defaultOpen ? 'open' : ''}" id="step-${step.num}">
+                    <div class="n-dot">${step.num}</div>
+                    <div class="n-head">
+                        <h3>${step.title}</h3>
+                        <div class="n-answer">${step.answer}</div>
+                    </div>
+                    <div class="n-body">
+                        ${step.body}
+                    </div>
+                    <button class="n-toggle" onclick="toggleStep(${step.num})">
+                        ${step.defaultOpen ? 'Collapse' : 'Show evidence'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function toggleStep(num) {
+            const el = document.getElementById(`step-${num}`);
+            const btn = el.querySelector('.n-toggle');
+            el.classList.toggle('open');
+            btn.textContent = el.classList.contains('open') ? 'Collapse' : 'Show evidence';
+        }
+
+        render();
+    </script>
+</body>
+</html>

@@ -154,4 +154,62 @@ window.FAN_SELECTOR_PROTOTYPE_DATA = {
                 "The final heuristic score ranks the candidate types after the physical checks are formed.",
         },
     ],
+    familyMap: {
+        recommendedFamily: "radial",
+        duty: {
+            flow: 1.0,
+            pressure: 500,
+            label: "1.00 m3/s at 500 Pa static",
+        },
+        families: [
+            {
+                id: "axial",
+                name: "Axial",
+                color: "#557b70",
+                flowComfort: [0.2, 3.6],
+                flowFade: [0.08, 3.95],
+                pressureComfort: [0, 250],
+                pressureFade: [0, 650],
+                summary: "Straight-through package and high flow, but pressure comfort fades early.",
+                boundaryReason:
+                    "Comfort ranges are drawn directly from the declared low-static axial territory, then extended to a softer fade zone rather than a freehand polygon.",
+                whyFlow:
+                    "Large face-area inline machines stay comfortable over a broad flow span before package size and pressure loading become awkward.",
+                whyPressure:
+                    "Axial pressure comfort is intentionally shallow because stall sensitivity, noise, and loading rise quickly as static pressure hardens.",
+            },
+            {
+                id: "mixed",
+                name: "Mixed Flow",
+                color: "#8d6a31",
+                flowComfort: [0.1, 1.8],
+                flowFade: [0.06, 2.2],
+                pressureComfort: [120, 900],
+                pressureFade: [60, 1500],
+                summary: "Bridge architecture when inline packaging still matters but axial pressure comfort is exhausted.",
+                boundaryReason:
+                    "Comfort ranges are the published mixed-flow bridge territory, then widened slightly for a readable transition band.",
+                whyFlow:
+                    "Mixed-flow stays in the compact inline regime, so its flow band is tighter than axial but broader than a single catalog family.",
+                whyPressure:
+                    "Pressure capability overlaps the gap between axial and centrifugal territory, so the vertical band intentionally sits between them.",
+            },
+            {
+                id: "radial",
+                name: "Radial / Centrifugal",
+                color: "#4b5e7b",
+                flowComfort: [0.08, 2.7],
+                flowFade: [0.05, 3.15],
+                pressureComfort: [300, 2200],
+                pressureFade: [180, 3200],
+                summary: "The restrictive-system family: strongest pressure tolerance and the clearest 90-degree-turn packaging bias.",
+                boundaryReason:
+                    "Comfort ranges are promoted into explicit radial pressure and flow bands so the ceiling is readable instead of implied by a lopsided blob.",
+                whyFlow:
+                    "Radial machines still span substantial flow, but the envelope narrows sooner once wheel size and housing scale become dominant.",
+                whyPressure:
+                    "The vertical extent is high because restrictive-system tolerance and centrifugal pressure capability are the main reasons the family wins here.",
+            },
+        ],
+    },
 };

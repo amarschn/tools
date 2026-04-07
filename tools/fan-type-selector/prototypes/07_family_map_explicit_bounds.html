@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype G: Explicit Bounds Bands</title>
+    <link rel="stylesheet" href="./shared.css">
+    <style>
+        .map-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+            gap: 18px;
+            align-items: start;
+        }
+        .map-card {
+            display: grid;
+            gap: 14px;
+        }
+        .map-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .family-button {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--bg-card);
+            color: var(--text-light);
+            padding: 9px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .family-button.active {
+            color: var(--text-color);
+            border-color: var(--text-color);
+            background: var(--primary-light);
+        }
+        .svg-frame {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--primary-light);
+        }
+        .map-note {
+            margin: 0;
+            font-size: 0.84rem;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+        .sidebar-stack {
+            display: grid;
+            gap: 14px;
+        }
+        .range-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .range-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--primary-light);
+            padding: 12px;
+        }
+        .range-label {
+            display: block;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+        .range-value {
+            display: block;
+            font-size: 0.96rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--text-color);
+        }
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.78rem;
+            color: var(--text-light);
+            background: var(--bg-card);
+            margin-top: 12px;
+        }
+        .status-chip strong {
+            color: var(--text-color);
+        }
+        .rule-copy {
+            margin: 0;
+            color: var(--text-light);
+            line-height: 1.55;
+        }
+        .rule-copy strong {
+            color: var(--text-color);
+        }
+        @media (max-width: 900px) {
+            .map-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 560px) {
+            .range-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <a class="back-link" href="./index.html">Back to Prototype Index</a>
+                <h1 class="tool-title">Prototype G: Explicit Bounds Bands</h1>
+                <p class="tool-copy">
+                    The chart stops pretending the family territories are naturally freehand. Each family
+                    is drawn from declared comfort bands plus a softer fade band, so the user can read what
+                    defines the bounds without guessing from an irregular outline.
+                </p>
+                <div class="meta-row">
+                    <div class="meta-chip"><strong>Pattern</strong> Comfort band plus fade band</div>
+                    <div class="meta-chip"><strong>Goal</strong> Make the family bounds explicit</div>
+                </div>
+            </div>
+        </div>
+
+        <section class="map-layout">
+            <section class="card map-card">
+                <div>
+                    <div class="eyebrow">Family Map Concept</div>
+                    <h2 class="hero-title" style="margin-bottom: 6px;">Bounds Are Data, Not Artwork</h2>
+                    <p class="muted">
+                        The visible field is derived from the union of all family fade bands plus a small pad.
+                        The colored core is the comfort zone; the lighter shell is the softer fade zone.
+                    </p>
+                </div>
+                <div class="map-toolbar" id="family-buttons"></div>
+                <svg class="svg-frame" id="bounds-map-svg" viewBox="0 0 860 540" aria-label="Family map with explicit comfort and fade bounds"></svg>
+                <p class="map-note" id="global-bounds-note"></p>
+            </section>
+
+            <aside class="sidebar-stack">
+                <section class="card">
+                    <div class="eyebrow">Viewport Basis</div>
+                    <p class="rule-copy" id="viewport-copy"></p>
+                    <div class="range-grid" id="viewport-ranges"></div>
+                </section>
+
+                <section class="card">
+                    <div class="eyebrow">Selected Family</div>
+                    <h3 id="family-title" style="margin: 0 0 6px;"></h3>
+                    <p class="rule-copy" id="family-summary"></p>
+                    <div class="status-chip" id="family-status"></div>
+                    <div class="range-grid" id="family-ranges"></div>
+                    <div class="rule-list" style="margin-top: 14px;" id="family-rules"></div>
+                </section>
+
+                <section class="card">
+                    <div class="eyebrow">Why This Direction Helps</div>
+                    <ul class="list">
+                        <li>The user can see both the declared comfort range and the softer heuristic fade range.</li>
+                        <li>The axis bounds are explained by one visible rule instead of hidden `xMax` and `yMax` constants.</li>
+                        <li>The map can later be generated from a single structured family dataset instead of hand-tuned polygon points.</li>
+                    </ul>
+                </section>
+            </aside>
+        </section>
+    </main>
+
+    <script src="./mock-data.js"></script>
+    <script>
+        const model = window.FAN_SELECTOR_PROTOTYPE_DATA.familyMap;
+        const duty = model.duty;
+        let activeFamilyId = model.recommendedFamily;
+
+        function niceCeil(value, step) {
+            return Math.ceil(value / step) * step;
+        }
+
+        function hexToRgba(hex, alpha) {
+            const normalized = String(hex).replace('#', '');
+            const red = Number.parseInt(normalized.slice(0, 2), 16);
+            const green = Number.parseInt(normalized.slice(2, 4), 16);
+            const blue = Number.parseInt(normalized.slice(4, 6), 16);
+            return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+        }
+
+        function getFamily(id) {
+            return model.families.find(item => item.id === id);
+        }
+
+        function computeGlobalBounds() {
+            const maxFlow = Math.max(...model.families.map(item => item.flowFade[1]));
+            const maxPressure = Math.max(...model.families.map(item => item.pressureFade[1]));
+            return {
+                flow: [0, niceCeil(maxFlow * 1.08, 0.1)],
+                pressure: [0, niceCeil(maxPressure * 1.08, 100)],
+            };
+        }
+
+        function classifyDuty(family) {
+            const inComfort =
+                duty.flow >= family.flowComfort[0] &&
+                duty.flow <= family.flowComfort[1] &&
+                duty.pressure >= family.pressureComfort[0] &&
+                duty.pressure <= family.pressureComfort[1];
+            const inFade =
+                duty.flow >= family.flowFade[0] &&
+                duty.flow <= family.flowFade[1] &&
+                duty.pressure >= family.pressureFade[0] &&
+                duty.pressure <= family.pressureFade[1];
+
+            if (inComfort) return 'Inside comfort band';
+            if (inFade) return 'Inside fade band';
+            return 'Outside visible band';
+        }
+
+        function formatRange(range, digits, unit) {
+            return `${range[0].toFixed(digits)} to ${range[1].toFixed(digits)} ${unit}`;
+        }
+
+        function renderButtons() {
+            document.getElementById('family-buttons').innerHTML = model.families.map(family => `
+                <button
+                    type="button"
+                    class="family-button ${family.id === activeFamilyId ? 'active' : ''}"
+                    data-family-id="${family.id}"
+                >
+                    ${family.name}
+                </button>
+            `).join('');
+
+            document.querySelectorAll('[data-family-id]').forEach(button => {
+                button.addEventListener('click', () => {
+                    activeFamilyId = button.dataset.familyId;
+                    render();
+                });
+            });
+        }
+
+        function renderSidebar(bounds) {
+            const family = getFamily(activeFamilyId);
+            document.getElementById('global-bounds-note').textContent =
+                `Global field shown: 0 to ${bounds.flow[1].toFixed(1)} m3/s and 0 to ${bounds.pressure[1].toFixed(0)} Pa. ` +
+                'Those limits come from the visible family fade bands plus an 8% pad, not from the duty point.';
+
+            document.getElementById('viewport-copy').innerHTML =
+                '<strong>Rule:</strong> take the union of every family fade range, then add a small presentation pad. ' +
+                'The chart window is therefore explainable before the duty point is even plotted.';
+
+            document.getElementById('viewport-ranges').innerHTML = `
+                <div class="range-card">
+                    <span class="range-label">Flow Field</span>
+                    <span class="range-value">${bounds.flow[0].toFixed(1)} to ${bounds.flow[1].toFixed(1)} m3/s</span>
+                </div>
+                <div class="range-card">
+                    <span class="range-label">Pressure Field</span>
+                    <span class="range-value">${bounds.pressure[0].toFixed(0)} to ${bounds.pressure[1].toFixed(0)} Pa</span>
+                </div>
+            `;
+
+            document.getElementById('family-title').textContent = family.name;
+            document.getElementById('family-summary').textContent = family.summary;
+            document.getElementById('family-status').innerHTML =
+                `<strong>Duty status</strong> ${classifyDuty(family)}`;
+
+            document.getElementById('family-ranges').innerHTML = `
+                <div class="range-card">
+                    <span class="range-label">Flow Comfort</span>
+                    <span class="range-value">${formatRange(family.flowComfort, 2, 'm3/s')}</span>
+                </div>
+                <div class="range-card">
+                    <span class="range-label">Pressure Comfort</span>
+                    <span class="range-value">${formatRange(family.pressureComfort, 0, 'Pa')}</span>
+                </div>
+                <div class="range-card">
+                    <span class="range-label">Flow Fade</span>
+                    <span class="range-value">${formatRange(family.flowFade, 2, 'm3/s')}</span>
+                </div>
+                <div class="range-card">
+                    <span class="range-label">Pressure Fade</span>
+                    <span class="range-value">${formatRange(family.pressureFade, 0, 'Pa')}</span>
+                </div>
+            `;
+
+            document.getElementById('family-rules').innerHTML = `
+                <div class="rule-item">
+                    <strong>Boundary rule</strong>
+                    <span class="muted">${family.boundaryReason}</span>
+                </div>
+                <div class="rule-item">
+                    <strong>Why the flow span looks like this</strong>
+                    <span class="muted">${family.whyFlow}</span>
+                </div>
+                <div class="rule-item">
+                    <strong>Why the pressure span looks like this</strong>
+                    <span class="muted">${family.whyPressure}</span>
+                </div>
+            `;
+        }
+
+        function renderMap(bounds) {
+            const svg = document.getElementById('bounds-map-svg');
+            const width = 860;
+            const height = 540;
+            const margin = { top: 26, right: 26, bottom: 62, left: 78 };
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+            const xMin = bounds.flow[0];
+            const xMax = bounds.flow[1];
+            const yMin = bounds.pressure[0];
+            const yMax = bounds.pressure[1];
+
+            const xToPx = value => margin.left + ((value - xMin) / (xMax - xMin)) * plotWidth;
+            const yToPx = value => margin.top + plotHeight - ((value - yMin) / (yMax - yMin)) * plotHeight;
+
+            const flowTicks = Array.from({ length: Math.floor(xMax / 0.5) + 1 }, (_, index) => index * 0.5)
+                .filter(value => value <= xMax + 1.0e-9);
+            const pressureTicks = Array.from({ length: Math.floor(yMax / 500) + 1 }, (_, index) => index * 500)
+                .filter(value => value <= yMax + 1.0e-9);
+
+            const layers = model.families.map(family => {
+                const focused = family.id === activeFamilyId;
+                const fadeX = xToPx(family.flowFade[0]);
+                const fadeY = yToPx(family.pressureFade[1]);
+                const fadeWidth = xToPx(family.flowFade[1]) - fadeX;
+                const fadeHeight = yToPx(family.pressureFade[0]) - fadeY;
+                const comfortX = xToPx(family.flowComfort[0]);
+                const comfortY = yToPx(family.pressureComfort[1]);
+                const comfortWidth = xToPx(family.flowComfort[1]) - comfortX;
+                const comfortHeight = yToPx(family.pressureComfort[0]) - comfortY;
+                const labelX = comfortX + 12;
+                const labelY = comfortY + 22;
+                const opacity = focused ? 0.26 : 0.12;
+                const fadeOpacity = focused ? 0.14 : 0.07;
+                const strokeWidth = focused ? 3 : 1.8;
+
+                return `
+                    <rect
+                        x="${fadeX.toFixed(1)}"
+                        y="${fadeY.toFixed(1)}"
+                        width="${fadeWidth.toFixed(1)}"
+                        height="${fadeHeight.toFixed(1)}"
+                        rx="18"
+                        fill="${hexToRgba(family.color, fadeOpacity)}"
+                        stroke="${family.color}"
+                        stroke-width="${strokeWidth}"
+                        stroke-dasharray="8 8"
+                    ></rect>
+                    <rect
+                        x="${comfortX.toFixed(1)}"
+                        y="${comfortY.toFixed(1)}"
+                        width="${comfortWidth.toFixed(1)}"
+                        height="${comfortHeight.toFixed(1)}"
+                        rx="16"
+                        fill="${hexToRgba(family.color, opacity)}"
+                        stroke="${family.color}"
+                        stroke-width="${strokeWidth + 0.6}"
+                    ></rect>
+                    <text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" fill="${family.color}" font-size="13" font-weight="700">
+                        ${family.name}
+                    </text>
+                `;
+            }).join('');
+
+            svg.innerHTML = `
+                <defs>
+                    <clipPath id="plot-clip">
+                        <rect x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}" rx="14"></rect>
+                    </clipPath>
+                </defs>
+                <rect x="0" y="0" width="${width}" height="${height}" fill="#f4f5f7"></rect>
+                <rect x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}" rx="14" fill="#ffffff" stroke="#e5e7eb"></rect>
+
+                ${flowTicks.map(value => `
+                    <line
+                        x1="${xToPx(value).toFixed(1)}"
+                        y1="${margin.top}"
+                        x2="${xToPx(value).toFixed(1)}"
+                        y2="${margin.top + plotHeight}"
+                        stroke="#e5e7eb"
+                    ></line>
+                `).join('')}
+                ${pressureTicks.map(value => `
+                    <line
+                        x1="${margin.left}"
+                        y1="${yToPx(value).toFixed(1)}"
+                        x2="${margin.left + plotWidth}"
+                        y2="${yToPx(value).toFixed(1)}"
+                        stroke="#e5e7eb"
+                    ></line>
+                `).join('')}
+
+                <g clip-path="url(#plot-clip)">
+                    ${layers}
+
+                    <line
+                        x1="${xToPx(duty.flow).toFixed(1)}"
+                        y1="${margin.top}"
+                        x2="${xToPx(duty.flow).toFixed(1)}"
+                        y2="${margin.top + plotHeight}"
+                        stroke="#111827"
+                        stroke-dasharray="5 5"
+                    ></line>
+                    <line
+                        x1="${margin.left}"
+                        y1="${yToPx(duty.pressure).toFixed(1)}"
+                        x2="${margin.left + plotWidth}"
+                        y2="${yToPx(duty.pressure).toFixed(1)}"
+                        stroke="#111827"
+                        stroke-dasharray="5 5"
+                    ></line>
+                    <circle cx="${xToPx(duty.flow).toFixed(1)}" cy="${yToPx(duty.pressure).toFixed(1)}" r="8" fill="#111827"></circle>
+                    <circle cx="${xToPx(duty.flow).toFixed(1)}" cy="${yToPx(duty.pressure).toFixed(1)}" r="14" fill="none" stroke="#111827" stroke-width="1.5"></circle>
+                    <text x="${(xToPx(duty.flow) + 16).toFixed(1)}" y="${(yToPx(duty.pressure) - 14).toFixed(1)}" fill="#111827" font-size="13" font-weight="700">
+                        Duty point
+                    </text>
+                </g>
+
+                ${flowTicks.map(value => `
+                    <text x="${xToPx(value).toFixed(1)}" y="${height - 24}" text-anchor="middle" fill="#6b7280" font-size="12">
+                        ${value.toFixed(1)}
+                    </text>
+                `).join('')}
+                ${pressureTicks.map(value => `
+                    <text x="${margin.left - 12}" y="${(yToPx(value) + 4).toFixed(1)}" text-anchor="end" fill="#6b7280" font-size="12">
+                        ${value.toFixed(0)}
+                    </text>
+                `).join('')}
+
+                <text x="${margin.left + plotWidth / 2}" y="${height - 4}" text-anchor="middle" fill="#111827" font-size="13" font-weight="700">
+                    Flow rate [m3/s]
+                </text>
+                <text
+                    x="20"
+                    y="${margin.top + plotHeight / 2}"
+                    fill="#111827"
+                    font-size="13"
+                    font-weight="700"
+                    transform="rotate(-90 20 ${margin.top + plotHeight / 2})"
+                    text-anchor="middle"
+                >
+                    Pressure rise [Pa]
+                </text>
+            `;
+        }
+
+        function render() {
+            const bounds = computeGlobalBounds();
+            renderButtons();
+            renderSidebar(bounds);
+            renderMap(bounds);
+        }
+
+        render();
+    </script>
+</body>
+</html>
