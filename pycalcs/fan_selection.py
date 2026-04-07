@@ -1911,11 +1911,54 @@ def _constraint_note(
     return "Unconstrained sizing shown near each type's preferred specific speed."
 
 
+_DEFAULT_WEIGHTS = {
+    "specific_speed_fit": 0.58,
+    "efficiency_fit": 0.27,
+    "tip_speed_fit": 0.15,
+}
+
+_DEFAULT_WEIGHTS_PASSAGE = {
+    "specific_speed_fit": 0.50,
+    "efficiency_fit": 0.22,
+    "tip_speed_fit": 0.12,
+    "passage_fit": 0.16,
+}
+
+
+def _resolve_weights(
+    passage_active: bool,
+    custom_weights: Optional[Dict[str, float]] = None,
+) -> Dict[str, float]:
+    """Return normalised scoring weights, merging user overrides if provided."""
+    if custom_weights is None:
+        defaults = dict(_DEFAULT_WEIGHTS_PASSAGE if passage_active else _DEFAULT_WEIGHTS)
+        if not passage_active:
+            defaults["passage_fit"] = 0.0
+        return defaults
+
+    # Accept user-provided raw weights for the three (or four) components.
+    raw: Dict[str, float] = {}
+    for key in ["specific_speed_fit", "efficiency_fit", "tip_speed_fit"]:
+        raw[key] = max(float(custom_weights.get(key, 0.0)), 0.0)
+    if passage_active:
+        raw["passage_fit"] = max(float(custom_weights.get("passage_fit", 0.0)), 0.0)
+    else:
+        raw["passage_fit"] = 0.0
+
+    total = sum(raw.values())
+    if total <= 0.0:
+        # Fall back to defaults if user zeros everything out.
+        return _resolve_weights(passage_active, None)
+
+    return {k: round(v / total, 4) for k, v in raw.items()}
+
+
 def _score_candidate(
     ns_fit: float,
     estimated_efficiency: float,
     tip_speed_ms: float,
     passage_fit: Optional[float],
+    custom_weights: Optional[Dict[str, float]] = None,
 ) -> float:
     """Blend fit terms into a 0-1 suitability score.
 
@@ -1928,6 +1971,8 @@ def _score_candidate(
         Tip speed in m/s.
     passage_fit : float or None
         Optional passage-geometry fit score from 0 to 1.
+    custom_weights : dict or None
+        Optional user-provided weights for scoring components.
 
     ---Returns---
     score : float
@@ -1938,10 +1983,13 @@ def _score_candidate(
     """
     eta_score = _clamp(estimated_efficiency / _MAX_TYPICAL_EFFICIENCY, 0.2, 1.0)
     tip_score = _tip_speed_fit(tip_speed_ms)
-    if passage_fit is None:
-        score = 0.58 * ns_fit + 0.27 * eta_score + 0.15 * tip_score
-    else:
-        score = 0.50 * ns_fit + 0.22 * eta_score + 0.12 * tip_score + 0.16 * passage_fit
+    w = _resolve_weights(passage_fit is not None, custom_weights)
+    score = (
+        w["specific_speed_fit"] * ns_fit
+        + w["efficiency_fit"] * eta_score
+        + w["tip_speed_fit"] * tip_score
+        + w["passage_fit"] * (passage_fit or 0.0)
+    )
     return _clamp(score, 0.0, 1.0)
 
 
@@ -1950,6 +1998,7 @@ def _score_breakdown(
     estimated_efficiency: float,
     tip_speed_ms: float,
     passage_fit: Optional[float],
+    custom_weights: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """Expose weighted score terms for frontend decision-trace rendering.
 
@@ -1962,6 +2011,8 @@ def _score_breakdown(
         Tip speed in m/s.
     passage_fit : float or None
         Optional passage-geometry fit score from 0 to 1.
+    custom_weights : dict or None
+        Optional user-provided weights for scoring components.
 
     ---Returns---
     breakdown : dict
@@ -1973,39 +2024,20 @@ def _score_breakdown(
     eta_score = _clamp(estimated_efficiency / _MAX_TYPICAL_EFFICIENCY, 0.2, 1.0)
     tip_score = _tip_speed_fit(tip_speed_ms)
 
-    weights: Dict[str, float] = {
-        "specific_speed_fit": 0.58,
-        "efficiency_fit": 0.27,
-        "tip_speed_fit": 0.15,
-        "passage_fit": 0.0,
-    }
+    weights = _resolve_weights(passage_fit is not None, custom_weights)
+
     components: Dict[str, Optional[float]] = {
         "specific_speed_fit": round(ns_fit, 4),
         "efficiency_fit": round(eta_score, 4),
         "tip_speed_fit": round(tip_score, 4),
-        "passage_fit": None,
+        "passage_fit": round(passage_fit, 4) if passage_fit is not None else None,
     }
     contributions: Dict[str, Optional[float]] = {
         "specific_speed_fit": round(weights["specific_speed_fit"] * ns_fit, 4),
         "efficiency_fit": round(weights["efficiency_fit"] * eta_score, 4),
         "tip_speed_fit": round(weights["tip_speed_fit"] * tip_score, 4),
-        "passage_fit": None,
+        "passage_fit": round(weights["passage_fit"] * passage_fit, 4) if passage_fit is not None else None,
     }
-
-    if passage_fit is not None:
-        weights = {
-            "specific_speed_fit": 0.50,
-            "efficiency_fit": 0.22,
-            "tip_speed_fit": 0.12,
-            "passage_fit": 0.16,
-        }
-        components["passage_fit"] = round(passage_fit, 4)
-        contributions = {
-            "specific_speed_fit": round(weights["specific_speed_fit"] * ns_fit, 4),
-            "efficiency_fit": round(weights["efficiency_fit"] * eta_score, 4),
-            "tip_speed_fit": round(weights["tip_speed_fit"] * tip_score, 4),
-            "passage_fit": round(weights["passage_fit"] * passage_fit, 4),
-        }
 
     total_score = _clamp(sum(value or 0.0 for value in contributions.values()), 0.0, 1.0)
     return {
@@ -2185,14 +2217,12 @@ def _comparative_blocker(candidate: Dict[str, Any], best: Dict[str, Any]) -> str
     )
 
 
-def _weight_rationale(passage_active: bool) -> List[Dict[str, Any]]:
+def _weight_rationale(
+    passage_active: bool,
+    custom_weights: Optional[Dict[str, float]] = None,
+) -> List[Dict[str, Any]]:
     """Return plain-language justification for the screening weights."""
-    weights = {
-        "specific_speed_fit": 0.50 if passage_active else 0.58,
-        "efficiency_fit": 0.22 if passage_active else 0.27,
-        "tip_speed_fit": 0.12 if passage_active else 0.15,
-        "passage_fit": 0.16 if passage_active else 0.0,
-    }
+    weights = _resolve_weights(passage_active, custom_weights)
     reasons = [
         {
             "component": "Specific-speed fit",
@@ -2264,12 +2294,13 @@ def _component_delta_reason(
 def _build_decision_audit(
     comparison: List[Dict[str, Any]],
     velocity_constraint: Dict[str, Any],
+    custom_weights: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """Create a plain-language audit trail for the screening decision."""
     best = comparison[0]
     runner_up = comparison[1] if len(comparison) > 1 else None
     passage_active = velocity_constraint["active"]
-    weight_rationale = _weight_rationale(passage_active)
+    weight_rationale = _weight_rationale(passage_active, custom_weights)
 
     if best["constraint_mode"] == "speed":
         duty_mode_summary = (
@@ -2445,6 +2476,7 @@ def analyze_fan_types(
     target_velocity_ms: Optional[float] = None,
     passage_area_m2: Optional[float] = None,
     geometry_overrides: Optional[Any] = None,
+    custom_weights: Optional[Dict[str, float]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Compare all supported fan types for a duty point.
@@ -2553,12 +2585,14 @@ def analyze_fan_types(
             estimated_efficiency,
             tip_speed_ms,
             passage_fit,
+            custom_weights,
         )
         suitability_score = _score_candidate(
             ns_fit,
             estimated_efficiency,
             tip_speed_ms,
             passage_fit,
+            custom_weights,
         )
 
         candidates.append(
@@ -2855,6 +2889,7 @@ def full_analysis(
     target_velocity_ms: Optional[float] = None,
     passage_area_m2: Optional[float] = None,
     geometry_overrides: Optional[Any] = None,
+    custom_weights: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Run the complete fan type selector analysis.
@@ -2883,6 +2918,10 @@ def full_analysis(
         Known flow area in m^2 when velocity_mode is known_area.
     geometry_overrides : dict or str or None
         Optional per-type geometry overrides for hub or eye dimensions.
+    custom_weights : dict or str or None
+        Optional user-provided scoring weights. Keys: specific_speed_fit,
+        efficiency_fit, tip_speed_fit, passage_fit. Raw values are normalised
+        to sum to 1.0.
 
     ---Returns---
     analysis : dict
@@ -2901,6 +2940,14 @@ def full_analysis(
     if pressure_basis not in {"static", "total"}:
         raise ValueError("pressure_basis must be 'static' or 'total'.")
 
+    # Parse custom_weights from JSON string if needed.
+    parsed_weights: Optional[Dict[str, float]] = None
+    if custom_weights is not None and custom_weights != "":
+        if isinstance(custom_weights, str):
+            parsed_weights = json.loads(custom_weights)
+        else:
+            parsed_weights = dict(custom_weights)
+
     velocity_constraint = evaluate_velocity_constraint(
         flow_m3s,
         velocity_mode,
@@ -2917,9 +2964,10 @@ def full_analysis(
         target_velocity_ms=target_velocity_ms,
         passage_area_m2=passage_area_m2,
         geometry_overrides=geometry_overrides,
+        custom_weights=parsed_weights,
     )
     recommendation = _build_recommendation(comparison, velocity_constraint, pressure_basis)
-    decision_audit = _build_decision_audit(comparison, velocity_constraint)
+    decision_audit = _build_decision_audit(comparison, velocity_constraint, parsed_weights)
     curves = generate_representative_curves(flow_m3s, pressure_pa, density_kgm3)
     q_max = max(curve["free_delivery_flow"] for curve in curves.values())
     system = generate_system_curve(flow_m3s, pressure_pa, q_max * 1.05)

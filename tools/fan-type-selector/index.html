@@ -13,6 +13,17 @@
     </script>
 
     <title>Fan Type Selector - Engineering Tools</title>
+    <script>
+    window.MathJax = {
+        tex: {
+            inlineMath: [['\\(', '\\)']],
+            displayMath: [['$$', '$$']],
+        },
+        options: {
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        },
+    };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
@@ -2107,6 +2118,41 @@
                         </div>
                     </details>
 
+                    <details class="input-disclosure">
+                        <summary>
+                            <span>
+                                <span class="input-disclosure-title">Scoring Weights</span>
+                                <span class="input-disclosure-copy">Adjust how much each factor influences the final ranking. The tool normalises to 100%.</span>
+                            </span>
+                            <span class="input-disclosure-meta" id="weights-summary">Defaults</span>
+                        </summary>
+                        <div class="input-disclosure-body">
+                            <div class="input-group" style="margin-bottom: 10px;">
+                                <label>Specific-speed fit <span class="tooltip-trigger" tabindex="0" data-tooltip="How close the duty sits to each fan family's natural specific-speed band. This is the primary architecture screening criterion.">?</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="range" id="weight-ns" min="0" max="100" value="58" step="1" style="flex:1;">
+                                    <span id="weight-ns-display" style="font-family:var(--font-mono); font-weight:600; min-width:40px; text-align:right;">58%</span>
+                                </div>
+                            </div>
+                            <div class="input-group" style="margin-bottom: 10px;">
+                                <label>Efficiency fit <span class="tooltip-trigger" tabindex="0" data-tooltip="Estimated peak efficiency normalised against the best achievable. Separates credible families after the architecture is physically plausible.">?</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="range" id="weight-eff" min="0" max="100" value="27" step="1" style="flex:1;">
+                                    <span id="weight-eff-display" style="font-family:var(--font-mono); font-weight:600; min-width:40px; text-align:right;">27%</span>
+                                </div>
+                            </div>
+                            <div class="input-group" style="margin-bottom: 10px;">
+                                <label>Tip-speed fit <span class="tooltip-trigger" tabindex="0" data-tooltip="Penalises high tip speed as a proxy for noise and mechanical stress. Secondary screen, not the defining criterion.">?</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="range" id="weight-tip" min="0" max="100" value="15" step="1" style="flex:1;">
+                                    <span id="weight-tip-display" style="font-family:var(--font-mono); font-weight:600; min-width:40px; text-align:right;">15%</span>
+                                </div>
+                            </div>
+                            <p class="control-note" id="weights-normalized-note">Normalised: 58 / 27 / 15 = 100%</p>
+                            <button type="button" class="btn btn-secondary" id="reset-weights-btn" style="margin-top: 6px;">Reset to Defaults</button>
+                        </div>
+                    </details>
+
                     <button type="submit" class="btn btn-primary" id="calculate-btn" disabled>Analyze Fan Types</button>
                     <div class="form-status" id="form-status">Using default values until Pyodide finishes loading.</div>
                     <div class="work-actions">
@@ -3213,6 +3259,16 @@
             };
             const geometryOverrides = gatherGeometryOverrides();
 
+            const wNs = parseFloat(document.getElementById('weight-ns').value) || 0;
+            const wEff = parseFloat(document.getElementById('weight-eff').value) || 0;
+            const wTip = parseFloat(document.getElementById('weight-tip').value) || 0;
+            const isDefault = wNs === 58 && wEff === 27 && wTip === 15;
+            const customWeights = isDefault ? null : {
+                specific_speed_fit: wNs,
+                efficiency_fit: wEff,
+                tip_speed_fit: wTip,
+            };
+
             return {
                 flowRaw,
                 pressureRaw,
@@ -3230,7 +3286,8 @@
                 geometryOverrideModes,
                 geometryOverrides,
                 temperatureC: Number.isFinite(temperatureC) ? temperatureC : 20,
-                elevationM: Number.isFinite(elevationM) ? elevationM : 0
+                elevationM: Number.isFinite(elevationM) ? elevationM : 0,
+                customWeights,
             };
         }
 
@@ -3250,7 +3307,10 @@
                 passage_area: document.getElementById('passage-area').value,
                 geometry_overrides: gatherRawGeometryOverrides(),
                 temperature: document.getElementById('temperature').value,
-                elevation: document.getElementById('elevation').value
+                elevation: document.getElementById('elevation').value,
+                weight_ns: document.getElementById('weight-ns').value,
+                weight_eff: document.getElementById('weight-eff').value,
+                weight_tip: document.getElementById('weight-tip').value
             };
         }
 
@@ -3432,9 +3492,13 @@
             applyGeometryOverrides(inputs.geometry_overrides || {});
             if (inputs.temperature !== undefined) document.getElementById('temperature').value = inputs.temperature;
             if (inputs.elevation !== undefined) document.getElementById('elevation').value = inputs.elevation;
+            if (inputs.weight_ns !== undefined) document.getElementById('weight-ns').value = inputs.weight_ns;
+            if (inputs.weight_eff !== undefined) document.getElementById('weight-eff').value = inputs.weight_eff;
+            if (inputs.weight_tip !== undefined) document.getElementById('weight-tip').value = inputs.weight_tip;
 
             setConstraintMode(inputs.constraint_mode || 'none');
             setVelocityMode(inputs.velocity_mode || 'none');
+            updateWeightsDisplay();
             updateInputSummaries();
             updateDensityPreview();
         }
@@ -3596,7 +3660,7 @@
                             <div class="equation-card">
                                 <strong>Equation</strong>
                                 <span class="equation-expression">${equation}</span>
-                                <div class="equation-subst">${substitution || 'No substituted values available.'}</div>
+                                <div class="equation-subst">${substitution ? substitution.split('<br>').map(s => `$$${s.trim()}$$`).join('') : 'No substituted values available.'}</div>
                             </div>
                         ` : ''}
                         ${extraHtml}
@@ -4743,7 +4807,8 @@
                         inputs.velocityMode,
                         inputs.velocityMode === 'target_velocity' ? inputs.targetVelocityMs : null,
                         inputs.velocityMode === 'known_area' ? inputs.passageAreaM2 : null,
-                        JSON.stringify(inputs.geometryOverrides)
+                        JSON.stringify(inputs.geometryOverrides),
+                        inputs.customWeights ? JSON.stringify(inputs.customWeights) : null
                     )
                 );
 
@@ -4784,6 +4849,23 @@
             });
         }
 
+
+        function updateWeightsDisplay() {
+            const wNs = parseInt(document.getElementById('weight-ns').value, 10);
+            const wEff = parseInt(document.getElementById('weight-eff').value, 10);
+            const wTip = parseInt(document.getElementById('weight-tip').value, 10);
+            const total = wNs + wEff + wTip;
+            const pctNs = total > 0 ? Math.round(wNs / total * 100) : 0;
+            const pctEff = total > 0 ? Math.round(wEff / total * 100) : 0;
+            const pctTip = total > 0 ? 100 - pctNs - pctEff : 0;
+            document.getElementById('weight-ns-display').textContent = `${pctNs}%`;
+            document.getElementById('weight-eff-display').textContent = `${pctEff}%`;
+            document.getElementById('weight-tip-display').textContent = `${pctTip}%`;
+            document.getElementById('weights-normalized-note').textContent =
+                `Normalised: ${pctNs} / ${pctEff} / ${pctTip} = 100%`;
+            const isDefault = wNs === 58 && wEff === 27 && wTip === 15;
+            document.getElementById('weights-summary').textContent = isDefault ? 'Defaults' : 'Custom';
+        }
 
         function bindInputs() {
             document.getElementById('calc-form').addEventListener('submit', event => {
@@ -4835,6 +4917,19 @@
                 if (!element) return;
                 element.addEventListener('input', () => scheduleRecalculate());
                 element.addEventListener('change', () => scheduleRecalculate(0));
+            });
+
+            ['weight-ns', 'weight-eff', 'weight-tip'].forEach(id => {
+                const el = document.getElementById(id);
+                el.addEventListener('input', () => { updateWeightsDisplay(); scheduleRecalculate(); });
+                el.addEventListener('change', () => { updateWeightsDisplay(); scheduleRecalculate(0); });
+            });
+            document.getElementById('reset-weights-btn').addEventListener('click', () => {
+                document.getElementById('weight-ns').value = 58;
+                document.getElementById('weight-eff').value = 27;
+                document.getElementById('weight-tip').value = 15;
+                updateWeightsDisplay();
+                scheduleRecalculate(0);
             });
 
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
