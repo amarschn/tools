@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <link rel="manifest" href="/manifest.json">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -12,174 +11,516 @@
       gtag('js', new Date());
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
-
-    <title>Materials Explorer — Ashby Charts &amp; Material Selection</title>
-
+    <title>Materials Explorer &mdash; Ashby Charts &amp; Material Selection</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="/shared/ashby-plot.js"></script>
-    <script src="/shared/url-state.js"></script>
-
+    <script src="/shared/json-ld.js"></script>
     <style>
+        /* ── Design tokens ─────────────────────────────────────── */
         :root {
-            --primary-color: #212529;
-            --primary-light: #f8f9fa;
-            --secondary-color: #495057;
-            --text-color: #212529;
-            --text-light: #6c757d;
-            --border-color: #dee2e6;
-            --bg-color: #f8f9fa;
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
             --bg-card: #ffffff;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
             --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
         }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"], body[data-theme="dark"] {
+                --primary-color: #f9fafb; --primary-light: #1f2937;
+                --secondary-color: #9ca3af; --accent-color: #f9fafb;
+                --success-color: #34d399; --warning-color: #fbbf24;
+                --text-color: #f9fafb; --text-light: #9ca3af;
+                --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+            }
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb; --primary-light: #1f2937;
+            --secondary-color: #9ca3af; --accent-color: #f9fafb;
+            --success-color: #34d399; --warning-color: #fbbf24;
+            --text-color: #f9fafb; --text-light: #9ca3af;
+            --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+        }
+
+        /* ── Reset & base ──────────────────────────────────────── */
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
+        html, body { min-height: 100%; }
         body {
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: var(--font-sans);
             line-height: 1.6;
-            background-color: var(--bg-color);
+            background: var(--bg-color);
             color: var(--text-color);
             display: flex;
             flex-direction: column;
         }
-        .container { width: 90%; max-width: 1400px; margin: 0 auto; padding: 20px 0; }
-        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.5em; line-height: 1.2; font-weight: 600; }
-        h1 { font-size: 2rem; }
-        h2 { font-size: 1.5rem; }
-        h3 { font-size: 1.1rem; color: var(--secondary-color); }
-        p { margin-bottom: 0.75em; color: var(--text-light); }
-        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
         a:hover { text-decoration: underline; }
+        p { color: var(--text-light); }
+        h1 { font-size: 2.25rem; letter-spacing: -0.025em; font-weight: 600; color: var(--primary-color); }
+        h2 { font-size: 1.375rem; font-weight: 600; color: var(--primary-color); }
+        h3 { font-size: 1rem; font-weight: 600; color: var(--secondary-color); }
 
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
-        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1400px; margin: 0 auto; }
-        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
-        .nav-brand:hover { text-decoration: none; }
-
-        main.container { flex-grow: 1; }
-        .tool-description { font-size: 1rem; max-width: 80ch; margin-bottom: 1rem; }
-
-        /* Controls */
-        .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
-        .control-group { display: flex; flex-direction: column; gap: 2px; }
-        .control-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; }
-        select, input[type="number"] {
-            padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px;
-            font-size: 0.9rem; background: var(--bg-card); color: var(--text-color);
+        /* ── Navbar ─────────────────────────────────────────────── */
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
         }
-        select:focus, input:focus { outline: none; border-color: #4e79a7; box-shadow: 0 0 0 2px rgba(78,121,167,0.15); }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 56px;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        .nav-brand { font-size: 1.15rem; font-weight: 600; color: var(--text-color); }
+        .nav-actions { display: flex; gap: 8px; }
+        .settings-button {
+            padding: 6px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .settings-button:hover { background: var(--bg-color); }
 
-        /* Family toggles */
-        .family-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-        .family-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); font-size: 0.85rem; background: var(--bg-card); transition: all 0.15s; user-select: none; }
-        .family-toggle.active { border-color: currentColor; font-weight: 600; }
-        .family-toggle .dot { width: 10px; height: 10px; border-radius: 50%; }
+        /* ── Settings panel ─────────────────────────────────────── */
+        .settings-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.25);
+            z-index: 900; display: none;
+            backdrop-filter: blur(2px);
+        }
+        .settings-overlay.open { display: block; }
+        .settings-panel {
+            position: fixed; top: 0; right: -400px;
+            width: 380px; height: 100%;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            z-index: 901;
+            transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+        }
+        .settings-panel.open { right: 0; }
+        .settings-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; }
+        .settings-close {
+            background: none; border: none; font-size: 0.9rem;
+            cursor: pointer; color: var(--text-light); padding: 6px 10px;
+            border-radius: 4px;
+        }
+        .settings-close:hover { background: var(--bg-color); color: var(--text-color); }
+        .settings-content { padding: 24px; }
+        .settings-section { margin-bottom: 28px; }
+        .settings-section h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--text-light); margin-bottom: 14px; font-weight: 600;
+        }
+        .setting-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .setting-row:last-child { border-bottom: none; }
+        .setting-label { font-size: 0.9rem; font-weight: 500; }
+        .setting-help { font-size: 0.78rem; color: var(--text-light); margin-top: 2px; max-width: 220px; }
 
-        /* Chart */
-        #ashby-chart { width: 100%; height: 550px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+        /* Toggle switch */
+        .switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
+        .switch input { display: none; }
+        .slider-toggle {
+            width: 42px; height: 24px;
+            background: var(--border-color); border-radius: 999px;
+            position: relative; cursor: pointer; transition: background 0.2s;
+        }
+        .slider-toggle::before {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--bg-card); transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .switch input:checked + .slider-toggle { background: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(18px); }
 
-        /* Presets */
-        .preset-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-        .preset-btn { padding: 4px 12px; border: 1px solid var(--border-color); border-radius: 16px; font-size: 0.8rem; background: var(--bg-card); cursor: pointer; transition: all 0.15s; }
-        .preset-btn:hover, .preset-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        /* Segmented control */
+        .segmented { display: inline-flex; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; }
+        .segmented button {
+            padding: 5px 14px; border: none; background: var(--bg-card);
+            color: var(--text-color); font-size: 0.8rem; font-weight: 500;
+            cursor: pointer; border-left: 1px solid var(--border-color);
+            transition: all 0.15s;
+        }
+        .segmented button:first-child { border-left: none; }
+        .segmented button.active { background: var(--accent-color); color: #fff; }
+        .segmented button:hover:not(.active) { background: var(--bg-color); }
 
-        /* Material card */
-        .material-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: var(--shadow); padding: 20px; margin-top: 16px; display: none; }
-        .material-card.visible { display: block; }
-        .material-card h3 { margin-bottom: 4px; }
-        .material-card .meta { font-size: 0.85rem; color: var(--text-light); margin-bottom: 12px; }
-        .card-close { float: right; cursor: pointer; font-size: 1.2rem; color: var(--text-light); background: none; border: none; padding: 4px 8px; }
-        .card-close:hover { color: var(--text-color); }
-        .prop-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        .prop-table th, .prop-table td { padding: 6px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
-        .prop-table th { font-weight: 600; color: var(--secondary-color); width: 35%; }
-        .prop-table td { font-family: "SF Mono", "Consolas", monospace; }
-        .prop-group-header { background: var(--bg-color); font-weight: 600; color: var(--text-color); }
-        .prop-group-header td { padding: 8px 12px; }
+        /* ── Container ──────────────────────────────────────────── */
+        .container {
+            width: 92%; max-width: 1440px;
+            margin: 0 auto; padding: 24px 0 40px;
+        }
+        .tool-header { margin-bottom: 20px; }
+        .tool-description {
+            margin-top: 8px; font-size: 1.02rem;
+            max-width: 78ch; line-height: 1.55;
+        }
 
-        /* Ranking table */
-        .ranking-section { margin-top: 16px; }
-        .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); overflow: hidden; }
-        .ranking-table th { padding: 8px 12px; text-align: left; background: var(--bg-color); font-weight: 600; color: var(--secondary-color); border-bottom: 1px solid var(--border-color); }
-        .ranking-table td { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; }
-        .ranking-table tr:hover { background: #f5f8fc; cursor: pointer; }
-        .rank-num { font-weight: 600; color: var(--text-light); width: 30px; }
+        /* ── Card ───────────────────────────────────────────────── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+        .card h2 { margin-bottom: 14px; }
 
-        /* Footer */
-        footer { padding: 20px 0; text-align: center; font-size: 0.85rem; color: var(--text-light); border-top: 1px solid var(--border-color); margin-top: 40px; }
+        /* ── Workspace: left rail + main ────────────────────────── */
+        .workspace-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        .left-rail { display: grid; gap: 16px; position: sticky; top: 20px; }
+        .main-content { display: grid; gap: 16px; min-width: 0; }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .controls { flex-direction: column; }
-            #ashby-chart { height: 400px; }
+        /* ── Inputs ─────────────────────────────────────────────── */
+        .input-group { margin-bottom: 14px; }
+        .input-group:last-child { margin-bottom: 0; }
+        .input-group label {
+            display: block; font-size: 0.78rem; font-weight: 600;
+            color: var(--text-light); text-transform: uppercase;
+            letter-spacing: 0.05em; margin-bottom: 5px;
+        }
+        .input-group select,
+        .input-group input[type="number"] {
+            width: 100%; padding: 8px 12px;
+            border: 1px solid var(--border-color); border-radius: 6px;
+            font-size: 0.9rem; font-family: var(--font-sans);
+            background: var(--bg-card); color: var(--text-color);
+            transition: border-color 0.15s, box-shadow 0.15s;
+            -webkit-appearance: none; appearance: none;
+        }
+        .input-group select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 30px;
+        }
+        .input-group select:focus,
+        .input-group input:focus {
+            outline: none; border-color: #4e79a7;
+            box-shadow: 0 0 0 3px rgba(78,121,167,0.12);
+        }
+        .input-group .hint { font-size: 0.75rem; color: var(--text-light); margin-top: 4px; line-height: 1.4; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* ── Preset chips ───────────────────────────────────────── */
+        .preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .preset-chip {
+            padding: 5px 13px;
+            border: 1px solid var(--border-color); border-radius: 999px;
+            font-size: 0.78rem; font-weight: 500;
+            background: var(--bg-card); color: var(--text-color);
+            cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .preset-chip:hover { border-color: var(--secondary-color); background: var(--bg-color); }
+        .preset-chip.active {
+            background: var(--accent-color); color: #fff;
+            border-color: var(--accent-color);
+        }
+
+        /* ── Family toggles ─────────────────────────────────────── */
+        .family-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+        .family-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 12px; border-radius: 999px;
+            border: 1.5px solid var(--border-color);
+            font-size: 0.78rem; font-weight: 500;
+            cursor: pointer; user-select: none;
+            transition: all 0.15s;
+            background: var(--bg-card); color: var(--text-light);
+        }
+        .family-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .family-pill.active {
+            color: var(--text-color); font-weight: 600;
+            border-color: currentColor;
+        }
+        .family-pill:hover { background: var(--bg-color); }
+
+        /* ── Chart area ─────────────────────────────────────────── */
+        #ashby-chart {
+            width: 100%; height: 540px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+
+        /* ── Material detail card ───────────────────────────────── */
+        .detail-card { display: none; }
+        .detail-card.visible { display: block; }
+        .detail-card .card-header {
+            display: flex; justify-content: space-between; align-items: start;
+            margin-bottom: 8px;
+        }
+        .detail-card .card-close {
+            background: none; border: none; font-size: 1.4rem;
+            cursor: pointer; color: var(--text-light); padding: 2px 6px;
+            border-radius: 4px; line-height: 1;
+        }
+        .detail-card .card-close:hover { background: var(--bg-color); color: var(--text-color); }
+        .detail-card .meta {
+            font-size: 0.82rem; color: var(--text-light); margin-top: 2px;
+        }
+        .prop-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 12px; }
+        .prop-table th, .prop-table td {
+            padding: 6px 12px; text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .prop-table th { font-weight: 600; color: var(--secondary-color); width: 40%; }
+        .prop-table td { font-family: var(--font-mono); font-size: 0.82rem; }
+        .prop-group-header td {
+            background: var(--bg-color); font-weight: 600;
+            color: var(--text-color); padding: 8px 12px;
+            font-family: var(--font-sans); font-size: 0.8rem;
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .range-hint {
+            color: var(--text-light); font-size: 0.75em;
+            font-family: var(--font-mono);
+        }
+        .basis-badge {
+            display: inline-block; padding: 1px 6px;
+            border-radius: 3px; font-size: 0.7em;
+            background: var(--bg-color); color: var(--text-light);
+            font-family: var(--font-sans); font-weight: 500;
+            margin-left: 4px; vertical-align: middle;
+        }
+
+        /* ── Ranking table ──────────────────────────────────────── */
+        .ranking-section { display: none; }
+        .ranking-section.visible { display: block; }
+        .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .ranking-table th {
+            padding: 8px 12px; text-align: left;
+            background: var(--bg-color); font-weight: 600;
+            color: var(--secondary-color);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .ranking-table td { padding: 7px 12px; border-bottom: 1px solid var(--border-color); }
+        .ranking-table tbody tr { transition: background 0.1s; }
+        .ranking-table tbody tr:hover { background: rgba(78,121,167,0.06); cursor: pointer; }
+        .rank-num { font-weight: 700; color: var(--text-light); width: 36px; text-align: center; }
+        .family-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 0.82rem;
+        }
+        .family-badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+        /* ── Footer ─────────────────────────────────────────────── */
+        footer {
+            margin-top: 48px; padding: 24px 0;
+            border-top: 1px solid var(--border-color);
+            text-align: center; font-size: 0.82rem; color: var(--text-light);
+        }
+        footer a { font-weight: 600; }
+
+        /* ── Responsive ─────────────────────────────────────────── */
+        @media (max-width: 960px) {
+            .workspace-layout { grid-template-columns: 1fr; }
+            .left-rail { position: static; }
+            #ashby-chart { height: 420px; }
+        }
+        @media (max-width: 600px) {
+            h1 { font-size: 1.6rem; }
+            .container { width: 95%; }
+            #ashby-chart { height: 320px; }
         }
     </style>
 </head>
-<body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <a class="nav-brand" href="/">Engineering Tools</a>
-            <a href="/tools/">All Tools</a>
-        </div>
-    </nav>
 
+<body data-theme="system">
+    <!-- ── Navbar ──────────────────────────────────────────────── -->
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="/tools/" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ── Settings panel ──────────────────────────────────────── -->
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Chart Behavior</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show property ranges</div>
+                        <div class="setting-help">Display min/max error bars when range data is available.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-ranges">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Show isolines</div>
+                        <div class="setting-help">Overlay constant-index guide lines when axes match the selected index.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-isolines" checked>
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Label points</div>
+                        <div class="setting-help">Show material names on highlighted (top-N) points.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-labels">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or follow system.</div>
+                    </div>
+                    <div class="segmented" id="theme-control">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system" class="active">System</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ── Main ────────────────────────────────────────────────── -->
     <main class="container">
-        <h1>Materials Explorer</h1>
-        <p class="tool-description">
-            Interactive Ashby charts for material selection. Plot any two properties, overlay performance index isolines, and click materials to inspect sourced property data. 60 materials across metals, polymers, ceramics, composites, and natural materials.
-        </p>
-
-        <!-- Chart presets -->
-        <div class="preset-bar" id="preset-bar"></div>
-
-        <!-- Axis & index controls -->
-        <div class="controls">
-            <div class="control-group">
-                <label>X-Axis</label>
-                <select id="x-prop"></select>
-            </div>
-            <div class="control-group">
-                <label>Y-Axis</label>
-                <select id="y-prop"></select>
-            </div>
-            <div class="control-group">
-                <label>Performance Index</label>
-                <select id="perf-index">
-                    <option value="">(none)</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Top N</label>
-                <input type="number" id="top-n" value="5" min="1" max="20" style="width:60px">
-            </div>
-            <div class="control-group" style="align-self: end;">
-                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-                    <input type="checkbox" id="show-ranges"> Show ranges
-                </label>
-            </div>
+        <div class="tool-header">
+            <h1>Materials Explorer</h1>
+            <p class="tool-description">
+                Interactive Ashby charts for material selection. Choose axes, overlay performance index
+                isolines, rank candidates, and click any point to inspect sourced property data across
+                60 engineering materials.
+            </p>
         </div>
 
-        <!-- Family toggles -->
-        <div class="family-toggles" id="family-toggles"></div>
+        <div class="workspace-layout">
+            <!-- Left Rail -->
+            <aside class="left-rail">
+                <section class="card">
+                    <h2>Chart Setup</h2>
 
-        <!-- Chart -->
-        <div id="ashby-chart"></div>
+                    <div class="input-group">
+                        <label>Preset</label>
+                        <div class="preset-chips" id="preset-chips"></div>
+                    </div>
 
-        <!-- Material detail card -->
-        <div class="material-card" id="material-card">
-            <button class="card-close" id="card-close">&times;</button>
-            <h3 id="card-name"></h3>
-            <div class="meta" id="card-meta"></div>
-            <table class="prop-table" id="card-props"></table>
-        </div>
+                    <div class="input-group">
+                        <label for="x-prop">X-Axis</label>
+                        <select id="x-prop"></select>
+                    </div>
 
-        <!-- Ranking table -->
-        <div class="ranking-section" id="ranking-section" style="display:none;">
-            <h3 id="ranking-title">Ranked Materials</h3>
-            <table class="ranking-table">
-                <thead><tr><th>#</th><th>Material</th><th>Family</th><th>Index Value</th></tr></thead>
-                <tbody id="ranking-body"></tbody>
-            </table>
+                    <div class="input-group">
+                        <label for="y-prop">Y-Axis</label>
+                        <select id="y-prop"></select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="perf-index">Performance Index</label>
+                        <select id="perf-index">
+                            <option value="">(none)</option>
+                        </select>
+                        <div class="hint" id="index-hint"></div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="top-n">Top N Ranked</label>
+                            <input type="number" id="top-n" value="5" min="1" max="20">
+                        </div>
+                        <div></div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Material Families</h2>
+                    <div class="family-toggles" id="family-toggles"></div>
+                </section>
+            </aside>
+
+            <!-- Main content -->
+            <div class="main-content">
+                <div id="ashby-chart"></div>
+
+                <!-- Material detail card -->
+                <div class="card detail-card" id="detail-card">
+                    <div class="card-header">
+                        <div>
+                            <h2 id="card-name"></h2>
+                            <div class="meta" id="card-meta"></div>
+                        </div>
+                        <button class="card-close" id="card-close" type="button">&times;</button>
+                    </div>
+                    <table class="prop-table" id="card-props"></table>
+                </div>
+
+                <!-- Ranking table -->
+                <section class="card ranking-section" id="ranking-section">
+                    <h2 id="ranking-title">Ranked Materials</h2>
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th style="width:36px">#</th>
+                                <th>Material</th>
+                                <th>Family</th>
+                                <th>Index Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ranking-body"></tbody>
+                    </table>
+                </section>
+            </div>
         </div>
     </main>
 
@@ -192,76 +533,73 @@
     </footer>
 
 <script>
-// ── Global state ─────────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════════
+   Materials Explorer — main script
+   ══════════════════════════════════════════════════════════════════ */
+
 let DB = null;
 let chart = null;
 let activeFamilies = new Set();
 
+/* ── Chart presets ────────────────────────────────────────────── */
 const PRESETS = [
-  { label: "Stiffness vs Density",      x: "density", y: "youngs_modulus",      index: "stiff_light_beam" },
-  { label: "Strength vs Density",        x: "density", y: "yield_strength",      index: "strong_light_beam" },
-  { label: "Toughness vs Strength",      x: "yield_strength", y: "fracture_toughness", index: "damage_tolerant" },
-  { label: "k vs CTE",                   x: "cte", y: "thermal_conductivity",   index: "thermal_distortion" },
-  { label: "k vs Density",               x: "density", y: "thermal_conductivity", index: "heat_spreading_mass" },
-  { label: "Price vs Strength",          x: "yield_strength", y: "price_per_kg", index: "" },
+  { label: "E vs \u03c1",       x: "density", y: "youngs_modulus",       index: "stiff_light_beam" },
+  { label: "\u03c3y vs \u03c1", x: "density", y: "yield_strength",       index: "strong_light_beam" },
+  { label: "KIC vs \u03c3y",    x: "yield_strength", y: "fracture_toughness", index: "damage_tolerant" },
+  { label: "k vs CTE",          x: "cte", y: "thermal_conductivity",    index: "thermal_distortion" },
+  { label: "k vs \u03c1",       x: "density", y: "thermal_conductivity", index: "heat_spreading_mass" },
+  { label: "Price vs \u03c3y",  x: "yield_strength", y: "price_per_kg",  index: "" },
 ];
 
-// Index library (mirrored from Python for client-side ranking)
+/* ── Performance index library (client-side mirror) ──────────── */
 const INDEX_LIB = {
-  stiff_light_tie:         { name: "Stiff, light tie (E/\u03c1)", expr: "E/\u03c1", fn: m => d(m,"youngs_modulus") / d(m,"density"), slope: 1, cx: "density", cy: "youngs_modulus", maximize: true },
-  stiff_light_beam:        { name: "Stiff, light beam (E\u00b9\u02f2/\u03c1)", fn: m => Math.sqrt(d(m,"youngs_modulus")) / d(m,"density"), slope: 2, cx: "density", cy: "youngs_modulus", maximize: true },
-  stiff_light_plate:       { name: "Stiff, light plate (E\u00b9\u02f3/\u03c1)", fn: m => Math.pow(d(m,"youngs_modulus"), 1/3) / d(m,"density"), slope: 3, cx: "density", cy: "youngs_modulus", maximize: true },
-  strong_light_tie:        { name: "Strong, light tie (\u03c3\u1d67/\u03c1)", fn: m => d(m,"yield_strength") / d(m,"density"), slope: 1, cx: "density", cy: "yield_strength", maximize: true },
-  strong_light_beam:       { name: "Strong, light beam (\u03c3\u1d67\u00b2\u02f3/\u03c1)", fn: m => Math.pow(d(m,"yield_strength"), 2/3) / d(m,"density"), slope: 1.5, cx: "density", cy: "yield_strength", maximize: true },
-  strong_light_plate:      { name: "Strong, light plate (\u03c3\u1d67\u00b9\u02f2/\u03c1)", fn: m => Math.pow(d(m,"yield_strength"), 0.5) / d(m,"density"), slope: 2, cx: "density", cy: "yield_strength", maximize: true },
-  max_elastic_energy_mass: { name: "Elastic energy/mass (\u03c3\u1d67\u00b2/E\u03c1)", fn: m => Math.pow(d(m,"yield_strength"),2) / (d(m,"youngs_modulus")*d(m,"density")), slope: null, cx: "youngs_modulus", cy: "yield_strength", maximize: true },
-  damage_tolerant:         { name: "Damage tolerant (K_IC/\u03c3\u1d67)", fn: m => d(m,"fracture_toughness") / d(m,"yield_strength"), slope: null, cx: "yield_strength", cy: "fracture_toughness", maximize: true },
-  thermal_distortion:      { name: "Thermal distortion (k/E\u03b1)", fn: m => d(m,"thermal_conductivity") / (d(m,"youngs_modulus")*d(m,"cte")), slope: null, cx: "cte", cy: "thermal_conductivity", maximize: true },
-  heat_spreading_mass:     { name: "Heat spreading/mass (k/\u03c1)", fn: m => d(m,"thermal_conductivity") / d(m,"density"), slope: 1, cx: "density", cy: "thermal_conductivity", maximize: true },
-  thermal_insulation:      { name: "Thermal insulation (1/k)", fn: m => 1/d(m,"thermal_conductivity"), slope: null, cx: "thermal_conductivity", cy: "density", maximize: true },
+  stiff_light_tie:    { name: "Stiff, light tie  (E / \u03c1)",                 fn: m => g(m,"youngs_modulus")/g(m,"density"),                                        slope: 1,    cx: "density", cy: "youngs_modulus" },
+  stiff_light_beam:   { name: "Stiff, light beam  (E\u00b9\u02f2 / \u03c1)",    fn: m => Math.sqrt(g(m,"youngs_modulus"))/g(m,"density"),                              slope: 2,    cx: "density", cy: "youngs_modulus" },
+  stiff_light_plate:  { name: "Stiff, light plate  (E\u00b9\u02f3 / \u03c1)",   fn: m => Math.pow(g(m,"youngs_modulus"),1/3)/g(m,"density"),                           slope: 3,    cx: "density", cy: "youngs_modulus" },
+  strong_light_tie:   { name: "Strong, light tie  (\u03c3y / \u03c1)",           fn: m => g(m,"yield_strength")/g(m,"density"),                                        slope: 1,    cx: "density", cy: "yield_strength" },
+  strong_light_beam:  { name: "Strong, light beam  (\u03c3y\u00b2\u02f3 / \u03c1)", fn: m => Math.pow(g(m,"yield_strength"),2/3)/g(m,"density"),                       slope: 1.5,  cx: "density", cy: "yield_strength" },
+  strong_light_plate: { name: "Strong, light plate  (\u03c3y\u00b9\u02f2 / \u03c1)", fn: m => Math.pow(g(m,"yield_strength"),0.5)/g(m,"density"),                      slope: 2,    cx: "density", cy: "yield_strength" },
+  damage_tolerant:    { name: "Damage tolerant  (KIC / \u03c3y)",                fn: m => g(m,"fracture_toughness")/g(m,"yield_strength"),                              slope: null, cx: "yield_strength", cy: "fracture_toughness" },
+  thermal_distortion: { name: "Thermal distortion  (k / E\u03b1)",              fn: m => g(m,"thermal_conductivity")/(g(m,"youngs_modulus")*g(m,"cte")),                slope: null, cx: "cte", cy: "thermal_conductivity" },
+  heat_spreading_mass:{ name: "Heat spreading / mass  (k / \u03c1)",             fn: m => g(m,"thermal_conductivity")/g(m,"density"),                                   slope: 1,    cx: "density", cy: "thermal_conductivity" },
+  thermal_insulation: { name: "Thermal insulation  (1 / k)",                    fn: m => 1/g(m,"thermal_conductivity"),                                                slope: null, cx: "thermal_conductivity", cy: "density" },
 };
 
-function d(m, prop) {
-  const v = ashbyGetValue(m, prop);
+function g(m, p) {
+  const v = ashbyGetValue(m, p);
   if (v == null || v === 0) throw new Error("missing");
   return v;
 }
-
-function safeIndex(fn, m) {
-  try { return fn(m); }
-  catch { return null; }
+function safeIdx(fn, m) {
+  try { return fn(m); } catch { return null; }
 }
 
-// ── Init ─────────────────────────────────────────────────────────────
+/* ── Init ─────────────────────────────────────────────────────── */
 async function init() {
   const resp = await fetch("/data/materials/materials.json");
   DB = await resp.json();
-
-  chart = new AshbyPlot("ashby-chart", {
-    onClick: showMaterialCard,
-  });
-
-  buildControls();
+  chart = new AshbyPlot("ashby-chart", { onClick: showCard });
+  buildUI();
   applyPreset(PRESETS[0]);
 }
 
-function buildControls() {
+function buildUI() {
   const reg = DB.property_registry;
+  const plottable = Object.entries(reg)
+    .filter(([, v]) => v.plottable !== false)
+    .sort((a, b) => a[1].label.localeCompare(b[1].label));
 
-  // Populate axis dropdowns with plottable properties
-  const plottable = Object.entries(reg).filter(([k, v]) => v.plottable !== false);
-  plottable.sort((a, b) => a[1].label.localeCompare(b[1].label));
-
+  // Axis dropdowns
   for (const sel of [document.getElementById("x-prop"), document.getElementById("y-prop")]) {
     for (const [key, meta] of plottable) {
       const opt = document.createElement("option");
       opt.value = key;
-      opt.textContent = `${meta.label}${meta.unit ? " (" + meta.unit + ")" : ""}`;
+      opt.textContent = meta.label + (meta.unit ? ` (${meta.unit})` : "");
       sel.appendChild(opt);
     }
   }
 
-  // Performance index dropdown
+  // Index dropdown
   const idxSel = document.getElementById("perf-index");
   for (const [key, idx] of Object.entries(INDEX_LIB)) {
     const opt = document.createElement("option");
@@ -272,45 +610,69 @@ function buildControls() {
 
   // Family toggles
   const families = [...new Set(DB.materials.map(m => m.family))].sort();
-  const toggleContainer = document.getElementById("family-toggles");
+  const tc = document.getElementById("family-toggles");
   for (const fam of families) {
     activeFamilies.add(fam);
     const btn = document.createElement("button");
-    btn.className = "family-toggle active";
-    btn.dataset.family = fam;
+    btn.type = "button";
+    btn.className = "family-pill active";
     btn.style.color = FAMILY_COLORS[fam] || "#888";
     btn.innerHTML = `<span class="dot" style="background:${FAMILY_COLORS[fam] || '#888'}"></span>${fam}`;
     btn.addEventListener("click", () => {
-      if (activeFamilies.has(fam)) {
-        activeFamilies.delete(fam);
-        btn.classList.remove("active");
-      } else {
-        activeFamilies.add(fam);
-        btn.classList.add("active");
-      }
+      if (activeFamilies.has(fam)) { activeFamilies.delete(fam); } else { activeFamilies.add(fam); }
+      btn.classList.toggle("active");
       updateChart();
     });
-    toggleContainer.appendChild(btn);
+    tc.appendChild(btn);
   }
 
   // Presets
-  const presetBar = document.getElementById("preset-bar");
-  for (const preset of PRESETS) {
+  const pc = document.getElementById("preset-chips");
+  PRESETS.forEach((p) => {
     const btn = document.createElement("button");
-    btn.className = "preset-btn";
-    btn.textContent = preset.label;
-    btn.addEventListener("click", () => applyPreset(preset));
-    presetBar.appendChild(btn);
-  }
+    btn.type = "button";
+    btn.className = "preset-chip";
+    btn.textContent = p.label;
+    btn.addEventListener("click", () => applyPreset(p));
+    pc.appendChild(btn);
+  });
 
-  // Event listeners
+  // Control event listeners
   document.getElementById("x-prop").addEventListener("change", updateChart);
   document.getElementById("y-prop").addEventListener("change", updateChart);
   document.getElementById("perf-index").addEventListener("change", updateChart);
   document.getElementById("top-n").addEventListener("change", updateChart);
-  document.getElementById("show-ranges").addEventListener("change", updateChart);
   document.getElementById("card-close").addEventListener("click", () => {
-    document.getElementById("material-card").classList.remove("visible");
+    document.getElementById("detail-card").classList.remove("visible");
+  });
+
+  // Settings toggles that affect chart
+  document.getElementById("setting-ranges").addEventListener("change", updateChart);
+  document.getElementById("setting-isolines").addEventListener("change", updateChart);
+  document.getElementById("setting-labels").addEventListener("change", updateChart);
+
+  // Settings panel open/close
+  const openSettings = () => {
+    document.getElementById("settings-panel").classList.add("open");
+    document.getElementById("settings-overlay").classList.add("open");
+    document.getElementById("settings-panel").setAttribute("aria-hidden", "false");
+  };
+  const closeSettings = () => {
+    document.getElementById("settings-panel").classList.remove("open");
+    document.getElementById("settings-overlay").classList.remove("open");
+    document.getElementById("settings-panel").setAttribute("aria-hidden", "true");
+  };
+  document.getElementById("settings-button").addEventListener("click", openSettings);
+  document.getElementById("settings-close").addEventListener("click", closeSettings);
+  document.getElementById("settings-overlay").addEventListener("click", closeSettings);
+
+  // Theme control
+  document.querySelectorAll("#theme-control button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.body.dataset.theme = btn.dataset.theme;
+      document.querySelectorAll("#theme-control button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
   });
 }
 
@@ -318,57 +680,56 @@ function applyPreset(preset) {
   document.getElementById("x-prop").value = preset.x;
   document.getElementById("y-prop").value = preset.y;
   document.getElementById("perf-index").value = preset.index || "";
-
-  // Highlight active preset button
-  document.querySelectorAll(".preset-btn").forEach((btn, i) => {
+  // Highlight active chip
+  document.querySelectorAll(".preset-chip").forEach((btn, i) => {
     btn.classList.toggle("active", PRESETS[i] === preset);
   });
-
   updateChart();
 }
 
+/* ── Chart update ─────────────────────────────────────────────── */
 function updateChart() {
   const xProp = document.getElementById("x-prop").value;
   const yProp = document.getElementById("y-prop").value;
-  const indexId = document.getElementById("perf-index").value;
+  const idxId = document.getElementById("perf-index").value;
   const topN = parseInt(document.getElementById("top-n").value) || 5;
-  const showRanges = document.getElementById("show-ranges").checked;
+  const showRanges = document.getElementById("setting-ranges").checked;
+  const showIsolines = document.getElementById("setting-isolines").checked;
 
-  // Compute ranking
+  // Index hint
+  const hintEl = document.getElementById("index-hint");
+  const idx = INDEX_LIB[idxId];
+  if (idx && idx.slope != null) {
+    const match = (xProp === idx.cx && yProp === idx.cy) || (xProp === idx.cy && yProp === idx.cx);
+    hintEl.textContent = match ? "Isolines will appear on chart." : `Tip: switch axes to ${idx.cy} vs ${idx.cx} to see isolines.`;
+  } else {
+    hintEl.textContent = "";
+  }
+
+  // Ranking
   let highlightIds = [];
   let ranked = [];
-  const idx = INDEX_LIB[indexId];
   if (idx) {
     const scored = [];
     for (const m of DB.materials) {
       if (!activeFamilies.has(m.family)) continue;
-      const val = safeIndex(idx.fn, m);
+      const val = safeIdx(idx.fn, m);
       if (val != null && isFinite(val)) scored.push({ m, val });
     }
-    scored.sort((a, b) => idx.maximize ? b.val - a.val : a.val - b.val);
+    scored.sort((a, b) => b.val - a.val);
     ranked = scored.slice(0, topN);
     highlightIds = ranked.map(s => s.m.id);
   }
 
   // Isolines
-  let isolines = undefined;
-  if (idx && idx.slope != null) {
-    const curX = xProp;
-    const curY = yProp;
-    // Only show isolines when axes match the index's chart_x and chart_y
-    if ((curX === idx.cx && curY === idx.cy) || (curX === idx.cy && curY === idx.cx)) {
-      // Generate isoline values from the ranked materials
-      const isoValues = [];
-      if (ranked.length > 0) {
-        // Show isolines at the top, median, and bottom ranked values
-        isoValues.push(ranked[0].val);
-        if (ranked.length > 2) isoValues.push(ranked[Math.floor(ranked.length / 2)].val);
-        if (ranked.length > 1) isoValues.push(ranked[ranked.length - 1].val);
-      } else {
-        // Default isolines
-        isoValues.push(1, 3, 10);
-      }
-      isolines = { slope: idx.slope, values: [...new Set(isoValues)], label: idx.name };
+  let isolines;
+  if (idx && idx.slope != null && showIsolines) {
+    const match = (xProp === idx.cx && yProp === idx.cy) || (xProp === idx.cy && yProp === idx.cx);
+    if (match && ranked.length > 0) {
+      const vals = [ranked[0]?.val];
+      if (ranked.length > 2) vals.push(ranked[Math.floor(ranked.length / 2)]?.val);
+      if (ranked.length > 1) vals.push(ranked[ranked.length - 1]?.val);
+      isolines = { slope: idx.slope, values: [...new Set(vals.filter(Boolean))] };
     }
   }
 
@@ -381,35 +742,36 @@ function updateChart() {
     isolines,
   });
 
-  // Update ranking table
-  const rankSection = document.getElementById("ranking-section");
-  const rankBody = document.getElementById("ranking-body");
+  // Ranking table
+  const rs = document.getElementById("ranking-section");
+  const rb = document.getElementById("ranking-body");
   if (ranked.length > 0 && idx) {
-    document.getElementById("ranking-title").textContent = `Top ${ranked.length} — ${idx.name}`;
-    rankBody.innerHTML = "";
+    document.getElementById("ranking-title").textContent = `Top ${ranked.length} \u2014 ${idx.name}`;
+    rb.innerHTML = "";
     for (let i = 0; i < ranked.length; i++) {
       const { m, val } = ranked[i];
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td class="rank-num">${i + 1}</td>
         <td>${m.name}</td>
-        <td><span style="color:${FAMILY_COLORS[m.family]||'#888'}">${m.family}</span></td>
-        <td style="font-family:monospace">${val.toExponential(3)}</td>
+        <td><span class="family-badge"><span class="dot" style="background:${FAMILY_COLORS[m.family] || '#888'}"></span>${m.family}</span></td>
+        <td style="font-family:var(--font-mono);font-size:0.85rem">${val.toExponential(3)}</td>
       `;
-      tr.addEventListener("click", () => showMaterialCard(m));
-      rankBody.appendChild(tr);
+      tr.addEventListener("click", () => showCard(m));
+      rb.appendChild(tr);
     }
-    rankSection.style.display = "block";
+    rs.classList.add("visible");
   } else {
-    rankSection.style.display = "none";
+    rs.classList.remove("visible");
   }
 }
 
-function showMaterialCard(material) {
-  const card = document.getElementById("material-card");
+/* ── Material detail card ─────────────────────────────────────── */
+function showCard(material) {
+  const card = document.getElementById("detail-card");
   document.getElementById("card-name").textContent = material.name;
 
-  const metaParts = [material.family, material.sub_family, material.record_kind];
+  const metaParts = [material.family, material.sub_family];
   if (material.condition) metaParts.push(material.condition);
   if (material.designation) metaParts.push(material.designation);
   document.getElementById("card-meta").textContent = metaParts.join(" \u00b7 ");
@@ -420,15 +782,18 @@ function showMaterialCard(material) {
 
   // Group properties
   const groups = {};
-  for (const [key, meta] of Object.entries(reg)) {
-    if (meta.computed) continue;
-    const g = meta.group || "other";
-    if (!groups[g]) groups[g] = [];
-    groups[g].push([key, meta]);
+  for (const [k, v] of Object.entries(reg)) {
+    if (v.computed) continue;
+    const gr = v.group || "other";
+    if (!groups[gr]) groups[gr] = [];
+    groups[gr].push([k, v]);
   }
 
-  const groupOrder = ["mechanical", "thermal", "electrical", "economic", "environmental", "processability"];
-  const groupLabels = { mechanical: "Mechanical", thermal: "Thermal", electrical: "Electrical", economic: "Economic", environmental: "Environmental", processability: "Processability" };
+  const groupOrder = ["mechanical", "thermal", "electrical", "economic", "environmental"];
+  const groupLabels = {
+    mechanical: "Mechanical", thermal: "Thermal", electrical: "Electrical",
+    economic: "Economic", environmental: "Environmental",
+  };
 
   for (const grp of groupOrder) {
     const props = groups[grp];
@@ -436,7 +801,6 @@ function showMaterialCard(material) {
     const hasAny = props.some(([k]) => ashbyGetValue(material, k) != null);
     if (!hasAny) continue;
 
-    // Group header
     const hdr = document.createElement("tr");
     hdr.className = "prop-group-header";
     hdr.innerHTML = `<td colspan="2">${groupLabels[grp] || grp}</td>`;
@@ -445,42 +809,39 @@ function showMaterialCard(material) {
     for (const [key, meta] of props) {
       const val = ashbyGetValue(material, key);
       if (val == null) continue;
-      const tr = document.createElement("tr");
+
       const displayed = ashbyDisplayValue(val, meta);
       const range = ashbyGetRange(material, key);
-      let rangeStr = "";
+      let extra = "";
       if (range) {
-        rangeStr = ` <span style="color:#999;font-size:0.8em">[${ashbyDisplayValue(range[0], meta)} – ${ashbyDisplayValue(range[1], meta)}]</span>`;
+        extra += ` <span class="range-hint">[${ashbyDisplayValue(range[0], meta)} \u2013 ${ashbyDisplayValue(range[1], meta)}]</span>`;
       }
-      // Source & basis
       const raw = material[key];
-      let basisStr = "";
       if (typeof raw === "object" && raw != null && raw.basis) {
-        basisStr = ` <span style="color:#aaa;font-size:0.75em">(${raw.basis})</span>`;
+        extra += ` <span class="basis-badge">${raw.basis}</span>`;
       }
 
-      tr.innerHTML = `<th>${meta.label}${meta.symbol ? " (" + meta.symbol + ")" : ""}</th><td>${displayed}${rangeStr}${basisStr}</td>`;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<th>${meta.label}${meta.symbol ? " (" + meta.symbol + ")" : ""}</th><td>${displayed}${extra}</td>`;
       tbody.appendChild(tr);
     }
   }
 
-  // Source info
+  // Source
   const srcId = material.default_source_id;
   const src = DB.sources[srcId];
   if (src) {
-    const srcRow = document.createElement("tr");
-    srcRow.className = "prop-group-header";
-    srcRow.innerHTML = `<td colspan="2">Source</td>`;
-    tbody.appendChild(srcRow);
+    const hdr = document.createElement("tr");
+    hdr.className = "prop-group-header";
+    hdr.innerHTML = `<td colspan="2">Source</td>`;
+    tbody.appendChild(hdr);
     const sr = document.createElement("tr");
-    sr.innerHTML = `<th>Default Source</th><td style="font-family:inherit;font-size:0.85em">${src.citation}</td>`;
+    sr.innerHTML = `<th>Default source</th><td style="font-family:var(--font-sans);font-size:0.82rem">${src.citation}</td>`;
     tbody.appendChild(sr);
   }
-
-  // Notes
   if (material.notes) {
     const nr = document.createElement("tr");
-    nr.innerHTML = `<th>Notes</th><td style="font-family:inherit;font-style:italic">${material.notes}</td>`;
+    nr.innerHTML = `<th>Notes</th><td style="font-family:var(--font-sans);font-style:italic;font-size:0.82rem">${material.notes}</td>`;
     tbody.appendChild(nr);
   }
 
@@ -488,7 +849,7 @@ function showMaterialCard(material) {
   card.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-// ── Boot ─────────────────────────────────────────────────────────────
+/* ── Boot ──────────────────────────────────────────────────────── */
 init();
 </script>
 </body>

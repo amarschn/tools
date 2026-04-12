@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ashby Chart with Family Envelopes (Blobs) — Prototype</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="/shared/ashby-plot.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fb; --bg-card: #ffffff; --text-color: #111827;
+            --text-light: #6b7280; --border-color: #e5e7eb;
+            --font-sans: 'Helvetica Neue', system-ui, sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-sans); background: var(--bg-color); color: var(--text-color); padding: 24px; }
+        h1 { font-size: 1.5rem; margin-bottom: 8px; }
+        p { color: var(--text-light); margin-bottom: 16px; max-width: 80ch; }
+        .controls { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+        .controls label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
+        .controls select { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; }
+        .controls button { padding: 6px 14px; border: 1px solid var(--border-color); border-radius: 20px; font-size: 0.82rem; cursor: pointer; background: var(--bg-card); }
+        .controls button.active { background: #111827; color: #fff; border-color: #111827; }
+        #chart { width: 100%; max-width: 1200px; height: 640px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); }
+        .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; }
+        .legend-swatch { width: 16px; height: 16px; border-radius: 3px; opacity: 0.4; border: 2px solid; }
+    </style>
+</head>
+<body>
+    <h1>Ashby Chart with Family Envelopes</h1>
+    <p>
+        Prototype: convex-hull "blobs" around each material family on log-log axes,
+        with individual material points overlaid. This is the classic Ashby chart style.
+    </p>
+    <div class="controls">
+        <label>X: </label><select id="x-prop"></select>
+        <label>Y: </label><select id="y-prop"></select>
+        <label style="margin-left:12px">Presets:</label>
+        <button class="active" data-preset="0">E vs &rho;</button>
+        <button data-preset="1">&sigma;y vs &rho;</button>
+        <button data-preset="2">k vs &rho;</button>
+    </div>
+    <div id="chart"></div>
+    <div class="legend" id="legend"></div>
+
+<script>
+const FAMILY_COLORS_BLOB = {
+  metal:     { fill: "rgba(78,121,167,0.15)",  line: "rgba(78,121,167,0.6)",  point: "#4e79a7" },
+  polymer:   { fill: "rgba(225,87,89,0.15)",   line: "rgba(225,87,89,0.6)",   point: "#e15759" },
+  ceramic:   { fill: "rgba(118,183,178,0.15)", line: "rgba(118,183,178,0.6)", point: "#76b7b2" },
+  composite: { fill: "rgba(242,142,43,0.15)",  line: "rgba(242,142,43,0.6)",  point: "#f28e2b" },
+  natural:   { fill: "rgba(89,161,79,0.15)",   line: "rgba(89,161,79,0.6)",   point: "#59a14f" },
+};
+
+const PRESETS = [
+  { x: "density", y: "youngs_modulus" },
+  { x: "density", y: "yield_strength" },
+  { x: "density", y: "thermal_conductivity" },
+];
+
+let DB = null;
+
+async function init() {
+  DB = await (await fetch("/data/materials/materials.json")).json();
+  const reg = DB.property_registry;
+  const plottable = Object.entries(reg).filter(([,v]) => v.plottable !== false).sort((a,b) => a[1].label.localeCompare(b[1].label));
+  for (const sel of [document.getElementById("x-prop"), document.getElementById("y-prop")]) {
+    for (const [k, m] of plottable) {
+      const o = document.createElement("option"); o.value = k; o.textContent = m.label + (m.unit ? ` (${m.unit})` : "");
+      sel.appendChild(o);
+    }
+  }
+  document.getElementById("x-prop").addEventListener("change", render);
+  document.getElementById("y-prop").addEventListener("change", render);
+  document.querySelectorAll("[data-preset]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const p = PRESETS[parseInt(btn.dataset.preset)];
+      document.getElementById("x-prop").value = p.x;
+      document.getElementById("y-prop").value = p.y;
+      document.querySelectorAll("[data-preset]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      render();
+    });
+  });
+  document.getElementById("x-prop").value = "density";
+  document.getElementById("y-prop").value = "youngs_modulus";
+  render();
+  buildLegend();
+}
+
+/**
+ * Compute the convex hull of 2D points (Andrew's monotone chain).
+ * Input: array of [x, y]. Output: array of [x, y] forming the hull (CCW).
+ */
+function convexHull(points) {
+  if (points.length < 3) return points.slice();
+  const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  upper.pop(); lower.pop();
+  return lower.concat(upper);
+}
+function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+
+/**
+ * Expand a convex hull outward by a factor (in log space).
+ * This gives the "padded blob" effect.
+ */
+function expandHull(hull, factor) {
+  if (hull.length < 3) return hull;
+  // Compute centroid in log space
+  let cx = 0, cy = 0;
+  for (const [x, y] of hull) { cx += Math.log10(x); cy += Math.log10(y); }
+  cx /= hull.length; cy /= hull.length;
+  // Expand each point away from centroid
+  return hull.map(([x, y]) => {
+    const lx = Math.log10(x), ly = Math.log10(y);
+    const dx = lx - cx, dy = ly - cy;
+    const nlx = cx + dx * factor, nly = cy + dy * factor;
+    return [Math.pow(10, nlx), Math.pow(10, nly)];
+  });
+}
+
+/**
+ * Smooth a polygon into a rounded blob using Catmull-Rom subdivision.
+ */
+function smoothPolygon(pts, subdivisions) {
+  if (pts.length < 3) return pts;
+  let result = pts.slice();
+  for (let s = 0; s < subdivisions; s++) {
+    const next = [];
+    const n = result.length;
+    for (let i = 0; i < n; i++) {
+      const p0 = result[(i - 1 + n) % n];
+      const p1 = result[i];
+      const p2 = result[(i + 1) % n];
+      const p3 = result[(i + 2) % n];
+      // Use log space for smooth interpolation on log axes
+      const lp0 = [Math.log10(p0[0]), Math.log10(p0[1])];
+      const lp1 = [Math.log10(p1[0]), Math.log10(p1[1])];
+      const lp2 = [Math.log10(p2[0]), Math.log10(p2[1])];
+      const lp3 = [Math.log10(p3[0]), Math.log10(p3[1])];
+
+      next.push(p1);
+      // Midpoint with Catmull-Rom influence
+      const mx = (-lp0[0] + 9*lp1[0] + 9*lp2[0] - lp3[0]) / 16;
+      const my = (-lp0[1] + 9*lp1[1] + 9*lp2[1] - lp3[1]) / 16;
+      next.push([Math.pow(10, mx), Math.pow(10, my)]);
+    }
+    result = next;
+  }
+  return result;
+}
+
+function render() {
+  const xProp = document.getElementById("x-prop").value;
+  const yProp = document.getElementById("y-prop").value;
+  const xMeta = DB.property_registry[xProp] || {};
+  const yMeta = DB.property_registry[yProp] || {};
+
+  // Group materials by family
+  const familyData = {};
+  for (const m of DB.materials) {
+    const xv = ashbyGetValue(m, xProp);
+    const yv = ashbyGetValue(m, yProp);
+    if (xv == null || yv == null || xv <= 0 || yv <= 0) continue;
+    const fam = m.family;
+    if (!familyData[fam]) familyData[fam] = { pts: [], materials: [] };
+    familyData[fam].pts.push([xv, yv]);
+    familyData[fam].materials.push(m);
+  }
+
+  const traces = [];
+
+  // 1) Blob traces (filled convex hulls) — drawn first (behind points)
+  for (const [fam, data] of Object.entries(familyData)) {
+    const colors = FAMILY_COLORS_BLOB[fam];
+    if (!colors || data.pts.length < 3) continue;
+
+    let hull = convexHull(data.pts);
+    hull = expandHull(hull, 1.35); // Pad outward
+    hull = smoothPolygon(hull, 3); // Smooth into blob
+
+    // Close the polygon
+    const hx = hull.map(p => p[0]);
+    const hy = hull.map(p => p[1]);
+    hx.push(hx[0]);
+    hy.push(hy[0]);
+
+    traces.push({
+      x: hx, y: hy,
+      type: "scatter", mode: "lines",
+      fill: "toself",
+      fillcolor: colors.fill,
+      line: { color: colors.line, width: 1.5 },
+      name: fam + " (envelope)",
+      showlegend: false,
+      hoverinfo: "skip",
+    });
+  }
+
+  // 2) Point traces (individual materials) — drawn on top
+  for (const [fam, data] of Object.entries(familyData)) {
+    const colors = FAMILY_COLORS_BLOB[fam] || { point: "#888" };
+    const x = data.pts.map(p => p[0]);
+    const y = data.pts.map(p => p[1]);
+    const text = data.materials.map(m => m.name);
+    const hovertemplate = data.materials.map((m, i) =>
+      `<b>${m.name}</b><br>${xMeta.label||xProp}: ${ashbyDisplayValue(x[i], xMeta)}<br>${yMeta.label||yProp}: ${ashbyDisplayValue(y[i], yMeta)}<extra>${fam}</extra>`
+    );
+
+    traces.push({
+      x, y, text,
+      type: "scatter", mode: "markers+text",
+      textposition: "top center",
+      textfont: { size: 9, color: colors.point },
+      name: fam.charAt(0).toUpperCase() + fam.slice(1),
+      marker: {
+        color: colors.point,
+        size: 7,
+        line: { width: 1, color: "#fff" },
+        opacity: 0.9,
+      },
+      hovertemplate,
+    });
+  }
+
+  const layout = {
+    title: { text: `${yMeta.label || yProp} vs ${xMeta.label || xProp}`, font: { size: 16 } },
+    xaxis: {
+      title: `${xMeta.label || xProp}${xMeta.unit ? " (" + xMeta.unit + ")" : ""}`,
+      type: "log", gridcolor: "#eee", zeroline: false,
+    },
+    yaxis: {
+      title: `${yMeta.label || yProp}${yMeta.unit ? " (" + yMeta.unit + ")" : ""}`,
+      type: "log", gridcolor: "#eee", zeroline: false,
+    },
+    hovermode: "closest",
+    legend: { orientation: "h", y: 1.08, x: 0.5, xanchor: "center" },
+    margin: { t: 60, r: 30, b: 60, l: 80 },
+    plot_bgcolor: "#fafafa",
+    paper_bgcolor: "#fff",
+  };
+
+  Plotly.react("chart", traces, layout, { responsive: true });
+}
+
+function buildLegend() {
+  const el = document.getElementById("legend");
+  for (const [fam, colors] of Object.entries(FAMILY_COLORS_BLOB)) {
+    const div = document.createElement("div");
+    div.className = "legend-item";
+    div.innerHTML = `<span class="legend-swatch" style="background:${colors.point};border-color:${colors.point}"></span>${fam}`;
+    el.appendChild(div);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

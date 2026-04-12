@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Materials Explorer — Prototype B (Top Controls)</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="/shared/ashby-plot.js"></script>
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', monospace;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary-color: #f9fafb; --primary-light: #1f2937; --secondary-color: #9ca3af;
+                --accent-color: #f9fafb; --text-color: #f9fafb; --text-light: #9ca3af;
+                --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0,0,0,0.45);
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-sans); line-height: 1.6; background: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; min-height: 100vh; }
+        a { color: var(--accent-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        p { color: var(--text-light); }
+        h1 { font-size: 2rem; letter-spacing: -0.02em; font-weight: 600; }
+        h2 { font-size: 1.25rem; font-weight: 600; }
+        h3 { font-size: 0.95rem; font-weight: 600; color: var(--secondary-color); }
+
+        .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: var(--shadow); }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 56px; max-width: 1440px; margin: 0 auto; padding: 0 24px; }
+        .nav-brand { font-size: 1.15rem; font-weight: 600; color: var(--text-color); }
+        .settings-button { padding: 6px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-color); font-size: 0.85rem; cursor: pointer; }
+        .settings-button:hover { background: var(--bg-color); }
+
+        /* Settings panel */
+        .settings-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 900; display: none; }
+        .settings-overlay.open { display: block; }
+        .settings-panel { position: fixed; top: 0; right: -380px; width: 360px; height: 100%; background: var(--bg-card); border-left: 1px solid var(--border-color); box-shadow: var(--shadow-lg); z-index: 901; transition: right 0.25s ease; overflow-y: auto; }
+        .settings-panel.open { right: 0; }
+        .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border-color); }
+        .settings-close { background: none; border: none; font-size: 1rem; cursor: pointer; color: var(--text-light); }
+        .settings-content { padding: 20px; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h4 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); margin-bottom: 12px; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+        .setting-label { font-size: 0.9rem; font-weight: 500; }
+        .setting-help { font-size: 0.78rem; color: var(--text-light); margin-top: 2px; }
+
+        .container { width: 92%; max-width: 1440px; margin: 0 auto; padding: 24px 0 40px; flex: 1; }
+        .tool-description { margin-top: 6px; font-size: 1rem; max-width: 78ch; margin-bottom: 16px; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: var(--shadow); padding: 20px; }
+
+        /* Top controls bar */
+        .controls-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 20px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: var(--shadow); margin-bottom: 16px; }
+        .ctrl-group { display: flex; flex-direction: column; gap: 3px; }
+        .ctrl-group label { font-size: 0.72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; }
+        .ctrl-group select, .ctrl-group input[type="number"] { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.88rem; background: var(--bg-card); color: var(--text-color); }
+        .ctrl-group select:focus { outline: none; border-color: #4e79a7; box-shadow: 0 0 0 2px rgba(78,121,167,0.15); }
+        .ctrl-separator { width: 1px; height: 32px; background: var(--border-color); align-self: end; margin-bottom: 2px; }
+
+        /* Preset chips inline */
+        .preset-chips { display: flex; flex-wrap: wrap; gap: 5px; align-self: end; }
+        .preset-chip { padding: 5px 12px; border: 1px solid var(--border-color); border-radius: 16px; font-size: 0.78rem; background: var(--bg-card); cursor: pointer; transition: all 0.15s; color: var(--text-color); white-space: nowrap; }
+        .preset-chip:hover, .preset-chip.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+
+        /* Family pills row */
+        .family-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .family-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 14px; border: 1px solid var(--border-color); font-size: 0.78rem; cursor: pointer; user-select: none; transition: all 0.15s; background: var(--bg-card); color: var(--text-color); }
+        .family-pill.active { font-weight: 600; }
+        .family-pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        /* Chart — full width */
+        #ashby-chart { width: 100%; height: 560px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); margin-bottom: 16px; }
+
+        /* Detail + ranking side by side */
+        .results-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 900px) { .results-row { grid-template-columns: 1fr; } }
+
+        .detail-card { display: none; }
+        .detail-card.visible { display: block; }
+        .detail-card .card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; }
+        .detail-card .card-close { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-light); }
+        .detail-card .meta { font-size: 0.82rem; color: var(--text-light); margin-top: 2px; }
+        .prop-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px; }
+        .prop-table th, .prop-table td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .prop-table th { font-weight: 600; color: var(--secondary-color); width: 45%; }
+        .prop-table td { font-family: var(--font-mono); font-size: 0.8rem; }
+        .prop-group-header td { background: var(--bg-color); font-weight: 600; font-family: var(--font-sans); padding: 6px 8px; }
+
+        .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .ranking-table th { padding: 8px 10px; text-align: left; background: var(--bg-color); font-weight: 600; color: var(--secondary-color); border-bottom: 1px solid var(--border-color); }
+        .ranking-table td { padding: 6px 10px; border-bottom: 1px solid var(--border-color); }
+        .ranking-table tr:hover { background: rgba(78,121,167,0.06); cursor: pointer; }
+
+        footer { margin-top: auto; padding: 20px 0; border-top: 1px solid var(--border-color); text-align: center; font-size: 0.82rem; color: var(--text-light); }
+
+        @media (max-width: 768px) {
+            .controls-bar { flex-direction: column; align-items: stretch; }
+            .ctrl-separator { display: none; }
+            #ashby-chart { height: 400px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="/tools/" class="nav-brand">Engineering Tools</a>
+            <button class="settings-button" id="settings-button">Tool Settings</button>
+        </nav>
+    </header>
+
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <aside class="settings-panel" id="settings-panel">
+        <div class="settings-header"><h3>Tool Settings</h3><button class="settings-close" id="settings-close">Close</button></div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Chart</h4>
+                <div class="setting-row"><div><div class="setting-label">Show ranges</div><div class="setting-help">Min/max error bars on data points.</div></div><label><input type="checkbox" id="setting-ranges"></label></div>
+                <div class="setting-row"><div><div class="setting-label">Show isolines</div><div class="setting-help">Constant-index guide lines.</div></div><label><input type="checkbox" id="setting-isolines" checked></label></div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="container">
+        <h1>Materials Explorer</h1>
+        <p class="tool-description">
+            Interactive Ashby charts for material selection. Plot any two properties, overlay isolines, and click to inspect.
+        </p>
+
+        <!-- Compact control bar -->
+        <div class="controls-bar">
+            <div class="preset-chips" id="preset-chips"></div>
+            <div class="ctrl-separator"></div>
+            <div class="ctrl-group">
+                <label>X-Axis</label>
+                <select id="x-prop"></select>
+            </div>
+            <div class="ctrl-group">
+                <label>Y-Axis</label>
+                <select id="y-prop"></select>
+            </div>
+            <div class="ctrl-separator"></div>
+            <div class="ctrl-group">
+                <label>Index</label>
+                <select id="perf-index"><option value="">(none)</option></select>
+            </div>
+            <div class="ctrl-group">
+                <label>Top N</label>
+                <input type="number" id="top-n" value="5" min="1" max="20" style="width:56px">
+            </div>
+        </div>
+
+        <!-- Family toggles -->
+        <div class="family-bar" id="family-toggles"></div>
+
+        <!-- Full-width chart -->
+        <div id="ashby-chart"></div>
+
+        <!-- Results: detail card + ranking side by side -->
+        <div class="results-row">
+            <div class="card detail-card" id="detail-card">
+                <div class="card-header">
+                    <div><h2 id="card-name"></h2><div class="meta" id="card-meta"></div></div>
+                    <button class="card-close" id="card-close">&times;</button>
+                </div>
+                <table class="prop-table" id="card-props"></table>
+            </div>
+
+            <section class="card" id="ranking-section" style="display:none;">
+                <h2 id="ranking-title">Ranked Materials</h2>
+                <table class="ranking-table">
+                    <thead><tr><th>#</th><th>Material</th><th>Family</th><th>Index</th></tr></thead>
+                    <tbody id="ranking-body"></tbody>
+                </table>
+            </section>
+        </div>
+    </main>
+
+    <footer><div class="container">Data sourced from Ashby (2011), ASM Handbooks, MatWeb, and manufacturer datasheets. For educational and preliminary design screening only.</div></footer>
+
+<script>
+/* Identical logic to Prototype A — only layout differs */
+let DB = null, chart = null, activeFamilies = new Set();
+const PRESETS = [
+  { label: "E vs \u03c1", x:"density", y:"youngs_modulus", index:"stiff_light_beam" },
+  { label: "\u03c3y vs \u03c1", x:"density", y:"yield_strength", index:"strong_light_beam" },
+  { label: "KIC vs \u03c3y", x:"yield_strength", y:"fracture_toughness", index:"" },
+  { label: "k vs CTE", x:"cte", y:"thermal_conductivity", index:"" },
+  { label: "k vs \u03c1", x:"density", y:"thermal_conductivity", index:"heat_spreading_mass" },
+];
+const INDEX_LIB = {
+  stiff_light_tie:{name:"E / \u03c1",fn:m=>g(m,"youngs_modulus")/g(m,"density"),slope:1,cx:"density",cy:"youngs_modulus"},
+  stiff_light_beam:{name:"E\u00b9\u02f2 / \u03c1",fn:m=>Math.sqrt(g(m,"youngs_modulus"))/g(m,"density"),slope:2,cx:"density",cy:"youngs_modulus"},
+  stiff_light_plate:{name:"E\u00b9\u02f3 / \u03c1",fn:m=>Math.pow(g(m,"youngs_modulus"),1/3)/g(m,"density"),slope:3,cx:"density",cy:"youngs_modulus"},
+  strong_light_tie:{name:"\u03c3y / \u03c1",fn:m=>g(m,"yield_strength")/g(m,"density"),slope:1,cx:"density",cy:"yield_strength"},
+  strong_light_beam:{name:"\u03c3y\u00b2\u02f3 / \u03c1",fn:m=>Math.pow(g(m,"yield_strength"),2/3)/g(m,"density"),slope:1.5,cx:"density",cy:"yield_strength"},
+  heat_spreading_mass:{name:"k / \u03c1",fn:m=>g(m,"thermal_conductivity")/g(m,"density"),slope:1,cx:"density",cy:"thermal_conductivity"},
+};
+function g(m,p){const v=ashbyGetValue(m,p);if(v==null||v===0)throw 0;return v;}
+function safe(fn,m){try{return fn(m);}catch{return null;}}
+
+async function init(){
+  DB=await(await fetch("/data/materials/materials.json")).json();
+  chart=new AshbyPlot("ashby-chart",{onClick:showCard});
+  buildUI(); applyPreset(PRESETS[0]);
+}
+function buildUI(){
+  const reg=DB.property_registry;
+  const plottable=Object.entries(reg).filter(([,v])=>v.plottable!==false).sort((a,b)=>a[1].label.localeCompare(b[1].label));
+  for(const sel of[document.getElementById("x-prop"),document.getElementById("y-prop")]){
+    for(const[key,meta]of plottable){const o=document.createElement("option");o.value=key;o.textContent=meta.label+(meta.unit?` (${meta.unit})`:"");sel.appendChild(o);}
+  }
+  const idxSel=document.getElementById("perf-index");
+  for(const[key,idx]of Object.entries(INDEX_LIB)){const o=document.createElement("option");o.value=key;o.textContent=idx.name;idxSel.appendChild(o);}
+
+  const families=[...new Set(DB.materials.map(m=>m.family))].sort();
+  const tc=document.getElementById("family-toggles");
+  for(const fam of families){activeFamilies.add(fam);const btn=document.createElement("button");btn.className="family-pill active";btn.style.color=FAMILY_COLORS[fam]||"#888";btn.innerHTML=`<span class="dot" style="background:${FAMILY_COLORS[fam]||'#888'}"></span>${fam}`;btn.onclick=()=>{activeFamilies.has(fam)?activeFamilies.delete(fam):activeFamilies.add(fam);btn.classList.toggle("active");updateChart();};tc.appendChild(btn);}
+
+  const pc=document.getElementById("preset-chips");
+  PRESETS.forEach(p=>{const btn=document.createElement("button");btn.className="preset-chip";btn.textContent=p.label;btn.onclick=()=>applyPreset(p);pc.appendChild(btn);});
+
+  document.getElementById("x-prop").onchange=updateChart;
+  document.getElementById("y-prop").onchange=updateChart;
+  document.getElementById("perf-index").onchange=updateChart;
+  document.getElementById("top-n").onchange=updateChart;
+  document.getElementById("card-close").onclick=()=>document.getElementById("detail-card").classList.remove("visible");
+
+  document.getElementById("settings-button").onclick=()=>{document.getElementById("settings-panel").classList.add("open");document.getElementById("settings-overlay").classList.add("open");};
+  document.getElementById("settings-close").onclick=closeS;document.getElementById("settings-overlay").onclick=closeS;
+  function closeS(){document.getElementById("settings-panel").classList.remove("open");document.getElementById("settings-overlay").classList.remove("open");}
+}
+function applyPreset(p){document.getElementById("x-prop").value=p.x;document.getElementById("y-prop").value=p.y;document.getElementById("perf-index").value=p.index||"";document.querySelectorAll(".preset-chip").forEach((btn,i)=>btn.classList.toggle("active",PRESETS[i]===p));updateChart();}
+function updateChart(){
+  const xP=document.getElementById("x-prop").value,yP=document.getElementById("y-prop").value,idxId=document.getElementById("perf-index").value,topN=parseInt(document.getElementById("top-n").value)||5;
+  let highlighted=[],ranked=[];const idx=INDEX_LIB[idxId];
+  if(idx){const scored=[];for(const m of DB.materials){if(!activeFamilies.has(m.family))continue;const v=safe(idx.fn,m);if(v!=null&&isFinite(v))scored.push({m,val:v});}scored.sort((a,b)=>b.val-a.val);ranked=scored.slice(0,topN);highlighted=ranked.map(s=>s.m.id);}
+  let isolines;if(idx&&idx.slope!=null&&((xP===idx.cx&&yP===idx.cy)||(xP===idx.cy&&yP===idx.cx))){const vals=ranked.length?[ranked[0]?.val,ranked[Math.floor(ranked.length/2)]?.val,ranked[ranked.length-1]?.val].filter(Boolean):[1,3,10];isolines={slope:idx.slope,values:[...new Set(vals)]};}
+  chart.update(DB.materials,DB.property_registry,{xProp:xP,yProp:yP,families:[...activeFamilies],highlightIds:highlighted,showRanges:document.getElementById("setting-ranges")?.checked||false,isolines});
+  const rs=document.getElementById("ranking-section"),rb=document.getElementById("ranking-body");
+  if(ranked.length&&idx){document.getElementById("ranking-title").textContent=`Top ${ranked.length} \u2014 ${idx.name}`;rb.innerHTML="";ranked.forEach(({m,val},i)=>{const tr=document.createElement("tr");tr.innerHTML=`<td style="font-weight:600;color:var(--text-light)">${i+1}</td><td>${m.name}</td><td><span style="color:${FAMILY_COLORS[m.family]||'#888'}">${m.family}</span></td><td style="font-family:var(--font-mono)">${val.toExponential(3)}</td>`;tr.onclick=()=>showCard(m);rb.appendChild(tr);});rs.style.display="block";}else{rs.style.display="none";}
+}
+function showCard(mat){
+  const card=document.getElementById("detail-card");document.getElementById("card-name").textContent=mat.name;
+  const parts=[mat.family,mat.sub_family];if(mat.condition)parts.push(mat.condition);if(mat.designation)parts.push(mat.designation);document.getElementById("card-meta").textContent=parts.join(" \u00b7 ");
+  const reg=DB.property_registry,tbody=document.getElementById("card-props");tbody.innerHTML="";
+  const groups={};for(const[k,v]of Object.entries(reg)){if(v.computed)continue;const gr=v.group||"other";if(!groups[gr])groups[gr]=[];groups[gr].push([k,v]);}
+  for(const grp of["mechanical","thermal","electrical","economic"]){const props=groups[grp];if(!props||!props.some(([k])=>ashbyGetValue(mat,k)!=null))continue;const hdr=document.createElement("tr");hdr.className="prop-group-header";hdr.innerHTML=`<td colspan="2">${grp.charAt(0).toUpperCase()+grp.slice(1)}</td>`;tbody.appendChild(hdr);for(const[k,meta]of props){const v=ashbyGetValue(mat,k);if(v==null)continue;const tr=document.createElement("tr");tr.innerHTML=`<th>${meta.label}</th><td>${ashbyDisplayValue(v,meta)}</td>`;tbody.appendChild(tr);}}
+  card.classList.add("visible");card.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+init();
+</script>
+</body>
+</html>
