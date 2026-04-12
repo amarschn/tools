@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Materials Explorer — Ashby Charts &amp; Material Selection</title>
+
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="/shared/ashby-plot.js"></script>
+    <script src="/shared/url-state.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #212529;
+            --primary-light: #f8f9fa;
+            --secondary-color: #495057;
+            --text-color: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --bg-card: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --border-radius: 8px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container { width: 90%; max-width: 1400px; margin: 0 auto; padding: 20px 0; }
+        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.5em; line-height: 1.2; font-weight: 600; }
+        h1 { font-size: 2rem; }
+        h2 { font-size: 1.5rem; }
+        h3 { font-size: 1.1rem; color: var(--secondary-color); }
+        p { margin-bottom: 0.75em; color: var(--text-light); }
+        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+
+        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1400px; margin: 0 auto; }
+        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+        .nav-brand:hover { text-decoration: none; }
+
+        main.container { flex-grow: 1; }
+        .tool-description { font-size: 1rem; max-width: 80ch; margin-bottom: 1rem; }
+
+        /* Controls */
+        .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
+        .control-group { display: flex; flex-direction: column; gap: 2px; }
+        .control-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; }
+        select, input[type="number"] {
+            padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px;
+            font-size: 0.9rem; background: var(--bg-card); color: var(--text-color);
+        }
+        select:focus, input:focus { outline: none; border-color: #4e79a7; box-shadow: 0 0 0 2px rgba(78,121,167,0.15); }
+
+        /* Family toggles */
+        .family-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .family-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); font-size: 0.85rem; background: var(--bg-card); transition: all 0.15s; user-select: none; }
+        .family-toggle.active { border-color: currentColor; font-weight: 600; }
+        .family-toggle .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* Chart */
+        #ashby-chart { width: 100%; height: 550px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+
+        /* Presets */
+        .preset-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .preset-btn { padding: 4px 12px; border: 1px solid var(--border-color); border-radius: 16px; font-size: 0.8rem; background: var(--bg-card); cursor: pointer; transition: all 0.15s; }
+        .preset-btn:hover, .preset-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+
+        /* Material card */
+        .material-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: var(--shadow); padding: 20px; margin-top: 16px; display: none; }
+        .material-card.visible { display: block; }
+        .material-card h3 { margin-bottom: 4px; }
+        .material-card .meta { font-size: 0.85rem; color: var(--text-light); margin-bottom: 12px; }
+        .card-close { float: right; cursor: pointer; font-size: 1.2rem; color: var(--text-light); background: none; border: none; padding: 4px 8px; }
+        .card-close:hover { color: var(--text-color); }
+        .prop-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .prop-table th, .prop-table td { padding: 6px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .prop-table th { font-weight: 600; color: var(--secondary-color); width: 35%; }
+        .prop-table td { font-family: "SF Mono", "Consolas", monospace; }
+        .prop-group-header { background: var(--bg-color); font-weight: 600; color: var(--text-color); }
+        .prop-group-header td { padding: 8px 12px; }
+
+        /* Ranking table */
+        .ranking-section { margin-top: 16px; }
+        .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); overflow: hidden; }
+        .ranking-table th { padding: 8px 12px; text-align: left; background: var(--bg-color); font-weight: 600; color: var(--secondary-color); border-bottom: 1px solid var(--border-color); }
+        .ranking-table td { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; }
+        .ranking-table tr:hover { background: #f5f8fc; cursor: pointer; }
+        .rank-num { font-weight: 600; color: var(--text-light); width: 30px; }
+
+        /* Footer */
+        footer { padding: 20px 0; text-align: center; font-size: 0.85rem; color: var(--text-light); border-top: 1px solid var(--border-color); margin-top: 40px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .controls { flex-direction: column; }
+            #ashby-chart { height: 400px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a class="nav-brand" href="/">Engineering Tools</a>
+            <a href="/tools/">All Tools</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <h1>Materials Explorer</h1>
+        <p class="tool-description">
+            Interactive Ashby charts for material selection. Plot any two properties, overlay performance index isolines, and click materials to inspect sourced property data. 60 materials across metals, polymers, ceramics, composites, and natural materials.
+        </p>
+
+        <!-- Chart presets -->
+        <div class="preset-bar" id="preset-bar"></div>
+
+        <!-- Axis & index controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label>X-Axis</label>
+                <select id="x-prop"></select>
+            </div>
+            <div class="control-group">
+                <label>Y-Axis</label>
+                <select id="y-prop"></select>
+            </div>
+            <div class="control-group">
+                <label>Performance Index</label>
+                <select id="perf-index">
+                    <option value="">(none)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Top N</label>
+                <input type="number" id="top-n" value="5" min="1" max="20" style="width:60px">
+            </div>
+            <div class="control-group" style="align-self: end;">
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="checkbox" id="show-ranges"> Show ranges
+                </label>
+            </div>
+        </div>
+
+        <!-- Family toggles -->
+        <div class="family-toggles" id="family-toggles"></div>
+
+        <!-- Chart -->
+        <div id="ashby-chart"></div>
+
+        <!-- Material detail card -->
+        <div class="material-card" id="material-card">
+            <button class="card-close" id="card-close">&times;</button>
+            <h3 id="card-name"></h3>
+            <div class="meta" id="card-meta"></div>
+            <table class="prop-table" id="card-props"></table>
+        </div>
+
+        <!-- Ranking table -->
+        <div class="ranking-section" id="ranking-section" style="display:none;">
+            <h3 id="ranking-title">Ranked Materials</h3>
+            <table class="ranking-table">
+                <thead><tr><th>#</th><th>Material</th><th>Family</th><th>Index Value</th></tr></thead>
+                <tbody id="ranking-body"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            Data sourced from Ashby (2011), ASM Handbooks, MatWeb, and manufacturer datasheets.
+            For educational and preliminary design screening only.
+            <br><a href="https://ko-fi.com/transparent_tools">Support this project</a>
+        </div>
+    </footer>
+
+<script>
+// ── Global state ─────────────────────────────────────────────────────
+let DB = null;
+let chart = null;
+let activeFamilies = new Set();
+
+const PRESETS = [
+  { label: "Stiffness vs Density",      x: "density", y: "youngs_modulus",      index: "stiff_light_beam" },
+  { label: "Strength vs Density",        x: "density", y: "yield_strength",      index: "strong_light_beam" },
+  { label: "Toughness vs Strength",      x: "yield_strength", y: "fracture_toughness", index: "damage_tolerant" },
+  { label: "k vs CTE",                   x: "cte", y: "thermal_conductivity",   index: "thermal_distortion" },
+  { label: "k vs Density",               x: "density", y: "thermal_conductivity", index: "heat_spreading_mass" },
+  { label: "Price vs Strength",          x: "yield_strength", y: "price_per_kg", index: "" },
+];
+
+// Index library (mirrored from Python for client-side ranking)
+const INDEX_LIB = {
+  stiff_light_tie:         { name: "Stiff, light tie (E/\u03c1)", expr: "E/\u03c1", fn: m => d(m,"youngs_modulus") / d(m,"density"), slope: 1, cx: "density", cy: "youngs_modulus", maximize: true },
+  stiff_light_beam:        { name: "Stiff, light beam (E\u00b9\u02f2/\u03c1)", fn: m => Math.sqrt(d(m,"youngs_modulus")) / d(m,"density"), slope: 2, cx: "density", cy: "youngs_modulus", maximize: true },
+  stiff_light_plate:       { name: "Stiff, light plate (E\u00b9\u02f3/\u03c1)", fn: m => Math.pow(d(m,"youngs_modulus"), 1/3) / d(m,"density"), slope: 3, cx: "density", cy: "youngs_modulus", maximize: true },
+  strong_light_tie:        { name: "Strong, light tie (\u03c3\u1d67/\u03c1)", fn: m => d(m,"yield_strength") / d(m,"density"), slope: 1, cx: "density", cy: "yield_strength", maximize: true },
+  strong_light_beam:       { name: "Strong, light beam (\u03c3\u1d67\u00b2\u02f3/\u03c1)", fn: m => Math.pow(d(m,"yield_strength"), 2/3) / d(m,"density"), slope: 1.5, cx: "density", cy: "yield_strength", maximize: true },
+  strong_light_plate:      { name: "Strong, light plate (\u03c3\u1d67\u00b9\u02f2/\u03c1)", fn: m => Math.pow(d(m,"yield_strength"), 0.5) / d(m,"density"), slope: 2, cx: "density", cy: "yield_strength", maximize: true },
+  max_elastic_energy_mass: { name: "Elastic energy/mass (\u03c3\u1d67\u00b2/E\u03c1)", fn: m => Math.pow(d(m,"yield_strength"),2) / (d(m,"youngs_modulus")*d(m,"density")), slope: null, cx: "youngs_modulus", cy: "yield_strength", maximize: true },
+  damage_tolerant:         { name: "Damage tolerant (K_IC/\u03c3\u1d67)", fn: m => d(m,"fracture_toughness") / d(m,"yield_strength"), slope: null, cx: "yield_strength", cy: "fracture_toughness", maximize: true },
+  thermal_distortion:      { name: "Thermal distortion (k/E\u03b1)", fn: m => d(m,"thermal_conductivity") / (d(m,"youngs_modulus")*d(m,"cte")), slope: null, cx: "cte", cy: "thermal_conductivity", maximize: true },
+  heat_spreading_mass:     { name: "Heat spreading/mass (k/\u03c1)", fn: m => d(m,"thermal_conductivity") / d(m,"density"), slope: 1, cx: "density", cy: "thermal_conductivity", maximize: true },
+  thermal_insulation:      { name: "Thermal insulation (1/k)", fn: m => 1/d(m,"thermal_conductivity"), slope: null, cx: "thermal_conductivity", cy: "density", maximize: true },
+};
+
+function d(m, prop) {
+  const v = ashbyGetValue(m, prop);
+  if (v == null || v === 0) throw new Error("missing");
+  return v;
+}
+
+function safeIndex(fn, m) {
+  try { return fn(m); }
+  catch { return null; }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+async function init() {
+  const resp = await fetch("/data/materials/materials.json");
+  DB = await resp.json();
+
+  chart = new AshbyPlot("ashby-chart", {
+    onClick: showMaterialCard,
+  });
+
+  buildControls();
+  applyPreset(PRESETS[0]);
+}
+
+function buildControls() {
+  const reg = DB.property_registry;
+
+  // Populate axis dropdowns with plottable properties
+  const plottable = Object.entries(reg).filter(([k, v]) => v.plottable !== false);
+  plottable.sort((a, b) => a[1].label.localeCompare(b[1].label));
+
+  for (const sel of [document.getElementById("x-prop"), document.getElementById("y-prop")]) {
+    for (const [key, meta] of plottable) {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = `${meta.label}${meta.unit ? " (" + meta.unit + ")" : ""}`;
+      sel.appendChild(opt);
+    }
+  }
+
+  // Performance index dropdown
+  const idxSel = document.getElementById("perf-index");
+  for (const [key, idx] of Object.entries(INDEX_LIB)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = idx.name;
+    idxSel.appendChild(opt);
+  }
+
+  // Family toggles
+  const families = [...new Set(DB.materials.map(m => m.family))].sort();
+  const toggleContainer = document.getElementById("family-toggles");
+  for (const fam of families) {
+    activeFamilies.add(fam);
+    const btn = document.createElement("button");
+    btn.className = "family-toggle active";
+    btn.dataset.family = fam;
+    btn.style.color = FAMILY_COLORS[fam] || "#888";
+    btn.innerHTML = `<span class="dot" style="background:${FAMILY_COLORS[fam] || '#888'}"></span>${fam}`;
+    btn.addEventListener("click", () => {
+      if (activeFamilies.has(fam)) {
+        activeFamilies.delete(fam);
+        btn.classList.remove("active");
+      } else {
+        activeFamilies.add(fam);
+        btn.classList.add("active");
+      }
+      updateChart();
+    });
+    toggleContainer.appendChild(btn);
+  }
+
+  // Presets
+  const presetBar = document.getElementById("preset-bar");
+  for (const preset of PRESETS) {
+    const btn = document.createElement("button");
+    btn.className = "preset-btn";
+    btn.textContent = preset.label;
+    btn.addEventListener("click", () => applyPreset(preset));
+    presetBar.appendChild(btn);
+  }
+
+  // Event listeners
+  document.getElementById("x-prop").addEventListener("change", updateChart);
+  document.getElementById("y-prop").addEventListener("change", updateChart);
+  document.getElementById("perf-index").addEventListener("change", updateChart);
+  document.getElementById("top-n").addEventListener("change", updateChart);
+  document.getElementById("show-ranges").addEventListener("change", updateChart);
+  document.getElementById("card-close").addEventListener("click", () => {
+    document.getElementById("material-card").classList.remove("visible");
+  });
+}
+
+function applyPreset(preset) {
+  document.getElementById("x-prop").value = preset.x;
+  document.getElementById("y-prop").value = preset.y;
+  document.getElementById("perf-index").value = preset.index || "";
+
+  // Highlight active preset button
+  document.querySelectorAll(".preset-btn").forEach((btn, i) => {
+    btn.classList.toggle("active", PRESETS[i] === preset);
+  });
+
+  updateChart();
+}
+
+function updateChart() {
+  const xProp = document.getElementById("x-prop").value;
+  const yProp = document.getElementById("y-prop").value;
+  const indexId = document.getElementById("perf-index").value;
+  const topN = parseInt(document.getElementById("top-n").value) || 5;
+  const showRanges = document.getElementById("show-ranges").checked;
+
+  // Compute ranking
+  let highlightIds = [];
+  let ranked = [];
+  const idx = INDEX_LIB[indexId];
+  if (idx) {
+    const scored = [];
+    for (const m of DB.materials) {
+      if (!activeFamilies.has(m.family)) continue;
+      const val = safeIndex(idx.fn, m);
+      if (val != null && isFinite(val)) scored.push({ m, val });
+    }
+    scored.sort((a, b) => idx.maximize ? b.val - a.val : a.val - b.val);
+    ranked = scored.slice(0, topN);
+    highlightIds = ranked.map(s => s.m.id);
+  }
+
+  // Isolines
+  let isolines = undefined;
+  if (idx && idx.slope != null) {
+    const curX = xProp;
+    const curY = yProp;
+    // Only show isolines when axes match the index's chart_x and chart_y
+    if ((curX === idx.cx && curY === idx.cy) || (curX === idx.cy && curY === idx.cx)) {
+      // Generate isoline values from the ranked materials
+      const isoValues = [];
+      if (ranked.length > 0) {
+        // Show isolines at the top, median, and bottom ranked values
+        isoValues.push(ranked[0].val);
+        if (ranked.length > 2) isoValues.push(ranked[Math.floor(ranked.length / 2)].val);
+        if (ranked.length > 1) isoValues.push(ranked[ranked.length - 1].val);
+      } else {
+        // Default isolines
+        isoValues.push(1, 3, 10);
+      }
+      isolines = { slope: idx.slope, values: [...new Set(isoValues)], label: idx.name };
+    }
+  }
+
+  chart.update(DB.materials, DB.property_registry, {
+    xProp,
+    yProp,
+    families: [...activeFamilies],
+    highlightIds,
+    showRanges,
+    isolines,
+  });
+
+  // Update ranking table
+  const rankSection = document.getElementById("ranking-section");
+  const rankBody = document.getElementById("ranking-body");
+  if (ranked.length > 0 && idx) {
+    document.getElementById("ranking-title").textContent = `Top ${ranked.length} — ${idx.name}`;
+    rankBody.innerHTML = "";
+    for (let i = 0; i < ranked.length; i++) {
+      const { m, val } = ranked[i];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="rank-num">${i + 1}</td>
+        <td>${m.name}</td>
+        <td><span style="color:${FAMILY_COLORS[m.family]||'#888'}">${m.family}</span></td>
+        <td style="font-family:monospace">${val.toExponential(3)}</td>
+      `;
+      tr.addEventListener("click", () => showMaterialCard(m));
+      rankBody.appendChild(tr);
+    }
+    rankSection.style.display = "block";
+  } else {
+    rankSection.style.display = "none";
+  }
+}
+
+function showMaterialCard(material) {
+  const card = document.getElementById("material-card");
+  document.getElementById("card-name").textContent = material.name;
+
+  const metaParts = [material.family, material.sub_family, material.record_kind];
+  if (material.condition) metaParts.push(material.condition);
+  if (material.designation) metaParts.push(material.designation);
+  document.getElementById("card-meta").textContent = metaParts.join(" \u00b7 ");
+
+  const reg = DB.property_registry;
+  const tbody = document.getElementById("card-props");
+  tbody.innerHTML = "";
+
+  // Group properties
+  const groups = {};
+  for (const [key, meta] of Object.entries(reg)) {
+    if (meta.computed) continue;
+    const g = meta.group || "other";
+    if (!groups[g]) groups[g] = [];
+    groups[g].push([key, meta]);
+  }
+
+  const groupOrder = ["mechanical", "thermal", "electrical", "economic", "environmental", "processability"];
+  const groupLabels = { mechanical: "Mechanical", thermal: "Thermal", electrical: "Electrical", economic: "Economic", environmental: "Environmental", processability: "Processability" };
+
+  for (const grp of groupOrder) {
+    const props = groups[grp];
+    if (!props) continue;
+    const hasAny = props.some(([k]) => ashbyGetValue(material, k) != null);
+    if (!hasAny) continue;
+
+    // Group header
+    const hdr = document.createElement("tr");
+    hdr.className = "prop-group-header";
+    hdr.innerHTML = `<td colspan="2">${groupLabels[grp] || grp}</td>`;
+    tbody.appendChild(hdr);
+
+    for (const [key, meta] of props) {
+      const val = ashbyGetValue(material, key);
+      if (val == null) continue;
+      const tr = document.createElement("tr");
+      const displayed = ashbyDisplayValue(val, meta);
+      const range = ashbyGetRange(material, key);
+      let rangeStr = "";
+      if (range) {
+        rangeStr = ` <span style="color:#999;font-size:0.8em">[${ashbyDisplayValue(range[0], meta)} – ${ashbyDisplayValue(range[1], meta)}]</span>`;
+      }
+      // Source & basis
+      const raw = material[key];
+      let basisStr = "";
+      if (typeof raw === "object" && raw != null && raw.basis) {
+        basisStr = ` <span style="color:#aaa;font-size:0.75em">(${raw.basis})</span>`;
+      }
+
+      tr.innerHTML = `<th>${meta.label}${meta.symbol ? " (" + meta.symbol + ")" : ""}</th><td>${displayed}${rangeStr}${basisStr}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // Source info
+  const srcId = material.default_source_id;
+  const src = DB.sources[srcId];
+  if (src) {
+    const srcRow = document.createElement("tr");
+    srcRow.className = "prop-group-header";
+    srcRow.innerHTML = `<td colspan="2">Source</td>`;
+    tbody.appendChild(srcRow);
+    const sr = document.createElement("tr");
+    sr.innerHTML = `<th>Default Source</th><td style="font-family:inherit;font-size:0.85em">${src.citation}</td>`;
+    tbody.appendChild(sr);
+  }
+
+  // Notes
+  if (material.notes) {
+    const nr = document.createElement("tr");
+    nr.innerHTML = `<th>Notes</th><td style="font-family:inherit;font-style:italic">${material.notes}</td>`;
+    tbody.appendChild(nr);
+  }
+
+  card.classList.add("visible");
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
