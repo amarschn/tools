@@ -77,6 +77,115 @@ function displayValue(val, meta) {
 
 // ── AshbyPlot class ─────────────────────────────────────────────────
 
+// ── Blob geometry helpers ───────────────────────────────────────
+// All blob geometry is computed in log10 space so that hulls,
+// expansion, and smoothing are correct on log-log Plotly axes.
+// Only the final output is converted back to linear.
+
+function _cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+
+/** Convex hull via Andrew's monotone chain. Input/output: [x,y] arrays. */
+function convexHull(points) {
+  if (points.length < 3) return points.slice();
+  const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && _cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && _cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  upper.pop(); lower.pop();
+  return lower.concat(upper);
+}
+
+/** Expand hull outward from centroid by factor. Operates in log space. */
+function expandHull(hull, factor) {
+  if (hull.length < 3) return hull;
+  let cx = 0, cy = 0;
+  for (const [x, y] of hull) { cx += x; cy += y; }
+  cx /= hull.length; cy /= hull.length;
+  return hull.map(([x, y]) => [cx + (x - cx) * factor, cy + (y - cy) * factor]);
+}
+
+/** Chaikin corner-cutting smoothing. Operates in log space.
+ *  Each pass replaces every edge with two points at 25%/75%,
+ *  converging to a smooth quadratic B-spline curve. */
+function smoothPolygon(pts, passes) {
+  if (pts.length < 3) return pts;
+  let result = pts.slice();
+  for (let s = 0; s < passes; s++) {
+    const next = [];
+    const n = result.length;
+    for (let i = 0; i < n; i++) {
+      const p1 = result[i];
+      const p2 = result[(i + 1) % n];
+      next.push([0.75 * p1[0] + 0.25 * p2[0], 0.75 * p1[1] + 0.25 * p2[1]]);
+      next.push([0.25 * p1[0] + 0.75 * p2[0], 0.25 * p1[1] + 0.75 * p2[1]]);
+    }
+    result = next;
+  }
+  return result;
+}
+
+/**
+ * Build a smooth blob envelope from raw material points.
+ * Input: array of [x, y] in linear space (positive values).
+ * Output: array of [x, y] in linear space forming a closed smooth blob.
+ */
+function buildBlobEnvelope(linearPoints) {
+  if (linearPoints.length < 3) return null;
+  // Convert to log space
+  const logPts = linearPoints.map(([x, y]) => [Math.log10(x), Math.log10(y)]);
+  // Compute hull in log space
+  let hull = convexHull(logPts);
+  if (hull.length < 3) return null;
+  // Expand outward in log space
+  hull = expandHull(hull, 1.5);
+  // Smooth in log space (6 Chaikin corner-cutting passes)
+  hull = smoothPolygon(hull, 6);
+  // Convert back to linear
+  return hull.map(([lx, ly]) => [Math.pow(10, lx), Math.pow(10, ly)]);
+}
+
+const FAMILY_BLOB_COLORS = {
+  metal:     { fill: "rgba(78,121,167,0.13)",  line: "rgba(78,121,167,0.5)" },
+  polymer:   { fill: "rgba(225,87,89,0.13)",   line: "rgba(225,87,89,0.5)" },
+  ceramic:   { fill: "rgba(118,183,178,0.13)", line: "rgba(118,183,178,0.5)" },
+  composite: { fill: "rgba(242,142,43,0.13)",  line: "rgba(242,142,43,0.5)" },
+  natural:   { fill: "rgba(89,161,79,0.13)",   line: "rgba(89,161,79,0.5)" },
+  foam:      { fill: "rgba(156,117,95,0.13)",   line: "rgba(156,117,95,0.5)" },
+  fabric:    { fill: "rgba(186,176,172,0.13)", line: "rgba(186,176,172,0.5)" },
+  gel:       { fill: "rgba(176,122,161,0.13)", line: "rgba(176,122,161,0.5)" },
+};
+
+// ── Theme helper ────────────────────────────────────────────────
+function getPlotlyThemeColors(isDark) {
+  if (isDark) {
+    return {
+      plotBg: "#1a1f2e",
+      paperBg: "#111827",
+      gridColor: "rgba(255,255,255,0.08)",
+      fontColor: "#e5e7eb",
+      axisColor: "#9ca3af",
+      hoverBg: "#1f2937",
+    };
+  }
+  return {
+    plotBg: "#fafafa",
+    paperBg: "#ffffff",
+    gridColor: "#eee",
+    fontColor: "#111827",
+    axisColor: "#6b7280",
+    hoverBg: "#fff",
+  };
+}
+
+
 class AshbyPlot {
   /**
    * @param {string} divId - ID of the container div
@@ -103,6 +212,9 @@ class AshbyPlot {
    * @param {Object} [opts.isolines] - { slope, values, label }
    * @param {string[]} [opts.highlightIds] - material IDs to highlight
    * @param {boolean} [opts.showRanges] - show min/max error bars
+   * @param {boolean} [opts.showBlobs] - show family envelope blobs
+   * @param {boolean} [opts.showPoints] - show individual material points (default true)
+   * @param {boolean} [opts.dark] - use dark theme colors
    */
   update(materials, registry, opts) {
     this._materials = materials;
@@ -116,6 +228,10 @@ class AshbyPlot {
     const showFamilies = new Set(opts.families || Object.keys(FAMILY_COLORS));
     const highlightSet = new Set(opts.highlightIds || []);
     const showRanges = opts.showRanges || false;
+    const showBlobs = opts.showBlobs || false;
+    const showPoints = opts.showPoints !== false;
+    const isDark = opts.dark || false;
+    const theme = getPlotlyThemeColors(isDark);
 
     // Group materials by family
     const familyGroups = {};
@@ -124,15 +240,44 @@ class AshbyPlot {
       if (!showFamilies.has(fam)) continue;
       const xVal = getValue(m, xProp);
       const yVal = getValue(m, yProp);
-      if (xVal == null || yVal == null) continue;
+      if (xVal == null || yVal == null || xVal <= 0 || yVal <= 0) continue;
       if (!familyGroups[fam]) familyGroups[fam] = [];
       familyGroups[fam].push({ material: m, x: xVal, y: yVal });
     }
 
     const traces = [];
 
-    // One trace per family
+    // Blob traces (family envelopes) — rendered behind points
+    if (showBlobs) {
+      for (const [fam, pts] of Object.entries(familyGroups)) {
+        const blobColors = FAMILY_BLOB_COLORS[fam];
+        if (!blobColors) continue;
+
+        const blob = buildBlobEnvelope(pts.map(p => [p.x, p.y]));
+        if (!blob) continue;
+
+        // Close the polygon
+        const hx = blob.map(p => p[0]);
+        const hy = blob.map(p => p[1]);
+        hx.push(hx[0]);
+        hy.push(hy[0]);
+
+        traces.push({
+          x: hx, y: hy,
+          type: "scatter", mode: "lines",
+          fill: "toself",
+          fillcolor: blobColors.fill,
+          line: { color: blobColors.line, width: 1.5, shape: "spline", smoothing: 1.0 },
+          name: fam + " envelope",
+          showlegend: false,
+          hoverinfo: "skip",
+        });
+      }
+    }
+
+    // Point traces — one per family
     for (const [fam, points] of Object.entries(familyGroups)) {
+      if (!showPoints) continue;
       const x = points.map(p => p.x);
       const y = points.map(p => p.y);
       const text = points.map(p => p.material.name);
@@ -203,7 +348,7 @@ class AshbyPlot {
         error_x,
         error_y,
         hovertemplate,
-        hoverlabel: { bgcolor: "#fff", font: { size: 12 } },
+        hoverlabel: { bgcolor: theme.hoverBg, font: { size: 12, color: theme.fontColor } },
       });
     }
 
@@ -237,7 +382,7 @@ class AshbyPlot {
           x0: xMin, y0: y0,
           x1: xMax, y1: y1,
           xref: "x", yref: "y",
-          line: { color: "rgba(100,100,100,0.3)", width: 1.5, dash: "dot" },
+          line: { color: isDark ? "rgba(180,180,180,0.25)" : "rgba(100,100,100,0.3)", width: 1.5, dash: "dot" },
         });
 
         // Label at right end
@@ -247,7 +392,7 @@ class AshbyPlot {
           xref: "x", yref: "y",
           text: `M=${M}`,
           showarrow: false,
-          font: { size: 10, color: "#888" },
+          font: { size: 10, color: theme.axisColor },
           xanchor: "right",
         });
       }
@@ -259,33 +404,38 @@ class AshbyPlot {
     const layout = {
       title: {
         text: `${yMeta.label || yProp} vs ${xMeta.label || xProp}`,
-        font: { size: 16, family: "system-ui, sans-serif" },
+        font: { size: 16, family: "system-ui, sans-serif", color: theme.fontColor },
+        y: 0.98,
+        yanchor: "top",
       },
       xaxis: {
-        title: { text: `${xMeta.label || xProp}${xMeta.unit ? " (" + xMeta.unit + ")" : ""}` },
+        title: { text: `${xMeta.label || xProp}${xMeta.unit ? " (" + xMeta.unit + ")" : ""}`, font: { color: theme.axisColor } },
         type: xScale,
-        gridcolor: "#eee",
+        gridcolor: theme.gridColor,
         zeroline: false,
+        tickfont: { color: theme.axisColor },
       },
       yaxis: {
-        title: { text: `${yMeta.label || yProp}${yMeta.unit ? " (" + yMeta.unit + ")" : ""}` },
+        title: { text: `${yMeta.label || yProp}${yMeta.unit ? " (" + yMeta.unit + ")" : ""}`, font: { color: theme.axisColor } },
         type: yScale,
-        gridcolor: "#eee",
+        gridcolor: theme.gridColor,
         zeroline: false,
+        tickfont: { color: theme.axisColor },
       },
       shapes,
       annotations,
       hovermode: "closest",
       legend: {
-        orientation: "h",
-        yanchor: "bottom",
-        y: 1.02,
-        xanchor: "right",
-        x: 1,
+        orientation: "v",
+        yanchor: "top",
+        y: 1,
+        xanchor: "left",
+        x: 1.02,
+        font: { color: theme.fontColor, size: 12 },
       },
-      margin: { t: 60, r: 40, b: 60, l: 80 },
-      plot_bgcolor: "#fafafa",
-      paper_bgcolor: "#fff",
+      margin: { t: 50, r: 120, b: 60, l: 80 },
+      plot_bgcolor: theme.plotBg,
+      paper_bgcolor: theme.paperBg,
     };
 
     const config = {
@@ -335,12 +485,14 @@ class AshbyPlot {
 
 // Export for use as ES module or global
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { AshbyPlot, FAMILY_COLORS, FAMILY_SYMBOLS, getValue, getRange, displayValue };
+  module.exports = { AshbyPlot, FAMILY_COLORS, FAMILY_SYMBOLS, FAMILY_BLOB_COLORS, getValue, getRange, displayValue, getPlotlyThemeColors };
 } else {
   window.AshbyPlot = AshbyPlot;
   window.FAMILY_COLORS = FAMILY_COLORS;
   window.FAMILY_SYMBOLS = FAMILY_SYMBOLS;
+  window.FAMILY_BLOB_COLORS = FAMILY_BLOB_COLORS;
   window.ashbyGetValue = getValue;
   window.ashbyGetRange = getRange;
   window.ashbyDisplayValue = displayValue;
+  window.getPlotlyThemeColors = getPlotlyThemeColors;
 }
