@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transient Heatsink Simulator - Engineering Tools</title>
+    <meta name="description" content="Simulate heatsink warmup, cooldown, pulse loads, and duty cycles with a lumped thermal RC model. Predicts time-to-limit, peak temperature, cyclic steady state, and cooldown time.">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.55;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex; flex-direction: column;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed; inset: 0;
+            background: var(--bg-color);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; }
+
+        /* Navigation */
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 5%;
+        }
+        .nav-container {
+            display: flex; justify-content: space-between; align-items: center;
+            height: 64px; max-width: 1400px; margin: 0 auto;
+        }
+        .nav-brand {
+            font-size: 1.35rem; font-weight: 600;
+            color: var(--text-color); text-decoration: none;
+        }
+        .nav-brand:hover { text-decoration: none; }
+
+        /* Container */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        main.container { flex-grow: 1; }
+        h1 {
+            font-size: 2.25rem; letter-spacing: -0.02em;
+            font-weight: 600; color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.25rem; font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px; margin-bottom: 1rem;
+        }
+        h3 {
+            font-size: 1rem; font-weight: 600;
+            color: var(--secondary-color); margin-bottom: 0.6rem;
+        }
+        p { color: var(--text-light); margin-bottom: 1em; }
+        a { color: var(--accent-color); }
+
+        .tool-description { font-size: 1.02rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.85fr) minmax(480px, 1.15fr);
+            gap: 28px;
+            align-items: start;
+        }
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+        .card + .card { margin-top: 18px; }
+
+        /* Forms */
+        .field { margin-bottom: 0.95rem; }
+        .field label {
+            display: block; font-weight: 500;
+            margin-bottom: 4px; font-size: 0.85rem;
+            color: var(--text-color);
+        }
+        .field input[type="number"],
+        .field input[type="text"],
+        .field select {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            background: var(--bg-card); color: var(--text-color);
+        }
+        .field input:focus, .field select:focus {
+            outline: none; border-color: var(--text-color);
+        }
+        .field input[type="number"]::-webkit-inner-spin-button,
+        .field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .field input[type="number"] { -moz-appearance: textfield; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .field-help {
+            font-size: 0.78rem; color: var(--text-light);
+            margin-top: 4px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 11px 16px; font-size: 0.95rem; font-weight: 600;
+            border: none; border-radius: var(--border-radius);
+            cursor: pointer; text-align: center;
+            transition: opacity 0.15s, background 0.15s;
+        }
+        .btn-primary {
+            background: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+            width: 100%;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Profile panels: show the inputs that match the selected profile */
+        .profile-panel { display: none; }
+        .profile-panel.active { display: block; }
+
+        /* Section heading */
+        .section-title {
+            text-transform: uppercase; letter-spacing: 0.04em;
+            font-size: 0.75rem; font-weight: 600; color: var(--text-light);
+            margin: 1.4rem 0 0.5rem;
+        }
+        .section-title:first-child { margin-top: 0; }
+
+        /* Tabs */
+        .tabs {
+            display: flex; border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px; gap: 4px; flex-wrap: wrap;
+        }
+        .tab-link {
+            padding: 11px 14px; cursor: pointer;
+            background: transparent; border: none;
+            font-size: 0.82rem; font-weight: 600;
+            letter-spacing: 0.04em; text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Status banner */
+        .status-banner {
+            padding: 12px 16px; border-radius: var(--border-radius);
+            margin-bottom: 16px; font-weight: 600; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .status-banner.acceptable { background: #d1fae5; color: #065f46; }
+        .status-banner.marginal { background: #fef3c7; color: #92400e; }
+        .status-banner.unacceptable { background: #fee2e2; color: #991b1b; }
+        .status-banner.not_converged { background: #dbeafe; color: #1e40af; }
+        .status-banner.invalid { background: #fee2e2; color: #991b1b; }
+        body[data-theme="dark"] .status-banner.acceptable { background: #052e16; color: #34d399; }
+        body[data-theme="dark"] .status-banner.marginal { background: #422006; color: #fbbf24; }
+        body[data-theme="dark"] .status-banner.unacceptable { background: #450a0a; color: #f87171; }
+        body[data-theme="dark"] .status-banner.not_converged { background: #1e3a5f; color: #93c5fd; }
+        body[data-theme="dark"] .status-banner.invalid { background: #450a0a; color: #f87171; }
+
+        /* Summary grid */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .summary-cell {
+            background: var(--bg-color);
+            padding: 14px;
+            border-radius: var(--border-radius);
+        }
+        .summary-cell .label {
+            font-size: 0.75rem; color: var(--text-light);
+            margin-bottom: 4px; text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .summary-cell .value {
+            font-family: var(--font-mono); font-size: 1.2rem; font-weight: 600;
+        }
+        .summary-cell .unit {
+            font-size: 0.75rem; color: var(--text-light); margin-left: 3px;
+        }
+
+        /* Plot containers */
+        .plot {
+            width: 100%;
+            min-height: 300px;
+            border-radius: var(--border-radius);
+            background: var(--bg-color);
+            margin-bottom: 16px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.9rem; margin-bottom: 12px;
+        }
+        thead th {
+            text-align: left; padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--text-light);
+        }
+        tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+        tbody td.num { font-family: var(--font-mono); text-align: right; }
+
+        /* Recommendations */
+        .recs { padding-left: 1.2em; margin-top: 8px; }
+        .recs li { margin-bottom: 6px; color: var(--text-color); }
+
+        /* Errors */
+        .error-list {
+            background: #fee2e2; color: #991b1b;
+            padding: 12px 16px; border-radius: var(--border-radius);
+            margin-bottom: 16px;
+        }
+        body[data-theme="dark"] .error-list { background: #450a0a; color: #fca5a5; }
+
+        /* Results placeholder */
+        .placeholder {
+            text-align: center; padding: 40px 20px;
+            color: var(--text-light); font-style: italic;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            padding: 22px 5%;
+            margin-top: 32px;
+            font-size: 0.85rem; color: var(--text-light); text-align: center;
+        }
+        footer a { color: var(--text-color); }
+
+        /* Math derivation block */
+        .math-block {
+            background: var(--primary-light);
+            padding: 14px;
+            border-radius: var(--border-radius);
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body data-theme="system">
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text" class="loading-text">Loading Pyodide…</div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">Engineering Tools</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <h1>Transient Heatsink Simulator</h1>
+        <p class="tool-description">
+            Lumped thermal RC model that predicts how a heat source on a heatsink warms,
+            cools, and responds to pulses or duty cycles. Reports time-to-limit, peak
+            temperature, cyclic steady state, and cooldown time. For steady-state plate-fin
+            sizing use the <a href="../simple_thermal/">Heatsink Designer</a>; for resistance-
+            only network budgets use the <a href="../thermal-path-budget/">Thermal Path Budget</a>.
+        </p>
+
+        <div class="tool-layout">
+            <!-- LEFT COLUMN: INPUTS -->
+            <section class="card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="section-title">Thermal Stack (Package On Heatsink)</div>
+                    <div class="field">
+                        <label for="ambient">Ambient temperature (°C)</label>
+                        <input type="number" id="ambient" value="25" step="any">
+                    </div>
+                    <div class="field">
+                        <label for="initial">Initial temperature (°C)</label>
+                        <input type="number" id="initial" value="25" step="any">
+                        <div class="field-help">Starting temperature of all dynamic nodes.</div>
+                    </div>
+                    <div class="field">
+                        <label for="source_limit">Source max temperature (°C)</label>
+                        <input type="number" id="source_limit" value="110" step="any">
+                    </div>
+                    <div class="row">
+                        <div class="field">
+                            <label for="r_jc">R<sub>jc</sub> (K/W)</label>
+                            <input type="number" id="r_jc" value="0.5" step="any" min="0.001">
+                            <div class="field-help">Source-to-case (junction-to-case)</div>
+                        </div>
+                        <div class="field">
+                            <label for="r_sa">R<sub>sa</sub> (K/W)</label>
+                            <input type="number" id="r_sa" value="1.5" step="any" min="0.001">
+                            <div class="field-help">Sink-to-ambient (steady-state)</div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="field">
+                            <label for="c_source">C<sub>source</sub> (J/K)</label>
+                            <input type="number" id="c_source" value="12" step="any" min="0.01">
+                            <div class="field-help">Source/package thermal mass</div>
+                        </div>
+                        <div class="field">
+                            <label for="c_sink">C<sub>sink</sub> (J/K)</label>
+                            <input type="number" id="c_sink" value="310" step="any" min="0.01">
+                            <div class="field-help">Heatsink thermal mass</div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Power Profile</div>
+                    <div class="field">
+                        <label for="profile_type">Profile type</label>
+                        <select id="profile_type">
+                            <option value="step">Step (continuous load)</option>
+                            <option value="pulse">Pulse (single overload)</option>
+                            <option value="duty_cycle">Duty cycle (repeating)</option>
+                        </select>
+                    </div>
+
+                    <div class="profile-panel active" data-profile="step">
+                        <div class="row">
+                            <div class="field">
+                                <label for="step_power">Power (W)</label>
+                                <input type="number" id="step_power" value="50" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="step_duration">Run time (s)</label>
+                                <input type="number" id="step_duration" value="600" step="any" min="0.1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-panel" data-profile="pulse">
+                        <div class="row">
+                            <div class="field">
+                                <label for="pulse_power">Pulse power (W)</label>
+                                <input type="number" id="pulse_power" value="120" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="pulse_duration">Pulse duration (s)</label>
+                                <input type="number" id="pulse_duration" value="20" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="pulse_cooldown">Cooldown duration (s)</label>
+                                <input type="number" id="pulse_cooldown" value="180" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="pulse_cooldown_target">Cooldown target (°C)</label>
+                                <input type="number" id="pulse_cooldown_target" value="40" step="any">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-panel" data-profile="duty_cycle">
+                        <div class="row">
+                            <div class="field">
+                                <label for="duty_on_power">On power (W)</label>
+                                <input type="number" id="duty_on_power" value="80" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="duty_on_time">On time (s)</label>
+                                <input type="number" id="duty_on_time" value="30" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="duty_off_power">Off power (W)</label>
+                                <input type="number" id="duty_off_power" value="0" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="duty_off_time">Off time (s)</label>
+                                <input type="number" id="duty_off_time" value="120" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="duty_run_time">Total simulation time (s)</label>
+                            <input type="number" id="duty_run_time" value="1200" step="any" min="1">
+                            <div class="field-help">Long enough to reach cyclic steady state — try 8–10× the slowest time constant.</div>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="calculate-btn" class="btn btn-primary" disabled>Calculate</button>
+                </form>
+            </section>
+
+            <!-- RIGHT COLUMN: RESULTS -->
+            <section class="card">
+                <div class="tabs">
+                    <button class="tab-link active" data-tab="results">Results</button>
+                    <button class="tab-link" data-tab="rc">RC Model</button>
+                    <button class="tab-link" data-tab="math">Math</button>
+                </div>
+
+                <div id="tab-results" class="tab-content active">
+                    <div id="results-placeholder" class="placeholder">
+                        Set inputs and press Calculate to simulate.
+                    </div>
+                    <div id="results-body" style="display: none;">
+                        <div id="status-banner" class="status-banner"></div>
+                        <div id="summary-grid" class="summary-grid"></div>
+                        <h3>Temperature vs time</h3>
+                        <div id="temp-plot" class="plot"></div>
+                        <h3>Power input</h3>
+                        <div id="power-plot" class="plot"></div>
+                        <h3>Diagnosis</h3>
+                        <ul id="diagnosis-list" class="recs"></ul>
+                        <h3>Recommendations</h3>
+                        <ul id="recs-list" class="recs"></ul>
+                    </div>
+                </div>
+
+                <div id="tab-rc" class="tab-content">
+                    <h3>Nodes</h3>
+                    <table id="nodes-table">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>Capacitance (J/K)</th>
+                                <th>Limit (°C)</th>
+                                <th>Peak (°C)</th>
+                                <th>Margin (K)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <h3>Segments</h3>
+                    <table id="segments-table">
+                        <thead>
+                            <tr>
+                                <th>Segment</th>
+                                <th>R (K/W)</th>
+                                <th>τ = R·C<sub>eff</sub> (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <h3>Time constants (per node)</h3>
+                    <table id="tau-table">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>C (J/K)</th>
+                                <th>Σ G (W/K)</th>
+                                <th>τ = C / Σ G (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <h3>Cycle summary (duty cycle only)</h3>
+                    <table id="cycle-table">
+                        <thead>
+                            <tr>
+                                <th>Cycle</th>
+                                <th>Peak (°C)</th>
+                                <th>Min (°C)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div id="tab-math" class="tab-content">
+                    <h3>Governing equation</h3>
+                    <div class="math-block">
+                        $$ C_i \frac{dT_i}{dt} = Q_i(t) + \sum_j \frac{T_j - T_i}{R_{ij}} $$
+                    </div>
+                    <p>
+                        Each dynamic node carries thermal capacitance \(C_i\) and exchanges
+                        heat with its neighbors through thermal resistances \(R_{ij}\). The
+                        right-hand side balances time-varying heat input \(Q_i(t)\) against
+                        conductive flow to the rest of the network.
+                    </p>
+
+                    <h3>Implicit-Euler discretization</h3>
+                    <div class="math-block">
+                        $$ \left(\frac{C_i}{\Delta t} + \sum_j G_{ij}\right) T_i^{n+1}
+                          - \sum_j G_{ij} T_j^{n+1}
+                          = \frac{C_i}{\Delta t} T_i^n + Q_i^{n+1}
+                          + \sum_{j \in \text{boundary}} G_{ij} T_j $$
+                    </div>
+                    <p>
+                        Implicit Euler is unconditionally stable for the linear thermal
+                        problem, so the time step is chosen for resolution rather than
+                        stability. Boundary-node terms move to the right-hand side.
+                    </p>
+
+                    <h3>One-lump analytical reference</h3>
+                    <div class="math-block">
+                        $$ T(t) = T_\infty + Q R \left(1 - e^{-t/\tau}\right)
+                          + (T_0 - T_\infty)\, e^{-t/\tau},
+                          \quad \tau = R C $$
+                    </div>
+                    <p>
+                        For one dynamic node and a constant heat input, this is the closed-
+                        form response. The general numerical solver reduces to this case in
+                        the simple-lump limit.
+                    </p>
+
+                    <h3>Substituted result</h3>
+                    <div id="subst-block" class="math-block">Run a calculation to see the substituted form.</div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <p>
+            Open-source engineering tools.
+            <a href="https://github.com/amarschn/tools" target="_blank" rel="noopener">Source</a>
+            · <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'thermal_transient';
+        const TOOL_FUNCTION_NAME = 'simulate_transient_thermal_model';
+        let pyodideInstance = null;
+        let pyToolModule = null;
+        let lastResult = null;
+
+        // -----------------------------------------------------------------
+        // Pyodide bootstrap
+        // -----------------------------------------------------------------
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide…';
+                const pyodide = await loadPyodide();
+                pyodideInstance = pyodide;
+
+                loadingText.textContent = 'Loading Python modules…';
+                await pyodide.loadPackage('micropip');
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+                    response_utils = await pyfetch('../../pycalcs/utils.py?v=${Date.now()}')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py?v=${Date.now()}')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+                    import utils
+                    import ${TOOL_MODULE_NAME}
+                `);
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+                document.getElementById('calculate-btn').disabled = false;
+                document.getElementById('loading-overlay').classList.add('hidden');
+            } catch (error) {
+                loadingText.textContent = 'Failed to load: ' + error.message;
+                console.error(error);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // UI plumbing
+        // -----------------------------------------------------------------
+        document.getElementById('profile_type').addEventListener('change', (e) => {
+            document.querySelectorAll('.profile-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.dataset.profile === e.target.value);
+            });
+        });
+
+        document.querySelectorAll('.tab-link').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.dataset.tab;
+                document.querySelectorAll('.tab-link').forEach(b => b.classList.toggle('active', b === btn));
+                document.querySelectorAll('.tab-content').forEach(c => {
+                    c.classList.toggle('active', c.id === 'tab-' + target);
+                });
+            });
+        });
+
+        function num(id) { return parseFloat(document.getElementById(id).value); }
+
+        // -----------------------------------------------------------------
+        // Build the model dictionary the Python solver expects
+        // -----------------------------------------------------------------
+        function buildModel() {
+            const profileType = document.getElementById('profile_type').value;
+            const ambient = num('ambient');
+            const initial = num('initial');
+            const sourceLimit = num('source_limit');
+            const rJC = num('r_jc');
+            const rSA = num('r_sa');
+            const cSource = num('c_source');
+            const cSink = num('c_sink');
+
+            let profile, duration, cooldownTarget = null;
+            if (profileType === 'step') {
+                profile = { type: 'step', power_w: num('step_power') };
+                duration = num('step_duration');
+            } else if (profileType === 'pulse') {
+                const pulseDur = num('pulse_duration');
+                const cooldown = num('pulse_cooldown');
+                profile = {
+                    type: 'pulse',
+                    pulse_power_w: num('pulse_power'),
+                    pulse_duration_s: pulseDur,
+                    cooldown_power_w: 0,
+                };
+                duration = pulseDur + cooldown;
+                cooldownTarget = num('pulse_cooldown_target');
+            } else {
+                profile = {
+                    type: 'duty_cycle',
+                    on_power_w: num('duty_on_power'),
+                    on_time_s: num('duty_on_time'),
+                    off_power_w: num('duty_off_power'),
+                    off_time_s: num('duty_off_time'),
+                };
+                duration = num('duty_run_time');
+            }
+
+            return {
+                time: {
+                    duration_s: duration,
+                    initial_temperature_c: initial,
+                    cooldown_target_c: cooldownTarget,
+                },
+                profile,
+                network: {
+                    nodes: [
+                        { id: 'source', label: 'Source', kind: 'dynamic',
+                          capacitance_j_per_k: cSource, max_temperature_c: sourceLimit },
+                        { id: 'sink', label: 'Heatsink', kind: 'dynamic',
+                          capacitance_j_per_k: cSink },
+                        { id: 'ambient', label: 'Ambient', kind: 'boundary',
+                          fixed_temperature_c: ambient },
+                    ],
+                    segments: [
+                        { id: 'r_jc', label: 'Source → Sink',
+                          from_node_id: 'source', to_node_id: 'sink',
+                          resistance_k_per_w: rJC },
+                        { id: 'r_sa', label: 'Sink → Ambient',
+                          from_node_id: 'sink', to_node_id: 'ambient',
+                          resistance_k_per_w: rSA },
+                    ],
+                    heat_inputs: [{ node_id: 'source', profile_role: 'primary' }],
+                },
+            };
+        }
+
+        // -----------------------------------------------------------------
+        // Calculate
+        // -----------------------------------------------------------------
+        async function handleCalculate(event) {
+            event.preventDefault();
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Simulating…';
+            btn.disabled = true;
+            try {
+                const model = buildModel();
+                const proxy = pyToolModule.simulate_transient_thermal_model(
+                    pyodideInstance.toPy(model)
+                );
+                const result = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                normalizeResult(result);
+                lastResult = result;
+                renderResult(result);
+            } catch (error) {
+                console.error('Simulation error:', error);
+                document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
+                document.getElementById('results-placeholder').style.display = 'block';
+                document.getElementById('results-body').style.display = 'none';
+            } finally {
+                btn.textContent = 'Calculate';
+                btn.disabled = false;
+            }
+        }
+
+        // Pyodide returns nested Maps/Arrays — flatten what the renderer needs.
+        function normalizeResult(r) {
+            const flatten = (v) => {
+                if (v instanceof Map) return Object.fromEntries([...v.entries()].map(([k, vv]) => [k, flatten(vv)]));
+                if (Array.isArray(v)) return v.map(flatten);
+                return v;
+            };
+            for (const k of Object.keys(r)) r[k] = flatten(r[k]);
+        }
+
+        // -----------------------------------------------------------------
+        // Rendering
+        // -----------------------------------------------------------------
+        function fmt(v, digits = 2) {
+            if (v === null || v === undefined || Number.isNaN(v)) return '—';
+            if (!Number.isFinite(v)) return v > 0 ? '∞' : '-∞';
+            const abs = Math.abs(v);
+            if (abs !== 0 && (abs < 0.01 || abs >= 1e6)) return v.toExponential(digits);
+            return v.toFixed(digits);
+        }
+
+        function renderResult(r) {
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-body').style.display = 'block';
+
+            const banner = document.getElementById('status-banner');
+            banner.className = 'status-banner ' + r.status;
+            banner.textContent = statusMessage(r.status, r.summary);
+
+            if (r.status === 'invalid') {
+                document.getElementById('summary-grid').innerHTML = '';
+                document.getElementById('temp-plot').innerHTML = '';
+                document.getElementById('power-plot').innerHTML = '';
+                document.getElementById('diagnosis-list').innerHTML = '';
+                const errs = (r.errors || []).map(e => `<li>${e}</li>`).join('');
+                document.getElementById('recs-list').innerHTML = errs || '<li>Validation failed.</li>';
+                return;
+            }
+
+            renderSummary(r.summary);
+            renderTempPlot(r.series, r.summary);
+            renderPowerPlot(r.series);
+            renderList('diagnosis-list', r.diagnosis);
+            renderList('recs-list', r.recommendations);
+            renderRCTab(r);
+            renderMathTab(r);
+        }
+
+        function statusMessage(status, summary) {
+            const map = {
+                acceptable: 'Acceptable — temperature limit not exceeded',
+                marginal: 'Marginal — within 5 K of the limit',
+                unacceptable: 'Unacceptable — temperature limit exceeded',
+                not_converged: 'Duty cycle has not reached cyclic steady state',
+                invalid: 'Invalid model — see error details below',
+            };
+            const base = map[status] || status;
+            if (summary && summary.time_to_limit_s != null) {
+                return `${base} (limit reached at t = ${fmt(summary.time_to_limit_s)} s)`;
+            }
+            return base;
+        }
+
+        function renderSummary(s) {
+            const cells = [
+                { label: 'Peak T (sim)', value: fmt(s.peak_temperature_c), unit: '°C' },
+                { label: 'Steady-state T', value: s.steady_state_temperature_c == null ? '—' : fmt(s.steady_state_temperature_c), unit: s.steady_state_temperature_c == null ? '' : '°C' },
+                { label: 'Time to limit', value: s.time_to_limit_s == null ? '—' : fmt(s.time_to_limit_s), unit: s.time_to_limit_s == null ? '' : 's' },
+                { label: 'Final T', value: fmt(s.final_temperature_c), unit: '°C' },
+                { label: 'Cooldown to target', value: s.cooldown_time_to_target_s == null ? '—' : fmt(s.cooldown_time_to_target_s), unit: s.cooldown_time_to_target_s == null ? '' : 's' },
+                { label: 'Slowest τ', value: fmt(s.slowest_mode_tau_s ?? s.dominant_time_constant_s, 1), unit: 's' },
+                { label: 'Peak node', value: s.peak_node_id || '—', unit: '' },
+                { label: 'Cyclic steady state', value: s.cyclic_steady_state_reached ? 'Yes' : 'No', unit: '' },
+            ];
+            document.getElementById('summary-grid').innerHTML = cells.map(c =>
+                `<div class="summary-cell">
+                    <div class="label">${c.label}</div>
+                    <div class="value">${c.value}<span class="unit">${c.unit}</span></div>
+                </div>`
+            ).join('');
+        }
+
+        function plotTheme() {
+            const dark = document.body.dataset.theme === 'dark'
+                || (document.body.dataset.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            return {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: dark ? '#f9fafb' : '#111827', family: 'Helvetica Neue, system-ui, sans-serif' },
+                xaxis: { gridcolor: dark ? '#374151' : '#e5e7eb', zerolinecolor: dark ? '#374151' : '#e5e7eb' },
+                yaxis: { gridcolor: dark ? '#374151' : '#e5e7eb', zerolinecolor: dark ? '#374151' : '#e5e7eb' },
+            };
+        }
+
+        function renderTempPlot(series, summary) {
+            const traces = [];
+            const palette = ['#dc2626', '#0ea5e9', '#16a34a', '#a855f7', '#f59e0b'];
+            let i = 0;
+            for (const [nodeId, temps] of Object.entries(series.node_temperatures_c)) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: series.time_s, y: temps,
+                    name: nodeId,
+                    line: { color: palette[i % palette.length], width: 2 },
+                });
+                i++;
+            }
+            // Limit line on the source node, if available.
+            if (summary && summary.peak_temperature_c != null) {
+                const sourceLimit = num('source_limit');
+                if (Number.isFinite(sourceLimit)) {
+                    traces.push({
+                        type: 'scatter', mode: 'lines',
+                        x: [series.time_s[0], series.time_s[series.time_s.length - 1]],
+                        y: [sourceLimit, sourceLimit],
+                        name: 'Source limit',
+                        line: { color: '#b91c1c', width: 1, dash: 'dot' },
+                    });
+                }
+                if (summary.steady_state_temperature_c != null && Number.isFinite(summary.steady_state_temperature_c)) {
+                    traces.push({
+                        type: 'scatter', mode: 'lines',
+                        x: [series.time_s[0], series.time_s[series.time_s.length - 1]],
+                        y: [summary.steady_state_temperature_c, summary.steady_state_temperature_c],
+                        name: 'Steady-state T',
+                        line: { color: '#6b7280', width: 1, dash: 'dash' },
+                    });
+                }
+            }
+            const layout = Object.assign({
+                margin: { t: 20, r: 20, b: 50, l: 60 },
+                xaxis: { title: 'Time (s)' },
+                yaxis: { title: 'Temperature (°C)' },
+                legend: { orientation: 'h', y: -0.2 },
+                height: 320,
+            }, plotTheme());
+            Plotly.newPlot('temp-plot', traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        function renderPowerPlot(series) {
+            const trace = {
+                type: 'scatter', mode: 'lines',
+                x: series.time_s, y: series.power_w,
+                line: { color: '#f59e0b', width: 2, shape: 'hv' },
+                fill: 'tozeroy', fillcolor: 'rgba(245, 158, 11, 0.15)',
+            };
+            const layout = Object.assign({
+                margin: { t: 20, r: 20, b: 50, l: 60 },
+                xaxis: { title: 'Time (s)' },
+                yaxis: { title: 'Power (W)' },
+                showlegend: false,
+                height: 220,
+            }, plotTheme());
+            Plotly.newPlot('power-plot', [trace], layout, { responsive: true, displayModeBar: false });
+        }
+
+        function renderList(id, items) {
+            const el = document.getElementById(id);
+            if (!items || items.length === 0) {
+                el.innerHTML = '<li><em>No notes.</em></li>';
+                return;
+            }
+            el.innerHTML = items.map(t => `<li>${t}</li>`).join('');
+        }
+
+        function renderRCTab(r) {
+            const nodeRows = (r.nodes || []).filter(n => n.kind === 'dynamic').map(n => `
+                <tr>
+                    <td>${n.label || n.id}</td>
+                    <td class="num">${fmt(n.capacitance_j_per_k, 1)}</td>
+                    <td class="num">${n.max_temperature_c == null ? '—' : fmt(n.max_temperature_c, 1)}</td>
+                    <td class="num">${fmt(n.peak_temperature_c, 2)}</td>
+                    <td class="num">${n.temperature_margin_c == null ? '—' : fmt(n.temperature_margin_c, 2)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#nodes-table tbody').innerHTML = nodeRows;
+
+            const segRows = (r.segments || []).map(s => `
+                <tr>
+                    <td>${s.label || s.id}</td>
+                    <td class="num">${fmt(s.resistance_k_per_w, 4)}</td>
+                    <td class="num">${s.tau_s == null ? '—' : fmt(s.tau_s, 1)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#segments-table tbody').innerHTML = segRows;
+
+            const tauRows = (r.time_constants || []).map(t => `
+                <tr>
+                    <td>${t.label || t.node_id}</td>
+                    <td class="num">${fmt(t.capacitance_j_per_k, 1)}</td>
+                    <td class="num">${fmt(t.sum_conductance_w_per_k, 4)}</td>
+                    <td class="num">${fmt(t.tau_s, 1)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#tau-table tbody').innerHTML = tauRows;
+
+            const cycleRows = (r.cycle_summary || []).map(c => `
+                <tr>
+                    <td class="num">${c.cycle}</td>
+                    <td class="num">${fmt(c.peak_c, 2)}</td>
+                    <td class="num">${fmt(c.min_c, 2)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#cycle-table tbody').innerHTML = cycleRows
+                || '<tr><td colspan="3" style="color: var(--text-light); text-align:center;">No cycle data (step or pulse profile).</td></tr>';
+        }
+
+        function renderMathTab(r) {
+            const block = document.getElementById('subst-block');
+            if (r.subst_governing) {
+                block.innerHTML = `\\[ ${r.subst_governing} \\]`;
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise([block]);
+                }
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>
