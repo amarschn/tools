@@ -40,11 +40,33 @@ _CORD_A = 0.833
 _CORD_B = -0.524
 _CORD_C = 0.008
 
-_ETA_A = 0.90
-_ETA_B = 0.017
-_ETA_C = -0.059
+# Screening ceiling shared by cordier_efficiency(), balje_eta_envelope(), and
+# the suitability-score normaliser. 0.88 reflects AMCA-realistic peak
+# total-to-total efficiency for the better commercial families (BC,
+# mixed-flow, axial) with a small margin above 0.85 so BC's peak does not
+# saturate the score.
+_EFFICIENCY_SCORING_CEILING = 0.88
 
-_MAX_TYPICAL_EFFICIENCY = 0.85
+# Off-ridge Gaussian decay rate in ln(D_s / D_s_opt).
+# beta = 0.60 -> eta falls to ~75 percent of ridge-peak at a factor-of-2
+# deviation in D_s. Tuned against the efficiency drop-off visible in
+# Balje (1981) Fig. 3.1.
+BALJE_OFF_RIDGE_BETA = 0.60
+
+# Reference values used for the new physics proxies added as part of the 2026
+# review (tip Mach, tip Reynolds, sound-power index). All defensible for air
+# around 20 C; not meant to replace a proper acoustic / compressibility calc.
+_SPEED_OF_SOUND_MS = 343.0
+_AIR_KINEMATIC_VISCOSITY_M2S = 1.51e-5
+# Madison-style sound power: L_w ~= 10 log10(Q * DP^2) + K_family.
+# K values are rough published screening offsets; see AMCA Pub. 201-23 style
+# commentary. Do NOT use for acoustic certification.
+_SOUND_POWER_K_FAMILY = {
+    "centrifugal_fc": 51.0,
+    "centrifugal_bc": 47.0,
+    "mixed": 48.0,
+    "axial": 52.0,
+}
 
 _PASSAGE_PREFS = {
     "axial": {
@@ -166,6 +188,7 @@ FAN_TYPES: Dict[str, Dict[str, Any]] = {
         "ns_min": 0.30,
         "ns_max": 1.20,
         "ns_optimal": 0.60,
+        "sigma_ln_ns": 0.32,
         "typical_peak_efficiency": 0.65,
         "bep_flow_fraction": 0.55,
         "power_overloading": True,
@@ -202,6 +225,7 @@ FAN_TYPES: Dict[str, Dict[str, Any]] = {
         "ns_min": 0.30,
         "ns_max": 1.50,
         "ns_optimal": 0.80,
+        "sigma_ln_ns": 0.36,
         "typical_peak_efficiency": 0.85,
         "bep_flow_fraction": 0.70,
         "power_overloading": False,
@@ -238,6 +262,7 @@ FAN_TYPES: Dict[str, Dict[str, Any]] = {
         "ns_min": 0.80,
         "ns_max": 3.00,
         "ns_optimal": 1.80,
+        "sigma_ln_ns": 0.32,
         "typical_peak_efficiency": 0.84,
         "bep_flow_fraction": 0.65,
         "power_overloading": False,
@@ -274,6 +299,7 @@ FAN_TYPES: Dict[str, Dict[str, Any]] = {
         "ns_min": 2.00,
         "ns_max": 8.00,
         "ns_optimal": 3.50,
+        "sigma_ln_ns": 0.40,
         "typical_peak_efficiency": 0.82,
         "bep_flow_fraction": 0.65,
         "power_overloading": False,
@@ -420,30 +446,104 @@ def _range_fit_log(value: float, minimum: float, maximum: float, optimal: float)
     return _clamp(0.72 - 0.45 * outside_distance, 0.08, 0.72)
 
 
-def _tip_speed_fit(tip_speed_ms: float) -> float:
+def _tip_speed_fit(tip_speed_ms: float, type_id: Optional[str] = None) -> float:
     """Rate tip speed as a soft acoustic / mechanical suitability proxy.
+
+    Per-family thresholds live in ``FAN_TYPES[type_id]['tip_speed_quiet_ms']``
+    and ``tip_speed_alert_ms``. When ``type_id`` is omitted the old hard-coded
+    20 / 50 m/s scale is used (preserves existing callers that do not know the
+    candidate family).
 
     ---Parameters---
     tip_speed_ms : float
         Impeller tip speed in m/s.
+    type_id : str or None
+        Fan type identifier for per-family thresholds.
 
     ---Returns---
     fit_score : float
         Score from 0 to 1, where lower tip speeds are favored.
 
     ---LaTeX---
-    U_{tip} = \\frac{\\pi D N}{60}
+    S_U = \\operatorname{clamp}\\!\\left(1 - \\tfrac{U_{tip} - U_{quiet}}{U_{alert} - U_{quiet}},\\ 0.15,\\ 1\\right)
     """
     _validate_positive("tip speed", tip_speed_ms)
-    if tip_speed_ms <= 20.0:
+    if type_id is not None and type_id in FAN_TYPES:
+        info = FAN_TYPES[type_id]
+        u_quiet = info["tip_speed_quiet_ms"]
+        u_alert = info["tip_speed_alert_ms"]
+    else:
+        u_quiet = 20.0
+        u_alert = 50.0
+    if tip_speed_ms <= u_quiet:
         return 1.0
-    if tip_speed_ms <= 35.0:
-        return 0.9
-    if tip_speed_ms <= 50.0:
-        return 0.75
-    if tip_speed_ms <= 65.0:
-        return 0.55
-    return _clamp(0.55 * 65.0 / tip_speed_ms, 0.15, 0.55)
+    span = max(u_alert - u_quiet, 1.0e-9)
+    # Above quiet, decay linearly to 0.40 at alert, then keep falling slowly.
+    if tip_speed_ms <= u_alert:
+        return _clamp(1.0 - 0.60 * (tip_speed_ms - u_quiet) / span, 0.40, 1.0)
+    overshoot = (tip_speed_ms - u_alert) / span
+    return _clamp(0.40 / (1.0 + overshoot), 0.12, 0.40)
+
+
+def _tip_mach(tip_speed_ms: float) -> float:
+    """Dimensionless tip Mach number (screening indicator only)."""
+    _validate_positive("tip speed", tip_speed_ms)
+    return tip_speed_ms / _SPEED_OF_SOUND_MS
+
+
+def _tip_reynolds(tip_speed_ms: float, diameter_m: float) -> float:
+    """Rotor Reynolds number built on tip speed and wheel diameter."""
+    _validate_positive("tip speed", tip_speed_ms)
+    _validate_positive("diameter", diameter_m)
+    return tip_speed_ms * diameter_m / _AIR_KINEMATIC_VISCOSITY_M2S
+
+
+def _sound_power_index(type_id: str, flow_m3s: float, pressure_pa: float) -> Optional[float]:
+    """Madison-style sound-power screening index in dB.
+
+    ``L_w = 10 log10(Q * DP^2) + K_family`` (Q in m^3/s, DP in Pa). Not an
+    acoustic prediction: it is a relative screening number so the comparison
+    can flag obviously louder families at a duty point.
+    """
+    if type_id not in _SOUND_POWER_K_FAMILY:
+        return None
+    _validate_positive("flow", flow_m3s)
+    _validate_positive("pressure rise", pressure_pa)
+    argument = flow_m3s * pressure_pa * pressure_pa
+    if argument <= 0.0:
+        return None
+    return round(10.0 * math.log10(argument) + _SOUND_POWER_K_FAMILY[type_id], 2)
+
+
+def _fc_hump_proximity(type_id: str, actual_ns: float) -> Optional[Dict[str, Any]]:
+    """Flag forward-curved candidates whose duty point sits near the stall hump.
+
+    Representative FC curves hump near ``Q / Q_free ~ 0.30``; when the user's
+    duty is close to its own `bep_flow_fraction`, operating pressure can land
+    just past the hump, which is where FC wheels lose stable margin. Returns
+    ``None`` for non-FC families.
+    """
+    if type_id != "centrifugal_fc":
+        return None
+    bep = FAN_TYPES[type_id]["bep_flow_fraction"]
+    # Hump proximity is a band around 0.25 - 0.35 of Q_free. Duty points for
+    # which the candidate's BEP already sits above ~0.50 stay safely past the
+    # hump. Closer BEP => closer to the hump edge.
+    proximity = _clamp((0.50 - bep) / 0.25 + 0.5 * (1.0 - min(actual_ns / 0.60, 1.0)), 0.0, 1.0)
+    if proximity <= 0.33:
+        label = "Low"
+    elif proximity <= 0.66:
+        label = "Moderate"
+    else:
+        label = "High"
+    return {
+        "index": round(proximity, 4),
+        "label": label,
+        "summary": (
+            "Forward-curved wheels carry a pressure hump near 25-35% of free delivery. "
+            "Check real-curve stall margin; avoid operating in the negative-slope region."
+        ),
+    }
 
 
 def _equivalent_diameter_from_area(area_m2: float) -> float:
@@ -905,9 +1005,91 @@ def cordier_ds(specific_speed_value: float) -> float:
     return math.exp(_CORD_A + _CORD_B * ln_ns + _CORD_C * ln_ns * ln_ns)
 
 
+def balje_eta_family(type_id: str, specific_speed_value: float, specific_diameter_value: float) -> float:
+    """
+    Return a single-family Balje efficiency at a point in the N_s-D_s plane.
+
+    The family contribution is a ln(N_s) Gaussian centered at the family's
+    peak specific speed, multiplied by an off-ridge Gaussian decay in
+    ln(D_s / D_s_opt). Used to score a *specific* candidate architecture.
+
+    ---Parameters---
+    type_id : str
+        Fan type identifier.
+    specific_speed_value : float
+        Dimensionless specific speed.
+    specific_diameter_value : float
+        Dimensionless specific diameter.
+
+    ---Returns---
+    efficiency : float
+        Family-specific efficiency estimate from 0 to 1 (not clamped to the
+        screening ceiling; call sites decide).
+
+    ---LaTeX---
+    \\eta_i = \\eta_{i,peak} \\exp\\left(-\\tfrac{1}{2}
+        \\left[\\tfrac{\\ln(\\omega_s / \\omega_{s,i})}{\\sigma_i}\\right]^2\\right)
+        \\exp\\left(-\\beta \\left[\\ln(\\delta_s / \\delta_{s,opt})\\right]^2\\right)
+    """
+    _validate_positive("specific speed", specific_speed_value)
+    _validate_positive("specific diameter", specific_diameter_value)
+    if type_id not in FAN_TYPES:
+        raise ValueError(f"Unknown fan type '{type_id}'.")
+
+    info = FAN_TYPES[type_id]
+    ns_peak = info["ns_optimal"]
+    sigma = info["sigma_ln_ns"]
+    eta_peak = info["typical_peak_efficiency"]
+
+    z = math.log(specific_speed_value / ns_peak) / sigma
+    ridge_peak = eta_peak * math.exp(-0.5 * z * z)
+
+    ds_opt = cordier_ds(specific_speed_value)
+    offset = math.log(specific_diameter_value / ds_opt)
+    return ridge_peak * math.exp(-BALJE_OFF_RIDGE_BETA * offset * offset)
+
+
+def balje_eta_envelope(specific_speed_value: float, specific_diameter_value: Optional[float] = None) -> float:
+    """
+    Return the max-over-families Balje efficiency envelope at a point.
+
+    When ``specific_diameter_value`` is omitted, the envelope is evaluated on
+    the Cordier ridge (D_s = D_s_opt), which is what cordier_efficiency
+    exposes externally.
+
+    ---Parameters---
+    specific_speed_value : float
+        Dimensionless specific speed.
+    specific_diameter_value : float or None
+        Optional dimensionless specific diameter. Defaults to the Cordier
+        optimum at the given N_s.
+
+    ---Returns---
+    efficiency : float
+        Envelope efficiency from 0 to ``_EFFICIENCY_SCORING_CEILING``.
+
+    ---LaTeX---
+    \\eta_{env} = \\max_i \\eta_i(\\omega_s, \\delta_s)
+    """
+    _validate_positive("specific speed", specific_speed_value)
+    ds = specific_diameter_value if specific_diameter_value is not None else cordier_ds(specific_speed_value)
+    _validate_positive("specific diameter", ds)
+
+    best = 0.0
+    for type_id in FAN_TYPES:
+        candidate = balje_eta_family(type_id, specific_speed_value, ds)
+        if candidate > best:
+            best = candidate
+    return _clamp(best, 0.0, _EFFICIENCY_SCORING_CEILING)
+
+
 def cordier_efficiency(specific_speed_value: float) -> float:
     """
     Estimate the peak total-to-total efficiency along the Cordier line.
+
+    Delegates to :func:`balje_eta_envelope` so the Python scoring pipeline,
+    the plotted Balje field, and any downstream consumer all agree on one
+    family-Gaussian envelope instead of an independent quadratic fit.
 
     ---Parameters---
     specific_speed_value : float
@@ -915,15 +1097,13 @@ def cordier_efficiency(specific_speed_value: float) -> float:
 
     ---Returns---
     efficiency : float
-        Estimated peak efficiency from 0 to 1.
+        Ridge-peak envelope efficiency, clamped at the screening ceiling.
 
     ---LaTeX---
-    \\eta = 0.90 + 0.017 \\ln(\\omega_s) - 0.059 [\\ln(\\omega_s)]^2
+    \\eta_{ridge}(\\omega_s) = \\max_i \\eta_{i,peak}
+        \\exp\\left(-\\tfrac{1}{2}\\left[\\tfrac{\\ln(\\omega_s / \\omega_{s,i})}{\\sigma_i}\\right]^2\\right)
     """
-    _validate_positive("specific speed", specific_speed_value)
-    ln_ns = math.log(specific_speed_value)
-    eta = _ETA_A + _ETA_B * ln_ns + _ETA_C * ln_ns * ln_ns
-    return _clamp(eta, 0.20, 0.95)
+    return balje_eta_envelope(specific_speed_value, None)
 
 
 def cordier_ns_from_ds(target_ds: float, tol: float = 1.0e-6, max_iter: int = 60) -> float:
@@ -962,6 +1142,93 @@ def cordier_ns_from_ds(target_ds: float, tol: float = 1.0e-6, max_iter: int = 60
         else:
             hi = mid
     return math.exp(0.5 * (lo + hi))
+
+
+def generate_balje_field(
+    ns_min: float = 0.08,
+    ns_max: float = 15.0,
+    ds_min: float = 0.30,
+    ds_max: float = 12.0,
+    resolution: int = 160,
+) -> Dict[str, List[Any]]:
+    """
+    Sample the family-envelope Balje efficiency over an N_s-D_s rectangle.
+
+    Produces arrays suitable for a Plotly ``contour`` trace with the axis
+    convention ``x = N_s``, ``y = D_s``. The ``z`` array is row-major over
+    ``D_s`` so that ``z[i][j]`` sits at ``(N_s[j], D_s[i])``.
+
+    ---Parameters---
+    ns_min, ns_max : float
+        Bounds of the specific-speed axis.
+    ds_min, ds_max : float
+        Bounds of the specific-diameter axis.
+    resolution : int
+        Number of samples per axis.
+
+    ---Returns---
+    field : dict
+        Dict with ``ns`` (x-axis), ``ds`` (y-axis), and ``z`` (2D envelope).
+
+    ---LaTeX---
+    z_{ij} = \\max_k \\eta_k(\\omega_{s,j}, \\delta_{s,i})
+    """
+    _validate_positive("ns_min", ns_min)
+    _validate_positive("ns_max", ns_max)
+    _validate_positive("ds_min", ds_min)
+    _validate_positive("ds_max", ds_max)
+    if ns_max <= ns_min or ds_max <= ds_min:
+        raise ValueError("axis maxima must exceed minima.")
+    if resolution < 8:
+        raise ValueError("resolution must be at least 8.")
+
+    def _log_space(lo: float, hi: float, count: int) -> List[float]:
+        ln_lo, ln_hi = math.log(lo), math.log(hi)
+        return [math.exp(ln_lo + (ln_hi - ln_lo) * i / (count - 1)) for i in range(count)]
+
+    ns_values = _log_space(ns_min, ns_max, resolution)
+    ds_values = _log_space(ds_min, ds_max, resolution)
+
+    z: List[List[float]] = []
+    for ds in ds_values:
+        row: List[float] = []
+        for ns in ns_values:
+            row.append(round(balje_eta_envelope(ns, ds), 5))
+        z.append(row)
+
+    return {
+        "ns": [round(value, 6) for value in ns_values],
+        "ds": [round(value, 6) for value in ds_values],
+        "z": z,
+    }
+
+
+def family_anchors() -> List[Dict[str, Any]]:
+    """
+    Return per-family peak markers on the Cordier line.
+
+    Each anchor sits at ``(ns_optimal, cordier_ds(ns_optimal))`` so the plotted
+    points line up exactly with the heavy Cordier curve in the Balje diagram.
+
+    ---Returns---
+    anchors : list[dict]
+        Per-family dicts with id, label, color, ns, ds, eta.
+
+    ---LaTeX---
+    (\\omega_{s,i}, \\delta_s(\\omega_{s,i}), \\eta_{i,peak})
+    """
+    anchors: List[Dict[str, Any]] = []
+    for type_id, info in FAN_TYPES.items():
+        ns_peak = info["ns_optimal"]
+        anchors.append({
+            "id": type_id,
+            "label": info["short_name"],
+            "color": info["color"],
+            "ns": round(ns_peak, 6),
+            "ds": round(cordier_ds(ns_peak), 6),
+            "eta": round(info["typical_peak_efficiency"], 4),
+        })
+    return anchors
 
 
 def generate_cordier_line(ns_min: float = 0.08, ns_max: float = 15.0, n_points: int = 100) -> Dict[str, List[float]]:
@@ -1959,6 +2226,7 @@ def _score_candidate(
     tip_speed_ms: float,
     passage_fit: Optional[float],
     custom_weights: Optional[Dict[str, float]] = None,
+    type_id: Optional[str] = None,
 ) -> float:
     """Blend fit terms into a 0-1 suitability score.
 
@@ -1973,6 +2241,8 @@ def _score_candidate(
         Optional passage-geometry fit score from 0 to 1.
     custom_weights : dict or None
         Optional user-provided weights for scoring components.
+    type_id : str or None
+        Fan type identifier, used for per-family tip-speed thresholds.
 
     ---Returns---
     score : float
@@ -1981,8 +2251,8 @@ def _score_candidate(
     ---LaTeX---
     S = w_N S_N + w_\\eta S_\\eta + w_U S_U + w_A S_A
     """
-    eta_score = _clamp(estimated_efficiency / _MAX_TYPICAL_EFFICIENCY, 0.2, 1.0)
-    tip_score = _tip_speed_fit(tip_speed_ms)
+    eta_score = _clamp(estimated_efficiency / _EFFICIENCY_SCORING_CEILING, 0.2, 1.0)
+    tip_score = _tip_speed_fit(tip_speed_ms, type_id)
     w = _resolve_weights(passage_fit is not None, custom_weights)
     score = (
         w["specific_speed_fit"] * ns_fit
@@ -1999,6 +2269,7 @@ def _score_breakdown(
     tip_speed_ms: float,
     passage_fit: Optional[float],
     custom_weights: Optional[Dict[str, float]] = None,
+    type_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Expose weighted score terms for frontend decision-trace rendering.
 
@@ -2013,6 +2284,8 @@ def _score_breakdown(
         Optional passage-geometry fit score from 0 to 1.
     custom_weights : dict or None
         Optional user-provided weights for scoring components.
+    type_id : str or None
+        Fan type identifier, used for per-family tip-speed thresholds.
 
     ---Returns---
     breakdown : dict
@@ -2021,8 +2294,8 @@ def _score_breakdown(
     ---LaTeX---
     S = w_N S_N + w_\\eta S_\\eta + w_U S_U + w_A S_A
     """
-    eta_score = _clamp(estimated_efficiency / _MAX_TYPICAL_EFFICIENCY, 0.2, 1.0)
-    tip_score = _tip_speed_fit(tip_speed_ms)
+    eta_score = _clamp(estimated_efficiency / _EFFICIENCY_SCORING_CEILING, 0.2, 1.0)
+    tip_score = _tip_speed_fit(tip_speed_ms, type_id)
 
     weights = _resolve_weights(passage_fit is not None, custom_weights)
 
@@ -2554,10 +2827,19 @@ def analyze_fan_types(
         else:
             range_distance = 0.0
 
-        estimated_efficiency = type_info["typical_peak_efficiency"] * (0.55 + 0.45 * ns_fit)
-        estimated_efficiency = min(estimated_efficiency, cordier_efficiency(max(actual_ns, 0.05)))
+        # Candidate efficiency now comes from the family's own Balje-Gaussian
+        # (not a quadratic Cordier envelope), capped at the family's declared
+        # typical peak and the global screening ceiling. This is the single
+        # source of truth shared with the plotted Balje diagram.
+        family_eta = balje_eta_family(type_id, max(actual_ns, 0.05), max(actual_ds, 0.05))
+        estimated_efficiency = min(family_eta, type_info["typical_peak_efficiency"])
+        estimated_efficiency = min(estimated_efficiency, _EFFICIENCY_SCORING_CEILING)
         shaft_power_w = flow_m3s * pressure_pa / max(estimated_efficiency, 1.0e-6)
         tip_speed_ms = math.pi * actual_diameter_m * actual_speed_rpm / 60.0
+        tip_mach = _tip_mach(tip_speed_ms)
+        tip_reynolds = _tip_reynolds(tip_speed_ms, actual_diameter_m)
+        sound_power_index_db = _sound_power_index(type_id, flow_m3s, pressure_pa)
+        fc_hump = _fc_hump_proximity(type_id, max(actual_ns, 0.05))
         reference_geometry = estimate_reference_geometry(
             type_id,
             actual_diameter_m,
@@ -2586,6 +2868,7 @@ def analyze_fan_types(
             tip_speed_ms,
             passage_fit,
             custom_weights,
+            type_id,
         )
         suitability_score = _score_candidate(
             ns_fit,
@@ -2593,6 +2876,7 @@ def analyze_fan_types(
             tip_speed_ms,
             passage_fit,
             custom_weights,
+            type_id,
         )
 
         candidates.append(
@@ -2630,6 +2914,10 @@ def analyze_fan_types(
                 "estimated_efficiency": round(estimated_efficiency, 4),
                 "shaft_power_w": round(shaft_power_w, 3),
                 "tip_speed_ms": round(tip_speed_ms, 4),
+                "tip_mach": round(tip_mach, 4),
+                "tip_reynolds": round(tip_reynolds, 0),
+                "sound_power_index_db": sound_power_index_db,
+                "fc_hump": fc_hump,
                 "reference_geometry": reference_geometry,
                 "ns_fit": round(ns_fit, 4),
                 "passage_fit": passage_fit,
@@ -3187,6 +3475,27 @@ def full_analysis(
         for type_id, info in FAN_TYPES.items()
     }
 
+    balje_payload = {
+        "field": generate_balje_field(),
+        "family_anchors": family_anchors(),
+        "families": [
+            {
+                "id": type_id,
+                "label": info["short_name"],
+                "color": info["color"],
+                "ns_peak": info["ns_optimal"],
+                "sigma_ln_ns": info["sigma_ln_ns"],
+                "eta_peak": info["typical_peak_efficiency"],
+                "ns_min": info["ns_min"],
+                "ns_max": info["ns_max"],
+            }
+            for type_id, info in FAN_TYPES.items()
+        ],
+        "off_ridge_beta": BALJE_OFF_RIDGE_BETA,
+        "cordier_fit": {"a": _CORD_A, "b": _CORD_B, "c": _CORD_C},
+        "efficiency_ceiling": _EFFICIENCY_SCORING_CEILING,
+    }
+
     return {
         "comparison": comparison,
         "recommendation": recommendation,
@@ -3202,6 +3511,7 @@ def full_analysis(
         "curves": curves,
         "system": system,
         "cordier": cordier,
+        "balje": balje_payload,
         "fan_types": type_regions,
         "inputs": {
             "flow_m3s": flow_m3s,
@@ -3230,6 +3540,7 @@ def full_analysis_json(
     target_velocity_ms: Optional[float] = None,
     passage_area_m2: Optional[float] = None,
     geometry_overrides: Optional[Any] = None,
+    custom_weights: Optional[Any] = None,
 ) -> str:
     """
     Return :func:`full_analysis` output as a JSON string.
@@ -3275,5 +3586,6 @@ def full_analysis_json(
             target_velocity_ms=target_velocity_ms,
             passage_area_m2=passage_area_m2,
             geometry_overrides=geometry_overrides,
+            custom_weights=custom_weights,
         )
     )

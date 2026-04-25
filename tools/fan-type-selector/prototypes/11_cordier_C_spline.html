@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cordier Diagram — Prototype C: Digitized Spline + Balje-style Islands</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .subtitle { color: #999; font-size: 0.85rem; margin-bottom: 16px; }
+  .note { background: #222244; border-left: 3px solid #5588cc; padding: 12px 16px; margin: 16px 0; font-size: 0.85rem; line-height: 1.5; border-radius: 4px; }
+  .note code { background: #333355; padding: 1px 4px; border-radius: 2px; }
+  #plot { width: 100%; height: 600px; }
+  table { border-collapse: collapse; font-size: 0.82rem; margin: 8px 0; }
+  th, td { padding: 4px 10px; border: 1px solid #444; text-align: right; }
+  th { background: #222244; color: #aac; }
+</style>
+</head>
+<body>
+
+<h1>Prototype C — Digitized Data Points + Monotone Cubic Interpolation</h1>
+<p class="subtitle">Instead of a formula, this uses reference points digitized from Balje (1981) with smooth interpolation. Efficiency islands are drawn as filled gradient bands.</p>
+
+<div class="note">
+  <strong>Approach:</strong> 12 reference points were read from Balje's published Cordier chart.
+  Between points, a monotone cubic Hermite spline (Fritsch-Carlson) is used in ln-ln space
+  so the curve is smooth and preserves the shape of the original data without overshooting.
+  <br><br>
+  <strong>Trade-off vs. a formula:</strong> A spline matches the original diagram more faithfully but
+  can't be written as a one-line equation. If adopted, the solver would need a lookup+interpolation
+  function instead of the current closed-form expression.
+  <br><br>
+  <strong>Digitized reference data:</strong>
+  <table>
+    <tr><th>N<sub>s</sub></th><th>D<sub>s</sub></th><th>&eta;<sub>peak</sub></th></tr>
+    <tr><td>0.06</td><td>14.0</td><td>0.36</td></tr>
+    <tr><td>0.10</td><td>10.0</td><td>0.48</td></tr>
+    <tr><td>0.20</td><td>6.2</td><td>0.62</td></tr>
+    <tr><td>0.35</td><td>4.2</td><td>0.74</td></tr>
+    <tr><td>0.60</td><td>3.1</td><td>0.83</td></tr>
+    <tr><td>1.00</td><td>2.30</td><td>0.90</td></tr>
+    <tr><td>1.50</td><td>1.80</td><td>0.90</td></tr>
+    <tr><td>2.50</td><td>1.35</td><td>0.87</td></tr>
+    <tr><td>4.00</td><td>1.00</td><td>0.82</td></tr>
+    <tr><td>6.00</td><td>0.78</td><td>0.76</td></tr>
+    <tr><td>10.0</td><td>0.62</td><td>0.65</td></tr>
+    <tr><td>15.0</td><td>0.52</td><td>0.52</td></tr>
+  </table>
+</div>
+
+<div id="plot"></div>
+
+<script>
+// --- Digitized Balje reference data ---
+const REF_DATA = [
+    { ns: 0.06, ds: 14.0, eta: 0.36 },
+    { ns: 0.10, ds: 10.0, eta: 0.48 },
+    { ns: 0.20, ds: 6.2,  eta: 0.62 },
+    { ns: 0.35, ds: 4.2,  eta: 0.74 },
+    { ns: 0.60, ds: 3.1,  eta: 0.83 },
+    { ns: 1.00, ds: 2.30, eta: 0.90 },
+    { ns: 1.50, ds: 1.80, eta: 0.90 },
+    { ns: 2.50, ds: 1.35, eta: 0.87 },
+    { ns: 4.00, ds: 1.00, eta: 0.82 },
+    { ns: 6.00, ds: 0.78, eta: 0.76 },
+    { ns: 10.0, ds: 0.62, eta: 0.65 },
+    { ns: 15.0, ds: 0.52, eta: 0.52 },
+];
+
+// Work in ln-space for smooth interpolation
+const lnNsRef = REF_DATA.map(d => Math.log(d.ns));
+const lnDsRef = REF_DATA.map(d => Math.log(d.ds));
+const etaRef  = REF_DATA.map(d => d.eta);
+
+// --- Fritsch-Carlson monotone cubic Hermite interpolation ---
+function monotoneCubicSetup(xs, ys) {
+    const n = xs.length;
+    const delta = [], m = [];
+    for (let i = 0; i < n - 1; i++) delta.push((ys[i+1] - ys[i]) / (xs[i+1] - xs[i]));
+    m.push(delta[0]);
+    for (let i = 1; i < n - 1; i++) {
+        if (delta[i-1] * delta[i] <= 0) { m.push(0); }
+        else { m.push((delta[i-1] + delta[i]) / 2); }
+    }
+    m.push(delta[n - 2]);
+    // Fritsch-Carlson monotonicity fix
+    for (let i = 0; i < n - 1; i++) {
+        if (Math.abs(delta[i]) < 1e-30) { m[i] = 0; m[i+1] = 0; continue; }
+        const alpha = m[i] / delta[i], beta = m[i+1] / delta[i];
+        const tau = alpha * alpha + beta * beta;
+        if (tau > 9) {
+            const t = 3 / Math.sqrt(tau);
+            m[i] = t * alpha * delta[i];
+            m[i+1] = t * beta * delta[i];
+        }
+    }
+    return { xs, ys, m };
+}
+
+function monotoneCubicEval(spline, x) {
+    const { xs, ys, m } = spline;
+    const n = xs.length;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n-1]) return ys[n-1];
+    let i = 0;
+    while (i < n - 2 && xs[i+1] < x) i++;
+    const h = xs[i+1] - xs[i];
+    const t = (x - xs[i]) / h;
+    const t2 = t * t, t3 = t2 * t;
+    return (2*t3 - 3*t2 + 1) * ys[i] + (t3 - 2*t2 + t) * h * m[i] +
+           (-2*t3 + 3*t2) * ys[i+1] + (t3 - t2) * h * m[i+1];
+}
+
+const dsSpline  = monotoneCubicSetup(lnNsRef, lnDsRef);
+const etaSpline = monotoneCubicSetup(lnNsRef, etaRef);
+
+function cordierDsSpline(ns) { return Math.exp(monotoneCubicEval(dsSpline, Math.log(ns))); }
+function cordierEtaSpline(ns) { return Math.min(0.95, Math.max(0.20, monotoneCubicEval(etaSpline, Math.log(ns)))); }
+
+// Also keep the old formula for ghost comparison
+function cordierDsOld(ns) {
+    const lnNs = Math.log(Math.max(ns, 1e-9));
+    return Math.exp(0.833 - 0.524 * lnNs + 0.008 * lnNs * lnNs);
+}
+
+function logSpace(min, max, n) {
+    const logMin = Math.log10(min), logMax = Math.log10(max);
+    return Array.from({ length: n }, (_, i) => 10 ** (logMin + i / (n - 1) * (logMax - logMin)));
+}
+
+function hexToRgba(hex, a) {
+    const h = hex.replace('#','');
+    return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+
+const types = [
+    { id: 'fc',    name: 'FC Centrifugal', nsMin: 0.30, nsMax: 1.20, color: '#c27b2b', tol: 1.26 },
+    { id: 'bc',    name: 'BC Centrifugal', nsMin: 0.30, nsMax: 1.50, color: '#56616e', tol: 1.18 },
+    { id: 'mixed', name: 'Mixed Flow',     nsMin: 0.80, nsMax: 3.00, color: '#0f766e', tol: 1.20 },
+    { id: 'axial', name: 'Axial',          nsMin: 2.00, nsMax: 8.00, color: '#2563eb', tol: 1.22 },
+];
+
+const traces = [];
+const lineNs = logSpace(0.06, 15, 400);
+
+// --- Filled efficiency islands (Balje-style) ---
+const beta = 5.0;
+const etaLevels = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90];
+const contourNs = logSpace(0.06, 15, 400);
+
+// Draw as filled bands from outer to inner so inner overlays outer
+const islandColors = [
+    'rgba(30,40,80,0.8)',    // 50%
+    'rgba(35,50,100,0.7)',   // 55%
+    'rgba(40,65,120,0.6)',   // 60%
+    'rgba(50,85,140,0.5)',   // 65%
+    'rgba(60,110,155,0.45)', // 70%
+    'rgba(70,140,165,0.4)',  // 75%
+    'rgba(85,170,170,0.35)', // 80%
+    'rgba(110,200,170,0.3)', // 85%
+    'rgba(150,225,160,0.25)',// 90%
+];
+
+etaLevels.forEach((etaTarget, idx) => {
+    const xU = [], yU = [], xL = [], yL = [];
+    contourNs.forEach(ns => {
+        const etaPeak = cordierEtaSpline(ns);
+        if (etaTarget > etaPeak) return;
+        const dsOpt = cordierDsSpline(ns);
+        const offset = Math.sqrt(-Math.log(etaTarget / etaPeak) / beta);
+        xU.push(dsOpt * Math.exp(offset));
+        yU.push(ns);
+        xL.push(dsOpt * Math.exp(-offset));
+        yL.push(ns);
+    });
+    if (xU.length < 4) return;
+    const pct = Math.round(etaTarget * 100);
+    traces.push({
+        x: [...xU, ...xL.reverse()], y: [...yU, ...yL.reverse()],
+        mode: 'lines',
+        line: { color: islandColors[idx], width: 1.2 },
+        fill: 'toself', fillcolor: islandColors[idx],
+        showlegend: false,
+        hovertemplate: `η ≈ ${pct}%<extra>Efficiency island</extra>`
+    });
+    // Label near the widest point of the contour
+    const midIdx = Math.floor(xU.length * 0.65);
+    if (midIdx < xU.length) {
+        traces.push({
+            x: [xU[midIdx]], y: [yU[midIdx]],
+            mode: 'text', text: [`${pct}%`],
+            textfont: { size: 9, color: 'rgba(200,220,255,0.7)' },
+            textposition: 'middle right', showlegend: false, hoverinfo: 'skip'
+        });
+    }
+});
+
+// Type ribbons (using spline-based line)
+types.forEach(t => {
+    const nsVals = logSpace(t.nsMin, t.nsMax, 72);
+    const upper = nsVals.map(ns => cordierDsSpline(ns) * t.tol);
+    const lower = nsVals.slice().reverse().map(ns => cordierDsSpline(ns) / t.tol);
+    traces.push({
+        x: [...upper, ...lower], y: [...nsVals, ...nsVals.slice().reverse()],
+        fill: 'toself', fillcolor: hexToRgba(t.color, 0.18),
+        line: { color: t.color, width: 1.8 }, mode: 'lines',
+        name: t.name, legendgroup: t.id,
+        hovertemplate: `<b>${t.name}</b><br>N_s: ${t.nsMin}–${t.nsMax}<extra></extra>`
+    });
+});
+
+// Old formula line (ghost)
+traces.push({
+    x: lineNs.map(cordierDsOld), y: lineNs,
+    mode: 'lines', name: 'Old formula (C=0.008)',
+    line: { color: 'rgba(255,100,100,0.45)', width: 2, dash: 'dot' },
+    hovertemplate: 'Old formula<br>D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra></extra>'
+});
+
+// Spline Cordier optimum line
+traces.push({
+    x: lineNs.map(cordierDsSpline), y: lineNs,
+    mode: 'lines', name: 'Spline Optimum',
+    line: { color: '#e0e0e0', width: 3 },
+    hovertemplate: 'Spline<br>D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra>Cordier Optimum</extra>'
+});
+
+// Digitized reference points
+traces.push({
+    x: REF_DATA.map(d => d.ds), y: REF_DATA.map(d => d.ns),
+    mode: 'markers', name: 'Balje ref. points',
+    marker: { size: 8, color: '#ffcc44', symbol: 'circle',
+              line: { width: 1.5, color: '#bb9922' } },
+    hovertemplate: 'Balje ref.<br>D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra></extra>'
+});
+
+Plotly.newPlot('plot', traces, {
+    paper_bgcolor: '#1a1a2e', plot_bgcolor: '#16213e',
+    font: { color: '#e0e0e0', family: "'Helvetica Neue', sans-serif" },
+    margin: { t: 20, r: 30, b: 70, l: 70 },
+    legend: { orientation: 'h', y: -0.15, x: 0, font: { size: 11 } },
+    xaxis: {
+        title: 'Specific Diameter D<sub>s</sub> [—]', type: 'log',
+        range: [Math.log10(0.3), Math.log10(18)],
+        gridcolor: 'rgba(100,100,140,0.25)', tickformat: '.2~g'
+    },
+    yaxis: {
+        title: 'Specific Speed N<sub>s</sub> [—]', type: 'log',
+        range: [Math.log10(0.05), Math.log10(18)],
+        gridcolor: 'rgba(100,100,140,0.25)', tickformat: '.2~g'
+    },
+    hovermode: 'closest'
+}, { responsive: true, displayModeBar: false });
+</script>
+</body>
+</html>

@@ -6,14 +6,20 @@ import pytest
 
 from pycalcs.fan_selection import (
     analyze_fan_types,
+    balje_eta_envelope,
+    balje_eta_family,
     compute_air_density,
+    cordier_ds,
+    cordier_efficiency,
     estimate_reference_geometry,
     evaluate_acoustic_risk,
     evaluate_architecture_margin,
     evaluate_drive_fit,
     evaluate_passage_fit,
     evaluate_velocity_constraint,
+    family_anchors,
     full_analysis,
+    generate_balje_field,
     recommend_radial_subtype,
     specific_diameter,
     specific_speed,
@@ -181,6 +187,86 @@ class TestPracticalSignals:
         acoustic = evaluate_acoustic_risk("axial", 62.0, quiet_constraint, margin["score"])
         assert margin["label"] in {"Moderate", "Tight", "High"}
         assert acoustic["label"] == "High"
+
+
+class TestBaljePhysics:
+    @pytest.mark.parametrize("ns", [0.10, 0.30, 0.80, 1.80, 3.50, 8.0])
+    def test_cordier_ds_is_finite_and_positive(self, ns):
+        ds = cordier_ds(ns)
+        assert ds > 0.0
+        assert ds < 30.0
+
+    def test_balje_eta_family_peaks_near_family_optimum(self):
+        """BC's eta should peak near Ns=0.8 on its own ridge."""
+        ds_opt = cordier_ds(0.8)
+        peak = balje_eta_family("centrifugal_bc", 0.8, ds_opt)
+        off_ridge = balje_eta_family("centrifugal_bc", 0.8, ds_opt * 1.8)
+        off_ns = balje_eta_family("centrifugal_bc", 2.5, cordier_ds(2.5))
+        assert peak > off_ridge
+        assert peak > off_ns
+        assert peak == pytest.approx(0.85, abs=0.01)
+
+    def test_balje_eta_envelope_equals_cordier_efficiency_on_ridge(self):
+        for ns in (0.30, 0.80, 1.80, 3.50):
+            ds_opt = cordier_ds(ns)
+            assert balje_eta_envelope(ns, ds_opt) == pytest.approx(cordier_efficiency(ns))
+
+    def test_balje_eta_envelope_never_exceeds_ceiling(self):
+        for ns in (0.08, 0.5, 1.0, 2.0, 5.0, 12.0):
+            for ds in (0.4, 1.0, 3.0, 8.0):
+                value = balje_eta_envelope(ns, ds)
+                assert 0.0 <= value <= 0.88
+
+    def test_generate_balje_field_shape_and_values(self):
+        field = generate_balje_field(resolution=24)
+        assert len(field["ns"]) == 24
+        assert len(field["ds"]) == 24
+        assert len(field["z"]) == 24
+        assert all(len(row) == 24 for row in field["z"])
+        flat = [v for row in field["z"] for v in row]
+        assert max(flat) <= 0.88
+        assert min(flat) >= 0.0
+
+    def test_family_anchors_lie_on_cordier_line(self):
+        anchors = family_anchors()
+        assert len(anchors) == 4
+        for anchor in anchors:
+            assert anchor["ds"] == pytest.approx(cordier_ds(anchor["ns"]), rel=1e-6)
+            assert 0.0 < anchor["eta"] <= 0.88
+
+    def test_balje_payload_is_in_full_analysis(self):
+        data = full_analysis(flow_m3s=1.0, pressure_pa=500.0)
+        assert "balje" in data
+        balje = data["balje"]
+        assert "field" in balje and "ns" in balje["field"]
+        assert "family_anchors" in balje and len(balje["family_anchors"]) == 4
+        assert balje["off_ridge_beta"] > 0.0
+        assert balje["efficiency_ceiling"] == pytest.approx(0.88, abs=0.001)
+
+
+class TestTipSpeedFit:
+    def test_tip_speed_fit_uses_per_family_thresholds(self):
+        """Axial permits higher tip speed than FC centrifugal, so the same
+        45 m/s reading should score better for axial than for FC."""
+        from pycalcs.fan_selection import _tip_speed_fit
+        fc_score = _tip_speed_fit(45.0, "centrifugal_fc")
+        axial_score = _tip_speed_fit(45.0, "axial")
+        assert axial_score > fc_score
+
+
+class TestCandidateSignals:
+    def test_candidate_carries_mach_reynolds_sound_signals(self):
+        data = full_analysis(flow_m3s=1.0, pressure_pa=500.0)
+        best = data["comparison"][0]
+        assert "tip_mach" in best and best["tip_mach"] is not None
+        assert "tip_reynolds" in best and best["tip_reynolds"] > 0
+        assert "sound_power_index_db" in best and best["sound_power_index_db"] is not None
+
+    def test_fc_candidate_carries_hump_warning(self):
+        data = full_analysis(flow_m3s=1.0, pressure_pa=500.0)
+        fc = next(c for c in data["comparison"] if c["type_id"] == "centrifugal_fc")
+        assert fc["fc_hump"] is not None
+        assert "hump" in fc["fc_hump"]["summary"].lower()
 
 
 class TestRadialBranch:

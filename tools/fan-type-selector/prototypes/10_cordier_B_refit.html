@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cordier Diagram — Prototype B: Refit to Balje Reference Data</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .subtitle { color: #999; font-size: 0.85rem; margin-bottom: 16px; }
+  .note { background: #222244; border-left: 3px solid #5588cc; padding: 12px 16px; margin: 16px 0; font-size: 0.85rem; line-height: 1.5; border-radius: 4px; }
+  .note code { background: #333355; padding: 1px 4px; border-radius: 2px; }
+  .comparison { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }
+  .comparison div { background: #222244; padding: 10px 14px; border-radius: 4px; flex: 1; min-width: 200px; }
+  .comparison strong { display: block; margin-bottom: 4px; font-size: 0.8rem; color: #7799cc; }
+  .comparison code { font-size: 0.85rem; }
+  #plot { width: 100%; height: 600px; }
+  table { border-collapse: collapse; font-size: 0.82rem; margin: 8px 0; }
+  th, td { padding: 4px 10px; border: 1px solid #444; text-align: right; }
+  th { background: #222244; color: #aac; }
+</style>
+</head>
+<body>
+
+<h1>Prototype B — Refit Coefficients (A=0.833, B=&minus;0.594, C=0.019)</h1>
+<p class="subtitle">Quadratic refit to Balje's approximate reference data. Same correlation form, different B and C.</p>
+
+<div class="comparison">
+  <div>
+    <strong>Original (current tool)</strong>
+    <code>ln(D<sub>s</sub>) = 0.833 &minus; 0.524 ln(N<sub>s</sub>) + 0.008 [ln(N<sub>s</sub>)]&sup2;</code>
+  </div>
+  <div>
+    <strong>Refit (this prototype)</strong>
+    <code>ln(D<sub>s</sub>) = 0.833 &minus; 0.594 ln(N<sub>s</sub>) + 0.019 [ln(N<sub>s</sub>)]&sup2;</code>
+  </div>
+</div>
+
+<div class="note">
+  <strong>How the refit was derived:</strong> Three reference points were read from Balje (1981) Fig. 1.2:
+  (N<sub>s</sub>=0.1, D<sub>s</sub>&asymp;10), (N<sub>s</sub>=1.0, D<sub>s</sub>&asymp;2.3), (N<sub>s</sub>=10, D<sub>s</sub>&asymp;0.65).
+  Solving the 3&times;3 system gives A=0.833, B=&minus;0.594, C=0.019.
+  The steeper B and larger C produce visible curvature — the slope in log-log goes from about &minus;0.64 at N<sub>s</sub>=0.1 to &minus;0.51 at N<sub>s</sub>=10.
+  <br><br>
+  <strong>Impact on the main operating range (N<sub>s</sub>&nbsp;0.3–8):</strong>
+  <table>
+    <tr><th>N<sub>s</sub></th><th>D<sub>s</sub> (old)</th><th>D<sub>s</sub> (refit)</th><th>&Delta;</th></tr>
+    <tr><td>0.3</td><td>4.38</td><td>4.98</td><td>+14%</td></tr>
+    <tr><td>0.6</td><td>3.01</td><td>3.22</td><td>+7%</td></tr>
+    <tr><td>1.0</td><td>2.30</td><td>2.30</td><td>0%</td></tr>
+    <tr><td>2.0</td><td>1.61</td><td>1.50</td><td>&minus;7%</td></tr>
+    <tr><td>3.5</td><td>1.21</td><td>1.07</td><td>&minus;12%</td></tr>
+    <tr><td>8.0</td><td>0.80</td><td>0.67</td><td>&minus;16%</td></tr>
+  </table>
+  Changes are moderate and within empirical uncertainty, but they shift recommended diameters/speeds for off-center types.
+</div>
+
+<div id="plot"></div>
+
+<script>
+// --- Refit Cordier coefficients ---
+const CORD_A = 0.833, CORD_B = -0.594, CORD_C = 0.019;
+const ETA_A = 0.90, ETA_B = 0.017, ETA_C = -0.059;
+
+// --- Original coefficients for comparison overlay ---
+const OLD_A = 0.833, OLD_B = -0.524, OLD_C = 0.008;
+
+function cordierDs(ns, a, b, c) {
+    const lnNs = Math.log(Math.max(ns, 1e-9));
+    return Math.exp(a + b * lnNs + c * lnNs * lnNs);
+}
+
+function cordierEta(ns) {
+    const lnNs = Math.log(Math.max(ns, 1e-9));
+    return Math.min(0.95, Math.max(0.20, ETA_A + ETA_B * lnNs + ETA_C * lnNs * lnNs));
+}
+
+function logSpace(min, max, n) {
+    const logMin = Math.log10(min), logMax = Math.log10(max);
+    return Array.from({ length: n }, (_, i) => 10 ** (logMin + i / (n - 1) * (logMax - logMin)));
+}
+
+function hexToRgba(hex, a) {
+    const h = hex.replace('#','');
+    return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+
+const types = [
+    { id: 'fc',    name: 'FC Centrifugal', nsMin: 0.30, nsMax: 1.20, color: '#c27b2b', tol: 1.26 },
+    { id: 'bc',    name: 'BC Centrifugal', nsMin: 0.30, nsMax: 1.50, color: '#56616e', tol: 1.18 },
+    { id: 'mixed', name: 'Mixed Flow',     nsMin: 0.80, nsMax: 3.00, color: '#0f766e', tol: 1.20 },
+    { id: 'axial', name: 'Axial',          nsMin: 2.00, nsMax: 8.00, color: '#2563eb', tol: 1.22 },
+];
+
+const traces = [];
+const beta = 5.0;
+const etaLevels = [0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90];
+const contourNs = logSpace(0.08, 15, 300);
+
+// Iso-efficiency contours (using refit Cordier line as center)
+etaLevels.forEach(etaTarget => {
+    const xU = [], yU = [], xL = [], yL = [];
+    contourNs.forEach(ns => {
+        const etaPeak = cordierEta(ns);
+        if (etaTarget > etaPeak) return;
+        const dsOpt = cordierDs(ns, CORD_A, CORD_B, CORD_C);
+        const offset = Math.sqrt(-Math.log(etaTarget / etaPeak) / beta);
+        xU.push(dsOpt * Math.exp(offset));
+        yU.push(ns);
+        xL.push(dsOpt * Math.exp(-offset));
+        yL.push(ns);
+    });
+    if (xU.length < 2) return;
+    const pct = Math.round(etaTarget * 100);
+    traces.push({
+        x: [...xU, ...xL.reverse()], y: [...yU, ...yL.reverse()],
+        mode: 'lines', line: { color: 'rgba(180,180,220,0.35)', width: 1, dash: 'dash' },
+        fill: 'none', showlegend: false,
+        hovertemplate: `η ≈ ${pct}%<extra></extra>`
+    });
+    traces.push({
+        x: [xU[xU.length - 1]], y: [yU[yU.length - 1]],
+        mode: 'text', text: [`${pct}%`],
+        textfont: { size: 9, color: 'rgba(180,180,220,0.6)' },
+        textposition: 'top right', showlegend: false, hoverinfo: 'skip'
+    });
+});
+
+// Type ribbons (using refit line)
+types.forEach(t => {
+    const nsVals = logSpace(t.nsMin, t.nsMax, 72);
+    const upper = nsVals.map(ns => cordierDs(ns, CORD_A, CORD_B, CORD_C) * t.tol);
+    const lower = nsVals.slice().reverse().map(ns => cordierDs(ns, CORD_A, CORD_B, CORD_C) / t.tol);
+    traces.push({
+        x: [...upper, ...lower], y: [...nsVals, ...nsVals.slice().reverse()],
+        fill: 'toself', fillcolor: hexToRgba(t.color, 0.14),
+        line: { color: t.color, width: 1.6 }, mode: 'lines',
+        name: t.name, legendgroup: t.id,
+        hovertemplate: `<b>${t.name}</b><br>N_s: ${t.nsMin}–${t.nsMax}<extra></extra>`
+    });
+});
+
+// Old line (ghost) for comparison
+const lineNs = logSpace(0.08, 15, 200);
+traces.push({
+    x: lineNs.map(ns => cordierDs(ns, OLD_A, OLD_B, OLD_C)), y: lineNs,
+    mode: 'lines', name: 'Original (C=0.008)',
+    line: { color: 'rgba(255,100,100,0.5)', width: 2, dash: 'dot' },
+    hovertemplate: 'Old fit<br>D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra></extra>'
+});
+
+// New Cordier optimum line
+traces.push({
+    x: lineNs.map(ns => cordierDs(ns, CORD_A, CORD_B, CORD_C)), y: lineNs,
+    mode: 'lines', name: 'Refit (C=0.019)',
+    line: { color: '#e0e0e0', width: 3 },
+    hovertemplate: 'Refit<br>D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra>Cordier Optimum</extra>'
+});
+
+// Balje reference points
+traces.push({
+    x: [10, 2.3, 0.65], y: [0.1, 1.0, 10],
+    mode: 'markers', name: 'Balje ref. points',
+    marker: { size: 10, color: '#ffcc44', symbol: 'x', line: { width: 2, color: '#ffcc44' } },
+    hovertemplate: 'Balje ref.<br>D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra></extra>'
+});
+
+Plotly.newPlot('plot', traces, {
+    paper_bgcolor: '#1a1a2e', plot_bgcolor: '#16213e',
+    font: { color: '#e0e0e0', family: "'Helvetica Neue', sans-serif" },
+    margin: { t: 20, r: 30, b: 70, l: 70 },
+    legend: { orientation: 'h', y: -0.15, x: 0, font: { size: 11 } },
+    xaxis: {
+        title: 'Specific Diameter D<sub>s</sub> [—]', type: 'log',
+        range: [Math.log10(0.3), Math.log10(14)],
+        gridcolor: 'rgba(100,100,140,0.25)', tickformat: '.2~g'
+    },
+    yaxis: {
+        title: 'Specific Speed N<sub>s</sub> [—]', type: 'log',
+        range: [Math.log10(0.06), Math.log10(15)],
+        gridcolor: 'rgba(100,100,140,0.25)', tickformat: '.2~g'
+    },
+    hovermode: 'closest'
+}, { responsive: true, displayModeBar: false });
+</script>
+</body>
+</html>

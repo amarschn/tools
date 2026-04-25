@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Balje Diagram - Efficiency Contours (Plotly)</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #fafafa; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .chart-container { width: 100%; max-width: 1000px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 20px; }
+        h1 { text-align: center; color: #333; margin-top: 0; font-size: 24px; }
+        p { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+        #plot { width: 100%; height: 700px; }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <h1>Balje Ns-Ds Diagram</h1>
+        <p>Specific Speed (Ns) vs. Specific Diameter (Ds) with simulated efficiency islands.</p>
+        <div id="plot"></div>
+    </div>
+    <script>
+        // Generate a grid for Ns (log scale 10^-2 to 10^1.5) and Ds (log scale 10^-1 to 10^2.5)
+        const x_min = -2.0, x_max = 1.5; // log10(Ns)
+        const y_min = -1.0, y_max = 2.5; // log10(Ds)
+        const resolution = 150;
+        
+        const x_vals = [];
+        const y_vals = [];
+        const z_vals = []; // Efficiency surface
+        
+        for (let i = 0; i < resolution; i++) {
+            x_vals.push(x_min + (x_max - x_min) * (i / (resolution - 1)));
+            y_vals.push(y_min + (y_max - y_min) * (i / (resolution - 1)));
+        }
+
+        // Define peaks (islands of efficiency)
+        // [x_center, y_center, peak_efficiency, spread_x, spread_y, correlation]
+        const peaks = [
+            // Axial (High Ns, Low Ds)
+            [Math.log10(5.0), Math.log10(0.5), 92, 0.4, 0.3, -0.6],
+            // Mixed Flow (Medium Ns, Medium-Low Ds)
+            [Math.log10(1.8), Math.log10(1.0), 88, 0.3, 0.3, -0.8],
+            // Radial / Centrifugal (Medium-Low Ns, Medium Ds)
+            [Math.log10(0.6), Math.log10(2.0), 86, 0.5, 0.4, -0.7],
+            // Positive Displacement / Drag (Low Ns, High Ds)
+            [Math.log10(0.05), Math.log10(15.0), 65, 0.6, 0.6, -0.5]
+        ];
+
+        // Evaluate efficiency on the grid
+        for (let j = 0; j < resolution; j++) {
+            let row = [];
+            let y = y_vals[j];
+            for (let i = 0; i < resolution; i++) {
+                let x = x_vals[i];
+                let max_eff = 20; // Base background efficiency
+                
+                // Add the peaks using a mixture model or max
+                for (let p of peaks) {
+                    let [xc, yc, peak_eff, sx, sy, rho] = p;
+                    let dx = (x - xc) / sx;
+                    let dy = (y - yc) / sy;
+                    let z_val = (dx*dx - 2*rho*dx*dy + dy*dy) / (2 * (1 - rho*rho));
+                    let eff = peak_eff * Math.exp(-z_val);
+                    if (eff > max_eff) max_eff = eff;
+                }
+                
+                // Add a penalty for straying far from the Cordier optimal "ridge"
+                // Optimal ridge roughly: y_ridge = 0.3 - 0.7 * x
+                let y_ridge = 0.2 - 0.6 * x;
+                let ridge_dist = Math.abs(y - y_ridge);
+                let ridge_penalty = Math.max(0, (ridge_dist - 0.5) * 20);
+                
+                max_eff -= ridge_penalty;
+                if (max_eff < 0) max_eff = 0;
+                
+                row.push(max_eff);
+            }
+            z_vals.push(row);
+        }
+
+        // Convert log grid to actual Ns, Ds values for plotting axes
+        const actual_x = x_vals.map(x => Math.pow(10, x));
+        const actual_y = y_vals.map(y => Math.pow(10, y));
+
+        const contourData = [{
+            z: z_vals,
+            x: actual_x,
+            y: actual_y,
+            type: 'contour',
+            colorscale: 'Jet',
+            contours: {
+                start: 30,
+                end: 95,
+                size: 5,
+                showlabels: true,
+                labelfont: {
+                    family: 'Arial, sans-serif',
+                    size: 12,
+                    color: 'white'
+                }
+            },
+            colorbar: {
+                title: 'Efficiency (%)',
+                titleside: 'right'
+            }
+        }];
+
+        const annotations = [
+            { x: Math.log10(5.0), y: Math.log10(0.5), text: 'Axial', showarrow: false, font: {size: 16, color: 'white', weight: 'bold'} },
+            { x: Math.log10(1.8), y: Math.log10(1.0), text: 'Mixed', showarrow: false, font: {size: 16, color: 'white', weight: 'bold'} },
+            { x: Math.log10(0.6), y: Math.log10(2.0), text: 'Radial', showarrow: false, font: {size: 16, color: 'black', weight: 'bold'} },
+            { x: Math.log10(0.05), y: Math.log10(15.0), text: 'Pos. Displacement', showarrow: false, font: {size: 14, color: 'black'} }
+        ];
+
+        const layout = {
+            xaxis: {
+                type: 'log',
+                title: 'Specific Speed (Ns)',
+                exponentformat: 'power',
+                gridcolor: 'rgba(255,255,255,0.2)',
+                zeroline: false,
+                range: [-2, 1.5] // Log ranges
+            },
+            yaxis: {
+                type: 'log',
+                title: 'Specific Diameter (Ds)',
+                exponentformat: 'power',
+                gridcolor: 'rgba(255,255,255,0.2)',
+                zeroline: false,
+                range: [-1, 2.5] // Log ranges
+            },
+            annotations: annotations,
+            margin: { l: 60, r: 20, t: 20, b: 60 },
+            hovermode: 'closest'
+        };
+
+        Plotly.newPlot('plot', contourData, layout, {responsive: true});
+    </script>
+</body>
+</html>

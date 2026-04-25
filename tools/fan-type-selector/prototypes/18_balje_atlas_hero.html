@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype R: Balje Atlas (Hero)</title>
+    <link rel="stylesheet" href="./shared.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        .chart-card { padding: 22px; }
+        .chart-frame { height: 720px; }
+        .layout-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 18px;
+            align-items: start;
+        }
+        .sidebar-copy {
+            color: var(--text-light);
+            line-height: 1.55;
+            margin: 0;
+        }
+        .legend-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-right: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.2);
+        }
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88rem;
+            color: var(--text-color);
+            padding: 5px 0;
+        }
+        .note-block + .note-block {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-color);
+        }
+        .note-block h3 {
+            margin: 0 0 6px;
+            font-size: 0.92rem;
+        }
+        .note-block p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        @media (max-width: 980px) {
+            .layout-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <a class="back-link" href="./index.html">Back to Fan Type Selector Prototypes</a>
+                <h1 class="tool-title">Prototype R: Balje Atlas (Hero)</h1>
+                <p class="tool-copy">
+                    A faithful Balje-atlas rebuild. Each machine family (drag, centrifugal, mixed-flow, axial)
+                    is a genuine efficiency <em>island</em> — an independent Gaussian peak in log-log
+                    (N<sub>s</sub>, D<sub>s</sub>) — not a slice through one shared ridge. That is what makes
+                    the published figure read as a map of territories rather than a curve with banding.
+                </p>
+                <div class="meta-row">
+                    <div class="meta-chip"><strong>Reference</strong> Concepts NREC, Balje (1981)</div>
+                    <div class="meta-chip"><strong>Duty</strong> 1.00 m³/s at 500 Pa</div>
+                    <div class="meta-chip"><strong>Lead</strong> BC Centrifugal</div>
+                </div>
+            </div>
+        </div>
+
+        <section class="layout-grid">
+            <article class="card chart-card">
+                <div id="balje-atlas-hero" class="chart-frame"></div>
+            </article>
+            <aside class="card">
+                <div class="note-block">
+                    <h3>How to read it</h3>
+                    <p>
+                        Each shaded blob is a region where that family's potential peak efficiency stays
+                        above the labelled contour. The heavy black curve is the Cordier optimum locus —
+                        it threads the ridge of each island.
+                    </p>
+                </div>
+                <div class="note-block">
+                    <h3>Family markers</h3>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#b7791f"></span>FC Centrifugal</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#475569"></span>BC Centrifugal</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#0f766e"></span>Mixed-flow</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#2563eb"></span>Axial</div>
+                </div>
+                <div class="note-block">
+                    <h3>Duty point</h3>
+                    <p>
+                        The white diamond is the current duty-point screen for BC Centrifugal at
+                        N<sub>s</sub> = 0.80, D<sub>s</sub> = 2.34.
+                    </p>
+                </div>
+                <div class="note-block">
+                    <h3>Model</h3>
+                    <p>
+                        η(N<sub>s</sub>, D<sub>s</sub>) = max<sub>i</sub> η<sub>i</sub> · exp(−q<sub>i</sub>),
+                        where q<sub>i</sub> is a rotated bivariate Gaussian centred on the family's
+                        optimum point, with negative correlation so each island tilts along the Cordier line.
+                    </p>
+                </div>
+            </aside>
+        </section>
+    </main>
+<script>
+(() => {
+    const PEAKS = [
+        {
+            id: 'drag',
+            label: 'Drag /<br>peripheral',
+            color: '#8b5cf6',
+            lnNs: Math.log10(0.08),
+            lnDs: Math.log10(16),
+            eta:  0.55,
+            sx: 0.50, sy: 0.55, rho: -0.60,
+        },
+        {
+            id: 'fc',
+            label: 'FC<br>centrifugal',
+            color: '#b7791f',
+            lnNs: Math.log10(0.55),
+            lnDs: Math.log10(3.9),
+            eta:  0.82,
+            sx: 0.26, sy: 0.26, rho: -0.80,
+        },
+        {
+            id: 'bc',
+            label: 'BC<br>centrifugal',
+            color: '#475569',
+            lnNs: Math.log10(0.95),
+            lnDs: Math.log10(2.55),
+            eta:  0.87,
+            sx: 0.26, sy: 0.24, rho: -0.80,
+        },
+        {
+            id: 'mixed',
+            label: 'Mixed-flow',
+            color: '#0f766e',
+            lnNs: Math.log10(2.00),
+            lnDs: Math.log10(1.65),
+            eta:  0.91,
+            sx: 0.28, sy: 0.24, rho: -0.82,
+        },
+        {
+            id: 'axial',
+            label: 'Axial',
+            color: '#2563eb',
+            lnNs: Math.log10(5.20),
+            lnDs: Math.log10(1.05),
+            eta:  0.93,
+            sx: 0.38, sy: 0.30, rho: -0.85,
+        },
+    ];
+
+    const NS_MIN = 0.03, NS_MAX = 30;
+    const DS_MIN = 0.4,  DS_MAX = 60;
+    const RES = 200;
+
+    const lnNsMin = Math.log10(NS_MIN), lnNsMax = Math.log10(NS_MAX);
+    const lnDsMin = Math.log10(DS_MIN), lnDsMax = Math.log10(DS_MAX);
+
+    const nsGrid = [];
+    const dsGrid = [];
+    for (let i = 0; i < RES; i += 1) {
+        const f = i / (RES - 1);
+        nsGrid.push(10 ** (lnNsMin + f * (lnNsMax - lnNsMin)));
+        dsGrid.push(10 ** (lnDsMin + f * (lnDsMax - lnDsMin)));
+    }
+
+    function etaAt(ns, ds) {
+        const x = Math.log10(ns);
+        const y = Math.log10(ds);
+        let best = 0;
+        for (const p of PEAKS) {
+            const dx = (x - p.lnNs) / p.sx;
+            const dy = (y - p.lnDs) / p.sy;
+            const q = (dx * dx - 2 * p.rho * dx * dy + dy * dy) / (2 * (1 - p.rho * p.rho));
+            const val = p.eta * Math.exp(-q);
+            if (val > best) best = val;
+        }
+        return best;
+    }
+
+    const z = dsGrid.map((ds) => nsGrid.map((ns) => etaAt(ns, ds)));
+
+    // Cordier optimum locus: fit through the peak centres (log-log)
+    const cordierCenters = PEAKS
+        .slice()
+        .sort((a, b) => a.lnNs - b.lnNs)
+        .map((p) => [p.lnNs, p.lnDs]);
+
+    function monotoneSlopes(xs, ys) {
+        const n = xs.length;
+        const d = [];
+        for (let i = 0; i < n - 1; i += 1) d.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+        const m = [d[0]];
+        for (let i = 1; i < n - 1; i += 1) {
+            m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+        }
+        m.push(d[n - 2]);
+        for (let i = 0; i < n - 1; i += 1) {
+            if (Math.abs(d[i]) < 1e-30) { m[i] = 0; m[i + 1] = 0; continue; }
+            const a = m[i] / d[i], b = m[i + 1] / d[i], tau = a * a + b * b;
+            if (tau > 9) {
+                const t = 3 / Math.sqrt(tau);
+                m[i] = t * a * d[i];
+                m[i + 1] = t * b * d[i];
+            }
+        }
+        return m;
+    }
+
+    function hermiteEval(xs, ys, m, x) {
+        const n = xs.length;
+        if (x <= xs[0]) return ys[0] + (x - xs[0]) * m[0];
+        if (x >= xs[n - 1]) return ys[n - 1] + (x - xs[n - 1]) * m[n - 1];
+        let i = 0;
+        while (i < n - 2 && xs[i + 1] < x) i += 1;
+        const h = xs[i + 1] - xs[i];
+        const t = (x - xs[i]) / h;
+        const t2 = t * t, t3 = t2 * t;
+        return (2 * t3 - 3 * t2 + 1) * ys[i]
+            + (t3 - 2 * t2 + t) * h * m[i]
+            + (-2 * t3 + 3 * t2) * ys[i + 1]
+            + (t3 - t2) * h * m[i + 1];
+    }
+
+    const cx = cordierCenters.map((p) => p[0]);
+    const cy = cordierCenters.map((p) => p[1]);
+    const cm = monotoneSlopes(cx, cy);
+
+    const cordierNs = [];
+    const cordierDs = [];
+    for (let i = 0; i < 240; i += 1) {
+        const f = i / 239;
+        const lnNs = lnNsMin + f * (lnNsMax - lnNsMin);
+        const lnDs = hermiteEval(cx, cy, cm, lnNs);
+        cordierNs.push(10 ** lnNs);
+        cordierDs.push(10 ** lnDs);
+    }
+
+    const traces = [];
+
+    // Filled heatmap base (soft cream → steel blue), lightly muted
+    traces.push({
+        type: 'contour',
+        x: nsGrid,
+        y: dsGrid,
+        z,
+        autocontour: false,
+        contours: {
+            start: 0.30,
+            end: 0.95,
+            size: 0.05,
+            coloring: 'fill',
+            showlines: false,
+        },
+        colorscale: [
+            [0.00, '#fbfaf5'],
+            [0.20, '#f3ecd9'],
+            [0.40, '#d9e4d4'],
+            [0.60, '#a8c5cd'],
+            [0.78, '#6a96b5'],
+            [0.90, '#3b6b94'],
+            [1.00, '#1e3a5f'],
+        ],
+        zmin: 0.20,
+        zmax: 0.95,
+        showscale: true,
+        colorbar: {
+            title: { text: 'η', side: 'top' },
+            thickness: 11,
+            len: 0.72,
+            x: 1.02,
+            tickvals: [0.3, 0.5, 0.7, 0.85, 0.9],
+            ticktext: ['30%', '50%', '70%', '85%', '90%'],
+            outlinewidth: 0,
+            tickfont: { size: 10, color: '#334155' },
+        },
+        hovertemplate: 'N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<br>η ≈ %{z:.0%}<extra></extra>',
+    });
+
+    // Contour line overlay with labels
+    traces.push({
+        type: 'contour',
+        x: nsGrid,
+        y: dsGrid,
+        z,
+        autocontour: false,
+        contours: {
+            start: 0.40,
+            end: 0.90,
+            size: 0.05,
+            coloring: 'none',
+            showlabels: true,
+            labelfont: { size: 10, color: '#1f2937' },
+            labelformat: '.0%',
+        },
+        line: { color: 'rgba(17, 24, 39, 0.55)', width: 0.9 },
+        showscale: false,
+        hoverinfo: 'skip',
+    });
+
+    // Cordier optimum locus
+    traces.push({
+        x: cordierNs,
+        y: cordierDs,
+        mode: 'lines',
+        name: 'Cordier optimum',
+        line: { color: '#0b0d12', width: 3.0 },
+        hovertemplate: 'Cordier optimum<br>N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<extra></extra>',
+    });
+
+    // Family peak markers
+    traces.push({
+        x: PEAKS.map((p) => 10 ** p.lnNs),
+        y: PEAKS.map((p) => 10 ** p.lnDs),
+        text: PEAKS.map((p) => p.label.replace('<br>', ' ')),
+        mode: 'markers',
+        showlegend: false,
+        marker: {
+            size: 11,
+            color: PEAKS.map((p) => p.color),
+            line: { color: '#ffffff', width: 1.6 },
+            symbol: 'circle',
+        },
+        hovertemplate: '<b>%{text}</b><br>N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<extra>Family optimum</extra>',
+    });
+
+    // Duty point (BC centrifugal lead)
+    const LEAD_NS = 0.80;
+    const LEAD_DS = 10 ** hermiteEval(cx, cy, cm, Math.log10(LEAD_NS));
+    traces.push({
+        x: [LEAD_NS],
+        y: [LEAD_DS],
+        mode: 'markers',
+        showlegend: false,
+        marker: {
+            size: 18,
+            color: '#ffffff',
+            symbol: 'diamond',
+            line: { color: '#0b0d12', width: 2.2 },
+        },
+        hovertemplate: '<b>Current duty</b><br>BC centrifugal lead<br>N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<extra></extra>',
+    });
+
+    const annotations = [];
+
+    // Family region labels placed on each peak centre
+    PEAKS.forEach((p) => {
+        annotations.push({
+            x: 10 ** p.lnNs,
+            y: 10 ** (p.lnDs + p.sy * 0.70),
+            xref: 'x',
+            yref: 'y',
+            text: `<b>${p.label}</b>`,
+            showarrow: false,
+            font: {
+                size: 11.5,
+                color: p.color,
+                family: "'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif",
+            },
+            align: 'center',
+            bgcolor: 'rgba(255, 255, 255, 0.86)',
+            bordercolor: 'rgba(203, 213, 225, 0.95)',
+            borderwidth: 1,
+            borderpad: 4,
+        });
+    });
+
+    // Axis guides: vertical grid bands for the four design families (subtle)
+    const bandBounds = [
+        { id: 'fc',    x0: 0.30, x1: 1.20, color: '#b7791f' },
+        { id: 'bc',    x0: 0.30, x1: 1.50, color: '#475569' },
+        { id: 'mixed', x0: 0.80, x1: 3.00, color: '#0f766e' },
+        { id: 'axial', x0: 2.00, x1: 8.00, color: '#2563eb' },
+    ];
+
+    const shapes = bandBounds.map((b, idx) => ({
+        type: 'rect',
+        xref: 'x',
+        yref: 'paper',
+        x0: b.x0,
+        x1: b.x1,
+        y0: 1.005 + idx * 0.018,
+        y1: 1.020 + idx * 0.018,
+        line: { width: 0 },
+        fillcolor: b.color,
+        opacity: 0.78,
+        layer: 'above',
+    }));
+
+    // Duty point crosshair to the axes
+    shapes.push({
+        type: 'line',
+        xref: 'x',
+        yref: 'y',
+        x0: LEAD_NS,
+        x1: LEAD_NS,
+        y0: DS_MIN,
+        y1: LEAD_DS,
+        line: { color: 'rgba(11, 13, 18, 0.35)', width: 1, dash: 'dot' },
+    });
+    shapes.push({
+        type: 'line',
+        xref: 'x',
+        yref: 'y',
+        x0: NS_MIN,
+        x1: LEAD_NS,
+        y0: LEAD_DS,
+        y1: LEAD_DS,
+        line: { color: 'rgba(11, 13, 18, 0.35)', width: 1, dash: 'dot' },
+    });
+
+    // Family-band legend under the chart
+    annotations.push({
+        x: NS_MIN,
+        y: 1.09,
+        xref: 'x',
+        yref: 'paper',
+        xanchor: 'left',
+        text: '<span style="color:#6b7280">family band</span>',
+        showarrow: false,
+        font: { size: 10 },
+    });
+
+    // Duty-point label callout
+    annotations.push({
+        x: LEAD_NS,
+        y: LEAD_DS,
+        xref: 'x',
+        yref: 'y',
+        text: `<b>Duty point</b><br>N<sub>s</sub> = ${LEAD_NS.toFixed(2)}  ·  D<sub>s</sub> = ${LEAD_DS.toFixed(2)}`,
+        showarrow: true,
+        arrowhead: 0,
+        arrowwidth: 1,
+        arrowcolor: '#0b0d12',
+        ax: 40,
+        ay: -36,
+        bgcolor: 'rgba(255, 255, 255, 0.95)',
+        bordercolor: '#0b0d12',
+        borderwidth: 1,
+        borderpad: 5,
+        font: { size: 11, color: '#0b0d12' },
+    });
+
+    const layout = {
+        margin: { t: 72, r: 96, b: 72, l: 78 },
+        paper_bgcolor: '#ffffff',
+        plot_bgcolor: '#fbfaf5',
+        font: {
+            family: "'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif",
+            color: '#111827',
+            size: 12,
+        },
+        hovermode: 'closest',
+        showlegend: false,
+        xaxis: {
+            title: { text: 'Specific speed  N<sub>s</sub>  [—]', standoff: 14 },
+            type: 'log',
+            range: [lnNsMin, lnNsMax],
+            tickvals: [0.03, 0.1, 0.3, 1, 3, 10, 30],
+            ticktext: ['0.03', '0.1', '0.3', '1', '3', '10', '30'],
+            ticks: 'outside',
+            ticklen: 6,
+            tickwidth: 1,
+            tickcolor: '#111827',
+            showline: true,
+            linewidth: 1.2,
+            linecolor: '#111827',
+            mirror: true,
+            gridcolor: 'rgba(17, 24, 39, 0.10)',
+            zeroline: false,
+            minor: { ticks: 'outside', ticklen: 3, tickcolor: '#94a3b8' },
+        },
+        yaxis: {
+            title: { text: 'Specific diameter  D<sub>s</sub>  [—]', standoff: 10 },
+            type: 'log',
+            range: [lnDsMin, lnDsMax],
+            tickvals: [0.4, 1, 3, 10, 30, 60],
+            ticktext: ['0.4', '1', '3', '10', '30', '60'],
+            ticks: 'outside',
+            ticklen: 6,
+            tickwidth: 1,
+            tickcolor: '#111827',
+            showline: true,
+            linewidth: 1.2,
+            linecolor: '#111827',
+            mirror: true,
+            gridcolor: 'rgba(17, 24, 39, 0.10)',
+            zeroline: false,
+            minor: { ticks: 'outside', ticklen: 3, tickcolor: '#94a3b8' },
+        },
+        annotations,
+        shapes,
+    };
+
+    Plotly.newPlot('balje-atlas-hero', traces, layout, {
+        responsive: true,
+        displayModeBar: false,
+    });
+})();
+</script>
+</body>
+</html>

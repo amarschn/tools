@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cordier Diagram — Prototype A: Original Coefficients</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .subtitle { color: #999; font-size: 0.85rem; margin-bottom: 16px; }
+  .note { background: #222244; border-left: 3px solid #5588cc; padding: 12px 16px; margin: 16px 0; font-size: 0.85rem; line-height: 1.5; border-radius: 4px; }
+  .note code { background: #333355; padding: 1px 4px; border-radius: 2px; }
+  #plot { width: 100%; height: 600px; }
+</style>
+</head>
+<body>
+
+<h1>Prototype A — Original Fit (A=0.833, B=&minus;0.524, C=0.008)</h1>
+<p class="subtitle">Current tool coefficients. Axes swapped to conventional orientation (D<sub>s</sub> on X, N<sub>s</sub> on Y). Iso-efficiency contours added.</p>
+
+<div class="note">
+  <strong>What this shows:</strong> The existing quadratic fit with C=0.008 produces an almost straight line in log-log space.
+  The curvature is barely visible. Efficiency contours use a Gaussian falloff model: &eta;(N<sub>s</sub>, D<sub>s</sub>) = &eta;<sub>peak</sub>(N<sub>s</sub>) &middot; exp(&minus;&beta; [ln(D<sub>s</sub>/D<sub>s,opt</sub>)]&sup2;) with &beta;=5.
+</div>
+
+<div id="plot"></div>
+
+<script>
+// --- Cordier correlation (original coefficients) ---
+const CORD_A = 0.833, CORD_B = -0.524, CORD_C = 0.008;
+const ETA_A = 0.90, ETA_B = 0.017, ETA_C = -0.059;
+
+function cordierDs(ns) {
+    const lnNs = Math.log(Math.max(ns, 1e-9));
+    return Math.exp(CORD_A + CORD_B * lnNs + CORD_C * lnNs * lnNs);
+}
+
+function cordierEta(ns) {
+    const lnNs = Math.log(Math.max(ns, 1e-9));
+    return Math.min(0.95, Math.max(0.20, ETA_A + ETA_B * lnNs + ETA_C * lnNs * lnNs));
+}
+
+function logSpace(min, max, n) {
+    const logMin = Math.log10(min), logMax = Math.log10(max);
+    return Array.from({ length: n }, (_, i) => 10 ** (logMin + i / (n - 1) * (logMax - logMin)));
+}
+
+// --- Fan type regions ---
+const types = [
+    { id: 'fc',    name: 'FC Centrifugal', nsMin: 0.30, nsMax: 1.20, color: '#c27b2b', tol: 1.26 },
+    { id: 'bc',    name: 'BC Centrifugal', nsMin: 0.30, nsMax: 1.50, color: '#56616e', tol: 1.18 },
+    { id: 'mixed', name: 'Mixed Flow',     nsMin: 0.80, nsMax: 3.00, color: '#0f766e', tol: 1.20 },
+    { id: 'axial', name: 'Axial',          nsMin: 2.00, nsMax: 8.00, color: '#2563eb', tol: 1.22 },
+];
+
+function hexToRgba(hex, a) {
+    const h = hex.replace('#','');
+    return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+
+// --- Build traces ---
+const traces = [];
+const beta = 5.0;
+const etaLevels = [0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90];
+const contourNs = logSpace(0.08, 15, 300);
+
+// Iso-efficiency contours
+etaLevels.forEach(etaTarget => {
+    const xU = [], yU = [], xL = [], yL = [];
+    contourNs.forEach(ns => {
+        const etaPeak = cordierEta(ns);
+        if (etaTarget > etaPeak) return;
+        const dsOpt = cordierDs(ns);
+        const offset = Math.sqrt(-Math.log(etaTarget / etaPeak) / beta);
+        xU.push(dsOpt * Math.exp(offset));
+        yU.push(ns);
+        xL.push(dsOpt * Math.exp(-offset));
+        yL.push(ns);
+    });
+    if (xU.length < 2) return;
+    const pct = Math.round(etaTarget * 100);
+    traces.push({
+        x: [...xU, ...xL.reverse()], y: [...yU, ...yL.reverse()],
+        mode: 'lines', line: { color: 'rgba(180,180,220,0.35)', width: 1, dash: 'dash' },
+        fill: 'none', showlegend: false,
+        hovertemplate: `η ≈ ${pct}%<extra></extra>`
+    });
+    // label
+    traces.push({
+        x: [xU[xU.length - 1]], y: [yU[yU.length - 1]],
+        mode: 'text', text: [`${pct}%`],
+        textfont: { size: 9, color: 'rgba(180,180,220,0.6)' },
+        textposition: 'top right', showlegend: false, hoverinfo: 'skip'
+    });
+});
+
+// Type ribbons
+types.forEach(t => {
+    const nsVals = logSpace(t.nsMin, t.nsMax, 72);
+    const upper = nsVals.map(ns => cordierDs(ns) * t.tol);
+    const lower = nsVals.slice().reverse().map(ns => cordierDs(ns) / t.tol);
+    traces.push({
+        x: [...upper, ...lower], y: [...nsVals, ...nsVals.slice().reverse()],
+        fill: 'toself', fillcolor: hexToRgba(t.color, 0.14),
+        line: { color: t.color, width: 1.6 }, mode: 'lines',
+        name: t.name, legendgroup: t.id,
+        hovertemplate: `<b>${t.name}</b><br>N_s: ${t.nsMin}–${t.nsMax}<extra></extra>`
+    });
+});
+
+// Cordier optimum line
+const lineNs = logSpace(0.08, 15, 200);
+traces.push({
+    x: lineNs.map(cordierDs), y: lineNs,
+    mode: 'lines', name: 'Cordier Optimum',
+    line: { color: '#e0e0e0', width: 3 },
+    hovertemplate: 'D_s = %{x:.2f}<br>N_s = %{y:.2f}<extra>Cordier Optimum</extra>'
+});
+
+Plotly.newPlot('plot', traces, {
+    paper_bgcolor: '#1a1a2e', plot_bgcolor: '#16213e',
+    font: { color: '#e0e0e0', family: "'Helvetica Neue', sans-serif" },
+    margin: { t: 20, r: 30, b: 70, l: 70 },
+    legend: { orientation: 'h', y: -0.15, x: 0, font: { size: 11 } },
+    xaxis: {
+        title: 'Specific Diameter D<sub>s</sub> [—]', type: 'log',
+        range: [Math.log10(0.3), Math.log10(14)],
+        gridcolor: 'rgba(100,100,140,0.25)', tickformat: '.2~g'
+    },
+    yaxis: {
+        title: 'Specific Speed N<sub>s</sub> [—]', type: 'log',
+        range: [Math.log10(0.06), Math.log10(15)],
+        gridcolor: 'rgba(100,100,140,0.25)', tickformat: '.2~g'
+    },
+    hovermode: 'closest'
+}, { responsive: true, displayModeBar: false });
+</script>
+</body>
+</html>

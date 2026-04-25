@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype S: Balje Diagram (Physics-Correct)</title>
+    <link rel="stylesheet" href="./shared.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="./balje-physics.js"></script>
+    <style>
+        .chart-card { padding: 22px; }
+        .chart-frame { height: 680px; }
+        .eta-frame { height: 220px; margin-top: 12px; }
+        .layout-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 18px;
+            align-items: start;
+        }
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.88rem;
+            color: var(--text-color);
+            padding: 4px 0;
+        }
+        .legend-swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
+            border: 1.5px solid #ffffff;
+            box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
+        }
+        .legend-ns {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--text-light);
+            margin-left: auto;
+        }
+        .note-block + .note-block {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-color);
+        }
+        .note-block h3 {
+            margin: 0 0 6px;
+            font-size: 0.92rem;
+        }
+        .note-block p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 0.88rem;
+            line-height: 1.55;
+        }
+        .formula {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-top: 6px;
+            line-height: 1.6;
+        }
+        @media (max-width: 1000px) {
+            .layout-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <a class="back-link" href="./index.html">Back to Fan Type Selector Prototypes</a>
+                <h1 class="tool-title">Prototype S: Balje Diagram (Physics-Correct)</h1>
+                <p class="tool-copy">
+                    This one is built from a single physics model rather than hand-placed ellipses.
+                    Every family peak lies on the Cordier line by construction; the
+                    "islands" are what emerges when a per-family η<sub>peak</sub>(N<sub>s</sub>)
+                    ridge is decayed off the Cordier curve. Production-tool candidate.
+                </p>
+                <div class="meta-row">
+                    <div class="meta-chip"><strong>Chart</strong> Balje diagram</div>
+                    <div class="meta-chip"><strong>Curve</strong> Cordier locus</div>
+                    <div class="meta-chip"><strong>Model</strong> η = η<sub>peak</sub>(N<sub>s</sub>)·e<sup>−β·ln²(D<sub>s</sub>/D<sub>s,opt</sub>)</sup></div>
+                </div>
+            </div>
+        </div>
+
+        <section class="layout-grid">
+            <div>
+                <article class="card chart-card">
+                    <div id="balje-map" class="chart-frame"></div>
+                </article>
+                <article class="card chart-card" style="margin-top: 14px;">
+                    <div id="eta-slice" class="eta-frame"></div>
+                </article>
+            </div>
+            <aside class="card">
+                <div class="note-block">
+                    <h3>Families on the ridge</h3>
+                    <div id="legend-rows"></div>
+                </div>
+                <div class="note-block">
+                    <h3>Model</h3>
+                    <p>
+                        Every point on the map gets one efficiency value from this formula. The
+                        Cordier line and the family humps are not drawn separately — they fall out
+                        of the math.
+                    </p>
+                    <code class="formula">
+η_peak(N_s) = max_i  η_i · exp(−½·[ln(N_s/N_s_i)/σ_i]²)<br>
+η(N_s, D_s) = η_peak(N_s) · exp(−β · ln²(D_s/D_s_opt(N_s)))
+                    </code>
+                    <p style="margin-top: 8px;">
+                        D<sub>s,opt</sub>(N<sub>s</sub>) is the tool's existing quadratic Cordier fit.
+                        β and each family's (N<sub>s,i</sub>, η<sub>i</sub>, σ<sub>i</sub>) are the
+                        only tunable parameters.
+                    </p>
+                </div>
+                <div class="note-block">
+                    <h3>Bottom strip</h3>
+                    <p>
+                        The lower chart is a horizontal slice through the ridge — peak efficiency
+                        along the Cordier line as a function of N<sub>s</sub>. This is where the
+                        "islands" on the map come from: each family is a hump here.
+                    </p>
+                </div>
+                <div class="note-block">
+                    <h3>Honest limits</h3>
+                    <p>
+                        Physics-consistent, not empirically digitized. Peak-η values and widths are
+                        calibrated to the Balje/Dixon envelope — reasonable for screening, not a
+                        substitute for measured maps.
+                    </p>
+                </div>
+            </aside>
+        </section>
+    </main>
+<script>
+(() => {
+    const B = window.BALJE_PHYSICS;
+    const NS_MIN = 0.03, NS_MAX = 20;
+    const DS_MIN = 0.3,  DS_MAX = 60;
+
+    // --- Build the legend from the same source of truth as the model ---
+    const legendHost = document.getElementById('legend-rows');
+    B.FAMILIES.forEach((fam) => {
+        const row = document.createElement('div');
+        row.className = 'legend-row';
+        row.innerHTML = `
+            <span class="legend-swatch" style="background:${fam.color}"></span>
+            <span>${fam.label}</span>
+            <span class="legend-ns">N_s ≈ ${fam.nsPeak.toFixed(2)},
+                η ≈ ${Math.round(fam.etaPeak * 100)}%</span>
+        `;
+        legendHost.appendChild(row);
+    });
+
+    // --- Efficiency field ---
+    const field = B.efficiencyField({
+        nsMin: NS_MIN, nsMax: NS_MAX,
+        dsMin: DS_MIN, dsMax: DS_MAX,
+        resolution: 220,
+    });
+
+    const locus = B.cordierLocus({ nsMin: NS_MIN, nsMax: NS_MAX, resolution: 260 });
+    const anchors = B.familyAnchors();
+
+    const traces = [];
+
+    // Filled heatmap — soft cream → steel blue
+    traces.push({
+        type: 'contour',
+        x: field.ns,
+        y: field.ds,
+        z: field.z,
+        autocontour: false,
+        contours: {
+            start: 0.20,
+            end: 0.95,
+            size: 0.05,
+            coloring: 'fill',
+            showlines: false,
+        },
+        colorscale: [
+            [0.00, '#fbfaf5'],
+            [0.18, '#f1e9d1'],
+            [0.38, '#d5e0d2'],
+            [0.58, '#a3c2ce'],
+            [0.78, '#5e8cae'],
+            [0.92, '#2f5a85'],
+            [1.00, '#1b3657'],
+        ],
+        zmin: 0.20,
+        zmax: 0.95,
+        showscale: true,
+        colorbar: {
+            title: { text: 'η', side: 'top' },
+            thickness: 11,
+            len: 0.72,
+            x: 1.02,
+            tickvals: [0.3, 0.5, 0.7, 0.85, 0.9],
+            ticktext: ['30%', '50%', '70%', '85%', '90%'],
+            outlinewidth: 0,
+            tickfont: { size: 10, color: '#334155' },
+        },
+        hovertemplate: 'N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<br>η ≈ %{z:.0%}<extra></extra>',
+    });
+
+    // Iso-η line overlay
+    traces.push({
+        type: 'contour',
+        x: field.ns,
+        y: field.ds,
+        z: field.z,
+        autocontour: false,
+        contours: {
+            start: 0.40,
+            end: 0.90,
+            size: 0.05,
+            coloring: 'none',
+            showlabels: true,
+            labelfont: { size: 10, color: '#1f2937' },
+            labelformat: '.0%',
+        },
+        line: { color: 'rgba(17, 24, 39, 0.50)', width: 0.9 },
+        showscale: false,
+        hoverinfo: 'skip',
+    });
+
+    // Cordier optimum locus — computed from the fit, not drawn by eye
+    traces.push({
+        x: locus.ns,
+        y: locus.ds,
+        mode: 'lines',
+        name: 'Cordier line',
+        line: { color: '#0b0d12', width: 3.0 },
+        hovertemplate: 'Cordier line<br>N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<extra></extra>',
+    });
+
+    // Family anchors — sit on the line by construction
+    traces.push({
+        x: anchors.map((a) => a.ns),
+        y: anchors.map((a) => a.ds),
+        text: anchors.map((a) => `${a.label} (η=${Math.round(a.eta * 100)}%)`),
+        mode: 'markers',
+        showlegend: false,
+        marker: {
+            size: 11,
+            color: anchors.map((a) => a.color),
+            line: { color: '#ffffff', width: 1.6 },
+            symbol: 'circle',
+        },
+        hovertemplate: '<b>%{text}</b><br>N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<extra>Family peak</extra>',
+    });
+
+    // Duty point — the tool's BC lead at N_s = 0.80
+    const DUTY_NS = 0.80;
+    const DUTY_DS = B.dsOpt(DUTY_NS);
+    traces.push({
+        x: [DUTY_NS],
+        y: [DUTY_DS],
+        mode: 'markers',
+        showlegend: false,
+        marker: {
+            size: 18,
+            color: '#ffffff',
+            symbol: 'diamond',
+            line: { color: '#0b0d12', width: 2.2 },
+        },
+        hovertemplate: '<b>Duty point</b><br>BC centrifugal lead<br>N<sub>s</sub> = %{x:.2f}<br>D<sub>s</sub> = %{y:.2f}<extra></extra>',
+    });
+
+    // Family-range bands above the chart — horizontal swatches matching CORDIER_TYPES
+    const shapes = [];
+    const annotations = [];
+
+    const RANGE_BANDS = [
+        { id: 'fc',    nsMin: 0.30, nsMax: 1.20, color: '#b7791f' },
+        { id: 'bc',    nsMin: 0.30, nsMax: 1.50, color: '#475569' },
+        { id: 'mixed', nsMin: 0.80, nsMax: 3.00, color: '#0f766e' },
+        { id: 'axial', nsMin: 2.00, nsMax: 8.00, color: '#2563eb' },
+    ];
+    RANGE_BANDS.forEach((band, idx) => {
+        shapes.push({
+            type: 'rect',
+            xref: 'x',
+            yref: 'paper',
+            x0: band.nsMin,
+            x1: band.nsMax,
+            y0: 1.005 + idx * 0.020,
+            y1: 1.020 + idx * 0.020,
+            line: { width: 0 },
+            fillcolor: band.color,
+            opacity: 0.85,
+            layer: 'above',
+        });
+    });
+
+    // Family labels centered above each peak, at the edge of its ridge hump
+    anchors.forEach((a) => {
+        annotations.push({
+            x: a.ns,
+            y: a.ds * 0.72,
+            xref: 'x',
+            yref: 'y',
+            text: `<b>${a.label}</b>`,
+            showarrow: false,
+            font: { size: 11, color: a.color },
+            bgcolor: 'rgba(255,255,255,0.88)',
+            bordercolor: 'rgba(203,213,225,0.95)',
+            borderwidth: 1,
+            borderpad: 4,
+        });
+    });
+
+    // Duty-point crosshair
+    shapes.push({
+        type: 'line', xref: 'x', yref: 'y',
+        x0: DUTY_NS, x1: DUTY_NS, y0: DS_MIN, y1: DUTY_DS,
+        line: { color: 'rgba(11,13,18,0.35)', width: 1, dash: 'dot' },
+    });
+    shapes.push({
+        type: 'line', xref: 'x', yref: 'y',
+        x0: NS_MIN, x1: DUTY_NS, y0: DUTY_DS, y1: DUTY_DS,
+        line: { color: 'rgba(11,13,18,0.35)', width: 1, dash: 'dot' },
+    });
+    annotations.push({
+        x: DUTY_NS, y: DUTY_DS,
+        xref: 'x', yref: 'y',
+        text: `<b>Duty</b>  N<sub>s</sub> = ${DUTY_NS.toFixed(2)}, D<sub>s</sub> = ${DUTY_DS.toFixed(2)}`,
+        showarrow: true,
+        arrowhead: 0, arrowwidth: 1, arrowcolor: '#0b0d12',
+        ax: 44, ay: -40,
+        bgcolor: 'rgba(255,255,255,0.95)',
+        bordercolor: '#0b0d12', borderwidth: 1, borderpad: 5,
+        font: { size: 11, color: '#0b0d12' },
+    });
+
+    const layout = {
+        margin: { t: 80, r: 96, b: 66, l: 78 },
+        paper_bgcolor: '#ffffff',
+        plot_bgcolor: '#fbfaf5',
+        font: {
+            family: "'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif",
+            color: '#111827',
+            size: 12,
+        },
+        hovermode: 'closest',
+        showlegend: false,
+        xaxis: {
+            title: { text: 'Specific speed  N<sub>s</sub>  [—]', standoff: 12 },
+            type: 'log',
+            range: [Math.log10(NS_MIN), Math.log10(NS_MAX)],
+            tickvals: [0.03, 0.1, 0.3, 1, 3, 10, 20],
+            ticktext: ['0.03', '0.1', '0.3', '1', '3', '10', '20'],
+            ticks: 'outside', ticklen: 6, tickwidth: 1, tickcolor: '#111827',
+            showline: true, linewidth: 1.2, linecolor: '#111827', mirror: true,
+            gridcolor: 'rgba(17,24,39,0.10)', zeroline: false,
+        },
+        yaxis: {
+            title: { text: 'Specific diameter  D<sub>s</sub>  [—]', standoff: 8 },
+            type: 'log',
+            range: [Math.log10(DS_MIN), Math.log10(DS_MAX)],
+            tickvals: [0.3, 1, 3, 10, 30, 60],
+            ticktext: ['0.3', '1', '3', '10', '30', '60'],
+            ticks: 'outside', ticklen: 6, tickwidth: 1, tickcolor: '#111827',
+            showline: true, linewidth: 1.2, linecolor: '#111827', mirror: true,
+            gridcolor: 'rgba(17,24,39,0.10)', zeroline: false,
+        },
+        annotations,
+        shapes,
+    };
+
+    Plotly.newPlot('balje-map', traces, layout, {
+        responsive: true,
+        displayModeBar: false,
+    });
+
+    // ---------- Lower strip: η_peak along the Cordier line ----------
+    const sliceNs = B.logSpace(NS_MIN, NS_MAX, 400);
+    const sliceEta = sliceNs.map((ns) => B.etaPeak(ns));
+
+    const sliceTraces = [
+        {
+            x: sliceNs,
+            y: sliceEta,
+            mode: 'lines',
+            line: { color: '#0b0d12', width: 2.4 },
+            hovertemplate: 'N<sub>s</sub> = %{x:.2f}<br>η<sub>peak</sub> = %{y:.0%}<extra>Along Cordier line</extra>',
+        },
+        {
+            x: anchors.map((a) => a.ns),
+            y: anchors.map((a) => a.eta),
+            text: anchors.map((a) => a.label),
+            mode: 'markers',
+            marker: {
+                size: 10,
+                color: anchors.map((a) => a.color),
+                line: { color: '#ffffff', width: 1.5 },
+            },
+            hovertemplate: '<b>%{text}</b><br>η<sub>peak</sub> = %{y:.0%}<extra></extra>',
+        },
+    ];
+
+    const sliceLayout = {
+        margin: { t: 8, r: 96, b: 44, l: 78 },
+        paper_bgcolor: '#ffffff',
+        plot_bgcolor: '#fbfaf5',
+        font: { family: "'Helvetica Neue', sans-serif", color: '#111827', size: 11 },
+        showlegend: false,
+        hovermode: 'closest',
+        xaxis: {
+            title: { text: 'N<sub>s</sub> along Cordier line', standoff: 10 },
+            type: 'log',
+            range: [Math.log10(NS_MIN), Math.log10(NS_MAX)],
+            tickvals: [0.03, 0.1, 0.3, 1, 3, 10, 20],
+            ticktext: ['0.03', '0.1', '0.3', '1', '3', '10', '20'],
+            ticks: 'outside', ticklen: 4, showline: true,
+            linewidth: 1.1, linecolor: '#111827', mirror: true,
+            gridcolor: 'rgba(17,24,39,0.10)',
+        },
+        yaxis: {
+            title: { text: 'η<sub>peak</sub>', standoff: 10 },
+            range: [0.25, 0.98],
+            tickvals: [0.3, 0.5, 0.7, 0.85, 0.95],
+            tickformat: '.0%',
+            ticks: 'outside', ticklen: 4, showline: true,
+            linewidth: 1.1, linecolor: '#111827', mirror: true,
+            gridcolor: 'rgba(17,24,39,0.10)',
+        },
+    };
+
+    Plotly.newPlot('eta-slice', sliceTraces, sliceLayout, {
+        responsive: true,
+        displayModeBar: false,
+    });
+})();
+</script>
+</body>
+</html>

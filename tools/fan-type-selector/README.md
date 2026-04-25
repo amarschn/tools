@@ -43,6 +43,10 @@ It is designed as a Phase-0 triage tool. The output should narrow the search spa
   - Nominal hardware size suggestions
   - Drive recommendation spanning direct-drive induction, VFD induction, belt or gearbox reduction, and ECM / BLDC style direct drive
   - Acoustic proxy risk from tip speed, passage velocity, and architecture margin
+  - Tip Mach check (flags duty points where the incompressible Cordier screen starts to break down, roughly above `M_tip ≈ 0.30`)
+  - Tip Reynolds check (flags small or slow wheels where `Re_D < ~1e5` so the efficiency envelope no longer applies cleanly)
+  - Madison-style sound-power screening index with per-family offsets, used for ranking only — not an AMCA 300 sound-power calculation
+  - Forward-curved stall hump notice when the lead family is forward-curved centrifugal
   - Architecture margin inside each family's natural `N_s` band
 - Hands the duty point and suggested family into the Fan Curve Explorer
 
@@ -60,11 +64,12 @@ It is designed as a Phase-0 triage tool. The output should narrow the search spa
 - Predicted wheel diameter
 - Nearby nominal hardware sizes to check first
 - Estimated RPM
-- Estimated peak efficiency
+- Estimated peak efficiency (capped at a 0.88 screening ceiling)
 - Shaft power
-- Tip speed
+- Tip speed, tip Mach, and tip Reynolds
 - Drive recommendation
-- Acoustic proxy risk
+- Acoustic proxy risk plus Madison-style sound-power screening index
+- Forward-curved stall-hump notice when the lead family is FC
 - Architecture margin
 - Packaging preview comparing predicted wheel size against the optional passage geometry
 - Hardware audit showing modeled reference section, effective flow area, and reference velocity
@@ -80,7 +85,23 @@ It is designed as a Phase-0 triage tool. The output should narrow the search spa
 
 ## Method Summary
 
- The ranking is driven primarily by specific-speed fit. Estimated efficiency, tip-speed realism, and the optional passage geometry check adjust that recommendation. Passage geometry is now compared against a modeled fan-side reference area rather than only outer wheel diameter, which makes the packaging screen more physically meaningful. The practical signals are there to expose the usual real-world vetoes and tradeoffs, not to pretend the tool can replace a catalog, a noise test, or a real fan curve. Representative fan curves are shown only for family-shape comparison; they are not real catalog curves.
+The ranking is driven primarily by specific-speed fit. Estimated efficiency, tip-speed realism, and the optional passage geometry check adjust that recommendation. Passage geometry is now compared against a modeled fan-side reference area rather than only outer wheel diameter, which makes the packaging screen more physically meaningful. The practical signals are there to expose the usual real-world vetoes and tradeoffs, not to pretend the tool can replace a catalog, a noise test, or a real fan curve. Representative fan curves are shown only for family-shape comparison; they are not real catalog curves.
+
+### Single Source of Truth for Balje Physics
+
+All Balje-plane physics lives in `pycalcs.fan_selection`:
+
+- `FAN_TYPES[type_id]` holds `ns_optimal`, `sigma_ln_ns`, `typical_peak_efficiency`, and per-family `tip_speed_quiet_ms` / `tip_speed_alert_ms` thresholds.
+- `balje_eta_family(type_id, N_s, D_s)` evaluates the single-family Gaussian envelope.
+- `balje_eta_envelope(N_s, D_s)` is the `max` over families, clamped at the screening ceiling (0.88).
+- `cordier_efficiency(N_s)` delegates to the envelope on the Cordier ridge, so the score uses the same curve the plot shows.
+- `generate_balje_field()` and `family_anchors()` produce the payload that `renderCordierPlot` consumes; the JS layer owns zero physics.
+
+The 0.88 ceiling is deliberately below peak laboratory values — it is a *screening* ceiling for first-pass efficiency estimates, not a claim about best-in-class hardware.
+
+### Reference-Section Asymmetry
+
+Axial / mixed-flow families use a rotor annulus (outer wheel minus hub) as their reference flow section, while centrifugal families use the inlet eye annulus. The packaging check compares system passage area against that modeled reference section, not the outer wheel envelope. For axial fans this means a casing bore just slightly larger than the rotor can still score well even though the rotor annulus is modest; the tool reports the basis explicitly alongside every candidate so the asymmetry stays visible.
 
 ## References
 

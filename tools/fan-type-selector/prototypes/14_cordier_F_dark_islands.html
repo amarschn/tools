@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cordier Diagram — Prototype F: Dark Theme with Islands</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .subtitle { color: #999; font-size: 0.85rem; margin-bottom: 16px; }
+  .note { background: #222244; border-left: 3px solid #5588cc; padding: 12px 16px; margin: 16px 0; font-size: 0.85rem; line-height: 1.5; }
+  #plot { width: 100%; height: 650px; }
+</style>
+</head>
+<body>
+
+<h1>Prototype F — Dark Theme + Balje-style Islands (for actual tool integration)</h1>
+<p class="subtitle">Same spline + island approach as D/E but adapted to the tool's dark color scheme. This is what integration into the actual fan selector would look like.</p>
+
+<div class="note">
+  Combines the classic Balje island contour look with the tool's dark UI.
+  Efficiency islands use a warm color ramp (dark purple → teal → gold toward the optimum).
+  The Cordier line is bright white for contrast. Type ribbons overlay with their existing colors.
+</div>
+
+<div id="plot"></div>
+
+<script>
+const REF_DATA = [
+    { ns: 0.06, ds: 14.0, eta: 0.36 },
+    { ns: 0.10, ds: 10.0, eta: 0.48 },
+    { ns: 0.20, ds: 6.2,  eta: 0.62 },
+    { ns: 0.35, ds: 4.2,  eta: 0.74 },
+    { ns: 0.60, ds: 3.1,  eta: 0.83 },
+    { ns: 1.00, ds: 2.30, eta: 0.90 },
+    { ns: 1.50, ds: 1.80, eta: 0.90 },
+    { ns: 2.50, ds: 1.35, eta: 0.87 },
+    { ns: 4.00, ds: 1.00, eta: 0.82 },
+    { ns: 6.00, ds: 0.78, eta: 0.76 },
+    { ns: 10.0, ds: 0.62, eta: 0.65 },
+    { ns: 15.0, ds: 0.52, eta: 0.52 },
+];
+
+const lnNsRef = REF_DATA.map(d => Math.log(d.ns));
+const lnDsRef = REF_DATA.map(d => Math.log(d.ds));
+const etaRef  = REF_DATA.map(d => d.eta);
+
+function mcSetup(xs, ys) {
+    const n = xs.length, delta = [], m = [];
+    for (let i = 0; i < n - 1; i++) delta.push((ys[i+1] - ys[i]) / (xs[i+1] - xs[i]));
+    m.push(delta[0]);
+    for (let i = 1; i < n - 1; i++) m.push(delta[i-1] * delta[i] <= 0 ? 0 : (delta[i-1] + delta[i]) / 2);
+    m.push(delta[n - 2]);
+    for (let i = 0; i < n - 1; i++) {
+        if (Math.abs(delta[i]) < 1e-30) { m[i] = 0; m[i+1] = 0; continue; }
+        const a = m[i] / delta[i], b = m[i+1] / delta[i], tau = a*a + b*b;
+        if (tau > 9) { const t = 3 / Math.sqrt(tau); m[i] = t*a*delta[i]; m[i+1] = t*b*delta[i]; }
+    }
+    return { xs, ys, m };
+}
+function mcEval(s, x) {
+    const { xs, ys, m } = s, n = xs.length;
+    if (x <= xs[0]) return ys[0]; if (x >= xs[n-1]) return ys[n-1];
+    let i = 0; while (i < n - 2 && xs[i+1] < x) i++;
+    const h = xs[i+1]-xs[i], t = (x-xs[i])/h, t2=t*t, t3=t2*t;
+    return (2*t3-3*t2+1)*ys[i] + (t3-2*t2+t)*h*m[i] + (-2*t3+3*t2)*ys[i+1] + (t3-t2)*h*m[i+1];
+}
+
+const dsSpline  = mcSetup(lnNsRef, lnDsRef);
+const etaSpline = mcSetup(lnNsRef, etaRef);
+function cDs(ns) { return Math.exp(mcEval(dsSpline, Math.log(ns))); }
+function cEta(ns) { return Math.min(0.95, Math.max(0.15, mcEval(etaSpline, Math.log(ns)))); }
+
+function logSpace(lo, hi, n) {
+    const a = Math.log10(lo), b = Math.log10(hi);
+    return Array.from({length:n}, (_,i) => 10**(a + i/(n-1)*(b-a)));
+}
+function hexRgba(hex, a) {
+    const h = hex.replace('#','');
+    return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+
+const types = [
+    { name: 'FC Centrifugal', nsMin: 0.30, nsMax: 1.20, color: '#c27b2b', tol: 1.26 },
+    { name: 'BC Centrifugal', nsMin: 0.30, nsMax: 1.50, color: '#56616e', tol: 1.18 },
+    { name: 'Mixed Flow',     nsMin: 0.80, nsMax: 3.00, color: '#0f766e', tol: 1.20 },
+    { name: 'Axial',          nsMin: 2.00, nsMax: 8.00, color: '#2563eb', tol: 1.22 },
+];
+
+const traces = [];
+const cNs = logSpace(0.05, 16, 500);
+
+// ============================================================
+// FILLED EFFICIENCY ISLANDS — warm ramp on dark background
+// ============================================================
+const beta = 4.5;
+const etaLevels = [0.40, 0.50, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90];
+
+// Dark → warm color ramp
+const fillColors = [
+    'rgba(35, 25, 55, 0.35)',     // 40% — deep purple
+    'rgba(40, 30, 70, 0.35)',     // 50%
+    'rgba(35, 50, 90, 0.30)',     // 60%
+    'rgba(25, 70, 100, 0.28)',    // 65%
+    'rgba(20, 95, 105, 0.25)',    // 70%
+    'rgba(25, 120, 100, 0.22)',   // 75%
+    'rgba(45, 145, 80, 0.20)',    // 80%
+    'rgba(90, 160, 50, 0.18)',    // 85%
+    'rgba(160, 175, 30, 0.16)',   // 90% — gold-green
+];
+const lineColors = [
+    'rgba(80, 60, 120, 0.40)',
+    'rgba(80, 70, 140, 0.45)',
+    'rgba(70, 100, 160, 0.50)',
+    'rgba(55, 130, 165, 0.55)',
+    'rgba(45, 160, 160, 0.60)',
+    'rgba(55, 185, 150, 0.65)',
+    'rgba(85, 200, 120, 0.70)',
+    'rgba(140, 210, 80, 0.75)',
+    'rgba(200, 215, 50, 0.85)',
+];
+
+etaLevels.forEach((etaTarget, idx) => {
+    const xU = [], yU = [], xL = [], yL = [];
+    cNs.forEach(ns => {
+        const etaPeak = cEta(ns);
+        if (etaTarget > etaPeak) return;
+        const dsOpt = cDs(ns);
+        const offset = Math.sqrt(-Math.log(etaTarget / etaPeak) / beta);
+        xU.push(dsOpt * Math.exp(offset));
+        yU.push(ns);
+        xL.push(dsOpt * Math.exp(-offset));
+        yL.push(ns);
+    });
+    if (xU.length < 4) return;
+    const pct = Math.round(etaTarget * 100);
+    const xClosed = [...xU, ...xL.slice().reverse(), xU[0]];
+    const yClosed = [...yU, ...yL.slice().reverse(), yU[0]];
+    traces.push({
+        x: xClosed, y: yClosed,
+        mode: 'lines',
+        line: { color: lineColors[idx], width: 1.0 },
+        fill: 'toself', fillcolor: fillColors[idx],
+        showlegend: false,
+        hovertemplate: `η = ${pct}%<extra></extra>`
+    });
+    // Label near the right edge of each island
+    const labelIdx = Math.min(Math.floor(xU.length * 0.88), xU.length - 1);
+    traces.push({
+        x: [xU[labelIdx] * 1.05], y: [yU[labelIdx]],
+        mode: 'text', text: [`${pct}%`],
+        textfont: { size: 9.5, color: lineColors[idx].replace(/[\d.]+\)$/, '1)') },
+        textposition: 'middle right', showlegend: false, hoverinfo: 'skip'
+    });
+});
+
+// ============================================================
+// TYPE RIBBONS
+// ============================================================
+types.forEach(t => {
+    const nsVals = logSpace(t.nsMin, t.nsMax, 80);
+    const upper = nsVals.map(ns => cDs(ns) * t.tol);
+    const lower = nsVals.slice().reverse().map(ns => cDs(ns) / t.tol);
+    traces.push({
+        x: [...upper, ...lower], y: [...nsVals, ...nsVals.slice().reverse()],
+        fill: 'toself', fillcolor: hexRgba(t.color, 0.12),
+        line: { color: hexRgba(t.color, 0.45), width: 1.2 }, mode: 'lines',
+        name: t.name,
+        hovertemplate: `<b>${t.name}</b><extra></extra>`
+    });
+    const midNs = Math.sqrt(t.nsMin * t.nsMax);
+    traces.push({
+        x: [cDs(midNs)], y: [midNs],
+        mode: 'text', text: [t.name],
+        textfont: { size: 10, color: hexRgba(t.color, 0.8) },
+        textposition: 'middle center', showlegend: false, hoverinfo: 'skip'
+    });
+});
+
+// ============================================================
+// CORDIER OPTIMUM LINE — bright white
+// ============================================================
+const lineNs = logSpace(0.06, 15, 400);
+traces.push({
+    x: lineNs.map(cDs), y: lineNs,
+    mode: 'lines', name: 'Cordier Optimum',
+    line: { color: '#fff', width: 2.8 },
+    hovertemplate: 'D<sub>s</sub> = %{x:.2f}<br>N<sub>s</sub> = %{y:.2f}<extra>Cordier Optimum</extra>'
+});
+
+// ============================================================
+// LAYOUT — tool dark theme
+// ============================================================
+Plotly.newPlot('plot', traces, {
+    paper_bgcolor: '#1e1e30',
+    plot_bgcolor: '#181828',
+    font: { color: '#d0d0d0', family: "'Helvetica Neue', sans-serif", size: 12 },
+    margin: { t: 24, r: 30, b: 80, l: 75 },
+    legend: {
+        orientation: 'h', y: -0.17, x: 0.5, xanchor: 'center',
+        font: { size: 11, color: '#bbb' },
+        bgcolor: 'rgba(30,30,48,0.9)', bordercolor: '#444', borderwidth: 1
+    },
+    xaxis: {
+        title: { text: 'Specific Diameter D<sub>s</sub> [—]', font: { size: 13 } },
+        type: 'log',
+        range: [Math.log10(0.35), Math.log10(16)],
+        gridcolor: 'rgba(255,255,255,0.06)',
+        tickformat: '.2~g', tickcolor: '#666',
+        linecolor: '#555', linewidth: 1, mirror: true,
+        ticks: 'outside', ticklen: 5
+    },
+    yaxis: {
+        title: { text: 'Specific Speed N<sub>s</sub> [—]', font: { size: 13 } },
+        type: 'log',
+        range: [Math.log10(0.05), Math.log10(16)],
+        gridcolor: 'rgba(255,255,255,0.06)',
+        tickformat: '.2~g', tickcolor: '#666',
+        linecolor: '#555', linewidth: 1, mirror: true,
+        ticks: 'outside', ticklen: 5
+    },
+    hovermode: 'closest'
+}, { responsive: true, displayModeBar: false });
+</script>
+</body>
+</html>

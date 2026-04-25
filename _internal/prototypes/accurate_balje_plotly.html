@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Accurate Balje Diagram (Ns-Ds)</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .chart-container { width: 100%; max-width: 1000px; border: 1px solid #ccc; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h1 { text-align: center; color: #222; font-size: 22px; margin-bottom: 5px; }
+        p.subtitle { text-align: center; color: #555; font-size: 14px; margin-bottom: 20px; }
+        #plot { width: 100%; height: 750px; }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <h1>Specific Speed vs. Specific Diameter (Balje Diagram)</h1>
+        <p class="subtitle">Accurate reproduction with efficiency islands and Cordier line</p>
+        <div id="plot"></div>
+    </div>
+    <script>
+        // Grid setup: Ns from 0.01 to 100 (log -2 to 2), Ds from 0.1 to 100 (log -1 to 2)
+        const x_min = -2.0, x_max = 2.0; 
+        const y_min = -1.0, y_max = 2.0; 
+        const resolution = 200;
+        
+        const x_vals = [];
+        const y_vals = [];
+        const z_vals = [];
+        
+        for (let i = 0; i < resolution; i++) {
+            x_vals.push(x_min + (x_max - x_min) * (i / (resolution - 1)));
+            y_vals.push(y_min + (y_max - y_min) * (i / (resolution - 1)));
+        }
+
+        // Peaks [log10(Ns), log10(Ds), peak_efficiency, spread_x, spread_y, correlation]
+        const peaks = [
+            // Axial
+            [Math.log10(5.0), Math.log10(0.7), 92, 0.4, 0.3, -0.85],
+            // Mixed Flow
+            [Math.log10(1.5), Math.log10(1.2), 90, 0.35, 0.25, -0.8],
+            // Radial (Centrifugal)
+            [Math.log10(0.6), Math.log10(2.5), 88, 0.4, 0.3, -0.75],
+            // Drag / Cross-flow / Peripheral
+            [Math.log10(0.05), Math.log10(20.0), 65, 0.5, 0.5, -0.6]
+        ];
+
+        // Evaluate efficiency surface
+        for (let j = 0; j < resolution; j++) {
+            let row = [];
+            let y = y_vals[j];
+            for (let i = 0; i < resolution; i++) {
+                let x = x_vals[i];
+                let eff = 10; // Base background
+                
+                // Add Gaussian peaks
+                for (let p of peaks) {
+                    let [xc, yc, peak_eff, sx, sy, rho] = p;
+                    let dx = (x - xc) / sx;
+                    let dy = (y - yc) / sy;
+                    let z_val = (dx*dx - 2*rho*dx*dy + dy*dy) / (2 * (1 - rho*rho));
+                    let local_eff = peak_eff * Math.exp(-z_val);
+                    if (local_eff > eff) eff = local_eff;
+                }
+                
+                // Penalty for deviating from the optimal Cordier path (Ns * Ds ~ 2.5 -> y = 0.4 - x)
+                let y_ridge = 0.4 - x; 
+                let ridge_dist = Math.abs(y - y_ridge);
+                let penalty = Math.pow(ridge_dist, 2) * 15;
+                
+                eff -= penalty;
+                if (eff < 0) eff = 0;
+                
+                row.push(eff);
+            }
+            z_vals.push(row);
+        }
+
+        const actual_x = x_vals.map(x => Math.pow(10, x));
+        const actual_y = y_vals.map(y => Math.pow(10, y));
+
+        // Cordier Line Data (Ns * Ds = 2.5)
+        const cordier_x = [];
+        const cordier_y = [];
+        for (let i = 0; i <= 100; i++) {
+            let log_x = -2.0 + (4.0) * (i / 100);
+            cordier_x.push(Math.pow(10, log_x));
+            cordier_y.push(2.5 / Math.pow(10, log_x));
+        }
+
+        const traces = [
+            {
+                z: z_vals,
+                x: actual_x,
+                y: actual_y,
+                type: 'contour',
+                colorscale: [
+                    [0, '#ffffff'],
+                    [0.3, '#e0f3db'],
+                    [0.5, '#a8ddb5'],
+                    [0.7, '#4eb3d3'],
+                    [0.85, '#2b8cbe'],
+                    [1, '#084081']
+                ],
+                contours: {
+                    start: 30,
+                    end: 90,
+                    size: 10,
+                    showlabels: true,
+                    labelfont: {
+                        family: 'Arial',
+                        size: 11,
+                        color: '#333'
+                    }
+                },
+                line: { width: 1, color: 'rgba(0,0,0,0.3)' },
+                colorbar: { title: 'Efficiency η (%)', titleside: 'right' },
+                name: 'Efficiency'
+            },
+            {
+                x: cordier_x,
+                y: cordier_y,
+                mode: 'lines',
+                line: { color: 'red', width: 2, dash: 'dash' },
+                name: 'Cordier Line (Ns·Ds ≈ 2.5)'
+            }
+        ];
+
+        const layout = {
+            xaxis: {
+                type: 'log',
+                title: { text: 'Specific Speed (N_s)', font: { size: 14, weight: 'bold' } },
+                range: [-2, 2], // 0.01 to 100
+                tickvals: [0.01, 0.1, 1, 10, 100],
+                ticktext: ['0.01', '0.1', '1', '10', '100'],
+                gridcolor: '#eee',
+                zeroline: false,
+                mirror: true,
+                ticks: 'inside',
+                showline: true,
+                linewidth: 1,
+                linecolor: 'black'
+            },
+            yaxis: {
+                type: 'log',
+                title: { text: 'Specific Diameter (D_s)', font: { size: 14, weight: 'bold' } },
+                range: [-1, 2], // 0.1 to 100
+                tickvals: [0.1, 1, 10, 100],
+                ticktext: ['0.1', '1', '10', '100'],
+                gridcolor: '#eee',
+                zeroline: false,
+                mirror: true,
+                ticks: 'inside',
+                showline: true,
+                linewidth: 1,
+                linecolor: 'black'
+            },
+            annotations: [
+                { x: Math.log10(5.0), y: Math.log10(0.4), text: 'Axial', showarrow: false, font: {size: 16, color: 'black', weight: 'bold'} },
+                { x: Math.log10(1.5), y: Math.log10(1.8), text: 'Mixed Flow', showarrow: false, font: {size: 16, color: 'black', weight: 'bold'} },
+                { x: Math.log10(0.6), y: Math.log10(4.0), text: 'Radial', showarrow: false, font: {size: 16, color: 'black', weight: 'bold'} },
+                { x: Math.log10(0.05), y: Math.log10(30.0), text: 'Drag / Peripheral', showarrow: false, font: {size: 14, color: 'black'} }
+            ],
+            margin: { l: 60, r: 20, t: 20, b: 60 },
+            plot_bgcolor: '#fff',
+            hovermode: 'closest',
+            showlegend: true,
+            legend: { x: 0.7, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)', bordercolor: '#ccc', borderwidth: 1 }
+        };
+
+        Plotly.newPlot('plot', traces, layout, {responsive: true});
+    </script>
+</body>
+</html>

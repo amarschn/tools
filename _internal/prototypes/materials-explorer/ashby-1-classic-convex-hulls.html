@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ashby Chart: Classic Convex Hulls</title>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f8f9fa; }
+        .chart-container { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 20px; max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; color: #333; font-size: 24px; }
+        .description { text-align: center; color: #666; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="chart-container">
+    <h1>Young's Modulus vs Density</h1>
+    <div class="description">Classic Ashby Chart styling with convex hull envelopes for material families.</div>
+    <div id="chart"></div>
+</div>
+
+<script>
+const materials = [
+  {family: 'Metals', name: 'Steel', density: 7800, modulus: 200},
+  {family: 'Metals', name: 'Aluminum', density: 2700, modulus: 69},
+  {family: 'Metals', name: 'Titanium', density: 4500, modulus: 110},
+  {family: 'Metals', name: 'Copper', density: 8900, modulus: 117},
+  {family: 'Metals', name: 'Magnesium', density: 1740, modulus: 45},
+  {family: 'Metals', name: 'Tungsten', density: 19250, modulus: 400},
+  {family: 'Metals', name: 'Zinc', density: 7140, modulus: 108},
+  {family: 'Metals', name: 'Lead', density: 11340, modulus: 16},
+  
+  {family: 'Polymers', name: 'Nylon', density: 1150, modulus: 2.5},
+  {family: 'Polymers', name: 'Polycarbonate', density: 1200, modulus: 2.3},
+  {family: 'Polymers', name: 'PVC', density: 1350, modulus: 3.0},
+  {family: 'Polymers', name: 'Polyethylene', density: 950, modulus: 0.8},
+  {family: 'Polymers', name: 'Polypropylene', density: 900, modulus: 1.2},
+  {family: 'Polymers', name: 'PTFE', density: 2200, modulus: 0.5},
+  {family: 'Polymers', name: 'Epoxy', density: 1200, modulus: 3.5},
+  {family: 'Polymers', name: 'Rubber', density: 1100, modulus: 0.05},
+
+  {family: 'Ceramics', name: 'Alumina', density: 3900, modulus: 380},
+  {family: 'Ceramics', name: 'Silicon Carbide', density: 3100, modulus: 410},
+  {family: 'Ceramics', name: 'Glass', density: 2500, modulus: 70},
+  {family: 'Ceramics', name: 'Concrete', density: 2400, modulus: 30},
+  {family: 'Ceramics', name: 'Brick', density: 2000, modulus: 20},
+  {family: 'Ceramics', name: 'Diamond', density: 3500, modulus: 1050},
+  {family: 'Ceramics', name: 'Zirconia', density: 6000, modulus: 210},
+
+  {family: 'Composites', name: 'CFRP', density: 1500, modulus: 150},
+  {family: 'Composites', name: 'GFRP', density: 1900, modulus: 45},
+  {family: 'Composites', name: 'Plywood', density: 600, modulus: 10},
+  {family: 'Composites', name: 'MDF', density: 750, modulus: 4},
+  {family: 'Composites', name: 'Kevlar/Epoxy', density: 1400, modulus: 80},
+
+  {family: 'Woods/Foams', name: 'Cork', density: 200, modulus: 0.03},
+  {family: 'Woods/Foams', name: 'Balsa', density: 150, modulus: 0.05},
+  {family: 'Woods/Foams', name: 'Pine', density: 500, modulus: 11},
+  {family: 'Woods/Foams', name: 'Oak', density: 700, modulus: 13},
+  {family: 'Woods/Foams', name: 'PU Foam', density: 50, modulus: 0.01}
+];
+
+// Helper: Convex Hull (Monotone Chain) based on Log10 values
+function getConvexHull(points) {
+    if (points.length <= 3) return [...points, points[0]]; // Close the loop if small
+    
+    // Sort points by X (log density), then Y (log modulus)
+    let sorted = [...points].sort((a, b) => {
+        let lxA = Math.log10(a.density);
+        let lxB = Math.log10(b.density);
+        if (lxA !== lxB) return lxA - lxB;
+        return Math.log10(a.modulus) - Math.log10(b.modulus);
+    });
+
+    const cross = (o, a, b) => {
+        return (Math.log10(a.density) - Math.log10(o.density)) * (Math.log10(b.modulus) - Math.log10(o.modulus)) - 
+               (Math.log10(a.modulus) - Math.log10(o.modulus)) * (Math.log10(b.density) - Math.log10(o.density));
+    };
+
+    let lower = [];
+    for (let i = 0; i < sorted.length; i++) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], sorted[i]) <= 0) lower.pop();
+        lower.push(sorted[i]);
+    }
+
+    let upper = [];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], sorted[i]) <= 0) upper.pop();
+        upper.push(sorted[i]);
+    }
+
+    upper.pop();
+    lower.pop();
+    
+    let hull = lower.concat(upper);
+    hull.push(hull[0]); // close loop
+    
+    // Add some margin to the hull to create the "envelope" effect visually (optional for prototype)
+    return hull;
+}
+
+const families = [...new Set(materials.map(m => m.family))];
+const colors = {
+    'Metals': 'rgba(214, 39, 40, 0.8)',
+    'Polymers': 'rgba(31, 119, 180, 0.8)',
+    'Ceramics': 'rgba(255, 127, 14, 0.8)',
+    'Composites': 'rgba(148, 103, 189, 0.8)',
+    'Woods/Foams': 'rgba(44, 160, 44, 0.8)'
+};
+
+const bgColors = {
+    'Metals': 'rgba(214, 39, 40, 0.2)',
+    'Polymers': 'rgba(31, 119, 180, 0.2)',
+    'Ceramics': 'rgba(255, 127, 14, 0.2)',
+    'Composites': 'rgba(148, 103, 189, 0.2)',
+    'Woods/Foams': 'rgba(44, 160, 44, 0.2)'
+};
+
+const traces = [];
+
+families.forEach(family => {
+    let familyData = materials.filter(m => m.family === family);
+    
+    // 1. Draw convex hull polygon
+    let hull = getConvexHull(familyData);
+    traces.push({
+        x: hull.map(h => h.density),
+        y: hull.map(h => h.modulus),
+        fill: 'toself',
+        fillcolor: bgColors[family],
+        line: { color: colors[family], width: 2 },
+        mode: 'lines',
+        name: family + ' Envelope',
+        hoverinfo: 'skip',
+        showlegend: false
+    });
+
+    // 2. Draw scatter points
+    traces.push({
+        x: familyData.map(m => m.density),
+        y: familyData.map(m => m.modulus),
+        mode: 'markers+text',
+        name: family,
+        text: familyData.map(m => m.name),
+        textposition: 'top center',
+        marker: {
+            size: 8,
+            color: colors[family],
+            line: { color: '#fff', width: 1 }
+        },
+        hovertemplate: '<b>%{text}</b><br>Density: %{x} kg/m³<br>Modulus: %{y} GPa<extra></extra>'
+    });
+});
+
+// Add a guideline for Performance Index E/rho
+traces.push({
+    x: [100, 10000],
+    y: [0.01, 100], // E/rho = constant
+    mode: 'lines',
+    name: 'Guide: E/ρ = C',
+    line: { color: '#888', dash: 'dash', width: 1.5 },
+    hoverinfo: 'skip'
+});
+
+const layout = {
+    xaxis: {
+        type: 'log',
+        title: 'Density (kg/m³)',
+        gridcolor: '#e5e5e5',
+        zeroline: false,
+        range: [1.5, 4.5] // Log ranges
+    },
+    yaxis: {
+        type: 'log',
+        title: "Young's Modulus (GPa)",
+        gridcolor: '#e5e5e5',
+        zeroline: false,
+        range: [-2.5, 3.5]
+    },
+    plot_bgcolor: '#fafafa',
+    paper_bgcolor: 'white',
+    hovermode: 'closest',
+    margin: { l: 60, r: 40, t: 40, b: 60 },
+    legend: { x: 1.02, y: 1, bordercolor: '#ddd', borderwidth: 1 }
+};
+
+Plotly.newPlot('chart', traces, layout, {responsive: true, displayModeBar: true});
+</script>
+
+</body>
+</html>
