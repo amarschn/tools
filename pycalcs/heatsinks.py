@@ -719,26 +719,39 @@ def solve_fan_operating_point(
     fan_max_pressure: float,
     fan_max_flow_rate: float,
     pressure_pa: float = 101325.0,
+    bypass_fraction: float = 0.0,
 ) -> Dict[str, float]:
     """
     Solve the fan/heatsink operating point by intersecting the fan and system curves.
+
+    When ``bypass_fraction`` > 0 (unducted configuration), only a fraction
+    ``(1 - bypass_fraction)`` of the fan's delivered flow actually traverses
+    the fin channels; the rest spills around the array.  The bisection
+    matches the fan curve at the total fan flow against the heatsink system
+    curve at the channel flow.  Returned ``volumetric_flow_rate``,
+    ``channel_velocity``, and ``pressure_drop`` reflect the channel side
+    (what the fins actually see); ``fan_volumetric_flow_rate`` is the fan
+    delivery for reference.
     """
 
     if fan_max_pressure < 0.0:
         raise ValueError("fan_max_pressure cannot be negative.")
     if fan_max_flow_rate <= 0.0:
         raise ValueError("fan_max_flow_rate must be greater than zero.")
+    if not 0.0 <= bypass_fraction < 1.0:
+        raise ValueError("bypass_fraction must be in [0, 1).")
 
+    throughput = 1.0 - bypass_fraction
     lower_flow = 0.0
     upper_flow = fan_max_flow_rate
     for _ in range(60):
-        mid_flow = 0.5 * (lower_flow + upper_flow)
+        mid_flow = 0.5 * (lower_flow + upper_flow)  # fan delivery
         fan_pressure = fan_curve_pressure(mid_flow, fan_max_pressure, fan_max_flow_rate)
         system_pressure = forced_convection_plate_array(
             geometry=geometry,
             surface_temperature=surface_temperature,
             ambient_temperature=ambient_temperature,
-            volumetric_flow_rate=mid_flow,
+            volumetric_flow_rate=mid_flow * throughput,
             pressure_pa=pressure_pa,
         )["pressure_drop"]
         if fan_pressure > system_pressure:
@@ -747,16 +760,20 @@ def solve_fan_operating_point(
             upper_flow = mid_flow
 
     operating_flow = 0.5 * (lower_flow + upper_flow)
+    channel_flow = operating_flow * throughput
     forced_state = forced_convection_plate_array(
         geometry=geometry,
         surface_temperature=surface_temperature,
         ambient_temperature=ambient_temperature,
-        volumetric_flow_rate=operating_flow,
+        volumetric_flow_rate=channel_flow,
         pressure_pa=pressure_pa,
     )
     forced_state["fan_pressure"] = fan_curve_pressure(
         operating_flow, fan_max_pressure, fan_max_flow_rate
     )
+    forced_state["fan_volumetric_flow_rate"] = operating_flow
+    if bypass_fraction > 0.0:
+        forced_state["bypass_fraction"] = bypass_fraction
     return forced_state
 
 
@@ -1040,6 +1057,9 @@ def analyze_plate_fin_heatsink(
                 state["bypass_fraction"] = bypass
             return state
 
+        fan_bypass = (
+            estimate_bypass_fraction(geometry) if not ducted else 0.0
+        )
         state = solve_fan_operating_point(
             geometry=geometry,
             surface_temperature=surface_temperature,
@@ -1047,6 +1067,7 @@ def analyze_plate_fin_heatsink(
             fan_max_pressure=fan_max_pressure,
             fan_max_flow_rate=fan_max_flow_rate,
             pressure_pa=pressure_pa,
+            bypass_fraction=fan_bypass,
         )
         state["convection_mode_used"] = "fan_curve"
         return state
@@ -1078,19 +1099,52 @@ def analyze_plate_fin_heatsink(
             total_area=geometry.total_area,
         )
         temperature_rise = surface_temperature - ambient_temperature
-        heat_rejected = overall_efficiency * effective_coefficient * geometry.total_area * temperature_rise
-        convection_heat = (
-            overall_efficiency
-            * flow_state["convection_coefficient"]
-            * geometry.total_area
-            * temperature_rise
+
+        # ε-NTU correction on the convection branch.  The Muzychka-Yovanovich
+        # forced-convection Nu is referenced to (T_wall − T_inlet), so the
+        # bare h·A·ΔT formula implicitly assumes the stream stays at T_∞
+        # end-to-end — i.e. infinite heat capacity.  At tight fin spacing or
+        # stalled flow that fails: air saturates toward T_b, the LMTD shrinks,
+        # and Q_conv is capped at ṁ·c_p·(T_b − T_∞).  ε-NTU splices the
+        # surface and stream limits into one expression that recovers h·A·ΔT
+        # at high flow and collapses to ṁ·c_p·ΔT at low flow.
+        #
+        # Skipped for natural convection: the Bar-Cohen composite correlation
+        # already blends the fully-developed (stream-limited) and isolated-
+        # plate (surface-limited) regimes, so its Nu_s is the *effective*
+        # Nusselt — applying ε-NTU on top would double-count.  The horizontal
+        # flat-plate correlations are also self-contained.  Radiation goes to
+        # the surroundings, not the channel air, so it stays h·A·ΔT in all
+        # modes.
+        film_temperature = 0.5 * (surface_temperature + ambient_temperature)
+        props = air_properties(film_temperature, pressure_pa=pressure_pa)
+        mass_flow_rate = props.density * flow_state["volumetric_flow_rate"]
+        stream_capacity = mass_flow_rate * props.specific_heat
+        surface_capacity = (
+            overall_efficiency * flow_state["convection_coefficient"] * geometry.total_area
         )
+        apply_ntu_correction = airflow_mode in ("forced", "fan_curve")
+        if apply_ntu_correction and stream_capacity > 0.0 and surface_capacity > 0.0:
+            ntu = surface_capacity / stream_capacity
+            effectiveness = -math.expm1(-ntu)  # 1 - exp(-NTU), accurate at small NTU
+            convection_heat = effectiveness * stream_capacity * temperature_rise
+        elif apply_ntu_correction:
+            ntu = 0.0
+            effectiveness = 0.0
+            convection_heat = 0.0
+        else:
+            # Natural convection: Bar-Cohen Nu already captures stream effects.
+            ntu = float("inf") if stream_capacity == 0.0 else surface_capacity / stream_capacity
+            effectiveness = 1.0 if surface_capacity > 0.0 else 0.0
+            convection_heat = surface_capacity * temperature_rise
+
         radiation_heat = (
             overall_efficiency
             * radiation_coefficient
             * geometry.total_area
             * temperature_rise
         )
+        heat_rejected = convection_heat + radiation_heat
         return {
             "flow_state": flow_state,
             "radiation_coefficient": radiation_coefficient,
@@ -1100,6 +1154,10 @@ def analyze_plate_fin_heatsink(
             "heat_rejected": heat_rejected,
             "convection_heat": convection_heat,
             "radiation_heat": radiation_heat,
+            "mass_flow_rate": mass_flow_rate,
+            "stream_capacity": stream_capacity,
+            "ntu": ntu,
+            "effectiveness": effectiveness,
         }
 
     lower_temperature = ambient_temperature + 1e-6
@@ -1276,6 +1334,10 @@ def analyze_plate_fin_heatsink(
         "convection_heat_rejected": final_state["convection_heat"],
         "radiation_heat_rejected": final_state["radiation_heat"],
         "heat_rejected": final_state["heat_rejected"],
+        "mass_flow_rate": final_state["mass_flow_rate"],
+        "stream_capacity": final_state["stream_capacity"],
+        "ntu": final_state["ntu"],
+        "effectiveness": final_state["effectiveness"],
         "convection_mode_used": flow_state["convection_mode_used"],
         "status": status,
         "recommendations": recommendations,
@@ -1322,17 +1384,45 @@ def analyze_plate_fin_heatsink(
             f" = {base_temperature:.2f} + {heat_load:.3f} \\times {interface_resistance:.4f}"
             f" = {case_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
         )
-    _h_eff_base = flow_state["convection_coefficient"] + final_state["radiation_coefficient"]
+    _h_conv_base = flow_state["convection_coefficient"]
+    _h_rad_base = final_state["radiation_coefficient"]
     _delta_t_base = base_temperature - ambient_temperature
-    result["subst_base_temperature"] = (
-        f"Q_{{\\mathrm{{load}}}} = \\eta_o \\, h_{{\\mathrm{{eff}}}} \\, A_t \\, (T_b - T_\\infty)"
-        f" = {final_state['overall_efficiency']:.4f} \\times {_h_eff_base:.3f}"
-        f" \\times {geometry.total_area:.6f} \\times {_delta_t_base:.2f}"
-        f" = {final_state['heat_rejected']:.2f}\\,\\mathrm{{W}}"
-        f"\\;\\Rightarrow\\; T_b = {base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
-        f",\\quad R_{{\\theta,\\mathrm{{sink}}}} = \\frac{{{_delta_t_base:.2f}}}{{{heat_load:.3f}}}"
-        f" = {sink_r_theta:.4f}\\,\\mathrm{{K/W}}"
-    )
+    _eta_o = final_state["overall_efficiency"]
+    _ntu = final_state["ntu"]
+    _eps = final_state["effectiveness"]
+    _stream_cap = final_state["stream_capacity"]
+    _mdot = final_state["mass_flow_rate"]
+    _q_conv = final_state["convection_heat"]
+    _q_rad = final_state["radiation_heat"]
+    if airflow_mode in ("forced", "fan_curve"):
+        result["subst_base_temperature"] = (
+            f"\\mathrm{{NTU}} = \\frac{{\\eta_o\\,h_{{\\mathrm{{conv}}}}\\,A_t}}{{\\dot m\\,c_p}}"
+            f" = \\frac{{{_eta_o:.4f} \\times {_h_conv_base:.3f} \\times {geometry.total_area:.6f}}}"
+            f"{{{_stream_cap:.4f}}} = {_ntu:.3f}"
+            f",\\;\\varepsilon = 1 - e^{{-\\mathrm{{NTU}}}} = {_eps:.4f}\\\\"
+            f"Q_{{\\mathrm{{conv}}}} = \\varepsilon\\,\\dot m\\,c_p\\,(T_b - T_\\infty)"
+            f" = {_eps:.4f} \\times {_stream_cap:.4f} \\times {_delta_t_base:.2f}"
+            f" = {_q_conv:.2f}\\,\\mathrm{{W}}\\\\"
+            f"Q_{{\\mathrm{{rad}}}} = \\eta_o\\,h_{{\\mathrm{{rad}}}}\\,A_t\\,(T_b - T_\\infty)"
+            f" = {_eta_o:.4f} \\times {_h_rad_base:.4f} \\times {geometry.total_area:.6f}"
+            f" \\times {_delta_t_base:.2f} = {_q_rad:.2f}\\,\\mathrm{{W}}\\\\"
+            f"Q_{{\\mathrm{{load}}}} = Q_{{\\mathrm{{conv}}}} + Q_{{\\mathrm{{rad}}}}"
+            f" = {final_state['heat_rejected']:.2f}\\,\\mathrm{{W}}"
+            f"\\;\\Rightarrow\\; T_b = {base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+            f",\\;R_{{\\theta,\\mathrm{{sink}}}} = \\frac{{{_delta_t_base:.2f}}}{{{heat_load:.3f}}}"
+            f" = {sink_r_theta:.4f}\\,\\mathrm{{K/W}}"
+        )
+    else:
+        _h_eff_nat = _h_conv_base + _h_rad_base
+        result["subst_base_temperature"] = (
+            f"Q_{{\\mathrm{{load}}}} = \\eta_o \\, h_{{\\mathrm{{eff}}}} \\, A_t \\, (T_b - T_\\infty)"
+            f" = {_eta_o:.4f} \\times {_h_eff_nat:.3f}"
+            f" \\times {geometry.total_area:.6f} \\times {_delta_t_base:.2f}"
+            f" = {final_state['heat_rejected']:.2f}\\,\\mathrm{{W}}"
+            f"\\;\\Rightarrow\\; T_b = {base_temperature:.2f}\\,^\\circ\\mathrm{{C}}"
+            f",\\quad R_{{\\theta,\\mathrm{{sink}}}} = \\frac{{{_delta_t_base:.2f}}}{{{heat_load:.3f}}}"
+            f" = {sink_r_theta:.4f}\\,\\mathrm{{K/W}}"
+        )
     _N_ch = geometry.channel_count
     _s = geometry.fin_spacing
     _H = geometry.fin_height
