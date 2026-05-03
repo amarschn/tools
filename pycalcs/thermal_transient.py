@@ -13,6 +13,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from . import heatsinks
+
 
 # Default density and specific heat for thermal-capacitance presets (SI).
 # Sources: standard handbook tables (Cengel & Ghajar, Incropera).
@@ -144,6 +146,344 @@ def estimate_thermal_capacitance(
             f"C = \\rho V c_p = {rho:.1f} \\times {volume_m3:.6g}"
             f" \\times {cp:.1f} = {capacitance:.2f}\\,\\mathrm{{J/K}}"
         ),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Plate-fin bridge: derive R_sa and C_sink from heatsink geometry             #
+# --------------------------------------------------------------------------- #
+
+
+# Plate-fin steady-state correlations are validated for a particular envelope.
+# Outside it (very high Re, vanishing fin efficiency) the returned R_sa starts
+# to drift from physical reality, so the bridge surfaces a warning rather than
+# silently feeding it into a transient simulation.
+_PLATE_FIN_REYNOLDS_MAX = 1.0e5
+_PLATE_FIN_FIN_EFFICIENCY_MIN = 0.5
+_PLATE_FIN_OVERALL_EFFICIENCY_MIN = 0.6
+
+
+def compute_plate_fin_sink_properties(
+    *,
+    base_length: float,
+    base_width: float,
+    base_thickness: float,
+    fin_height: float,
+    fin_thickness: float,
+    fin_count: int,
+    material_conductivity: float,
+    surface_emissivity: float = 0.85,
+    airflow_mode: str = "natural",
+    approach_velocity: float = 0.0,
+    volumetric_flow_rate: float = 0.0,
+    fan_max_pressure: float = 0.0,
+    fan_max_flow_rate: float = 0.0,
+    pressure_pa: float = 101325.0,
+    orientation: str = "vertical",
+    ducted: bool = True,
+    reference_heat_load_w: float,
+    ambient_temperature_c: float,
+    sink_material_id: str | None = "aluminum_6063",
+    sink_density_kg_per_m3: float | None = None,
+    sink_heat_capacity_j_per_kgk: float | None = None,
+) -> dict[str, Any]:
+    r"""
+    Derive sink-to-ambient resistance and lumped capacitance from plate-fin
+    geometry.
+
+    Calls :func:`pycalcs.heatsinks.analyze_plate_fin_heatsink` to get
+    ``R_sa`` for the steady-state operating point implied by
+    ``reference_heat_load_w`` and ``ambient_temperature_c``, and computes
+    ``C_sink = rho * V * c_p`` from the geometry's solid volume.
+
+    The reference heat load only affects the radiation linearization and
+    air-property film temperature inside the plate-fin solver — for transient
+    use, pass the duty-cycle-mean or peak power.  ``R_sa`` itself does not
+    depend strongly on heat load.
+
+    ---Parameters---
+    base_length, base_width, base_thickness, fin_height, fin_thickness,
+    fin_count, material_conductivity, surface_emissivity, airflow_mode,
+    approach_velocity, volumetric_flow_rate, fan_max_pressure,
+    fan_max_flow_rate, pressure_pa, orientation, ducted :
+        Identical to :func:`pycalcs.heatsinks.analyze_plate_fin_heatsink`.
+    reference_heat_load_w : float
+        Steady-state-equivalent heat load used to evaluate ``R_sa`` (W).
+        Use the mean power for duty cycles or the step power for step loads.
+    ambient_temperature_c : float
+        Ambient temperature (°C) — sets the film temperature for air props.
+    sink_material_id : str
+        Material preset key for thermal-capacitance (density and ``c_p``).
+        Defaults to ``aluminum_6063``.  Independent of the conduction
+        material because emissivity and conductivity already pin down the
+        plate-fin solver inputs; ``rho`` and ``c_p`` only set the lumped
+        thermal mass.
+    sink_density_kg_per_m3, sink_heat_capacity_j_per_kgk :
+        Optional overrides for the material preset.
+
+    ---Returns---
+    sink_thermal_resistance_k_per_w : float
+    sink_capacitance_j_per_k : float
+    sink_volume_m3 : float
+    sink_mass_kg : float
+    plate_fin_result : dict
+        Full result dict from ``analyze_plate_fin_heatsink``.
+    warnings : list of str
+        Out-of-envelope warnings (high Re, low fin efficiency).
+    subst_sink_thermal_resistance : str
+    subst_sink_capacitance : str
+    """
+
+    geometry = heatsinks.calculate_plate_fin_geometry(
+        base_length=base_length,
+        base_width=base_width,
+        base_thickness=base_thickness,
+        fin_height=fin_height,
+        fin_thickness=fin_thickness,
+        fin_count=fin_count,
+    )
+
+    if reference_heat_load_w <= 0.0:
+        raise ValueError("reference_heat_load_w must be greater than zero.")
+
+    # target_junction_temperature only feeds the steady-state acceptability
+    # check inside the heatsink solver, which we ignore — pass a comfortable
+    # placeholder so the solver reports a positive R_sa budget either way.
+    plate_fin = heatsinks.analyze_plate_fin_heatsink(
+        heat_load=reference_heat_load_w,
+        ambient_temperature=ambient_temperature_c,
+        target_junction_temperature=ambient_temperature_c + 100.0,
+        base_length=base_length,
+        base_width=base_width,
+        base_thickness=base_thickness,
+        fin_height=fin_height,
+        fin_thickness=fin_thickness,
+        fin_count=fin_count,
+        material_conductivity=material_conductivity,
+        surface_emissivity=surface_emissivity,
+        airflow_mode=airflow_mode,
+        approach_velocity=approach_velocity,
+        volumetric_flow_rate=volumetric_flow_rate,
+        fan_max_pressure=fan_max_pressure,
+        fan_max_flow_rate=fan_max_flow_rate,
+        pressure_pa=pressure_pa,
+        orientation=orientation,
+        ducted=ducted,
+    )
+
+    r_sa = float(plate_fin["sink_thermal_resistance"])
+
+    capacitance = estimate_thermal_capacitance(
+        volume_m3=geometry.volume,
+        material_id=sink_material_id,
+        density_kg_per_m3=sink_density_kg_per_m3,
+        heat_capacity_j_per_kgk=sink_heat_capacity_j_per_kgk,
+    )
+
+    warnings: list[str] = []
+    re_ch = float(plate_fin.get("reynolds_number", 0.0))
+    fin_eta = float(plate_fin.get("fin_efficiency", 1.0))
+    overall_eta = float(plate_fin.get("overall_surface_efficiency", 1.0))
+    if re_ch > _PLATE_FIN_REYNOLDS_MAX:
+        warnings.append(
+            f"Channel Reynolds number {re_ch:.0f} exceeds the validated "
+            f"plate-fin range (<= {_PLATE_FIN_REYNOLDS_MAX:.0f}); R_sa may be "
+            "less accurate at this flow rate."
+        )
+    if fin_eta < _PLATE_FIN_FIN_EFFICIENCY_MIN:
+        warnings.append(
+            f"Fin efficiency {fin_eta:.2f} is below "
+            f"{_PLATE_FIN_FIN_EFFICIENCY_MIN:.2f}; the lumped-sink assumption "
+            "weakens — consider shorter or thicker fins, or a higher-conductivity "
+            "alloy."
+        )
+    if overall_eta < _PLATE_FIN_OVERALL_EFFICIENCY_MIN:
+        warnings.append(
+            f"Overall surface efficiency {overall_eta:.2f} is below "
+            f"{_PLATE_FIN_OVERALL_EFFICIENCY_MIN:.2f}; the heatsink rejects far "
+            "less heat than its surface area suggests."
+        )
+
+    subst_r_sa = (
+        f"R_{{sa}} = {r_sa:.3f}\\,\\mathrm{{K/W}}"
+        f" \\;\\text{{(from plate-fin solver, Q_{{ref}} = {reference_heat_load_w:.1f}\\,W)}}"
+    )
+
+    return {
+        "sink_thermal_resistance_k_per_w": r_sa,
+        "sink_capacitance_j_per_k": float(capacitance["capacitance_j_per_k"]),
+        "sink_volume_m3": float(geometry.volume),
+        "sink_mass_kg": float(capacitance["mass_kg"]),
+        "sink_density_kg_per_m3": float(capacitance["density_kg_per_m3"]),
+        "sink_heat_capacity_j_per_kgk": float(capacitance["heat_capacity_j_per_kgk"]),
+        "plate_fin_result": plate_fin,
+        "warnings": warnings,
+        "subst_sink_thermal_resistance": subst_r_sa,
+        "subst_sink_capacitance": capacitance["subst_capacitance"],
+    }
+
+
+def build_plate_fin_transient_model(
+    *,
+    # Plate-fin geometry + airflow (forwarded to compute_plate_fin_sink_properties).
+    base_length: float,
+    base_width: float,
+    base_thickness: float,
+    fin_height: float,
+    fin_thickness: float,
+    fin_count: int,
+    material_conductivity: float,
+    surface_emissivity: float = 0.85,
+    airflow_mode: str = "natural",
+    approach_velocity: float = 0.0,
+    volumetric_flow_rate: float = 0.0,
+    fan_max_pressure: float = 0.0,
+    fan_max_flow_rate: float = 0.0,
+    pressure_pa: float = 101325.0,
+    orientation: str = "vertical",
+    ducted: bool = True,
+    sink_material_id: str | None = "aluminum_6063",
+    sink_density_kg_per_m3: float | None = None,
+    sink_heat_capacity_j_per_kgk: float | None = None,
+    # Source side.
+    junction_to_case_resistance_k_per_w: float = 0.0,
+    interface_resistance_k_per_w: float = 0.0,
+    source_capacitance_j_per_k: float,
+    max_source_temperature_c: float | None = None,
+    # Profile + time.
+    profile: dict[str, Any],
+    duration_s: float,
+    initial_temperature_c: float,
+    ambient_temperature_c: float,
+    time_step_s: float | None = None,
+    cooldown_target_c: float | None = None,
+) -> dict[str, Any]:
+    """
+    Assemble a full transient RC model from plate-fin heatsink geometry.
+
+    This is a convenience wrapper around
+    :func:`compute_plate_fin_sink_properties` that returns a model dict
+    ready to feed to :func:`simulate_transient_thermal_model`.  The
+    source-to-sink resistance is the sum of the supplied junction-to-case
+    and interface resistances (zero-resistance segments are not allowed by
+    the validator, so a small floor is applied if both are zero).
+
+    The plate-fin reference operating point uses the steady-state-equivalent
+    power computed from ``profile`` (mean power for duty cycles, step power
+    for step loads, peak for single pulses).
+    """
+
+    reference_q = _steady_state_power(profile)
+    if reference_q <= 0.0:
+        # Pulse profiles can have zero mean power between events — fall back
+        # to the peak so the plate-fin solver has a real operating point.
+        reference_q = max(
+            float(profile.get("power_w") or 0.0),
+            float(profile.get("pulse_power_w") or 0.0),
+            float(profile.get("on_power_w") or 0.0),
+        )
+    if reference_q <= 0.0:
+        raise ValueError("Profile defines no positive heat load; cannot bridge to plate-fin.")
+
+    sink = compute_plate_fin_sink_properties(
+        base_length=base_length,
+        base_width=base_width,
+        base_thickness=base_thickness,
+        fin_height=fin_height,
+        fin_thickness=fin_thickness,
+        fin_count=fin_count,
+        material_conductivity=material_conductivity,
+        surface_emissivity=surface_emissivity,
+        airflow_mode=airflow_mode,
+        approach_velocity=approach_velocity,
+        volumetric_flow_rate=volumetric_flow_rate,
+        fan_max_pressure=fan_max_pressure,
+        fan_max_flow_rate=fan_max_flow_rate,
+        pressure_pa=pressure_pa,
+        orientation=orientation,
+        ducted=ducted,
+        reference_heat_load_w=reference_q,
+        ambient_temperature_c=ambient_temperature_c,
+        sink_material_id=sink_material_id,
+        sink_density_kg_per_m3=sink_density_kg_per_m3,
+        sink_heat_capacity_j_per_kgk=sink_heat_capacity_j_per_kgk,
+    )
+
+    # The validator rejects zero-resistance segments. If the user has neither
+    # a junction-to-case nor an interface resistance, insert a tiny epsilon so
+    # the solver still runs — physically equivalent to lumping the source onto
+    # the sink, which the user can also do by switching to a single-lump
+    # template.
+    r_source_to_sink = (
+        float(junction_to_case_resistance_k_per_w)
+        + float(interface_resistance_k_per_w)
+    )
+    if r_source_to_sink <= 0.0:
+        r_source_to_sink = 1.0e-4
+
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "source",
+            "label": "Source",
+            "kind": "dynamic",
+            "capacitance_j_per_k": float(source_capacitance_j_per_k),
+            "max_temperature_c": (
+                float(max_source_temperature_c) if max_source_temperature_c is not None else None
+            ),
+        },
+        {
+            "id": "sink",
+            "label": "Heatsink",
+            "kind": "dynamic",
+            "capacitance_j_per_k": sink["sink_capacitance_j_per_k"],
+        },
+        {
+            "id": "ambient",
+            "label": "Ambient",
+            "kind": "boundary",
+            "fixed_temperature_c": float(ambient_temperature_c),
+        },
+    ]
+    segments: list[dict[str, Any]] = [
+        {
+            "id": "r_jc",
+            "label": "Source to sink",
+            "from_node_id": "source",
+            "to_node_id": "sink",
+            "resistance_k_per_w": r_source_to_sink,
+        },
+        {
+            "id": "r_sa",
+            "label": "Sink to ambient",
+            "from_node_id": "sink",
+            "to_node_id": "ambient",
+            "resistance_k_per_w": sink["sink_thermal_resistance_k_per_w"],
+        },
+    ]
+
+    time_settings: dict[str, Any] = {
+        "duration_s": float(duration_s),
+        "initial_temperature_c": float(initial_temperature_c),
+    }
+    if time_step_s is not None:
+        time_settings["time_step_s"] = float(time_step_s)
+    if cooldown_target_c is not None:
+        time_settings["cooldown_target_c"] = float(cooldown_target_c)
+
+    model = {
+        "time": time_settings,
+        "profile": dict(profile),
+        "network": {
+            "nodes": nodes,
+            "segments": segments,
+            "heat_inputs": [{"node_id": "source", "profile_role": "primary"}],
+        },
+    }
+
+    return {
+        "model": model,
+        "sink": sink,
+        "reference_heat_load_w": reference_q,
     }
 
 

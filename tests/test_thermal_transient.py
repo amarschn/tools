@@ -6,7 +6,10 @@ import math
 
 import pytest
 
+from pycalcs import heatsinks
 from pycalcs.thermal_transient import (
+    build_plate_fin_transient_model,
+    compute_plate_fin_sink_properties,
     estimate_thermal_capacitance,
     generate_power_profile,
     get_material_presets,
@@ -523,3 +526,166 @@ def test_invalid_model_returns_invalid_status_not_exception() -> None:
     result = simulate_transient_thermal_model(bad)
     assert result["status"] == "invalid"
     assert result["errors"]
+
+
+# --------------------------------------------------------------------------- #
+# Plate-fin bridge                                                            #
+# --------------------------------------------------------------------------- #
+
+
+# Reference plate-fin geometry used across the bridge tests — a typical
+# extruded aluminum sink, vertical, natural convection.
+_PLATE_FIN_GEOMETRY = dict(
+    base_length=0.10,
+    base_width=0.10,
+    base_thickness=0.006,
+    fin_height=0.025,
+    fin_thickness=0.0015,
+    fin_count=12,
+    material_conductivity=201.0,
+    surface_emissivity=0.85,
+    airflow_mode="natural",
+)
+
+
+def test_plate_fin_bridge_R_sa_matches_direct_solver_call() -> None:
+    """The bridge must report exactly the R_sa that analyze_plate_fin_heatsink
+    returns for the same geometry — otherwise transient simulations would
+    silently disagree with the steady-state tool for the same hardware."""
+    direct = heatsinks.analyze_plate_fin_heatsink(
+        heat_load=30.0,
+        ambient_temperature=25.0,
+        target_junction_temperature=125.0,
+        **_PLATE_FIN_GEOMETRY,
+    )
+    bridged = compute_plate_fin_sink_properties(
+        reference_heat_load_w=30.0,
+        ambient_temperature_c=25.0,
+        **_PLATE_FIN_GEOMETRY,
+    )
+    assert math.isclose(
+        bridged["sink_thermal_resistance_k_per_w"],
+        direct["sink_thermal_resistance"],
+        rel_tol=1e-9,
+    )
+
+
+def test_plate_fin_bridge_C_sink_equals_rho_V_cp() -> None:
+    """C_sink = rho * V * cp using the geometry's solid volume and the
+    selected sink material preset."""
+    geom = heatsinks.calculate_plate_fin_geometry(
+        base_length=_PLATE_FIN_GEOMETRY["base_length"],
+        base_width=_PLATE_FIN_GEOMETRY["base_width"],
+        base_thickness=_PLATE_FIN_GEOMETRY["base_thickness"],
+        fin_height=_PLATE_FIN_GEOMETRY["fin_height"],
+        fin_thickness=_PLATE_FIN_GEOMETRY["fin_thickness"],
+        fin_count=_PLATE_FIN_GEOMETRY["fin_count"],
+    )
+    bridged = compute_plate_fin_sink_properties(
+        reference_heat_load_w=30.0,
+        ambient_temperature_c=25.0,
+        sink_material_id="aluminum_6063",
+        **_PLATE_FIN_GEOMETRY,
+    )
+    expected_C = 2700.0 * geom.volume * 900.0
+    assert bridged["sink_volume_m3"] == pytest.approx(geom.volume, rel=1e-9)
+    assert bridged["sink_capacitance_j_per_k"] == pytest.approx(expected_C, rel=1e-9)
+
+
+def test_plate_fin_bridge_material_override() -> None:
+    """Explicit density/cp must override the preset, and a non-preset material
+    must work when both overrides are supplied."""
+    bridged = compute_plate_fin_sink_properties(
+        reference_heat_load_w=30.0,
+        ambient_temperature_c=25.0,
+        sink_material_id=None,
+        sink_density_kg_per_m3=8000.0,
+        sink_heat_capacity_j_per_kgk=500.0,
+        **_PLATE_FIN_GEOMETRY,
+    )
+    assert bridged["sink_density_kg_per_m3"] == 8000.0
+    assert bridged["sink_heat_capacity_j_per_kgk"] == 500.0
+
+
+def test_plate_fin_bridge_warns_when_fin_efficiency_low() -> None:
+    """Tall, thin steel fins push fin efficiency well below the warning
+    threshold; the bridge must surface that to the caller."""
+    inputs = dict(_PLATE_FIN_GEOMETRY)
+    inputs.update(
+        material_conductivity=15.0,  # steel
+        fin_height=0.080,             # very tall
+        fin_thickness=0.0008,         # very thin
+    )
+    bridged = compute_plate_fin_sink_properties(
+        reference_heat_load_w=30.0, ambient_temperature_c=25.0, **inputs,
+    )
+    assert any("fin efficiency" in w.lower() for w in bridged["warnings"])
+
+
+def test_build_plate_fin_transient_model_simulates_cleanly() -> None:
+    """End-to-end: bridge → simulate. The assembled model must validate and
+    produce a finite peak temperature."""
+    bundle = build_plate_fin_transient_model(
+        **_PLATE_FIN_GEOMETRY,
+        junction_to_case_resistance_k_per_w=0.5,
+        interface_resistance_k_per_w=0.05,
+        source_capacitance_j_per_k=12.0,
+        max_source_temperature_c=110.0,
+        profile={"type": "step", "power_w": 30.0},
+        duration_s=600.0,
+        initial_temperature_c=25.0,
+        ambient_temperature_c=25.0,
+    )
+    result = simulate_transient_thermal_model(bundle["model"])
+    assert result["status"] in {"acceptable", "marginal", "unacceptable"}
+    assert math.isfinite(result["summary"]["peak_temperature_c"])
+    # Sanity: the source-to-sink segment combines junction-to-case + interface.
+    r_jc_seg = next(s for s in bundle["model"]["network"]["segments"] if s["id"] == "r_jc")
+    assert r_jc_seg["resistance_k_per_w"] == pytest.approx(0.55)
+    # Sanity: the sink resistance in the model matches the bridge's reported R_sa.
+    r_sa_seg = next(s for s in bundle["model"]["network"]["segments"] if s["id"] == "r_sa")
+    assert r_sa_seg["resistance_k_per_w"] == pytest.approx(
+        bundle["sink"]["sink_thermal_resistance_k_per_w"], rel=1e-9
+    )
+
+
+def test_build_plate_fin_transient_model_uses_mean_power_for_duty() -> None:
+    """For a 50% duty cycle, the plate-fin reference operating point should be
+    the mean power, not the on-power. R_sa drifts only weakly with temperature,
+    but the bridge contract is to use the steady-state-equivalent load."""
+    bundle = build_plate_fin_transient_model(
+        **_PLATE_FIN_GEOMETRY,
+        junction_to_case_resistance_k_per_w=0.5,
+        source_capacitance_j_per_k=12.0,
+        max_source_temperature_c=110.0,
+        profile={
+            "type": "duty_cycle",
+            "on_power_w": 60.0, "on_time_s": 30.0,
+            "off_power_w": 0.0, "off_time_s": 30.0,
+        },
+        duration_s=600.0,
+        initial_temperature_c=25.0,
+        ambient_temperature_c=25.0,
+    )
+    assert bundle["reference_heat_load_w"] == pytest.approx(30.0)
+
+
+def test_build_plate_fin_transient_model_zero_jc_uses_resistance_floor() -> None:
+    """If both junction-to-case and interface resistance are zero, the
+    validator would reject a zero-resistance segment. The bridge inserts a
+    tiny floor so the simulation still runs (physically: source lumped with
+    sink)."""
+    bundle = build_plate_fin_transient_model(
+        **_PLATE_FIN_GEOMETRY,
+        junction_to_case_resistance_k_per_w=0.0,
+        interface_resistance_k_per_w=0.0,
+        source_capacitance_j_per_k=12.0,
+        profile={"type": "step", "power_w": 30.0},
+        duration_s=200.0,
+        initial_temperature_c=25.0,
+        ambient_temperature_c=25.0,
+    )
+    r_jc_seg = next(s for s in bundle["model"]["network"]["segments"] if s["id"] == "r_jc")
+    assert 0.0 < r_jc_seg["resistance_k_per_w"] < 1e-3
+    result = simulate_transient_thermal_model(bundle["model"])
+    assert result["status"] != "invalid"

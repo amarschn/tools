@@ -56,6 +56,24 @@ Implemented in `pycalcs/thermal_transient.py`:
 - `generate_power_profile(profile, time_s)` — series Q(t) for step / pulse / duty
 - `estimate_thermal_capacitance(volume_m3, material_id, …)` — `C = ρ V c_p`
   with material presets (aluminum 6063/6061, copper, steel, FR-4, silicon)
+- `compute_plate_fin_sink_properties(...)` — derives `R_sa` and `C_sink` from
+  plate-fin geometry by calling the steady-state solver in `pycalcs.heatsinks`
+- `build_plate_fin_transient_model(...)` — convenience wrapper that returns a
+  ready-to-simulate model dict from plate-fin geometry plus profile/time
+
+## Sink properties: direct or from plate-fin geometry
+
+The UI offers two modes for sink-side inputs:
+
+- **Direct**: type `R_sa` and `C_sink` outright, or compute `C_sink` from a
+  material preset and a sink volume.
+- **From plate-fin geometry**: enter base/fin dimensions, fin count, alloy,
+  and airflow; both `R_sa` and `C_sink` are computed and shown live above
+  the calculate button. Out-of-envelope warnings (very low fin efficiency,
+  very high channel Reynolds) surface alongside the readout.
+
+The [Heatsink Designer](../simple_thermal/) tool has a **Send to Transient**
+button that opens this tool with the same plate-fin geometry pre-loaded.
 
 ## Tests
 

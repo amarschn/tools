@@ -256,6 +256,35 @@
         }
         body[data-theme="dark"] .info-callout { background: #1e3a5f; color: #93c5fd; }
 
+        /* Sink-mode panels (Direct / Plate-fin geometry) */
+        .sink-panel { display: none; }
+        .sink-panel.active { display: block; }
+
+        /* Plate-fin computed-values readout */
+        .pf-readout {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 10px 14px;
+            margin: 10px 0;
+            font-size: 0.88rem;
+            color: var(--text-color);
+        }
+        .pf-readout-row { display: flex; justify-content: space-between; padding: 2px 0; }
+        .pf-readout-row strong { font-family: var(--font-monospace, monospace); }
+        .pf-warning {
+            color: #92400e;
+            background: #fef3c7;
+            border-left: 3px solid #d97706;
+            padding: 6px 10px;
+            margin-top: 6px;
+            font-size: 0.85rem;
+            border-radius: 4px;
+        }
+        body[data-theme="dark"] .pf-warning {
+            color: #fcd34d; background: #422006; border-left-color: #d97706;
+        }
+
         /* Section heading */
         .section-title {
             text-transform: uppercase; letter-spacing: 0.04em;
@@ -426,68 +455,152 @@
                         <label for="source_limit">Source max temperature (°C)</label>
                         <input type="number" id="source_limit" value="110" step="any">
                     </div>
-                    <div class="row">
-                        <div class="field">
-                            <label for="r_jc">R<sub>jc</sub> (K/W)</label>
-                            <input type="number" id="r_jc" value="0.5" step="any" min="0.001">
-                            <div class="field-help">Source-to-case (junction-to-case)</div>
+                    <div class="field">
+                        <label for="r_jc">R<sub>jc</sub> (K/W)</label>
+                        <input type="number" id="r_jc" value="0.5" step="any" min="0.001">
+                        <div class="field-help">Source-to-case (junction-to-case + interface)</div>
+                    </div>
+
+                    <div class="field">
+                        <label>Sink properties source</label>
+                        <div class="segmented" role="tablist">
+                            <button type="button" class="seg-btn active" data-sink-mode="direct">Direct R<sub>sa</sub> + C<sub>sink</sub></button>
+                            <button type="button" class="seg-btn" data-sink-mode="plate_fin">From plate-fin geometry</button>
                         </div>
+                    </div>
+
+                    <!-- Direct sink mode: user types R_sa and chooses how to give C_sink -->
+                    <div class="sink-panel active" data-sink-mode="direct">
                         <div class="field">
                             <label for="r_sa">R<sub>sa</sub> (K/W)</label>
                             <input type="number" id="r_sa" value="1.5" step="any" min="0.001">
                             <div class="field-help">Sink-to-ambient (steady-state)</div>
                         </div>
-                    </div>
-                    <div class="field">
-                        <label>Capacitance input mode</label>
-                        <div class="segmented" role="tablist">
-                            <button type="button" class="seg-btn active" data-cap-mode="direct">Direct (J/K)</button>
-                            <button type="button" class="seg-btn" data-cap-mode="geometry">From geometry</button>
+                        <div class="field">
+                            <label>Capacitance input mode</label>
+                            <div class="segmented" role="tablist">
+                                <button type="button" class="seg-btn active" data-cap-mode="direct">Direct (J/K)</button>
+                                <button type="button" class="seg-btn" data-cap-mode="geometry">From geometry</button>
+                            </div>
+                        </div>
+
+                        <!-- Direct: user enters J/K outright -->
+                        <div class="cap-panel active" data-cap-mode="direct">
+                            <div class="row">
+                                <div class="field">
+                                    <label for="c_source">C<sub>source</sub> (J/K)</label>
+                                    <input type="number" id="c_source" value="12" step="any" min="0.01">
+                                    <div class="field-help">Source/package thermal mass</div>
+                                </div>
+                                <div class="field">
+                                    <label for="c_sink">C<sub>sink</sub> (J/K)</label>
+                                    <input type="number" id="c_sink" value="310" step="any" min="0.01">
+                                    <div class="field-help">Heatsink thermal mass</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- From geometry: user picks material + volume; J/K computed client-side -->
+                        <div class="cap-panel" data-cap-mode="geometry">
+                            <h3 style="margin-top:0.4rem;">Source body</h3>
+                            <div class="row">
+                                <div class="field">
+                                    <label for="source_material">Material</label>
+                                    <select id="source_material"></select>
+                                </div>
+                                <div class="field">
+                                    <label for="source_volume_cm3">Volume (cm³)</label>
+                                    <input type="number" id="source_volume_cm3" value="5" step="any" min="0.001">
+                                </div>
+                            </div>
+                            <div class="field-help" id="source_cap_readout">C = ρ V c_p = —</div>
+                            <h3>Heatsink body</h3>
+                            <div class="row">
+                                <div class="field">
+                                    <label for="sink_material">Material</label>
+                                    <select id="sink_material"></select>
+                                </div>
+                                <div class="field">
+                                    <label for="sink_volume_cm3">Volume (cm³)</label>
+                                    <input type="number" id="sink_volume_cm3" value="130" step="any" min="0.001">
+                                </div>
+                            </div>
+                            <div class="field-help" id="sink_cap_readout">C = ρ V c_p = —</div>
                         </div>
                     </div>
 
-                    <!-- Direct: user enters J/K outright -->
-                    <div class="cap-panel active" data-cap-mode="direct">
+                    <!-- Plate-fin sink mode: full geometry → both R_sa and C_sink computed -->
+                    <div class="sink-panel" data-sink-mode="plate_fin">
+                        <div class="field-help" style="margin-bottom: 0.5rem;">
+                            R<sub>sa</sub> and C<sub>sink</sub> are computed from heatsink geometry using
+                            the <a href="../simple_thermal/" target="_blank">plate-fin steady-state solver</a>.
+                            You still enter C<sub>source</sub> below.
+                        </div>
                         <div class="row">
                             <div class="field">
-                                <label for="c_source">C<sub>source</sub> (J/K)</label>
-                                <input type="number" id="c_source" value="12" step="any" min="0.01">
-                                <div class="field-help">Source/package thermal mass</div>
+                                <label for="pf_base_length">Base length L (mm)</label>
+                                <input type="number" id="pf_base_length" value="100" step="any" min="1">
+                                <div class="field-help">Along airflow</div>
                             </div>
                             <div class="field">
-                                <label for="c_sink">C<sub>sink</sub> (J/K)</label>
-                                <input type="number" id="c_sink" value="310" step="any" min="0.01">
-                                <div class="field-help">Heatsink thermal mass</div>
+                                <label for="pf_base_width">Base width W (mm)</label>
+                                <input type="number" id="pf_base_width" value="100" step="any" min="1">
                             </div>
                         </div>
-                    </div>
-
-                    <!-- From geometry: user picks material + volume; J/K computed client-side -->
-                    <div class="cap-panel" data-cap-mode="geometry">
-                        <h3 style="margin-top:0.4rem;">Source body</h3>
                         <div class="row">
                             <div class="field">
-                                <label for="source_material">Material</label>
-                                <select id="source_material"></select>
+                                <label for="pf_base_thickness">Base thickness (mm)</label>
+                                <input type="number" id="pf_base_thickness" value="6" step="any" min="0.1">
                             </div>
                             <div class="field">
-                                <label for="source_volume_cm3">Volume (cm³)</label>
-                                <input type="number" id="source_volume_cm3" value="5" step="any" min="0.001">
+                                <label for="pf_fin_height">Fin height (mm)</label>
+                                <input type="number" id="pf_fin_height" value="25" step="any" min="1">
                             </div>
                         </div>
-                        <div class="field-help" id="source_cap_readout">C = ρ V c_p = —</div>
-                        <h3>Heatsink body</h3>
                         <div class="row">
                             <div class="field">
-                                <label for="sink_material">Material</label>
-                                <select id="sink_material"></select>
+                                <label for="pf_fin_thickness">Fin thickness (mm)</label>
+                                <input type="number" id="pf_fin_thickness" value="1.5" step="any" min="0.1">
                             </div>
                             <div class="field">
-                                <label for="sink_volume_cm3">Volume (cm³)</label>
-                                <input type="number" id="sink_volume_cm3" value="130" step="any" min="0.001">
+                                <label for="pf_fin_count">Fin count</label>
+                                <input type="number" id="pf_fin_count" value="12" step="1" min="2">
                             </div>
                         </div>
-                        <div class="field-help" id="sink_cap_readout">C = ρ V c_p = —</div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="pf_material">Heatsink material</label>
+                                <select id="pf_material">
+                                    <option value="aluminum_6063" data-conductivity="201" data-emissivity="0.10">Aluminum 6063 (k=201)</option>
+                                    <option value="aluminum_6061" data-conductivity="167" data-emissivity="0.10">Aluminum 6061 (k=167)</option>
+                                    <option value="copper_c110" data-conductivity="385" data-emissivity="0.05">Copper C110 (k=385)</option>
+                                    <option value="aluminum_6063_anodized" data-conductivity="201" data-emissivity="0.85">Anodized aluminum (k=201, ε=0.85)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="pf_airflow">Airflow</label>
+                                <select id="pf_airflow">
+                                    <option value="natural">Natural convection</option>
+                                    <option value="forced">Forced (m/s)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="field" id="pf_velocity_field" style="display:none;">
+                            <label for="pf_velocity">Approach velocity (m/s)</label>
+                            <input type="number" id="pf_velocity" value="2" step="any" min="0.1">
+                        </div>
+                        <div class="pf-readout" id="pf_readout">
+                            <div class="pf-readout-row"><span>R<sub>sa</sub></span><strong id="pf_r_sa_out">—</strong></div>
+                            <div class="pf-readout-row"><span>C<sub>sink</sub></span><strong id="pf_c_sink_out">—</strong></div>
+                            <div class="pf-readout-row"><span>Sink volume</span><strong id="pf_volume_out">—</strong></div>
+                            <div class="pf-readout-row"><span>Sink mass</span><strong id="pf_mass_out">—</strong></div>
+                            <div id="pf_warnings"></div>
+                        </div>
+                        <div class="field">
+                            <label for="pf_c_source">C<sub>source</sub> (J/K)</label>
+                            <input type="number" id="pf_c_source" value="12" step="any" min="0.01">
+                            <div class="field-help">Source/package thermal mass — not derivable from heatsink geometry</div>
+                        </div>
                     </div>
 
                     <div class="section-title">Power Profile</div>
@@ -710,6 +823,11 @@
         let pyToolModule = null;
         let lastResult = null;
         let lastModel = null;
+        // Cache of the most recent plate-fin bridge call. Populated by
+        // updatePlateFinReadout() and consumed by buildModel() when the user
+        // is in plate-fin sink mode. Holds { rSa, cSink, warnings } or null.
+        let lastPlateFinResult = null;
+        let plateFinDebounce = null;
 
         // Mirror of pycalcs/thermal_transient.MATERIAL_PRESETS — kept in JS so
         // the capacitance-from-geometry mode doesn't need a Pyodide round-trip
@@ -752,7 +870,9 @@
                 document.getElementById('calculate-btn').disabled = false;
                 document.getElementById('loading-overlay').classList.add('hidden');
                 bindCapacitanceModeUI();
+                bindSinkModeUI();
                 bindIOButtons();
+                tryApplyHandoffFromQuery();
             } catch (error) {
                 loadingText.textContent = 'Failed to load: ' + error.message;
                 console.error(error);
@@ -851,6 +971,146 @@
         }
 
         // -----------------------------------------------------------------
+        // Plate-fin sink mode: compute R_sa + C_sink from heatsink geometry
+        // by calling pycalcs.thermal_transient.compute_plate_fin_sink_properties
+        // through Pyodide. Debounced on input change.
+        // -----------------------------------------------------------------
+        function getSinkMode() {
+            const active = document.querySelector('.seg-btn.active[data-sink-mode]');
+            return active ? active.dataset.sinkMode : 'direct';
+        }
+        function plateFinReferencePower() {
+            const profileType = document.getElementById('profile_type').value;
+            if (profileType === 'step') {
+                return Math.max(num('step_power') || 0, 1.0);
+            }
+            if (profileType === 'pulse') {
+                return Math.max(num('pulse_power') || 0, 1.0);
+            }
+            // Duty cycle: mean power.
+            const onP = num('duty_on_power') || 0;
+            const offP = num('duty_off_power') || 0;
+            const onT = num('duty_on_time') || 0;
+            const offT = num('duty_off_time') || 0;
+            const period = onT + offT;
+            return Math.max(period > 0 ? (onP * onT + offP * offT) / period : onP, 1.0);
+        }
+        function plateFinInputs() {
+            const matEl = document.getElementById('pf_material');
+            const opt = matEl.options[matEl.selectedIndex];
+            const conductivity = parseFloat(opt.dataset.conductivity);
+            const emissivity = parseFloat(opt.dataset.emissivity);
+            // Materials with low emissivity (bare aluminum) get rough-anodized
+            // coverage on real production sinks; we still respect the user's
+            // explicit choice here.
+            const airflow = document.getElementById('pf_airflow').value;
+            const inputs = {
+                base_length: num('pf_base_length') / 1000.0,
+                base_width: num('pf_base_width') / 1000.0,
+                base_thickness: num('pf_base_thickness') / 1000.0,
+                fin_height: num('pf_fin_height') / 1000.0,
+                fin_thickness: num('pf_fin_thickness') / 1000.0,
+                fin_count: parseInt(document.getElementById('pf_fin_count').value, 10),
+                material_conductivity: conductivity,
+                surface_emissivity: emissivity,
+                airflow_mode: airflow,
+                approach_velocity: airflow === 'forced' ? num('pf_velocity') : 0.0,
+                volumetric_flow_rate: 0.0,
+                fan_max_pressure: 0.0,
+                fan_max_flow_rate: 0.0,
+                pressure_pa: 101325.0,
+                orientation: 'vertical',
+                ducted: true,
+                reference_heat_load_w: plateFinReferencePower(),
+                ambient_temperature_c: num('ambient'),
+                // Map heatsink alloy → transient-side material preset for cp/rho.
+                // Anodized aluminum uses the same density/cp as 6063.
+                sink_material_id:
+                    matEl.value === 'copper_c110' ? 'copper_c110'
+                    : matEl.value === 'aluminum_6061' ? 'aluminum_6061'
+                    : 'aluminum_6063',
+            };
+            return inputs;
+        }
+        function setPlateFinReadout(text, fields, warnings) {
+            ['pf_r_sa_out', 'pf_c_sink_out', 'pf_volume_out', 'pf_mass_out'].forEach(id => {
+                document.getElementById(id).textContent = fields[id] || '—';
+            });
+            const warnEl = document.getElementById('pf_warnings');
+            warnEl.innerHTML = '';
+            (warnings || []).forEach(w => {
+                const div = document.createElement('div');
+                div.className = 'pf-warning';
+                div.textContent = w;
+                warnEl.appendChild(div);
+            });
+        }
+        async function updatePlateFinReadout() {
+            if (!pyToolModule || getSinkMode() !== 'plate_fin') return;
+            const inputs = plateFinInputs();
+            try {
+                const proxy = pyToolModule.compute_plate_fin_sink_properties.callKwargs(inputs);
+                const result = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                lastPlateFinResult = {
+                    rSa: result.sink_thermal_resistance_k_per_w,
+                    cSink: result.sink_capacitance_j_per_k,
+                    volume: result.sink_volume_m3,
+                    mass: result.sink_mass_kg,
+                    warnings: result.warnings || [],
+                };
+                setPlateFinReadout(null, {
+                    pf_r_sa_out: lastPlateFinResult.rSa.toFixed(3) + ' K/W',
+                    pf_c_sink_out: lastPlateFinResult.cSink.toFixed(1) + ' J/K',
+                    pf_volume_out: (lastPlateFinResult.volume * 1e6).toFixed(1) + ' cm³',
+                    pf_mass_out: lastPlateFinResult.mass.toFixed(2) + ' kg',
+                }, lastPlateFinResult.warnings);
+            } catch (err) {
+                lastPlateFinResult = null;
+                setPlateFinReadout(null,
+                    { pf_r_sa_out: '—', pf_c_sink_out: '—', pf_volume_out: '—', pf_mass_out: '—' },
+                    [String(err.message || err)],
+                );
+            }
+        }
+        function schedulePlateFinUpdate() {
+            if (plateFinDebounce) clearTimeout(plateFinDebounce);
+            plateFinDebounce = setTimeout(updatePlateFinReadout, 150);
+        }
+        function bindSinkModeUI() {
+            document.querySelectorAll('.seg-btn[data-sink-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.seg-btn[data-sink-mode]')
+                        .forEach(b => b.classList.toggle('active', b === btn));
+                    document.querySelectorAll('.sink-panel')
+                        .forEach(p => p.classList.toggle('active', p.dataset.sinkMode === btn.dataset.sinkMode));
+                    if (btn.dataset.sinkMode === 'plate_fin') updatePlateFinReadout();
+                });
+            });
+            // Geometry inputs that drive the readout.
+            const pfIds = [
+                'pf_base_length', 'pf_base_width', 'pf_base_thickness',
+                'pf_fin_height', 'pf_fin_thickness', 'pf_fin_count',
+                'pf_material', 'pf_airflow', 'pf_velocity',
+            ];
+            pfIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', schedulePlateFinUpdate);
+            });
+            // Profile / ambient changes shift the reference operating point.
+            ['ambient', 'profile_type', 'step_power', 'pulse_power',
+             'duty_on_power', 'duty_off_power', 'duty_on_time', 'duty_off_time']
+                .forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', schedulePlateFinUpdate);
+                });
+            document.getElementById('pf_airflow').addEventListener('change', () => {
+                const isForced = document.getElementById('pf_airflow').value === 'forced';
+                document.getElementById('pf_velocity_field').style.display = isForced ? 'block' : 'none';
+            });
+        }
+
+        // -----------------------------------------------------------------
         // Build the model dictionary the Python solver expects
         // -----------------------------------------------------------------
         function buildModel() {
@@ -859,8 +1119,22 @@
             const initial = num('initial');
             const sourceLimit = num('source_limit');
             const rJC = num('r_jc');
-            const rSA = num('r_sa');
-            const { cSource, cSink } = getCapacitances();
+
+            let rSA, cSource, cSink;
+            if (getSinkMode() === 'plate_fin') {
+                if (!lastPlateFinResult) {
+                    throw new Error(
+                        'Plate-fin geometry has not been evaluated yet. ' +
+                        'Adjust an input or wait for Pyodide to finish loading.'
+                    );
+                }
+                rSA = lastPlateFinResult.rSa;
+                cSink = lastPlateFinResult.cSink;
+                cSource = num('pf_c_source');
+            } else {
+                rSA = num('r_sa');
+                ({ cSource, cSink } = getCapacitances());
+            }
 
             let profile, duration;
             if (profileType === 'step') {
@@ -967,8 +1241,12 @@
             if (!model || !model.network || !model.profile || !model.time) {
                 throw new Error('Imported file is missing required keys (time, profile, network).');
             }
-            // Switch to direct capacitance mode on import — geometry inputs
-            // aren't part of the saved model.
+            // Switch to direct sink + direct capacitance mode on import —
+            // geometry inputs aren't part of the saved model.
+            document.querySelectorAll('.seg-btn[data-sink-mode]')
+                .forEach(b => b.classList.toggle('active', b.dataset.sinkMode === 'direct'));
+            document.querySelectorAll('.sink-panel')
+                .forEach(p => p.classList.toggle('active', p.dataset.sinkMode === 'direct'));
             document.querySelectorAll('.seg-btn[data-cap-mode]')
                 .forEach(b => b.classList.toggle('active', b.dataset.capMode === 'direct'));
             document.querySelectorAll('.cap-panel')
@@ -1022,6 +1300,67 @@
                 setVal('duty_off_time', model.profile.off_time_s);
                 setVal('duty_run_time', model.time.duration_s);
             }
+        }
+
+        // -----------------------------------------------------------------
+        // Handoff from simple_thermal: when arriving with ?from=plate_fin
+        // and a sessionStorage payload, populate the plate-fin geometry
+        // panel and switch into plate-fin sink mode.
+        // -----------------------------------------------------------------
+        function tryApplyHandoffFromQuery() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('from') !== 'plate_fin') return;
+            let payload;
+            try {
+                const raw = sessionStorage.getItem('transient_heatsink_handoff');
+                if (!raw) return;
+                payload = JSON.parse(raw);
+                sessionStorage.removeItem('transient_heatsink_handoff');
+            } catch (err) {
+                console.warn('Handoff payload was unreadable:', err);
+                return;
+            }
+
+            const setVal = (id, v) => {
+                const el = document.getElementById(id);
+                if (el && v != null && Number.isFinite(parseFloat(v))) el.value = v;
+            };
+            // Geometry: simple_thermal uses metres; the form uses millimetres.
+            if (payload.base_length != null)    setVal('pf_base_length',    payload.base_length    * 1000);
+            if (payload.base_width != null)     setVal('pf_base_width',     payload.base_width     * 1000);
+            if (payload.base_thickness != null) setVal('pf_base_thickness', payload.base_thickness * 1000);
+            if (payload.fin_height != null)     setVal('pf_fin_height',     payload.fin_height     * 1000);
+            if (payload.fin_thickness != null)  setVal('pf_fin_thickness',  payload.fin_thickness  * 1000);
+            if (payload.fin_count != null)      setVal('pf_fin_count',      payload.fin_count);
+
+            // Map conductivity → material option whose data-conductivity matches.
+            if (payload.material_conductivity != null) {
+                const matEl = document.getElementById('pf_material');
+                let bestIdx = 0;
+                let bestErr = Infinity;
+                for (let i = 0; i < matEl.options.length; i++) {
+                    const k = parseFloat(matEl.options[i].dataset.conductivity);
+                    const err = Math.abs(k - payload.material_conductivity);
+                    if (err < bestErr) { bestErr = err; bestIdx = i; }
+                }
+                matEl.selectedIndex = bestIdx;
+            }
+            if (payload.airflow_mode) {
+                document.getElementById('pf_airflow').value =
+                    payload.airflow_mode === 'fan_curve' ? 'forced' : payload.airflow_mode;
+                const isForced = document.getElementById('pf_airflow').value === 'forced';
+                document.getElementById('pf_velocity_field').style.display = isForced ? 'block' : 'none';
+            }
+            if (payload.approach_velocity != null) setVal('pf_velocity', payload.approach_velocity);
+            if (payload.ambient_temperature_c != null) setVal('ambient', payload.ambient_temperature_c);
+            if (payload.heat_load_w != null) setVal('step_power', payload.heat_load_w);
+
+            // Switch into plate-fin sink mode.
+            document.querySelectorAll('.seg-btn[data-sink-mode]')
+                .forEach(b => b.classList.toggle('active', b.dataset.sinkMode === 'plate_fin'));
+            document.querySelectorAll('.sink-panel')
+                .forEach(p => p.classList.toggle('active', p.dataset.sinkMode === 'plate_fin'));
+            updatePlateFinReadout();
         }
 
         // -----------------------------------------------------------------
