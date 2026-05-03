@@ -413,28 +413,89 @@ def test_validation_rejects_zero_resistance() -> None:
 def test_steady_state_asymptote_flags_unacceptable_even_when_window_too_short() -> None:
     """If the simulation window stops before reaching the limit but the
     steady-state asymptote crosses it, the status must still be unacceptable.
-    Otherwise users see a falsely-OK transient and miss the long-term failure.
+
+    Step profiles auto-extend to ~5*tau_slow so they would normally reach the
+    asymptote on their own; the asymptote-only check is what catches duty
+    cycles whose walk-up is slower than the user's chosen window.
     """
+    R = 1.0
+    C = 1000.0  # tau_slow = 1000 s — far longer than the 20 s window below
+    ambient = 25.0
+    limit = 80.0
+    # Mean power = 60 W; asymptote = ambient + 60*1 = 85 °C, above the limit.
+    model = one_lump_model(
+        capacitance=C,
+        resistance=R,
+        power=0.0,
+        duration=20.0,
+        ambient=ambient,
+        max_temperature_c=limit,
+        profile_type="duty_cycle",
+        profile_extras={
+            "on_power_w": 120.0, "on_time_s": 5.0,
+            "off_power_w": 0.0, "off_time_s": 5.0,
+        },
+        time_step_s=0.5,
+    )
+    result = simulate_transient_thermal_model(model)
+    assert result["summary"]["peak_temperature_c"] < limit
+    assert result["summary"]["steady_state_temperature_c"] == pytest.approx(85.0, rel=1e-3)
+    assert result["status"] == "unacceptable"
+
+
+def test_auto_extends_step_duration_to_capture_asymptote() -> None:
+    """Step profiles with too-short user duration should auto-extend to ~5*tau_slow
+    so the temperature plot reaches the asymptote and the user can see whether
+    the design ultimately exceeds its limit."""
     R = 2.0
     C = 100.0
     Q = 50.0
-    ambient = 25.0
-    limit = 110.0
-    asymptote = ambient + Q * R  # 125 C, above the 110 C limit
-    assert asymptote > limit  # sanity
-    # Run for only 0.5 RC -- simulated peak stays well below the limit.
+    # Slowest tau = R*C = 200 s.  User asks for 50 s — way too short.
     model = one_lump_model(
         capacitance=C,
         resistance=R,
         power=Q,
-        duration=0.5 * R * C,
-        ambient=ambient,
-        max_temperature_c=limit,
+        duration=50.0,
+        ambient=25.0,
+        max_temperature_c=110.0,
     )
     result = simulate_transient_thermal_model(model)
-    assert result["summary"]["peak_temperature_c"] < limit
-    assert result["summary"]["steady_state_temperature_c"] == pytest.approx(asymptote, rel=1e-6)
-    assert result["status"] == "unacceptable"
+    assert result["summary"]["requested_duration_s"] == pytest.approx(50.0)
+    # Simulated window should be ~5 * tau_slow = 1000 s.
+    assert result["summary"]["simulated_duration_s"] >= 5.0 * R * C * 0.95
+    assert result["summary"]["auto_extended_duration"] is True
+    # The warning surfaces the change so users know their input was overridden.
+    assert any("extended" in w.lower() for w in result["warnings"])
+
+
+def test_no_auto_extension_when_user_duration_already_long() -> None:
+    """If the user picks a duration well past the slow time constant, leave it alone."""
+    R = 1.0
+    C = 50.0
+    model = one_lump_model(
+        capacitance=C, resistance=R, power=10.0, duration=10.0 * R * C, ambient=25.0,
+    )
+    result = simulate_transient_thermal_model(model)
+    assert result["summary"]["auto_extended_duration"] is False
+    assert result["summary"]["simulated_duration_s"] == pytest.approx(10.0 * R * C)
+
+
+def test_pulse_duration_not_auto_extended() -> None:
+    """Pulse profiles have a meaningful user-specified window; never override it."""
+    R = 5.0
+    C = 100.0
+    # Slowest tau = 500 s.  Run the pulse for 30 s, cool for 60 s — total 90 s.
+    model = one_lump_model(
+        capacitance=C,
+        resistance=R,
+        power=0.0,
+        duration=90.0,
+        ambient=25.0,
+        profile_type="pulse",
+        profile_extras={"pulse_power_w": 100.0, "pulse_duration_s": 30.0, "cooldown_power_w": 0.0},
+    )
+    result = simulate_transient_thermal_model(model)
+    assert result["summary"]["auto_extended_duration"] is False
 
 
 def test_slowest_mode_tau_matches_two_node_eigenvalue() -> None:

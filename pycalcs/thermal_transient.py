@@ -496,11 +496,9 @@ def simulate_transient_thermal_model(model: dict[str, Any]) -> dict[str, Any]:
     profile = normalized["profile"]
     time_settings = normalized["time"]
 
-    duration = float(time_settings["duration_s"])
+    requested_duration = float(time_settings["duration_s"])
     dt_input = time_settings.get("time_step_s")
     initial_temp = float(time_settings["initial_temperature_c"])
-
-    time_grid = _time_grid(duration, dt_input, profile)
 
     boundary_node = next(n for n in nodes if n["kind"] == "boundary")
     dynamic_nodes = [n for n in nodes if n["kind"] == "dynamic"]
@@ -508,8 +506,6 @@ def simulate_transient_thermal_model(model: dict[str, Any]) -> dict[str, Any]:
 
     primary_input = heat_inputs[0]
     primary_node_id = primary_input["node_id"]
-
-    power_series = generate_power_profile(profile, time_grid)
 
     # Initial temperatures
     node_temperatures: dict[str, list[float]] = {}
@@ -571,6 +567,26 @@ def simulate_transient_thermal_model(model: dict[str, Any]) -> dict[str, Any]:
     dominant_tau = slowest_tau if slowest_tau is not None else (
         time_constants_list[0]["tau_s"] if time_constants_list else 0.0
     )
+
+    # Auto-extend the simulation window for step profiles whose user-supplied
+    # duration is shorter than ~5 slow time constants — otherwise the plot can
+    # truncate before the asymptote, leading users to read a falsely-OK peak
+    # while the steady-state target sits above the limit.  Pulse and duty
+    # cycles have a natural user-specified window and are not extended.
+    auto_extension_warnings: list[str] = []
+    duration = requested_duration
+    if profile.get("type") == "step" and slowest_tau is not None and math.isfinite(slowest_tau):
+        target_duration = 5.0 * slowest_tau
+        if requested_duration < target_duration:
+            duration = target_duration
+            auto_extension_warnings.append(
+                f"Simulation window extended from {requested_duration:.1f} s to "
+                f"{duration:.1f} s (5x slowest time constant {slowest_tau:.1f} s) so "
+                "the asymptote is visible in the temperature plot."
+            )
+
+    time_grid = _time_grid(duration, dt_input, profile)
+    power_series = generate_power_profile(profile, time_grid)
 
     # Steady-state asymptote: G T_ss = Q + G_boundary * T_boundary.
     steady_rhs = [g_boundary_vec[i] * boundary_temp for i in range(n_dyn)]
@@ -795,6 +811,9 @@ def simulate_transient_thermal_model(model: dict[str, Any]) -> dict[str, Any]:
         "dominant_time_constant_s": dominant_tau,
         "slowest_mode_tau_s": slowest_tau,
         "limiting_node_id": limiting_node_id,
+        "requested_duration_s": requested_duration,
+        "simulated_duration_s": duration,
+        "auto_extended_duration": duration > requested_duration + 1e-9,
     }
 
     subst_governing = (
@@ -816,7 +835,7 @@ def simulate_transient_thermal_model(model: dict[str, Any]) -> dict[str, Any]:
         "cycle_summary": cycle_summary,
         "diagnosis": diagnosis,
         "recommendations": recommendations,
-        "warnings": validation["warnings"],
+        "warnings": list(validation["warnings"]) + auto_extension_warnings,
         "errors": [],
         "subst_governing": subst_governing,
     }

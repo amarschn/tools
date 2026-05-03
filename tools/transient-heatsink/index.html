@@ -206,8 +206,55 @@
         .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Profile panels: show the inputs that match the selected profile */
-        .profile-panel { display: none; }
-        .profile-panel.active { display: block; }
+        .profile-panel, .cap-panel { display: none; }
+        .profile-panel.active, .cap-panel.active { display: block; }
+
+        /* Segmented control */
+        .segmented {
+            display: inline-flex;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            background: var(--bg-card);
+        }
+        .seg-btn {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.85rem; font-weight: 600;
+            padding: 8px 14px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .seg-btn + .seg-btn { border-left: 1px solid var(--border-color); }
+        .seg-btn.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        /* Secondary buttons + IO actions row */
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            padding: 9px 12px;
+        }
+        .btn-secondary:hover { background: var(--primary-light); }
+        .io-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .io-actions .btn { flex: 1; }
+
+        /* Auto-extension callout */
+        .info-callout {
+            background: #dbeafe; color: #1e40af;
+            padding: 10px 14px; border-radius: var(--border-radius);
+            margin-bottom: 14px; font-size: 0.88rem;
+        }
+        body[data-theme="dark"] .info-callout { background: #1e3a5f; color: #93c5fd; }
 
         /* Section heading */
         .section-title {
@@ -391,17 +438,56 @@
                             <div class="field-help">Sink-to-ambient (steady-state)</div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="field">
-                            <label for="c_source">C<sub>source</sub> (J/K)</label>
-                            <input type="number" id="c_source" value="12" step="any" min="0.01">
-                            <div class="field-help">Source/package thermal mass</div>
+                    <div class="field">
+                        <label>Capacitance input mode</label>
+                        <div class="segmented" role="tablist">
+                            <button type="button" class="seg-btn active" data-cap-mode="direct">Direct (J/K)</button>
+                            <button type="button" class="seg-btn" data-cap-mode="geometry">From geometry</button>
                         </div>
-                        <div class="field">
-                            <label for="c_sink">C<sub>sink</sub> (J/K)</label>
-                            <input type="number" id="c_sink" value="310" step="any" min="0.01">
-                            <div class="field-help">Heatsink thermal mass</div>
+                    </div>
+
+                    <!-- Direct: user enters J/K outright -->
+                    <div class="cap-panel active" data-cap-mode="direct">
+                        <div class="row">
+                            <div class="field">
+                                <label for="c_source">C<sub>source</sub> (J/K)</label>
+                                <input type="number" id="c_source" value="12" step="any" min="0.01">
+                                <div class="field-help">Source/package thermal mass</div>
+                            </div>
+                            <div class="field">
+                                <label for="c_sink">C<sub>sink</sub> (J/K)</label>
+                                <input type="number" id="c_sink" value="310" step="any" min="0.01">
+                                <div class="field-help">Heatsink thermal mass</div>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- From geometry: user picks material + volume; J/K computed client-side -->
+                    <div class="cap-panel" data-cap-mode="geometry">
+                        <h3 style="margin-top:0.4rem;">Source body</h3>
+                        <div class="row">
+                            <div class="field">
+                                <label for="source_material">Material</label>
+                                <select id="source_material"></select>
+                            </div>
+                            <div class="field">
+                                <label for="source_volume_cm3">Volume (cm³)</label>
+                                <input type="number" id="source_volume_cm3" value="5" step="any" min="0.001">
+                            </div>
+                        </div>
+                        <div class="field-help" id="source_cap_readout">C = ρ V c_p = —</div>
+                        <h3>Heatsink body</h3>
+                        <div class="row">
+                            <div class="field">
+                                <label for="sink_material">Material</label>
+                                <select id="sink_material"></select>
+                            </div>
+                            <div class="field">
+                                <label for="sink_volume_cm3">Volume (cm³)</label>
+                                <input type="number" id="sink_volume_cm3" value="130" step="any" min="0.001">
+                            </div>
+                        </div>
+                        <div class="field-help" id="sink_cap_readout">C = ρ V c_p = —</div>
                     </div>
 
                     <div class="section-title">Power Profile</div>
@@ -438,15 +524,9 @@
                                 <input type="number" id="pulse_duration" value="20" step="any" min="0.1">
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="field">
-                                <label for="pulse_cooldown">Cooldown duration (s)</label>
-                                <input type="number" id="pulse_cooldown" value="180" step="any" min="0">
-                            </div>
-                            <div class="field">
-                                <label for="pulse_cooldown_target">Cooldown target (°C)</label>
-                                <input type="number" id="pulse_cooldown_target" value="40" step="any">
-                            </div>
+                        <div class="field">
+                            <label for="pulse_cooldown">Cooldown duration (s)</label>
+                            <input type="number" id="pulse_cooldown" value="180" step="any" min="0">
                         </div>
                     </div>
 
@@ -478,7 +558,19 @@
                         </div>
                     </div>
 
+                    <div class="section-title">Cooldown Target (optional)</div>
+                    <div class="field">
+                        <label for="cooldown_target">Cool-to temperature (°C)</label>
+                        <input type="number" id="cooldown_target" value="40" step="any">
+                        <div class="field-help">Reports the time to drop below this value after the simulated peak. Only meaningful when the profile includes a cooldown phase (pulse or duty); reads "—" for steady-state step loads.</div>
+                    </div>
+
                     <button type="submit" id="calculate-btn" class="btn btn-primary" disabled>Calculate</button>
+                    <div class="io-actions">
+                        <button type="button" class="btn btn-secondary" id="export-btn">Export model JSON</button>
+                        <button type="button" class="btn btn-secondary" id="import-btn">Import model JSON</button>
+                        <input type="file" id="import-file" accept="application/json,.json" style="display:none;">
+                    </div>
                 </form>
             </section>
 
@@ -496,6 +588,7 @@
                     </div>
                     <div id="results-body" style="display: none;">
                         <div id="status-banner" class="status-banner"></div>
+                        <div id="auto-extend-callout" class="info-callout" style="display:none;"></div>
                         <div id="summary-grid" class="summary-grid"></div>
                         <h3>Temperature vs time</h3>
                         <div id="temp-plot" class="plot"></div>
@@ -616,6 +709,19 @@
         let pyodideInstance = null;
         let pyToolModule = null;
         let lastResult = null;
+        let lastModel = null;
+
+        // Mirror of pycalcs/thermal_transient.MATERIAL_PRESETS — kept in JS so
+        // the capacitance-from-geometry mode doesn't need a Pyodide round-trip
+        // on every input change. If the Python presets change, update both.
+        const MATERIAL_PRESETS = {
+            aluminum_6063: { label: 'Aluminum 6063', density: 2700, cp: 900 },
+            aluminum_6061: { label: 'Aluminum 6061', density: 2700, cp: 896 },
+            copper_c110:   { label: 'Copper C110',  density: 8960, cp: 385 },
+            steel:         { label: 'Carbon steel', density: 7850, cp: 470 },
+            fr4:           { label: 'FR-4',         density: 1850, cp: 900 },
+            silicon:       { label: 'Silicon die',  density: 2330, cp: 700 },
+        };
 
         // -----------------------------------------------------------------
         // Pyodide bootstrap
@@ -645,6 +751,8 @@
                 document.getElementById('calc-form').addEventListener('submit', handleCalculate);
                 document.getElementById('calculate-btn').disabled = false;
                 document.getElementById('loading-overlay').classList.add('hidden');
+                bindCapacitanceModeUI();
+                bindIOButtons();
             } catch (error) {
                 loadingText.textContent = 'Failed to load: ' + error.message;
                 console.error(error);
@@ -673,6 +781,76 @@
         function num(id) { return parseFloat(document.getElementById(id).value); }
 
         // -----------------------------------------------------------------
+        // Capacitance-from-geometry: compute C = rho * V * cp client-side
+        // -----------------------------------------------------------------
+        function getCapMode() {
+            const active = document.querySelector('.seg-btn.active[data-cap-mode]');
+            return active ? active.dataset.capMode : 'direct';
+        }
+        function populateMaterialDropdowns() {
+            const opts = Object.entries(MATERIAL_PRESETS).map(([id, m]) =>
+                `<option value="${id}">${m.label}</option>`
+            ).join('');
+            const src = document.getElementById('source_material');
+            const snk = document.getElementById('sink_material');
+            if (src) src.innerHTML = opts;
+            if (snk) snk.innerHTML = opts;
+            if (src && !src.value) src.value = 'silicon';
+            if (snk && !snk.value) snk.value = 'aluminum_6063';
+        }
+        function computeCapFromGeometry(materialId, volumeCm3) {
+            const m = MATERIAL_PRESETS[materialId];
+            if (!m || !Number.isFinite(volumeCm3) || volumeCm3 <= 0) return NaN;
+            return m.density * (volumeCm3 * 1e-6) * m.cp;  // V cm³ → m³
+        }
+        function updateGeometryReadouts() {
+            const cs = computeCapFromGeometry(
+                document.getElementById('source_material').value,
+                num('source_volume_cm3'),
+            );
+            const ck = computeCapFromGeometry(
+                document.getElementById('sink_material').value,
+                num('sink_volume_cm3'),
+            );
+            document.getElementById('source_cap_readout').textContent =
+                'C = ρ V c_p = ' + (Number.isFinite(cs) ? cs.toFixed(2) + ' J/K' : '—');
+            document.getElementById('sink_cap_readout').textContent =
+                'C = ρ V c_p = ' + (Number.isFinite(ck) ? ck.toFixed(2) + ' J/K' : '—');
+        }
+        function bindCapacitanceModeUI() {
+            populateMaterialDropdowns();
+            document.querySelectorAll('.seg-btn[data-cap-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.seg-btn[data-cap-mode]')
+                        .forEach(b => b.classList.toggle('active', b === btn));
+                    document.querySelectorAll('.cap-panel')
+                        .forEach(p => p.classList.toggle('active', p.dataset.capMode === btn.dataset.capMode));
+                });
+            });
+            ['source_material', 'sink_material', 'source_volume_cm3', 'sink_volume_cm3']
+                .forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', updateGeometryReadouts);
+                });
+            updateGeometryReadouts();
+        }
+
+        function getCapacitances() {
+            if (getCapMode() === 'geometry') {
+                const cs = computeCapFromGeometry(
+                    document.getElementById('source_material').value,
+                    num('source_volume_cm3'),
+                );
+                const ck = computeCapFromGeometry(
+                    document.getElementById('sink_material').value,
+                    num('sink_volume_cm3'),
+                );
+                return { cSource: cs, cSink: ck };
+            }
+            return { cSource: num('c_source'), cSink: num('c_sink') };
+        }
+
+        // -----------------------------------------------------------------
         // Build the model dictionary the Python solver expects
         // -----------------------------------------------------------------
         function buildModel() {
@@ -682,10 +860,9 @@
             const sourceLimit = num('source_limit');
             const rJC = num('r_jc');
             const rSA = num('r_sa');
-            const cSource = num('c_source');
-            const cSink = num('c_sink');
+            const { cSource, cSink } = getCapacitances();
 
-            let profile, duration, cooldownTarget = null;
+            let profile, duration;
             if (profileType === 'step') {
                 profile = { type: 'step', power_w: num('step_power') };
                 duration = num('step_duration');
@@ -699,7 +876,6 @@
                     cooldown_power_w: 0,
                 };
                 duration = pulseDur + cooldown;
-                cooldownTarget = num('pulse_cooldown_target');
             } else {
                 profile = {
                     type: 'duty_cycle',
@@ -710,6 +886,11 @@
                 };
                 duration = num('duty_run_time');
             }
+
+            const cooldownInput = document.getElementById('cooldown_target');
+            const cooldownTarget = cooldownInput && cooldownInput.value !== ''
+                ? parseFloat(cooldownInput.value)
+                : null;
 
             return {
                 time: {
@@ -738,6 +919,109 @@
                     heat_inputs: [{ node_id: 'source', profile_role: 'primary' }],
                 },
             };
+        }
+
+        // -----------------------------------------------------------------
+        // JSON import/export — round-trip the same model dict the solver
+        // accepts, so saved files also load directly into pytest fixtures.
+        // -----------------------------------------------------------------
+        function bindIOButtons() {
+            document.getElementById('export-btn').addEventListener('click', handleExport);
+            document.getElementById('import-btn').addEventListener('click', () => {
+                document.getElementById('import-file').click();
+            });
+            document.getElementById('import-file').addEventListener('change', handleImportFile);
+        }
+
+        function handleExport() {
+            const model = buildModel();
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `transient-heatsink-${model.profile.type}-${stamp}.json`;
+            const payload = JSON.stringify(model, null, 2);
+            const blob = new Blob([payload], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        async function handleImportFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const model = JSON.parse(text);
+                applyImportedModel(model);
+            } catch (err) {
+                alert('Could not import: ' + err.message);
+            } finally {
+                event.target.value = '';  // allow re-importing the same file
+            }
+        }
+
+        function applyImportedModel(model) {
+            if (!model || !model.network || !model.profile || !model.time) {
+                throw new Error('Imported file is missing required keys (time, profile, network).');
+            }
+            // Switch to direct capacitance mode on import — geometry inputs
+            // aren't part of the saved model.
+            document.querySelectorAll('.seg-btn[data-cap-mode]')
+                .forEach(b => b.classList.toggle('active', b.dataset.capMode === 'direct'));
+            document.querySelectorAll('.cap-panel')
+                .forEach(p => p.classList.toggle('active', p.dataset.capMode === 'direct'));
+
+            const setVal = (id, v) => {
+                const el = document.getElementById(id);
+                if (el && v != null && Number.isFinite(parseFloat(v))) el.value = v;
+            };
+            // Time + ambient + initial
+            setVal('initial', model.time.initial_temperature_c);
+            setVal('cooldown_target', model.time.cooldown_target_c);
+
+            const ambientNode = (model.network.nodes || []).find(n => n.kind === 'boundary');
+            if (ambientNode) setVal('ambient', ambientNode.fixed_temperature_c);
+
+            const sourceNode = (model.network.nodes || []).find(n => n.id === 'source')
+                || (model.network.nodes || []).find(n => n.kind === 'dynamic');
+            const sinkNode = (model.network.nodes || []).find(n => n.id === 'sink');
+            if (sourceNode) {
+                setVal('source_limit', sourceNode.max_temperature_c);
+                setVal('c_source', sourceNode.capacitance_j_per_k);
+            }
+            if (sinkNode) setVal('c_sink', sinkNode.capacitance_j_per_k);
+
+            const rJCSeg = (model.network.segments || []).find(s => s.id === 'r_jc');
+            const rSASeg = (model.network.segments || []).find(s => s.id === 'r_sa');
+            if (rJCSeg) setVal('r_jc', rJCSeg.resistance_k_per_w);
+            if (rSASeg) setVal('r_sa', rSASeg.resistance_k_per_w);
+
+            // Profile — switch tab, populate fields
+            const ptype = model.profile.type;
+            const profileSelect = document.getElementById('profile_type');
+            if (profileSelect && ['step', 'pulse', 'duty_cycle'].includes(ptype)) {
+                profileSelect.value = ptype;
+                profileSelect.dispatchEvent(new Event('change'));
+            }
+            if (ptype === 'step') {
+                setVal('step_power', model.profile.power_w);
+                setVal('step_duration', model.time.duration_s);
+            } else if (ptype === 'pulse') {
+                setVal('pulse_power', model.profile.pulse_power_w);
+                setVal('pulse_duration', model.profile.pulse_duration_s);
+                const dur = parseFloat(model.time.duration_s) || 0;
+                const pulseDur = parseFloat(model.profile.pulse_duration_s) || 0;
+                setVal('pulse_cooldown', Math.max(0, dur - pulseDur));
+            } else if (ptype === 'duty_cycle') {
+                setVal('duty_on_power', model.profile.on_power_w);
+                setVal('duty_on_time', model.profile.on_time_s);
+                setVal('duty_off_power', model.profile.off_power_w);
+                setVal('duty_off_time', model.profile.off_time_s);
+                setVal('duty_run_time', model.time.duration_s);
+            }
         }
 
         // -----------------------------------------------------------------
@@ -809,12 +1093,24 @@
             }
 
             renderSummary(r.summary);
+            renderAutoExtensionCallout(r);
             renderTempPlot(r.series, r.summary);
             renderPowerPlot(r.series);
             renderList('diagnosis-list', r.diagnosis);
             renderList('recs-list', r.recommendations);
             renderRCTab(r);
             renderMathTab(r);
+        }
+
+        function renderAutoExtensionCallout(r) {
+            const el = document.getElementById('auto-extend-callout');
+            const extWarnings = (r.warnings || []).filter(w => /extended/i.test(w));
+            if (r.summary && r.summary.auto_extended_duration && extWarnings.length) {
+                el.textContent = extWarnings[0];
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
         }
 
         function statusMessage(status, summary) {
