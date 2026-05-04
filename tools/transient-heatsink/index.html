@@ -692,6 +692,7 @@
                 <div class="tabs">
                     <button class="tab-link active" data-tab="results">Results</button>
                     <button class="tab-link" data-tab="rc">RC Model</button>
+                    <button class="tab-link" data-tab="sensitivity">Sensitivity</button>
                     <button class="tab-link" data-tab="math">Math</button>
                 </div>
 
@@ -752,16 +753,58 @@
                         <tbody></tbody>
                     </table>
                     <h3>Cycle summary (duty cycle only)</h3>
+                    <div id="cycle-summary-status" class="field-help" style="margin-bottom:8px;"></div>
                     <table id="cycle-table">
                         <thead>
                             <tr>
                                 <th>Cycle</th>
                                 <th>Peak (°C)</th>
                                 <th>Min (°C)</th>
+                                <th>Walk-up (°C)</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+
+                <div id="tab-sensitivity" class="tab-content">
+                    <h3>Single-parameter sweep</h3>
+                    <p style="color:var(--text-light);font-size:0.9rem;">
+                        Hold every other input constant and vary one parameter across a relative range.
+                        Useful for ranking design levers when peak temperature or time-to-limit is borderline.
+                        Run the main calculation first; the sweep uses those inputs as the baseline.
+                    </p>
+                    <div class="row">
+                        <div class="field">
+                            <label for="sens-parameter">Parameter</label>
+                            <select id="sens-parameter">
+                                <option value="r_sa">R<sub>sa</sub> (sink to ambient)</option>
+                                <option value="r_jc">R<sub>jc</sub> (source to sink)</option>
+                                <option value="c_sink">C<sub>sink</sub></option>
+                                <option value="c_source">C<sub>source</sub></option>
+                                <option value="on_time">Duty on time</option>
+                                <option value="off_time">Duty off time</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="sens-fractions">Fractions of baseline</label>
+                            <input type="text" id="sens-fractions" value="0.5, 0.75, 1.0, 1.25, 1.5">
+                            <div class="field-help">Comma-separated multipliers. Baseline (1.0) is always included.</div>
+                        </div>
+                    </div>
+                    <button type="button" id="sens-run" class="btn btn-primary" style="margin-top:8px;" disabled>Run sweep</button>
+                    <div id="sens-status" class="field-help" style="margin-top:8px;">Run a calculation first to set the baseline.</div>
+                    <div id="sens-peak-plot" class="plot" style="display:none;"></div>
+                    <div id="sens-ttl-plot" class="plot" style="display:none;"></div>
+
+                    <h3 style="margin-top:24px;">Resistance vs. thermal mass</h3>
+                    <p style="color:var(--text-light);font-size:0.9rem;">
+                        Compares the peak-temperature drop from <em>halving R<sub>sa</sub></em>
+                        against the drop from <em>doubling C<sub>sink</sub></em> at the current
+                        baseline.
+                    </p>
+                    <button type="button" id="lever-run" class="btn btn-primary" style="margin-top:4px;" disabled>Compare design levers</button>
+                    <div id="lever-output" class="info-callout" style="display:none;margin-top:10px;"></div>
                 </div>
 
                 <div id="tab-math" class="tab-content">
@@ -872,6 +915,7 @@
                 bindCapacitanceModeUI();
                 bindSinkModeUI();
                 bindIOButtons();
+                bindSensitivityUI();
                 tryApplyHandoffFromQuery();
             } catch (error) {
                 loadingText.textContent = 'Failed to load: ' + error.message;
@@ -1380,7 +1424,9 @@
                 proxy.destroy();
                 normalizeResult(result);
                 lastResult = result;
+                lastModel = model;
                 renderResult(result);
+                enableSensitivityButtons();
             } catch (error) {
                 console.error('Simulation error:', error);
                 document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
@@ -1600,15 +1646,35 @@
             `).join('');
             document.querySelector('#tau-table tbody').innerHTML = tauRows;
 
-            const cycleRows = (r.cycle_summary || []).map(c => `
+            const cycles = r.cycle_summary || [];
+            const cycleRows = cycles.map(c => `
                 <tr>
                     <td class="num">${c.cycle}</td>
                     <td class="num">${fmt(c.peak_c, 2)}</td>
                     <td class="num">${fmt(c.min_c, 2)}</td>
+                    <td class="num">${c.walk_up_c == null ? '—' : (c.walk_up_c > 0 ? '+' : '') + fmt(c.walk_up_c, 2)}</td>
                 </tr>
             `).join('');
             document.querySelector('#cycle-table tbody').innerHTML = cycleRows
-                || '<tr><td colspan="3" style="color: var(--text-light); text-align:center;">No cycle data (step or pulse profile).</td></tr>';
+                || '<tr><td colspan="4" style="color: var(--text-light); text-align:center;">No cycle data (step or pulse profile).</td></tr>';
+
+            const statusEl = document.getElementById('cycle-summary-status');
+            if (cycles.length === 0) {
+                statusEl.textContent = '';
+            } else if (r.summary && r.summary.cyclic_steady_state_reached) {
+                const last = cycles[cycles.length - 1];
+                statusEl.innerHTML =
+                    `<strong style="color:#059669;">Cyclic steady state reached</strong> ` +
+                    `at cycle ${last.cycle} (peak ${fmt(last.peak_c, 1)} °C, min ${fmt(last.min_c, 1)} °C, ` +
+                    `walk-up &lt;0.05 °C between consecutive cycles).`;
+            } else if (cycles.length >= 2) {
+                const last = cycles[cycles.length - 1];
+                const drift = last.walk_up_c == null ? 0 : Math.abs(last.walk_up_c);
+                statusEl.innerHTML =
+                    `<strong style="color:#d97706;">Not converged</strong> — ` +
+                    `last-cycle peak still drifting by ${fmt(drift, 2)} °C. ` +
+                    `Extend simulation duration or expect more thermal walk-up.`;
+            }
         }
 
         function renderMathTab(r) {
@@ -1618,6 +1684,161 @@
                 if (window.MathJax && window.MathJax.typesetPromise) {
                     window.MathJax.typesetPromise([block]);
                 }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Sensitivity tab: drive generate_transient_sensitivity and
+        // compute_design_lever_recommendation through Pyodide. Uses the
+        // most recent buildModel() output as the baseline; both buttons
+        // stay disabled until the user has run the main calculation.
+        // -----------------------------------------------------------------
+        function bindSensitivityUI() {
+            const sensRun = document.getElementById('sens-run');
+            const leverRun = document.getElementById('lever-run');
+            sensRun.addEventListener('click', runSensitivitySweep);
+            leverRun.addEventListener('click', runDesignLeverComparison);
+        }
+
+        function enableSensitivityButtons() {
+            document.getElementById('sens-run').disabled = false;
+            document.getElementById('lever-run').disabled = false;
+            const status = document.getElementById('sens-status');
+            if (status.textContent.startsWith('Run a calculation first')) {
+                status.textContent = 'Baseline ready — pick a parameter and run a sweep.';
+            }
+        }
+
+        function parseFractions(text) {
+            return (text || '')
+                .split(/[,\s]+/)
+                .map(s => parseFloat(s))
+                .filter(v => Number.isFinite(v) && v > 0);
+        }
+
+        async function runSensitivitySweep() {
+            if (!lastModel) {
+                document.getElementById('sens-status').textContent =
+                    'Run a calculation first to set the baseline.';
+                return;
+            }
+            const param = document.getElementById('sens-parameter').value;
+            const fractions = parseFractions(document.getElementById('sens-fractions').value);
+            const status = document.getElementById('sens-status');
+            const btn = document.getElementById('sens-run');
+            btn.disabled = true;
+            btn.textContent = 'Running…';
+            status.textContent = `Sweeping ${param} across ${fractions.length || 'default'} fractions…`;
+            try {
+                const proxy = pyToolModule.generate_transient_sensitivity.callKwargs({
+                    model: pyodideInstance.toPy(lastModel),
+                    parameter: param,
+                    fractions: fractions.length ? fractions : null,
+                });
+                const sweep = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                renderSensitivityResult(sweep);
+            } catch (err) {
+                status.textContent = 'Sweep failed: ' + (err.message || err);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run sweep';
+            }
+        }
+
+        function renderSensitivityResult(sweep) {
+            const status = document.getElementById('sens-status');
+            const peakDiv = document.getElementById('sens-peak-plot');
+            const ttlDiv = document.getElementById('sens-ttl-plot');
+            if (sweep.errors && sweep.errors.length && sweep.baseline_value == null) {
+                status.textContent = sweep.errors.map(e => e.message).join(' ');
+                peakDiv.style.display = 'none';
+                ttlDiv.style.display = 'none';
+                return;
+            }
+            const errSummary = (sweep.errors || []).length
+                ? ` ${sweep.errors.length} run${sweep.errors.length === 1 ? '' : 's'} skipped.`
+                : '';
+            const slopeBits = [];
+            if (sweep.local_peak_slope != null) {
+                slopeBits.push(
+                    `Local slope ∂T_peak/∂${sweep.parameter} = ${sweep.local_peak_slope.toFixed(3)} °C / (${sweep.units})`
+                );
+            }
+            if (sweep.local_peak_elasticity != null) {
+                slopeBits.push(`elasticity = ${sweep.local_peak_elasticity.toFixed(2)}`);
+            }
+            status.textContent =
+                `Baseline ${sweep.label} = ${sweep.baseline_value.toFixed(3)} ${sweep.units}.` +
+                (slopeBits.length ? ' ' + slopeBits.join('; ') + '.' : '') +
+                errSummary;
+
+            // Peak temperature vs parameter value
+            const xs = sweep.values;
+            const peaks = sweep.peak_temperature_c;
+            const peakTrace = {
+                x: xs, y: peaks, type: 'scatter', mode: 'lines+markers',
+                name: 'Peak T', line: { color: '#dc2626' },
+            };
+            const baselineX = sweep.baseline_value;
+            const baselineY = sweep.baseline_peak_c;
+            const peakBaseline = baselineY != null ? {
+                x: [baselineX], y: [baselineY], type: 'scatter', mode: 'markers',
+                name: 'Baseline', marker: { color: '#111827', size: 12, symbol: 'diamond' },
+            } : null;
+            Plotly.newPlot(peakDiv, peakBaseline ? [peakTrace, peakBaseline] : [peakTrace], {
+                title: `Peak temperature vs ${sweep.label}`,
+                xaxis: { title: `${sweep.label} (${sweep.units})` },
+                yaxis: { title: 'Peak T (°C)' },
+                margin: { t: 40, r: 10, b: 50, l: 60 },
+            }, { responsive: true });
+            peakDiv.style.display = 'block';
+
+            // Time-to-limit (only if at least one run produced a value)
+            const ttls = sweep.time_to_limit_s;
+            const finitePairs = xs
+                .map((x, i) => [x, ttls[i]])
+                .filter(([, t]) => t != null && Number.isFinite(t));
+            if (finitePairs.length >= 2) {
+                Plotly.newPlot(ttlDiv, [{
+                    x: finitePairs.map(p => p[0]),
+                    y: finitePairs.map(p => p[1]),
+                    type: 'scatter', mode: 'lines+markers',
+                    name: 'Time to limit', line: { color: '#2563eb' },
+                }], {
+                    title: `Time to limit vs ${sweep.label}`,
+                    xaxis: { title: `${sweep.label} (${sweep.units})` },
+                    yaxis: { title: 'Time to limit (s)' },
+                    margin: { t: 40, r: 10, b: 50, l: 60 },
+                }, { responsive: true });
+                ttlDiv.style.display = 'block';
+            } else {
+                ttlDiv.style.display = 'none';
+            }
+        }
+
+        async function runDesignLeverComparison() {
+            if (!lastModel) return;
+            const btn = document.getElementById('lever-run');
+            const out = document.getElementById('lever-output');
+            btn.disabled = true;
+            btn.textContent = 'Running…';
+            try {
+                const proxy = pyToolModule.compute_design_lever_recommendation(
+                    pyodideInstance.toPy(lastModel)
+                );
+                const rec = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                out.style.display = 'block';
+                out.innerHTML = `<strong>${rec.recommendation.replace(/_/g, ' ')}:</strong> ${rec.message}`;
+            } catch (err) {
+                out.style.display = 'block';
+                out.textContent = 'Comparison failed: ' + (err.message || err);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Compare design levers';
             }
         }
 

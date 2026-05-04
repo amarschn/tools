@@ -60,6 +60,11 @@ Implemented in `pycalcs/thermal_transient.py`:
   plate-fin geometry by calling the steady-state solver in `pycalcs.heatsinks`
 - `build_plate_fin_transient_model(...)` — convenience wrapper that returns a
   ready-to-simulate model dict from plate-fin geometry plus profile/time
+- `generate_transient_sensitivity(model, parameter, fractions=None)` — sweep
+  one of `r_sa`, `r_jc`, `c_source`, `c_sink`, `on_time`, `off_time` and
+  return peak T, time-to-limit, and steady-state T at each fraction
+- `compute_design_lever_recommendation(model)` — compares "halve R_sa" to
+  "double C_sink" and returns a directional recommendation
 
 ## Sink properties: direct or from plate-fin geometry
 

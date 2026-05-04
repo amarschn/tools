@@ -9,9 +9,11 @@ import pytest
 from pycalcs import heatsinks
 from pycalcs.thermal_transient import (
     build_plate_fin_transient_model,
+    compute_design_lever_recommendation,
     compute_plate_fin_sink_properties,
     estimate_thermal_capacitance,
     generate_power_profile,
+    generate_transient_sensitivity,
     get_material_presets,
     simulate_transient_thermal_model,
     validate_transient_thermal_model,
@@ -689,3 +691,184 @@ def test_build_plate_fin_transient_model_zero_jc_uses_resistance_floor() -> None
     assert 0.0 < r_jc_seg["resistance_k_per_w"] < 1e-3
     result = simulate_transient_thermal_model(bundle["model"])
     assert result["status"] != "invalid"
+
+
+# --------------------------------------------------------------------------- #
+# Sensitivity sweeps and design-lever recommendation                          #
+# --------------------------------------------------------------------------- #
+
+
+def package_on_heatsink_model(
+    *,
+    R_jc: float = 0.5, R_sa: float = 1.5,
+    C_source: float = 12.0, C_sink: float = 310.0,
+    profile: dict | None = None,
+    duration: float = 600.0,
+    ambient: float = 25.0, initial: float = 25.0,
+    max_temperature_c: float | None = 110.0,
+) -> dict:
+    """Canonical 3-node Package-On-Heatsink model with the same ids the bridge
+    function and UI build, so it's compatible with SENSITIVITY_PARAMETERS."""
+    return {
+        "time": {"duration_s": duration, "initial_temperature_c": initial},
+        "profile": profile or {"type": "step", "power_w": 30.0},
+        "network": {
+            "nodes": [
+                {"id": "source", "label": "Source", "kind": "dynamic",
+                 "capacitance_j_per_k": C_source, "max_temperature_c": max_temperature_c},
+                {"id": "sink", "label": "Sink", "kind": "dynamic",
+                 "capacitance_j_per_k": C_sink},
+                {"id": "ambient", "label": "Ambient", "kind": "boundary",
+                 "fixed_temperature_c": ambient},
+            ],
+            "segments": [
+                {"id": "r_jc", "label": "Source->Sink", "from_node_id": "source",
+                 "to_node_id": "sink", "resistance_k_per_w": R_jc},
+                {"id": "r_sa", "label": "Sink->Ambient", "from_node_id": "sink",
+                 "to_node_id": "ambient", "resistance_k_per_w": R_sa},
+            ],
+            "heat_inputs": [{"node_id": "source", "profile_role": "primary"}],
+        },
+    }
+
+
+def test_sensitivity_sweep_r_sa_is_monotonic() -> None:
+    """Higher R_sa → higher peak temperature for a step load. The relationship
+    must be strictly monotonic; if it isn't, something is wrong with the
+    deep-copy-and-mutate logic."""
+    sweep = generate_transient_sensitivity(
+        package_on_heatsink_model(),
+        "r_sa",
+        fractions=[0.5, 1.0, 1.5, 2.0],
+    )
+    peaks = sweep["peak_temperature_c"]
+    assert all(p is not None for p in peaks)
+    assert all(peaks[i] < peaks[i + 1] for i in range(len(peaks) - 1))
+    # Baseline must be present in the result regardless of the fractions list.
+    assert 1.0 in sweep["fractions"]
+    assert sweep["baseline_value"] == pytest.approx(1.5)
+
+
+def test_sensitivity_sweep_does_not_mutate_input() -> None:
+    """The input model must be left untouched after a sweep — otherwise
+    successive calls would compound."""
+    model = package_on_heatsink_model(R_sa=1.5)
+    generate_transient_sensitivity(model, "r_sa", fractions=[0.5, 2.0])
+    r_sa_seg = next(s for s in model["network"]["segments"] if s["id"] == "r_sa")
+    assert r_sa_seg["resistance_k_per_w"] == 1.5
+
+
+def test_sensitivity_c_sink_changes_time_to_limit_not_steady_state() -> None:
+    """Adding heatsink mass slows the rise but cannot change the steady-state
+    temperature (asymptote depends only on R_sa, R_jc, ambient, power)."""
+    model = package_on_heatsink_model(
+        R_jc=0.3, R_sa=2.0,
+        profile={"type": "step", "power_w": 50.0},
+        duration=2000.0,
+    )
+    sweep = generate_transient_sensitivity(model, "c_sink", fractions=[0.5, 1.0, 2.0, 4.0])
+    steady = sweep["steady_state_temperature_c"]
+    assert all(s is not None for s in steady)
+    # All four steady-state temperatures should match within numerical noise.
+    assert max(steady) - min(steady) < 0.05
+
+
+def test_sensitivity_unknown_parameter_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown sensitivity parameter"):
+        generate_transient_sensitivity(package_on_heatsink_model(), "not_a_param")
+
+
+def test_sensitivity_inapplicable_parameter_returns_error_not_exception() -> None:
+    """Sweeping on_time on a step-profile model must return an error in the
+    result — not raise — so the UI can surface it next to the dropdown."""
+    sweep = generate_transient_sensitivity(package_on_heatsink_model(), "on_time")
+    assert sweep["baseline_value"] is None
+    assert any("duty_cycle" in e["message"] for e in sweep["errors"])
+
+
+def test_sensitivity_local_slope_sign_matches_physics() -> None:
+    """For a duty cycle, raising R_sa raises peak T → slope > 0.
+    Raising C_sink smooths cyclic peaks → slope < 0.
+    Duty cycles are used here because step profiles auto-extend the
+    simulation window to ~5*tau_slow, which masks the C_sink effect."""
+    model = package_on_heatsink_model(
+        profile={
+            "type": "duty_cycle",
+            "on_power_w": 80.0, "on_time_s": 30.0,
+            "off_power_w": 0.0, "off_time_s": 30.0,
+        },
+        duration=300.0,
+    )
+    r_sweep = generate_transient_sensitivity(model, "r_sa", fractions=[1.0, 1.1])
+    c_sweep = generate_transient_sensitivity(model, "c_sink", fractions=[1.0, 1.1])
+    assert r_sweep["local_peak_slope"] is not None and r_sweep["local_peak_slope"] > 0
+    assert c_sweep["local_peak_slope"] is not None and c_sweep["local_peak_slope"] < 0
+
+
+def test_design_lever_recommendation_resistance_dominated() -> None:
+    """When R_sa is the bottleneck (large R, small mass already saturating),
+    halving R_sa should win over doubling C_sink."""
+    # Step load on a heavy sink: doubling sink mass barely changes the steady-state
+    # peak because the system is near its asymptote, but halving R_sa cuts the
+    # asymptote almost in half.
+    model = package_on_heatsink_model(
+        R_jc=0.1, R_sa=3.0, C_source=5.0, C_sink=200.0,
+        profile={"type": "step", "power_w": 30.0},
+        duration=4000.0,  # long enough to approach steady state
+    )
+    rec = compute_design_lever_recommendation(model)
+    assert rec["recommendation"] == "improve_resistance"
+    assert rec["delta_peak_half_r_sa_c"] > rec["delta_peak_double_c_sink_c"]
+    assert "R_sa" in rec["message"]
+
+
+def test_design_lever_recommendation_capacitance_dominated_pulse() -> None:
+    """A pulse long enough for energy to reach the sink, but short enough
+    that the system is still far from the R_sa-determined asymptote.  In
+    that regime the lumped capacitance dominates the peak, so doubling
+    C_sink wins over halving R_sa."""
+    # 60-second pulse, R_sa*C_sink = 450 s (long compared to pulse).  The
+    # sink barely cools during the pulse, so peak rise ≈ Q*t / (C_source +
+    # C_sink) — doubling C_sink ≈ halves the rise; halving R_sa hardly
+    # matters in 60 s.
+    model = package_on_heatsink_model(
+        R_jc=0.05, R_sa=1.5, C_source=10.0, C_sink=300.0,
+        profile={
+            "type": "pulse", "pulse_power_w": 100.0,
+            "pulse_duration_s": 60.0, "cooldown_power_w": 0.0,
+        },
+        duration=600.0,
+    )
+    rec = compute_design_lever_recommendation(model)
+    assert rec["recommendation"] in {"add_mass", "comparable"}
+    assert rec["delta_peak_double_c_sink_c"] is not None
+    assert rec["delta_peak_double_c_sink_c"] >= rec["delta_peak_half_r_sa_c"]
+
+
+def test_design_lever_recommendation_handles_missing_segments() -> None:
+    """A single-lump model has no R_sa or C_sink segment with the canonical
+    ids; the helper must return insufficient_data, not raise."""
+    model = one_lump_model(capacitance=200.0, resistance=2.0, power=30.0, duration=300.0)
+    rec = compute_design_lever_recommendation(model)
+    assert rec["recommendation"] == "insufficient_data"
+
+
+def test_cycle_summary_includes_walk_up() -> None:
+    """Each cycle (after the first) reports its peak rise relative to the
+    prior cycle, so the UI can show whether duty-cycle peaks are drifting."""
+    model = package_on_heatsink_model(
+        profile={
+            "type": "duty_cycle",
+            "on_power_w": 80.0, "on_time_s": 30.0,
+            "off_power_w": 0.0, "off_time_s": 30.0,
+        },
+        duration=300.0,
+    )
+    result = simulate_transient_thermal_model(model)
+    cycles = result["cycle_summary"]
+    assert len(cycles) >= 3
+    assert cycles[0]["walk_up_c"] is None
+    # The system is climbing toward steady state, so early cycles must walk up
+    # and the magnitude must shrink as we approach convergence.
+    assert cycles[1]["walk_up_c"] > 0
+    assert cycles[1]["walk_up_c"] >= cycles[-1]["walk_up_c"]

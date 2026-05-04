@@ -10,6 +10,7 @@ Companion plan: ``plans/2026-04-25_transient_heatsink_tool_plan.md``.
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import Any
 
@@ -1019,15 +1020,20 @@ def simulate_transient_thermal_model(model: dict[str, Any]) -> dict[str, Any]:
                 ]
                 if not samples:
                     continue
-                cycle_summary.append(
-                    {
-                        "cycle": c + 1,
-                        "t_start_s": t_start,
-                        "t_end_s": t_end,
-                        "peak_c": max(samples),
-                        "min_c": min(samples),
-                    }
-                )
+                entry = {
+                    "cycle": c + 1,
+                    "t_start_s": t_start,
+                    "t_end_s": t_end,
+                    "peak_c": max(samples),
+                    "min_c": min(samples),
+                    # Per-cycle walk-up: how much hotter this cycle's peak is
+                    # than the previous cycle's. The first cycle has no prior
+                    # to compare to, so walk_up_c is None there.
+                    "walk_up_c": None,
+                }
+                if cycle_summary:
+                    entry["walk_up_c"] = entry["peak_c"] - cycle_summary[-1]["peak_c"]
+                cycle_summary.append(entry)
             if len(cycle_summary) >= 2:
                 last = cycle_summary[-1]
                 prev = cycle_summary[-2]
@@ -1349,3 +1355,378 @@ def _build_recommendations(
     else:
         out.append("Thermal budget is met under the modeled assumptions.")
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Sensitivity sweeps and design-lever recommendation                          #
+# --------------------------------------------------------------------------- #
+
+
+# Catalog of sweepable parameters. Each entry maps a UI-facing key to the
+# location of the value inside the model dict, so the same lookup machinery
+# handles segments, nodes, and profile fields.
+SENSITIVITY_PARAMETERS: dict[str, dict[str, Any]] = {
+    "r_sa": {
+        "target": ("segment", "r_sa", "resistance_k_per_w"),
+        "label": "R_sa (sink to ambient)",
+        "units": "K/W",
+    },
+    "r_jc": {
+        "target": ("segment", "r_jc", "resistance_k_per_w"),
+        "label": "R_jc (source to sink)",
+        "units": "K/W",
+    },
+    "c_source": {
+        "target": ("node", "source", "capacitance_j_per_k"),
+        "label": "C_source",
+        "units": "J/K",
+    },
+    "c_sink": {
+        "target": ("node", "sink", "capacitance_j_per_k"),
+        "label": "C_sink",
+        "units": "J/K",
+    },
+    "on_time": {
+        "target": ("profile", None, "on_time_s"),
+        "label": "Duty on time",
+        "units": "s",
+        "requires_profile": "duty_cycle",
+    },
+    "off_time": {
+        "target": ("profile", None, "off_time_s"),
+        "label": "Duty off time",
+        "units": "s",
+        "requires_profile": "duty_cycle",
+    },
+}
+
+
+# Default sweep used when the caller does not supply explicit fractions.
+_DEFAULT_SENSITIVITY_FRACTIONS: tuple[float, ...] = (0.5, 0.75, 1.0, 1.25, 1.5)
+
+
+def _locate_parameter(model: dict[str, Any], spec: dict[str, Any]) -> tuple[Any, str, str | None]:
+    """Return ``(container, field, missing_reason)``.
+
+    On success ``container`` is the dict whose ``[field]`` is the swept
+    value.  On failure ``missing_reason`` describes why the parameter does
+    not apply to this model and ``container`` is ``None``.
+    """
+
+    domain, ident, field = spec["target"]
+    network = model.get("network") or {}
+    if domain == "segment":
+        for seg in network.get("segments") or []:
+            if seg.get("id") == ident:
+                return seg, field, None
+        return None, field, f"Model has no segment with id '{ident}'."
+    if domain == "node":
+        for node in network.get("nodes") or []:
+            if node.get("id") == ident:
+                if field not in node:
+                    return None, field, (
+                        f"Node '{ident}' has no field '{field}' (likely a boundary node)."
+                    )
+                return node, field, None
+        return None, field, f"Model has no node with id '{ident}'."
+    if domain == "profile":
+        profile = model.get("profile") or {}
+        required = spec.get("requires_profile")
+        if required is not None and profile.get("type") != required:
+            return None, field, (
+                f"Parameter only applies to '{required}' profiles "
+                f"(model uses '{profile.get('type')}')."
+            )
+        return profile, field, None
+    return None, field, f"Unknown parameter domain '{domain}'."
+
+
+def generate_transient_sensitivity(
+    model: dict[str, Any],
+    parameter: str,
+    fractions: list[float] | tuple[float, ...] | None = None,
+) -> dict[str, Any]:
+    """
+    Sweep one model parameter and return peak temperature, time-to-limit, and
+    steady-state temperature for each value.
+
+    ``parameter`` is one of the keys in :data:`SENSITIVITY_PARAMETERS`.
+    ``fractions`` are multipliers applied to the parameter's baseline value;
+    a baseline run (fraction ``1.0``) is always included in the result even
+    if not in ``fractions``.
+
+    The sweep deep-copies the input model for each run, so the caller's model
+    is never mutated.  Failed runs (validation errors, etc.) appear in
+    ``errors`` with their fraction; the corresponding peak/time-to-limit
+    entries are ``None``.
+
+    ---Returns---
+    parameter : str
+    label : str
+    units : str
+    baseline_value : float
+    fractions : list of float
+    values : list of float
+    peak_temperature_c : list of float | None
+    time_to_limit_s : list of float | None
+    steady_state_temperature_c : list of float | None
+    baseline_peak_c : float | None
+    baseline_time_to_limit_s : float | None
+    local_peak_slope : float | None
+        Forward-difference slope ``dT_peak / dx`` at the baseline,
+        in units of (°C per parameter unit).  Useful for ranking levers.
+    local_peak_elasticity : float | None
+        Dimensionless elasticity ``(x / dT_rise) * dT_peak / dx`` at the
+        baseline — "% change in peak rise per 1% change in parameter."
+    errors : list of dict
+        ``{"fraction": ..., "message": ...}`` entries for failed runs.
+    """
+
+    spec = SENSITIVITY_PARAMETERS.get(parameter)
+    if spec is None:
+        raise ValueError(
+            f"Unknown sensitivity parameter '{parameter}'. "
+            f"Choose one of {sorted(SENSITIVITY_PARAMETERS)}."
+        )
+
+    container, field, missing = _locate_parameter(model, spec)
+    if missing is not None:
+        return {
+            "parameter": parameter,
+            "label": spec["label"],
+            "units": spec["units"],
+            "baseline_value": None,
+            "fractions": [],
+            "values": [],
+            "peak_temperature_c": [],
+            "time_to_limit_s": [],
+            "steady_state_temperature_c": [],
+            "baseline_peak_c": None,
+            "baseline_time_to_limit_s": None,
+            "local_peak_slope": None,
+            "local_peak_elasticity": None,
+            "errors": [{"fraction": None, "message": missing}],
+        }
+
+    baseline_value = float(container[field])
+
+    if fractions is None:
+        fractions_list = list(_DEFAULT_SENSITIVITY_FRACTIONS)
+    else:
+        fractions_list = [float(f) for f in fractions]
+    if 1.0 not in fractions_list:
+        fractions_list.append(1.0)
+    # Ascending order keeps plot lines monotonic on the x-axis.
+    fractions_list = sorted(set(round(f, 9) for f in fractions_list))
+
+    peaks: list[float | None] = []
+    ttl: list[float | None] = []
+    steady: list[float | None] = []
+    values: list[float] = []
+    errors: list[dict[str, Any]] = []
+
+    ambient = next(
+        (n.get("fixed_temperature_c") for n in (model.get("network") or {}).get("nodes") or []
+         if n.get("kind") == "boundary"),
+        None,
+    )
+
+    for fraction in fractions_list:
+        new_value = baseline_value * fraction
+        values.append(new_value)
+        if new_value <= 0.0 and spec["target"][0] != "profile":
+            # Resistance/capacitance must remain positive — skip but record.
+            peaks.append(None)
+            ttl.append(None)
+            steady.append(None)
+            errors.append({
+                "fraction": fraction,
+                "message": f"{spec['label']} would become non-positive ({new_value:.4g}); skipped.",
+            })
+            continue
+
+        perturbed = copy.deepcopy(model)
+        sub_container, sub_field, _ = _locate_parameter(perturbed, spec)
+        sub_container[sub_field] = new_value
+
+        try:
+            result = simulate_transient_thermal_model(perturbed)
+        except Exception as exc:  # pragma: no cover — defensive only
+            peaks.append(None)
+            ttl.append(None)
+            steady.append(None)
+            errors.append({"fraction": fraction, "message": str(exc)})
+            continue
+
+        if result.get("status") == "invalid":
+            peaks.append(None)
+            ttl.append(None)
+            steady.append(None)
+            errors.append({
+                "fraction": fraction,
+                "message": "; ".join(result.get("errors") or ["unknown error"]),
+            })
+            continue
+
+        summary = result.get("summary") or {}
+        peaks.append(summary.get("peak_temperature_c"))
+        ttl.append(summary.get("time_to_limit_s"))
+        steady.append(summary.get("steady_state_temperature_c"))
+
+    # Local slope / elasticity from the baseline and its nearest higher fraction.
+    baseline_idx = fractions_list.index(1.0)
+    baseline_peak = peaks[baseline_idx]
+    baseline_ttl = ttl[baseline_idx]
+
+    slope = None
+    elasticity = None
+    higher_idx = next(
+        (i for i in range(baseline_idx + 1, len(fractions_list))
+         if peaks[i] is not None),
+        None,
+    )
+    if (
+        higher_idx is not None
+        and baseline_peak is not None
+        and peaks[higher_idx] is not None
+    ):
+        dx = values[higher_idx] - values[baseline_idx]
+        dT = peaks[higher_idx] - baseline_peak
+        if dx != 0:
+            slope = dT / dx
+            if ambient is not None:
+                rise = baseline_peak - float(ambient)
+                if abs(rise) > 1e-9 and baseline_value > 0:
+                    elasticity = (baseline_value / rise) * slope
+
+    return {
+        "parameter": parameter,
+        "label": spec["label"],
+        "units": spec["units"],
+        "baseline_value": baseline_value,
+        "fractions": fractions_list,
+        "values": values,
+        "peak_temperature_c": peaks,
+        "time_to_limit_s": ttl,
+        "steady_state_temperature_c": steady,
+        "baseline_peak_c": baseline_peak,
+        "baseline_time_to_limit_s": baseline_ttl,
+        "local_peak_slope": slope,
+        "local_peak_elasticity": elasticity,
+        "errors": errors,
+    }
+
+
+def compute_design_lever_recommendation(model: dict[str, Any]) -> dict[str, Any]:
+    """
+    Compare the leverage of "lower R_sa by 50%" against "double C_sink" and
+    return a directional recommendation.
+
+    The comparison runs two extra simulations and reports peak-temperature
+    drops for each lever.  Useful for the user question "should I improve
+    resistance or add thermal mass?".  When neither lever is applicable
+    (e.g. single-lump model), ``recommendation`` is ``"insufficient_data"``.
+    """
+
+    baseline = simulate_transient_thermal_model(copy.deepcopy(model))
+    if baseline.get("status") == "invalid":
+        return {
+            "recommendation": "insufficient_data",
+            "message": "Baseline model is invalid; cannot compare design levers.",
+            "baseline_peak_c": None,
+        }
+    base_peak = (baseline.get("summary") or {}).get("peak_temperature_c")
+    if base_peak is None:
+        return {
+            "recommendation": "insufficient_data",
+            "message": "Baseline run did not return a peak temperature.",
+            "baseline_peak_c": None,
+        }
+
+    def _peak_at(parameter: str, fraction: float) -> float | None:
+        spec = SENSITIVITY_PARAMETERS[parameter]
+        scratch = copy.deepcopy(model)
+        container, field, missing = _locate_parameter(scratch, spec)
+        if missing is not None or container is None:
+            return None
+        container[field] = float(container[field]) * fraction
+        result = simulate_transient_thermal_model(scratch)
+        if result.get("status") == "invalid":
+            return None
+        return (result.get("summary") or {}).get("peak_temperature_c")
+
+    half_r_peak = _peak_at("r_sa", 0.5)
+    double_c_peak = _peak_at("c_sink", 2.0)
+
+    delta_r = (base_peak - half_r_peak) if half_r_peak is not None else None
+    delta_c = (base_peak - double_c_peak) if double_c_peak is not None else None
+
+    if delta_r is None and delta_c is None:
+        return {
+            "recommendation": "insufficient_data",
+            "message": "Neither R_sa nor C_sink is present in this model.",
+            "baseline_peak_c": base_peak,
+            "delta_peak_half_r_sa_c": None,
+            "delta_peak_double_c_sink_c": None,
+        }
+
+    # Significant-leverage threshold: ignore changes below 1 °C — they sit
+    # below the lumped-RC model's own accuracy floor.
+    threshold = 1.0
+    if delta_r is None:
+        recommendation = "add_mass" if (delta_c or 0) > threshold else "neither_helps"
+    elif delta_c is None:
+        recommendation = "improve_resistance" if delta_r > threshold else "neither_helps"
+    else:
+        if max(delta_r, delta_c) < threshold:
+            recommendation = "neither_helps"
+        elif delta_r > 1.5 * delta_c:
+            recommendation = "improve_resistance"
+        elif delta_c > 1.5 * delta_r:
+            recommendation = "add_mass"
+        else:
+            recommendation = "comparable"
+
+    return {
+        "recommendation": recommendation,
+        "baseline_peak_c": base_peak,
+        "delta_peak_half_r_sa_c": delta_r,
+        "delta_peak_double_c_sink_c": delta_c,
+        "message": _design_lever_message(
+            recommendation, delta_r, delta_c
+        ),
+    }
+
+
+def _design_lever_message(
+    recommendation: str,
+    delta_r: float | None,
+    delta_c: float | None,
+) -> str:
+    """Plain-language summary of the resistance-vs-mass comparison."""
+
+    def fmt(d: float | None) -> str:
+        return f"{d:.1f} °C" if d is not None else "—"
+
+    if recommendation == "improve_resistance":
+        return (
+            f"Halving R_sa drops peak by {fmt(delta_r)}; doubling C_sink only "
+            f"drops it by {fmt(delta_c)}. Improve resistance first."
+        )
+    if recommendation == "add_mass":
+        return (
+            f"Doubling C_sink drops peak by {fmt(delta_c)}; halving R_sa only "
+            f"drops it by {fmt(delta_r)}. Adding thermal mass is the bigger lever."
+        )
+    if recommendation == "comparable":
+        return (
+            f"Halving R_sa and doubling C_sink drop peak by similar amounts "
+            f"({fmt(delta_r)} vs {fmt(delta_c)}). Either lever helps."
+        )
+    if recommendation == "neither_helps":
+        return (
+            "Neither halving R_sa nor doubling C_sink moves peak temperature "
+            "more than ~1 °C — the bottleneck is elsewhere (R_jc, C_source, "
+            "or the duty cycle itself)."
+        )
+    return "Could not compare design levers in this model."
