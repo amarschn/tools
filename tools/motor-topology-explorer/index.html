@@ -530,6 +530,7 @@
         const themeCycle = ['system', 'light', 'dark'];
         let pyodide = null;
         let topologyDatabase = {};
+        let topologyOverviews = {};
         let currentTopology = 'pmsm_spm';
 
         const elements = {
@@ -663,63 +664,173 @@
             });
         }
 
-        function createCrossSectionSvg(topologyKey) {
-            const common = {
-                pmsm_spm: {
-                    title: 'Surface magnets on rotor, three-phase stator',
-                    rotorFill: '#111827',
-                    statorFill: '#e5e7eb',
-                    accent: '#0f766e',
-                    labelA: 'Surface PM rotor',
-                    labelB: '3-phase stator',
-                    labelC: 'Small air gap',
-                },
-                induction_squirrel_cage: {
-                    title: 'Squirrel-cage rotor bars inside AC stator',
-                    rotorFill: '#6b7280',
-                    statorFill: '#e5e7eb',
-                    accent: '#b45309',
-                    labelA: 'Rotor bars',
-                    labelB: 'AC stator',
-                    labelC: 'Slip creates torque',
-                },
-                dc_brushed_pm: {
-                    title: 'Commutated armature inside permanent-magnet field',
-                    rotorFill: '#111827',
-                    statorFill: '#e5e7eb',
-                    accent: '#b91c1c',
-                    labelA: 'Wound armature',
-                    labelB: 'PM field',
-                    labelC: 'Brush commutator',
-                },
-            }[topologyKey];
+        const SECTION_CX = 200;
+        const SECTION_CY = 184;
 
+        function polarPoint(cx, cy, angleDeg, r) {
+            const a = (angleDeg - 90) * Math.PI / 180;
+            return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+        }
+
+        function arcSector(cx, cy, rIn, rOut, startDeg, endDeg, fill, stroke) {
+            const p1 = polarPoint(cx, cy, startDeg, rIn);
+            const p2 = polarPoint(cx, cy, endDeg, rIn);
+            const p3 = polarPoint(cx, cy, endDeg, rOut);
+            const p4 = polarPoint(cx, cy, startDeg, rOut);
+            const sweep = ((endDeg - startDeg) % 360 + 360) % 360;
+            const large = sweep > 180 ? 1 : 0;
+            const strokeAttr = stroke ? ` stroke="${stroke}" stroke-width="0.8"` : '';
+            return `<path d="M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} A ${rIn} ${rIn} 0 ${large} 1 ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} A ${rOut} ${rOut} 0 ${large} 0 ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z" fill="${fill}"${strokeAttr} />`;
+        }
+
+        function pmsmSpmSection() {
+            const cx = SECTION_CX, cy = SECTION_CY;
+            let parts = '';
+            // Stator yoke (back-iron) - solid annulus
+            parts += `<circle cx="${cx}" cy="${cy}" r="120" fill="#94a3b8" stroke="#1e293b" stroke-width="1.2" />`;
+            parts += `<circle cx="${cx}" cy="${cy}" r="80" fill="var(--bg-card)" />`;
+            // Stator teeth (12, slot openings between)
+            for (let i = 0; i < 12; i++) {
+                const c = i * 30;
+                parts += arcSector(cx, cy, 64, 80, c - 12, c + 12, '#94a3b8', '#1e293b');
+            }
+            // Air gap (visualized as thin dashed ring)
+            parts += `<circle cx="${cx}" cy="${cy}" r="62" fill="none" stroke="#1e293b" stroke-width="0.4" stroke-dasharray="2 2" />`;
+            // Rotor iron core
+            parts += `<circle cx="${cx}" cy="${cy}" r="58" fill="#475569" />`;
+            // 4 surface magnets, alternating N (red) / S (blue)
+            const magnetColors = ['#dc2626', '#1d4ed8', '#dc2626', '#1d4ed8'];
+            const magnetLabels = ['N', 'S', 'N', 'S'];
+            for (let i = 0; i < 4; i++) {
+                const c = i * 90;
+                parts += arcSector(cx, cy, 50, 58, c - 38, c + 38, magnetColors[i]);
+                const lp = polarPoint(cx, cy, c, 54);
+                parts += `<text x="${lp.x.toFixed(1)}" y="${(lp.y + 4).toFixed(1)}" text-anchor="middle" fill="white" font-size="11" font-weight="700">${magnetLabels[i]}</text>`;
+            }
+            // Shaft
+            parts += `<circle cx="${cx}" cy="${cy}" r="10" fill="var(--bg-card)" stroke="#1e293b" stroke-width="1" />`;
+            return {
+                title: 'PMSM (SPM): surface magnets on rotor, slotted 3-phase stator',
+                body: parts,
+                callouts: [
+                    { ax: cx + 32, ay: cy - 48, label: 'Surface magnets (N / S alternating)' },
+                    { ax: cx + 70, ay: cy + 4, label: '12 stator teeth + 3-phase windings' },
+                    { ax: cx - 56, ay: cy + 50, label: 'Air gap (small for high torque density)' },
+                ],
+            };
+        }
+
+        function inductionSection() {
+            const cx = SECTION_CX, cy = SECTION_CY;
+            let parts = '';
+            // Stator yoke (warm slate to distinguish from PMSM)
+            parts += `<circle cx="${cx}" cy="${cy}" r="120" fill="#a8a29e" stroke="#292524" stroke-width="1.2" />`;
+            parts += `<circle cx="${cx}" cy="${cy}" r="80" fill="var(--bg-card)" />`;
+            // Stator teeth
+            for (let i = 0; i < 12; i++) {
+                const c = i * 30;
+                parts += arcSector(cx, cy, 64, 80, c - 12, c + 12, '#a8a29e', '#292524');
+            }
+            // Rotor iron (lighter - no magnets)
+            parts += `<circle cx="${cx}" cy="${cy}" r="58" fill="#d6d3d1" stroke="#44403c" stroke-width="0.8" />`;
+            // End ring (concentric outline just inside the bar circle)
+            parts += `<circle cx="${cx}" cy="${cy}" r="48" fill="none" stroke="#57534e" stroke-width="1" stroke-dasharray="3 2" />`;
+            // 18 squirrel-cage rotor bars
+            for (let i = 0; i < 18; i++) {
+                const angle = i * 20;
+                const p = polarPoint(cx, cy, angle, 53);
+                parts += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.6" fill="#1c1917" />`;
+            }
+            // Shaft
+            parts += `<circle cx="${cx}" cy="${cy}" r="10" fill="var(--bg-card)" stroke="#1c1917" stroke-width="1" />`;
+            return {
+                title: 'Induction (squirrel cage): conducting rotor bars inside AC stator',
+                body: parts,
+                callouts: [
+                    { ax: cx + 50, ay: cy - 22, label: 'Squirrel-cage rotor bars' },
+                    { ax: cx + 76, ay: cy + 30, label: '3-phase AC stator (no rotor magnets)' },
+                    { ax: cx - 36, ay: cy + 38, label: 'End ring shorts the bars' },
+                ],
+            };
+        }
+
+        function dcBrushedSection() {
+            const cx = SECTION_CX, cy = SECTION_CY;
+            let parts = '';
+            // Outer casing/frame
+            parts += `<circle cx="${cx}" cy="${cy}" r="120" fill="#e7e5e4" stroke="#1c1917" stroke-width="1.2" />`;
+            parts += `<circle cx="${cx}" cy="${cy}" r="100" fill="var(--bg-card)" stroke="#1c1917" stroke-width="0.6" />`;
+            // Two field magnets bonded to the frame
+            parts += arcSector(cx, cy, 78, 100, 200, 340, '#1d4ed8'); // left half = N
+            parts += arcSector(cx, cy, 78, 100, 20, 160, '#dc2626');  // right half = S
+            // N / S labels
+            const nPos = polarPoint(cx, cy, 270, 89);
+            const sPos = polarPoint(cx, cy, 90, 89);
+            parts += `<text x="${nPos.x.toFixed(1)}" y="${(nPos.y + 5).toFixed(1)}" text-anchor="middle" fill="white" font-size="14" font-weight="700">N</text>`;
+            parts += `<text x="${sPos.x.toFixed(1)}" y="${(sPos.y + 5).toFixed(1)}" text-anchor="middle" fill="white" font-size="14" font-weight="700">S</text>`;
+            // Air gap dashed ring
+            parts += `<circle cx="${cx}" cy="${cy}" r="74" fill="none" stroke="#1c1917" stroke-width="0.4" stroke-dasharray="2 2" />`;
+            // Wound armature (slotted rotor)
+            parts += `<circle cx="${cx}" cy="${cy}" r="68" fill="#57534e" stroke="#1c1917" stroke-width="1" />`;
+            // 8 armature slots offset 22.5 degrees from field-magnet centers
+            for (let i = 0; i < 8; i++) {
+                const c = i * 45 + 22.5;
+                parts += arcSector(cx, cy, 38, 68, c - 5, c + 5, '#1c1917');
+            }
+            // Commutator ring
+            parts += `<circle cx="${cx}" cy="${cy}" r="22" fill="#fbbf24" stroke="#78350f" stroke-width="1" />`;
+            // Commutator segment dividers
+            for (let i = 0; i < 8; i++) {
+                const a = (i * 45 + 22.5) * Math.PI / 180;
+                const x1 = cx + Math.cos(a) * 14;
+                const y1 = cy + Math.sin(a) * 14;
+                const x2 = cx + Math.cos(a) * 22;
+                const y2 = cy + Math.sin(a) * 22;
+                parts += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#78350f" stroke-width="0.7" />`;
+            }
+            // Brushes pressed onto commutator from top and bottom (carbon blocks with springs implied)
+            parts += `<rect x="${cx - 7}" y="${cy - 38}" width="14" height="16" rx="1" fill="#1f2937" stroke="white" stroke-width="0.8" />`;
+            parts += `<rect x="${cx - 7}" y="${cy + 22}" width="14" height="16" rx="1" fill="#1f2937" stroke="white" stroke-width="0.8" />`;
+            // Shaft
+            parts += `<circle cx="${cx}" cy="${cy}" r="8" fill="var(--bg-card)" stroke="#1c1917" stroke-width="1" />`;
+            return {
+                title: 'DC brushed: PM field on stator, wound armature with commutator',
+                body: parts,
+                callouts: [
+                    { ax: cx - 88, ay: cy - 4, label: 'Permanent-magnet field (stator)' },
+                    { ax: cx + 50, ay: cy - 50, label: 'Wound armature with slots' },
+                    { ax: cx + 12, ay: cy - 30, label: 'Brushes ride on commutator' },
+                ],
+            };
+        }
+
+        const SECTION_BUILDERS = {
+            pmsm_spm: pmsmSpmSection,
+            induction_squirrel_cage: inductionSection,
+            dc_brushed_pm: dcBrushedSection,
+        };
+
+        function createCrossSectionSvg(topologyKey) {
+            const builder = SECTION_BUILDERS[topologyKey];
+            if (!builder) return '';
+            const { title, body, callouts } = builder();
+            const calloutSvg = callouts.map((c, i) => {
+                const labelY = 96 + i * 88;
+                const labelX = 408;
+                return `
+                    <line x1="${c.ax.toFixed(1)}" y1="${c.ay.toFixed(1)}" x2="${labelX - 6}" y2="${labelY}" stroke="var(--text-light)" stroke-width="1.2" />
+                    <circle cx="${c.ax.toFixed(1)}" cy="${c.ay.toFixed(1)}" r="2.6" fill="var(--text-color)" />
+                    <text x="${labelX}" y="${labelY + 4}" fill="var(--text-color)" font-size="13" font-weight="600">${c.label}</text>
+                `;
+            }).join('');
             return `
                 <svg class="motor-svg" viewBox="0 0 520 360" role="img" aria-labelledby="motor-svg-title">
-                    <title id="motor-svg-title">${common.title}</title>
+                    <title id="motor-svg-title">${title}</title>
                     <rect x="8" y="8" width="504" height="344" rx="18" fill="var(--bg-card)" stroke="var(--border-color)" />
-                    <circle cx="230" cy="175" r="116" fill="${common.statorFill}" stroke="var(--secondary-color)" stroke-width="2" />
-                    <circle cx="230" cy="175" r="78" fill="var(--bg-card)" stroke="var(--border-color)" stroke-width="2" />
-                    <circle cx="230" cy="175" r="48" fill="${common.rotorFill}" />
-                    <circle cx="230" cy="175" r="8" fill="var(--bg-card)" opacity="0.9" />
-                    <g fill="${common.accent}">
-                        <rect x="223" y="64" width="14" height="30" rx="4" />
-                        <rect x="223" y="256" width="14" height="30" rx="4" />
-                        <rect x="119" y="168" width="30" height="14" rx="4" />
-                        <rect x="311" y="168" width="30" height="14" rx="4" />
-                    </g>
-                    <g stroke="${common.accent}" stroke-width="4" fill="none" stroke-linecap="round">
-                        <path d="M168 116 C195 92, 265 92, 292 116" />
-                        <path d="M168 234 C195 258, 265 258, 292 234" />
-                    </g>
-                    <line x1="302" y1="114" x2="405" y2="88" stroke="var(--secondary-color)" stroke-width="1.5" />
-                    <line x1="292" y1="175" x2="405" y2="175" stroke="var(--secondary-color)" stroke-width="1.5" />
-                    <line x1="282" y1="235" x2="405" y2="262" stroke="var(--secondary-color)" stroke-width="1.5" />
-                    <text x="28" y="38" fill="var(--text-color)" font-size="17" font-weight="700">${common.title}</text>
-                    <text x="414" y="92" fill="var(--text-color)" font-size="15" font-weight="700">${common.labelA}</text>
-                    <text x="414" y="179" fill="var(--text-color)" font-size="15" font-weight="700">${common.labelB}</text>
-                    <text x="414" y="266" fill="var(--text-color)" font-size="15" font-weight="700">${common.labelC}</text>
-                    <text x="184" y="334" fill="var(--text-light)" font-size="13">Pedagogical cross-section, not a manufacturing drawing</text>
+                    <text x="24" y="34" fill="var(--text-color)" font-size="14" font-weight="700">${title}</text>
+                    ${body}
+                    ${calloutSvg}
+                    <text x="24" y="340" fill="var(--text-light)" font-size="11">Pedagogical cross-section, not a manufacturing drawing</text>
                 </svg>
             `;
         }
@@ -739,22 +850,16 @@
             renderList(elements.referencesList, overview.references);
         }
 
-        function getOverviewFromPython(topologyKey) {
-            pyodide.globals.set('selected_topology', topologyKey);
-            const jsonText = pyodide.runPython(`
-import json
-from pycalcs import motors
-json.dumps(motors.calculate_topology_overview(selected_topology))
-`);
-            return JSON.parse(jsonText);
-        }
-
         function selectTopology(topologyKey) {
             clearError();
             try {
+                const overview = topologyOverviews[topologyKey];
+                if (!overview) {
+                    throw new Error(`Unknown topology: ${topologyKey}`);
+                }
                 currentTopology = topologyKey;
                 updateActiveTopologyButton();
-                renderOverview(getOverviewFromPython(topologyKey));
+                renderOverview(overview);
             } catch (error) {
                 showError(error.message);
             }
@@ -785,6 +890,12 @@ from pycalcs import motors
 json.dumps(motors.MOTOR_TOPOLOGIES)
 `);
             topologyDatabase = JSON.parse(dataJson);
+            topologyOverviews = Object.fromEntries(
+                Object.entries(topologyDatabase).map(([key, data]) => [
+                    key,
+                    { ...data, topology_key: key },
+                ])
+            );
         }
 
         async function initializeTool() {
@@ -792,7 +903,7 @@ json.dumps(motors.MOTOR_TOPOLOGIES)
             try {
                 await initializePyodide();
                 renderTopologyList();
-                renderOverview(getOverviewFromPython(currentTopology));
+                renderOverview(topologyOverviews[currentTopology]);
             } catch (error) {
                 showError(error.message);
             } finally {

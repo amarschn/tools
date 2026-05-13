@@ -12,91 +12,124 @@ from copy import deepcopy
 from typing import Any
 
 
-TRADEOFF_DIMENSIONS: dict[str, dict[str, str]] = {
+# Polarity values:
+#   "higher_better"  -> normalize so larger numeric values rank higher
+#   "lower_better"   -> normalize so smaller numeric values rank higher
+#   "context"        -> no universal direction; surface the value but do not score it
+#
+# Scale (ordinal dimensions only): integer-keyed map from numeric code to label.
+# The keys cover the full encoding range; per-topology entries store integers
+# from this set in their min/typ/max fields.
+TRADEOFF_DIMENSIONS: dict[str, dict[str, Any]] = {
     "torque_density_nm_per_kg": {
         "label": "Torque density by mass",
         "unit": "N-m/kg",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "torque_density_nm_per_l": {
         "label": "Torque density by volume",
         "unit": "N-m/L",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "power_density_w_per_kg": {
         "label": "Power density by mass",
         "unit": "W/kg",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "power_density_w_per_l": {
         "label": "Power density by volume",
         "unit": "W/L",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "peak_efficiency_percent": {
         "label": "Peak efficiency",
         "unit": "%",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "speed_range_rpm": {
         "label": "Speed range / max safe speed",
         "unit": "rpm",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "field_weakening_capability": {
         "label": "Field-weakening capability",
         "unit": "ordinal",
         "kind": "ordinal",
+        "polarity": "higher_better",
+        "scale": {0: "None", 1: "Limited", 2: "Moderate", 3: "Strong"},
     },
     "cost_usd_per_kw": {
         "label": "Cost band",
         "unit": "$/kW",
         "kind": "numeric",
+        "polarity": "lower_better",
     },
     "control_complexity": {
         "label": "Control complexity",
         "unit": "1-5",
         "kind": "ordinal",
+        "polarity": "lower_better",
+        "scale": {1: "Trivial", 2: "Low", 3: "Moderate", 4: "High", 5: "Very high"},
     },
     "cogging_smoothness": {
         "label": "Cogging / smoothness",
         "unit": "1-5",
         "kind": "ordinal",
+        "polarity": "higher_better",
+        "scale": {1: "Heavy ripple", 2: "Notable ripple", 3: "Some ripple", 4: "Smooth", 5: "Glassy"},
     },
     "audible_noise": {
         "label": "Audible noise character",
         "unit": "1-5",
         "kind": "ordinal",
+        "polarity": "lower_better",
+        "scale": {1: "Silent", 2: "Soft hum", 3: "Audible whine", 4: "Loud", 5: "Harsh"},
     },
     "self_starting": {
         "label": "Self-starting behavior",
         "unit": "ordinal",
         "kind": "ordinal",
+        "polarity": "higher_better",
+        "scale": {1: "Needs commutation", 2: "Self-starting"},
     },
     "position_sensor_requirement": {
         "label": "Position-sensor requirement",
         "unit": "ordinal",
         "kind": "ordinal",
+        "polarity": "lower_better",
+        "scale": {0: "None", 1: "Optional", 2: "Recommended", 3: "Required"},
     },
     "power_factor": {
         "label": "Power factor",
         "unit": "cos(phi)",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
     "rotor_inertia": {
         "label": "Rotor inertia",
         "unit": "1-5",
         "kind": "ordinal",
+        "polarity": "context",
+        "scale": {1: "Very low", 2: "Low", 3: "Medium", 4: "High", 5: "Very high"},
     },
     "magnet_content": {
         "label": "Magnet content",
         "unit": "ordinal",
         "kind": "ordinal",
+        "polarity": "lower_better",
+        "scale": {0: "None", 1: "Ferrite", 2: "NdFeB", 3: "SmCo"},
     },
     "continuous_peak_ratio": {
         "label": "Continuous-to-peak ratio",
         "unit": "ratio",
         "kind": "numeric",
+        "polarity": "higher_better",
     },
 }
 
@@ -614,11 +647,12 @@ MOTOR_TOPOLOGIES: dict[str, dict[str, Any]] = {
                 "display": "None for basic drive",
             },
             "power_factor": {
-                "min": 0.0,
-                "typ": 0.0,
-                "max": 0.0,
-                "unit": "not applicable",
+                "min": None,
+                "typ": None,
+                "max": None,
+                "unit": "cos(phi)",
                 "display": "N/A for DC supply",
+                "not_applicable": True,
             },
             "rotor_inertia": {
                 "min": 2.0,
