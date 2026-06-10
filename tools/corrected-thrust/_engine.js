@@ -104,6 +104,20 @@ function fmt(x, sig=4){
   return parseFloat(x.toPrecision(sig)).toString();
 }
 
+// Higher-precision formatter for derivation substitutions, so that
+// recomputing a result by hand from the printed intermediates reproduces
+// the displayed answer. Used throughout the audit trail, analysis sheet,
+// text export, and as cached values in the spreadsheet.
+function fmt6(x){ return fmt(x, 6); }
+
+// RPM is always presented the same way everywhere: rounded to a whole
+// rev/min with thousands separators. One source of truth avoids the
+// "headline says 23,262 but the equation says 23,260" rounding mismatch.
+function fmtRPM(x){
+  if(!isFinite(x)) return '—';
+  return Math.round(x).toLocaleString('en-US');
+}
+
 global.CT_ENGINE = { UNITS, convertToSI, convertFromSI, isaPressure, isaTemperature,
-  satVaporPressure, moistAirDensity, evaluateSide, solve, fmt };
+  satVaporPressure, moistAirDensity, evaluateSide, solve, fmt, fmt6, fmtRPM };
 })(window);
