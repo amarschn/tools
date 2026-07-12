@@ -751,19 +751,34 @@ class TestConductorProtection:
 class TestEvaluateCircuit:
     """End-to-end verdict combining ampacity, voltage drop, and protection."""
 
-    def test_long_run_upsizes_for_voltage_drop(self):
-        """40 A / 120 V / 30 m upsizes past the ampacity-minimum to meet VD."""
+    def test_voltage_drop_is_advisory_not_a_verdict_check(self):
+        """40 A / 120 V / 30 m: recommends code-min 8 AWG and PASSES; high VD is
+        only advisory, with a suggested upsize."""
         r = wire_sizing.evaluate_circuit(40, 120, 30, "copper", 75, 30, 3, 3.0, "DC")
-        # Ampacity minimum for 40 A is 8 AWG; VD forces a larger conductor.
-        assert r["recommended_size"] != "8 AWG"
-        assert r["voltage_drop_ok"] is True
-        assert r["verdict"]["binding_constraint"] == "voltage_drop"
+        assert r["recommended_size"] == "8 AWG"          # code minimum, not upsized
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        adv = r["voltage_drop_advisory"]
+        assert adv["within_target"] is False             # VD exceeds 3%
+        assert adv["suggested_size"] is not None          # offers an upsize
+        assert "voltage_drop" not in r["verdict"]["checks"]
 
-    def test_unsatisfiable_voltage_drop_fails(self):
-        """A long low-voltage run that no standard conductor can satisfy -> FAIL."""
+    def test_60a_shed_feeder_recommends_code_minimum(self):
+        """Real-world check: 60 A / 240 V / 50 m recommends 6 AWG (code min),
+        not an aggressively upsized conductor."""
+        r = wire_sizing.evaluate_circuit(60, 240, 50, "copper", 75, 30, 3, 3.0, "AC")
+        assert r["recommended_size"] == "6 AWG"
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        # VD at 6 AWG exceeds 3%, so it suggests upsizing (to 4 AWG or larger).
+        assert r["voltage_drop_advisory"]["within_target"] is False
+        assert r["voltage_drop_advisory"]["suggested_size"] is not None
+
+    def test_unsatisfiable_voltage_drop_still_passes_code(self):
+        """A run no conductor can bring under 3% VD still passes code (ampacity/
+        OCPD) with no VD upsize available."""
         r = wire_sizing.evaluate_circuit(150, 12, 60, "copper", 75, 30, 3, 3.0, "DC")
-        assert r["verdict"]["status"] == "fail"
-        assert r["verdict"]["binding_constraint"] == "voltage_drop"
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        assert r["voltage_drop_advisory"]["within_target"] is False
+        assert r["voltage_drop_advisory"]["suggested_size"] is None
 
     def test_short_run_passes(self):
         """A short, lightly loaded run passes all checks."""
@@ -776,7 +791,7 @@ class TestEvaluateCircuit:
         r = wire_sizing.evaluate_circuit(30, 120, 8, "copper", 75, 30, 3, 3.0, "DC")
         assert r["breaker"]["breaker_rating_a"] is not None
         assert set(r["verdict"]["checks"]) == {
-            "ampacity", "voltage_drop", "overcurrent_protection", "continuous_conductor"}
+            "ampacity", "overcurrent_protection", "continuous_conductor"}
 
     def test_continuous_load_upsizes_conductor(self):
         """A continuous load is sized so conductor ampacity >= 125% of load."""

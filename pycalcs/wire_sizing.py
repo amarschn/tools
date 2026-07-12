@@ -849,9 +849,10 @@ SMALL_CONDUCTOR_MAX_OCPD: Dict[str, Dict[str, int]] = {
     "aluminum": {"12 AWG": 15, "10 AWG": 25},
 }
 
-# Verdict tuning: how much headroom before a passing result is only "marginal".
-_AMPACITY_MARGINAL_PCT = 10.0   # < 10% ampacity headroom -> marginal
-_VDROP_MARGINAL_FRACTION = 0.9  # within 10% of the VD limit -> marginal
+# Verdict tuning: a code-compliant result with very little ampacity headroom
+# (< 5%) is flagged "marginal". Common sizings (e.g. 60 A on 6 AWG / 65 A, ~8%)
+# stay a clean "pass".
+_AMPACITY_MARGINAL_PCT = 5.0
 
 
 def next_standard_ocpd(current_a: float) -> Optional[int]:
@@ -993,11 +994,13 @@ def evaluate_circuit(
     """
     Full NEC branch-circuit evaluation with a single pass/fail verdict.
 
-    Runs conductor sizing (ampacity + voltage drop), selects the overcurrent
-    device (NEC 240.6/210.20), verifies the device protects the conductor
-    (NEC 240.4), and — for continuous loads — checks that the conductor ampacity
-    is at least 125% of the load (NEC 210.19(A)). Returns the underlying sizing
-    result plus a verdict identifying the binding constraint.
+    Recommends the code-minimum conductor: the smallest size that satisfies
+    ampacity, overcurrent protection (NEC 240.4/240.6), and — for continuous
+    loads — the 125% conductor rule (NEC 210.19(A)). Voltage drop is treated as
+    advisory (NEC Informational Notes), so it never drives the recommendation or
+    the pass/fail verdict; instead the result reports the drop at the recommended
+    conductor and, if it exceeds the target, the smallest conductor that would
+    meet it.
 
     ---Parameters---
     current_a : float
@@ -1023,10 +1026,13 @@ def evaluate_circuit(
 
     ---Returns---
     result : dict
-        The ``calculate_wire_size`` dict, augmented with ``breaker`` (selection),
-        ``protection`` (240.4 check), a ``continuous_conductor_ok`` flag, and a
-        ``verdict`` = {status, headline, binding_constraint, reasons, checks}.
-        ``status`` is one of "pass", "marginal", "fail".
+        The recommended-conductor sizing dict, augmented with ``breaker``
+        (selection), ``protection`` (240.4 check), ``continuous_conductor_ok``,
+        ``voltage_drop_advisory`` = {target_percent, actual_percent,
+        within_target, suggested_size, suggested_percent}, and a ``verdict`` =
+        {status, headline, binding_constraint, reasons, checks}. ``checks``
+        covers only the mandatory code checks (ampacity, overcurrent_protection,
+        continuous_conductor). ``status`` is one of "pass", "marginal", "fail".
 
     ---References---
     NFPA 70 (NEC), 210.19(A), 210.20(A), 240.4, 240.6, 310.16.
@@ -1065,16 +1071,25 @@ def evaluate_circuit(
         size = sizes[-1]
         chosen = (size, *_evaluate_size(size))
 
-    # Stage 2: from that size upward, upsize to the smallest conductor that also
-    # satisfies the voltage-drop limit (a larger conductor only helps).
-    start = sizes.index(chosen[0])
-    for size in sizes[start:]:
-        chk, prot, cont_ok = _evaluate_size(size)
-        if chk["voltage_drop_ok"] and chk["ampacity_ok"] and prot["protected"] and cont_ok:
-            chosen = (size, chk, prot, cont_ok)
-            break
-
+    # The recommendation is the code-minimum conductor from Stage 1. Voltage
+    # drop is advisory (NEC 210.19(A)/215.2(A) Informational Notes), so it does
+    # NOT drive the recommendation or the pass/fail verdict — only ampacity and
+    # overcurrent protection are code requirements.
     size, chk, protection, continuous_conductor_ok = chosen
+
+    # Voltage-drop advisory, evaluated at the recommended conductor. If it
+    # exceeds the target, find the smallest larger conductor that would meet it.
+    vd_within_target = bool(chk["voltage_drop_ok"])
+    suggested_vd_size = None
+    suggested_vd_percent = None
+    if not vd_within_target:
+        idx = sizes.index(size)
+        for s2 in sizes[idx + 1:]:
+            c2, p2, ct2 = _evaluate_size(s2)
+            if c2["voltage_drop_ok"] and c2["ampacity_ok"] and p2["protected"] and ct2:
+                suggested_vd_size = s2
+                suggested_vd_percent = c2["voltage_drop_percent"]
+                break
 
     # Normalize to the calculate_wire_size field names the UI expects.
     sizing = dict(chk)
@@ -1084,9 +1099,9 @@ def evaluate_circuit(
     derating = sizing.get("total_derating_factor") or 1.0
     sizing["required_ampacity_a"] = current_a / derating
 
+    # Mandatory (code) checks only — voltage drop is advisory, not a check.
     checks = {
         "ampacity": bool(sizing["ampacity_ok"]),
-        "voltage_drop": bool(sizing["voltage_drop_ok"]),
         "overcurrent_protection": bool(protection["protected"]),
         "continuous_conductor": bool(continuous_conductor_ok),
     }
@@ -1095,49 +1110,42 @@ def evaluate_circuit(
     if not checks["ampacity"]:
         reasons.append(
             f"Ampacity: corrected {sizing['corrected_ampacity_a']:.0f} A < load "
-            f"{current_a:.0f} A.")
-    if not checks["voltage_drop"]:
-        reasons.append(
-            f"Voltage drop {sizing['voltage_drop_percent']:.1f}% exceeds "
-            f"{max_voltage_drop_percent:.1f}% limit.")
+            f"{current_a:.0f} A (exceeds the largest standard conductor).")
     if not checks["overcurrent_protection"]:
         reasons.append(protection["note"])
     if not checks["continuous_conductor"]:
         reasons.append(
             "Continuous load: conductor ampacity below 125% of load "
-            "(NEC 210.19(A)); increase conductor size.")
+            "(NEC 210.19(A)).")
 
     if not all(checks.values()):
         status = "fail"
-        # Binding constraint = first failing check, in priority order.
-        for key in ("ampacity", "overcurrent_protection", "continuous_conductor",
-                    "voltage_drop"):
+        for key in ("ampacity", "overcurrent_protection", "continuous_conductor"):
             if not checks[key]:
                 binding = key
                 break
         headline = f"FAIL — {reasons[0]}"
     else:
-        # All pass: flag marginal cases and report the tightest constraint.
-        vd_fraction = (sizing["voltage_drop_percent"] / max_voltage_drop_percent
-                       if max_voltage_drop_percent > 0 else 0.0)
-        amp_marginal = sizing["ampacity_margin_percent"] < _AMPACITY_MARGINAL_PCT
-        vd_marginal = vd_fraction >= _VDROP_MARGINAL_FRACTION
-        if amp_marginal or vd_marginal:
-            status = "marginal"
-        else:
-            status = "pass"
-        # Tightest constraint: whichever has less headroom.
-        binding = "voltage_drop" if vd_fraction >= (
-            1.0 - sizing["ampacity_margin_percent"] / 100.0) else "ampacity"
+        # Code-compliant. A thin ampacity margin is flagged as marginal.
+        status = ("marginal"
+                  if sizing["ampacity_margin_percent"] < _AMPACITY_MARGINAL_PCT
+                  else "pass")
+        binding = "ampacity"
         verb = "Marginal" if status == "marginal" else "Pass"
-        headline = (
-            f"{verb} — {sizing['recommended_size']} {material}, "
-            f"{breaker_rating} A breaker, VD {sizing['voltage_drop_percent']:.1f}%.")
+        headline = (f"{verb} — {sizing['recommended_size']} {material} on a "
+                    f"{breaker_rating} A breaker (NEC code minimum).")
 
     sizing["breaker"] = breaker
     sizing["protection"] = protection
     sizing["continuous_load"] = continuous_load
     sizing["continuous_conductor_ok"] = continuous_conductor_ok
+    sizing["voltage_drop_advisory"] = {
+        "target_percent": max_voltage_drop_percent,
+        "actual_percent": sizing["voltage_drop_percent"],
+        "within_target": vd_within_target,
+        "suggested_size": suggested_vd_size,
+        "suggested_percent": suggested_vd_percent,
+    }
     sizing["verdict"] = {
         "status": status,
         "headline": headline,

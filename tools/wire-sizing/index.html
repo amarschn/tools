@@ -704,6 +704,20 @@
                 </div>
                 <div class="card-body">
                     <div class="form-group">
+                        <label class="form-label">Circuit Type</label>
+                        <select id="preset" class="form-select">
+                            <option value="branch120">120 V branch circuit</option>
+                            <option value="branch240">240 V branch circuit</option>
+                            <option value="feeder240">240 V feeder / subpanel</option>
+                            <option value="dc12">12 V DC</option>
+                            <option value="dc24">24 V DC</option>
+                            <option value="dc48">48 V DC</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <p class="form-hint">Sets voltage, AC/DC, and the voltage-drop target</p>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Load Current (A)</label>
                         <input type="number" id="current" class="form-input" value="20" min="0.1" step="0.1">
                         <p class="form-hint">Maximum continuous current draw</p>
@@ -907,6 +921,7 @@
             maxVdrop: document.getElementById('maxVdrop'),
             circuitType: document.getElementById('circuitType'),
             continuous: document.getElementById('continuous'),
+            preset: document.getElementById('preset'),
             calculateBtn: document.getElementById('calculateBtn'),
             statusMsg: document.getElementById('statusMsg'),
             resultsContent: document.getElementById('resultsContent'),
@@ -1001,6 +1016,7 @@
             const verdict = result.verdict || {};
             const breaker = result.breaker || {};
             const protection = result.protection || {};
+            const advisory = result.voltage_drop_advisory || {};
             const breakerRating = breaker.breaker_rating_a;
 
             let html = `
@@ -1064,11 +1080,18 @@
 
                 <div class="result-panel">
                     <div class="result-header">
-                        <span class="result-title">Voltage Drop</span>
-                        <span class="result-badge ${result.voltage_drop_ok ? 'badge-pass' : (result.voltage_drop_percent <= 5 ? 'badge-warn' : 'badge-fail')}">
+                        <span class="result-title">Voltage Drop <span style="font-weight:400;opacity:.6;">· advisory</span></span>
+                        <span class="result-badge ${advisory.within_target ? 'badge-pass' : 'badge-warn'}">
                             ${result.voltage_drop_percent.toFixed(1)}%
                         </span>
                     </div>
+                    ${!advisory.within_target ? `
+                    <p class="form-hint" style="margin:0 0 12px;">
+                        Above the ${advisory.target_percent}% guideline (a recommendation, not an NEC requirement).
+                        ${advisory.suggested_size
+                            ? `For ≤${advisory.target_percent}%, upsize to <strong>${advisory.suggested_size}</strong> (${advisory.suggested_percent.toFixed(1)}%).`
+                            : `No standard conductor meets ≤${advisory.target_percent}% on this run.`}
+                    </p>` : ''}
                     <div class="vdrop-bar-container">
                         <div class="vdrop-bar-bg">
                             <div class="vdrop-bar-fill ${result.voltage_drop_ok ? 'ok' : (result.voltage_drop_percent <= 5 ? 'warn' : 'fail')}"
@@ -1236,6 +1259,27 @@
         });
 
         elements.calculateBtn.addEventListener('click', calculate);
+
+        // Circuit presets: set voltage, AC/DC, and the voltage-drop target together.
+        const PRESETS = {
+            branch120: { voltage: 120, circuitType: 'AC', maxVdrop: 3 },
+            branch240: { voltage: 240, circuitType: 'AC', maxVdrop: 3 },
+            feeder240: { voltage: 240, circuitType: 'AC', maxVdrop: 3 },
+            dc12:      { voltage: 12,  circuitType: 'DC', maxVdrop: 3 },
+            dc24:      { voltage: 24,  circuitType: 'DC', maxVdrop: 3 },
+            dc48:      { voltage: 48,  circuitType: 'DC', maxVdrop: 3 },
+        };
+        elements.preset.addEventListener('change', () => {
+            const p = PRESETS[elements.preset.value];
+            if (!p) return; // "custom" leaves fields as-is
+            elements.voltage.value = p.voltage;
+            elements.circuitType.value = p.circuitType;
+            elements.maxVdrop.value = p.maxVdrop;
+            if (wireSizingModule) calculate();
+        });
+        // Editing voltage/type directly means the preset no longer describes it.
+        [elements.voltage, elements.circuitType].forEach(el =>
+            el.addEventListener('change', () => { elements.preset.value = 'custom'; }));
 
         // Calculate on Enter key
         document.querySelectorAll('.form-input').forEach(input => {
