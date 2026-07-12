@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Motor Topology Explainer/Explorer - Engineering Tools</title>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #111827;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #1f2937;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #111827;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #1f2937;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { min-height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+        p { color: var(--text-light); margin-bottom: 1rem; }
+        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); }
+        h2 { font-size: 1.375rem; font-weight: 600; color: var(--primary-color); }
+        h3 { font-size: 1.05rem; font-weight: 600; color: var(--secondary-color); }
+        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+        }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        .nav-brand {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .nav-actions { display: flex; align-items: center; gap: 8px; }
+        .theme-button {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            cursor: pointer;
+            font-weight: 600;
+            padding: 7px 14px;
+        }
+        .theme-button:hover { background: var(--primary-light); }
+
+        .container {
+            width: 92%;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px 0 44px;
+        }
+        .tool-header { margin-bottom: 22px; }
+        .tool-description {
+            margin-top: 8px;
+            font-size: 1.04rem;
+            max-width: 84ch;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+        .workspace-layout {
+            display: grid;
+            grid-template-columns: 320px minmax(0, 1fr);
+            gap: 22px;
+            align-items: start;
+        }
+        .left-rail {
+            display: grid;
+            gap: 16px;
+            position: sticky;
+            top: 18px;
+        }
+        .rail-title {
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+        }
+        .topology-list { display: grid; gap: 8px; }
+        .topology-button {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+            color: var(--text-color);
+            cursor: pointer;
+            padding: 12px 14px;
+            text-align: left;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .topology-button:hover { border-color: var(--secondary-color); }
+        .topology-button.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: var(--bg-card);
+        }
+        .topology-button .name { display: block; font-weight: 600; }
+        .topology-button .family {
+            display: block;
+            font-size: 0.78rem;
+            opacity: 0.72;
+            margin-top: 2px;
+        }
+        .rail-note {
+            border: 1px dashed var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 14px;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .tab-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            margin: -4px 0 22px;
+            padding-bottom: 12px;
+        }
+        .tab-button {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            cursor: pointer;
+            font-weight: 600;
+            padding: 8px 14px;
+        }
+        .tab-button.active {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: var(--bg-card);
+        }
+        .tab-button[aria-disabled="true"] {
+            color: var(--text-light);
+            cursor: not-allowed;
+            opacity: 0.62;
+        }
+
+        .overview-grid {
+            display: grid;
+            grid-template-columns: minmax(280px, 0.95fr) minmax(360px, 1.05fr);
+            gap: 24px;
+            align-items: start;
+        }
+        .diagram-card {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 18px;
+        }
+        .motor-svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            min-height: 250px;
+        }
+        .kicker {
+            color: var(--text-light);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .takeaway {
+            border-left: 4px solid var(--accent-color);
+            color: var(--text-color);
+            font-size: 1.08rem;
+            margin: 14px 0 20px;
+            padding-left: 16px;
+        }
+        .content-section { margin-top: 24px; }
+        .fact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .fact-card,
+        .tradeoff-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 14px;
+        }
+        .fact-card { color: var(--text-color); }
+        .list-columns {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+        ul.clean-list {
+            list-style: none;
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        ul.clean-list li {
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-light);
+            padding-bottom: 8px;
+        }
+        ul.clean-list li:last-child { border-bottom: none; }
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .chip {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            color: var(--text-color);
+            font-size: 0.84rem;
+            padding: 5px 10px;
+        }
+        .tradeoff-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .tradeoff-label {
+            color: var(--text-light);
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .tradeoff-value {
+            color: var(--text-color);
+            font-family: var(--font-mono);
+            font-size: 1.05rem;
+            margin-top: 6px;
+        }
+        .tradeoff-range {
+            color: var(--text-light);
+            font-size: 0.82rem;
+            margin-top: 2px;
+        }
+        .callout {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            color: var(--text-light);
+            margin-top: 24px;
+            padding: 16px;
+        }
+        .callout strong { color: var(--text-color); }
+        .placeholder-panel {
+            border: 1px dashed var(--border-color);
+            border-radius: var(--border-radius);
+            color: var(--text-light);
+            margin-top: 20px;
+            padding: 18px;
+        }
+        .error-message {
+            background: rgba(185, 28, 28, 0.08);
+            border: 1px solid var(--danger-color);
+            border-radius: var(--border-radius);
+            color: var(--danger-color);
+            display: none;
+            margin-bottom: 16px;
+            padding: 12px 14px;
+        }
+
+        @media (max-width: 1050px) {
+            .workspace-layout,
+            .overview-grid {
+                grid-template-columns: 1fr;
+            }
+            .left-rail { position: static; }
+            .tradeoff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 680px) {
+            h1 { font-size: 1.85rem; }
+            .container { width: 94%; }
+            .fact-grid,
+            .list-columns,
+            .tradeoff-grid {
+                grid-template-columns: 1fr;
+            }
+            .nav-container { padding: 0 14px; }
+        }
+    </style>
+</head>
+
+<body data-theme="system">
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide...</div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <a class="nav-brand" href="../../">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="theme-button" id="theme-toggle" type="button">Theme: System</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="tool-header">
+            <h1>Motor Topology Explainer/Explorer</h1>
+            <p class="tool-description">
+                Build intuition for major electric motor architectures, starting with what each machine is,
+                why it exists, where it is used, and which tradeoffs define it.
+            </p>
+        </header>
+
+        <div class="workspace-layout">
+            <aside class="left-rail">
+                <section class="card">
+                    <div class="rail-title">
+                        <h2>Topologies</h2>
+                        <p>Select one motor family to update the overview.</p>
+                    </div>
+                    <div class="topology-list" id="topology-list"></div>
+                </section>
+
+                <section class="rail-note">
+                    <strong>Compare mode:</strong> planned for the Tradeoffs tab after the remaining topology
+                    database is filled in.
+                </section>
+            </aside>
+
+            <section class="card">
+                <div class="tab-strip" role="tablist" aria-label="Motor explorer sections">
+                    <button class="tab-button active" type="button" role="tab" aria-selected="true">Overview</button>
+                    <button class="tab-button" type="button" aria-disabled="true">Performance</button>
+                    <button class="tab-button" type="button" aria-disabled="true">Control</button>
+                    <button class="tab-button" type="button" aria-disabled="true">Tradeoffs</button>
+                    <button class="tab-button" type="button" aria-disabled="true">Equations</button>
+                    <button class="tab-button" type="button" aria-disabled="true">Background</button>
+                </div>
+
+                <div class="error-message" id="error-message"></div>
+
+                <article id="overview-panel">
+                    <div class="overview-grid">
+                        <div class="diagram-card" id="diagram-card" aria-label="Topology cross-section diagram"></div>
+
+                        <div>
+                            <div class="kicker" id="topology-family">Motor family</div>
+                            <h2 id="topology-name">Loading...</h2>
+                            <p class="takeaway" id="topology-takeaway"></p>
+                            <p id="topology-description"></p>
+
+                            <div class="content-section">
+                                <h3>Where You See It</h3>
+                                <div class="chip-row" id="applications-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Distinguishing Facts</h3>
+                        <div class="fact-grid" id="facts-grid"></div>
+                    </div>
+
+                    <div class="content-section list-columns">
+                        <div>
+                            <h3>Pros</h3>
+                            <ul class="clean-list" id="pros-list"></ul>
+                        </div>
+                        <div>
+                            <h3>Cons</h3>
+                            <ul class="clean-list" id="cons-list"></ul>
+                        </div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Applicable Control Concepts</h3>
+                        <div class="chip-row" id="controls-list"></div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Tradeoff Snapshot</h3>
+                        <div class="tradeoff-grid" id="tradeoff-grid"></div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>References Seeded For This Topology</h3>
+                        <ul class="clean-list" id="references-list"></ul>
+                    </div>
+
+                    <div class="callout">
+                        <strong>Skeleton status:</strong> this first build step is intentionally limited to
+                        the Overview tab. Performance envelopes, waveform comparisons, equations, and
+                        background animations are added in the planned follow-on steps.
+                    </div>
+
+                    <div class="placeholder-panel">
+                        Planned next: torque-speed, power-speed, efficiency-map, and loss-breakdown plots driven
+                        by the same default parameters already stored in <code>pycalcs/motors.py</code>.
+                    </div>
+                </article>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const TOOL_MODULE_NAME = 'motors';
+        const TOOL_FUNCTION_NAME = 'calculate_topology_overview';
+        const PARAM_ORDER = ['topology'];
+
+        const TRADEOFF_SNAPSHOT_KEYS = [
+            'torque_density_nm_per_kg',
+            'peak_efficiency_percent',
+            'field_weakening_capability',
+            'control_complexity',
+            'magnet_content',
+            'cost_usd_per_kw',
+        ];
+
+        const themeCycle = ['system', 'light', 'dark'];
+        let pyodide = null;
+        let topologyDatabase = {};
+        let topologyOverviews = {};
+        let currentTopology = 'pmsm_spm';
+
+        const elements = {
+            loadingOverlay: document.getElementById('loading-overlay'),
+            loadingText: document.getElementById('loading-text'),
+            themeToggle: document.getElementById('theme-toggle'),
+            topologyList: document.getElementById('topology-list'),
+            errorMessage: document.getElementById('error-message'),
+            diagramCard: document.getElementById('diagram-card'),
+            topologyFamily: document.getElementById('topology-family'),
+            topologyName: document.getElementById('topology-name'),
+            topologyTakeaway: document.getElementById('topology-takeaway'),
+            topologyDescription: document.getElementById('topology-description'),
+            applicationsList: document.getElementById('applications-list'),
+            factsGrid: document.getElementById('facts-grid'),
+            prosList: document.getElementById('pros-list'),
+            consList: document.getElementById('cons-list'),
+            controlsList: document.getElementById('controls-list'),
+            tradeoffGrid: document.getElementById('tradeoff-grid'),
+            referencesList: document.getElementById('references-list'),
+        };
+
+        function setTheme(theme) {
+            document.body.dataset.theme = theme;
+            localStorage.setItem('motor-topology-explorer-theme', theme);
+            elements.themeToggle.textContent = `Theme: ${theme.charAt(0).toUpperCase()}${theme.slice(1)}`;
+        }
+
+        function initializeTheme() {
+            const storedTheme = localStorage.getItem('motor-topology-explorer-theme') || 'system';
+            setTheme(storedTheme);
+            elements.themeToggle.addEventListener('click', () => {
+                const nextIndex = (themeCycle.indexOf(document.body.dataset.theme) + 1) % themeCycle.length;
+                setTheme(themeCycle[nextIndex]);
+            });
+        }
+
+        function showError(message) {
+            elements.errorMessage.textContent = message;
+            elements.errorMessage.style.display = 'block';
+        }
+
+        function clearError() {
+            elements.errorMessage.textContent = '';
+            elements.errorMessage.style.display = 'none';
+        }
+
+        function createChip(text) {
+            const chip = document.createElement('span');
+            chip.className = 'chip';
+            chip.textContent = text;
+            return chip;
+        }
+
+        function renderList(container, items) {
+            container.innerHTML = '';
+            items.forEach((item) => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                container.appendChild(li);
+            });
+        }
+
+        function renderChips(container, items) {
+            container.innerHTML = '';
+            items.forEach((item) => container.appendChild(createChip(item)));
+        }
+
+        function formatNumber(value) {
+            if (value === 0) return '0';
+            if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            if (Math.abs(value) >= 10) return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+            return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        }
+
+        function renderTradeoffs(overview) {
+            elements.tradeoffGrid.innerHTML = '';
+
+            TRADEOFF_SNAPSHOT_KEYS.forEach((key) => {
+                const dimension = overview.tradeoffs[key];
+                const card = document.createElement('div');
+                card.className = 'tradeoff-card';
+
+                const label = document.createElement('div');
+                label.className = 'tradeoff-label';
+                label.textContent = key.replaceAll('_', ' ');
+
+                const value = document.createElement('div');
+                value.className = 'tradeoff-value';
+                value.textContent = dimension.display;
+
+                const range = document.createElement('div');
+                range.className = 'tradeoff-range';
+                range.textContent = `${formatNumber(dimension.min)} - ${formatNumber(dimension.typ)} - ${formatNumber(dimension.max)} ${dimension.unit}`;
+
+                card.append(label, value, range);
+                elements.tradeoffGrid.appendChild(card);
+            });
+        }
+
+        function renderFacts(facts) {
+            elements.factsGrid.innerHTML = '';
+            facts.forEach((fact) => {
+                const card = document.createElement('div');
+                card.className = 'fact-card';
+                card.textContent = fact;
+                elements.factsGrid.appendChild(card);
+            });
+        }
+
+        function renderTopologyList() {
+            elements.topologyList.innerHTML = '';
+
+            Object.entries(topologyDatabase).forEach(([key, topology]) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = `topology-button${key === currentTopology ? ' active' : ''}`;
+                button.dataset.topology = key;
+                button.innerHTML = `
+                    <span class="name">${topology.short_name}</span>
+                    <span class="family">${topology.family}</span>
+                `;
+                button.addEventListener('click', () => selectTopology(key));
+                elements.topologyList.appendChild(button);
+            });
+        }
+
+        function updateActiveTopologyButton() {
+            document.querySelectorAll('.topology-button').forEach((button) => {
+                button.classList.toggle('active', button.dataset.topology === currentTopology);
+            });
+        }
+
+        const SECTION_CX = 200;
+        const SECTION_CY = 184;
+
+        function polarPoint(cx, cy, angleDeg, r) {
+            const a = (angleDeg - 90) * Math.PI / 180;
+            return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+        }
+
+        function arcSector(cx, cy, rIn, rOut, startDeg, endDeg, fill, stroke) {
+            const p1 = polarPoint(cx, cy, startDeg, rIn);
+            const p2 = polarPoint(cx, cy, endDeg, rIn);
+            const p3 = polarPoint(cx, cy, endDeg, rOut);
+            const p4 = polarPoint(cx, cy, startDeg, rOut);
+            const sweep = ((endDeg - startDeg) % 360 + 360) % 360;
+            const large = sweep > 180 ? 1 : 0;
+            const strokeAttr = stroke ? ` stroke="${stroke}" stroke-width="0.8"` : '';
+            return `<path d="M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} A ${rIn} ${rIn} 0 ${large} 1 ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} A ${rOut} ${rOut} 0 ${large} 0 ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z" fill="${fill}"${strokeAttr} />`;
+        }
+
+        function pmsmSpmSection() {
+            const cx = SECTION_CX, cy = SECTION_CY;
+            let parts = '';
+            // Stator yoke (back-iron) - solid annulus
+            parts += `<circle cx="${cx}" cy="${cy}" r="120" fill="#94a3b8" stroke="#1e293b" stroke-width="1.2" />`;
+            parts += `<circle cx="${cx}" cy="${cy}" r="80" fill="var(--bg-card)" />`;
+            // Stator teeth (12, slot openings between)
+            for (let i = 0; i < 12; i++) {
+                const c = i * 30;
+                parts += arcSector(cx, cy, 64, 80, c - 12, c + 12, '#94a3b8', '#1e293b');
+            }
+            // Air gap (visualized as thin dashed ring)
+            parts += `<circle cx="${cx}" cy="${cy}" r="62" fill="none" stroke="#1e293b" stroke-width="0.4" stroke-dasharray="2 2" />`;
+            // Rotor iron core
+            parts += `<circle cx="${cx}" cy="${cy}" r="58" fill="#475569" />`;
+            // 4 surface magnets, alternating N (red) / S (blue)
+            const magnetColors = ['#dc2626', '#1d4ed8', '#dc2626', '#1d4ed8'];
+            const magnetLabels = ['N', 'S', 'N', 'S'];
+            for (let i = 0; i < 4; i++) {
+                const c = i * 90;
+                parts += arcSector(cx, cy, 50, 58, c - 38, c + 38, magnetColors[i]);
+                const lp = polarPoint(cx, cy, c, 54);
+                parts += `<text x="${lp.x.toFixed(1)}" y="${(lp.y + 4).toFixed(1)}" text-anchor="middle" fill="white" font-size="11" font-weight="700">${magnetLabels[i]}</text>`;
+            }
+            // Shaft
+            parts += `<circle cx="${cx}" cy="${cy}" r="10" fill="var(--bg-card)" stroke="#1e293b" stroke-width="1" />`;
+            return {
+                title: 'PMSM (SPM): surface magnets on rotor, slotted 3-phase stator',
+                body: parts,
+                callouts: [
+                    { ax: cx + 32, ay: cy - 48, label: 'Surface magnets (N / S alternating)' },
+                    { ax: cx + 70, ay: cy + 4, label: '12 stator teeth + 3-phase windings' },
+                    { ax: cx - 56, ay: cy + 50, label: 'Air gap (small for high torque density)' },
+                ],
+            };
+        }
+
+        function inductionSection() {
+            const cx = SECTION_CX, cy = SECTION_CY;
+            let parts = '';
+            // Stator yoke (warm slate to distinguish from PMSM)
+            parts += `<circle cx="${cx}" cy="${cy}" r="120" fill="#a8a29e" stroke="#292524" stroke-width="1.2" />`;
+            parts += `<circle cx="${cx}" cy="${cy}" r="80" fill="var(--bg-card)" />`;
+            // Stator teeth
+            for (let i = 0; i < 12; i++) {
+                const c = i * 30;
+                parts += arcSector(cx, cy, 64, 80, c - 12, c + 12, '#a8a29e', '#292524');
+            }
+            // Rotor iron (lighter - no magnets)
+            parts += `<circle cx="${cx}" cy="${cy}" r="58" fill="#d6d3d1" stroke="#44403c" stroke-width="0.8" />`;
+            // End ring (concentric outline just inside the bar circle)
+            parts += `<circle cx="${cx}" cy="${cy}" r="48" fill="none" stroke="#57534e" stroke-width="1" stroke-dasharray="3 2" />`;
+            // 18 squirrel-cage rotor bars
+            for (let i = 0; i < 18; i++) {
+                const angle = i * 20;
+                const p = polarPoint(cx, cy, angle, 53);
+                parts += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.6" fill="#1c1917" />`;
+            }
+            // Shaft
+            parts += `<circle cx="${cx}" cy="${cy}" r="10" fill="var(--bg-card)" stroke="#1c1917" stroke-width="1" />`;
+            return {
+                title: 'Induction (squirrel cage): conducting rotor bars inside AC stator',
+                body: parts,
+                callouts: [
+                    { ax: cx + 50, ay: cy - 22, label: 'Squirrel-cage rotor bars' },
+                    { ax: cx + 76, ay: cy + 30, label: '3-phase AC stator (no rotor magnets)' },
+                    { ax: cx - 36, ay: cy + 38, label: 'End ring shorts the bars' },
+                ],
+            };
+        }
+
+        function dcBrushedSection() {
+            const cx = SECTION_CX, cy = SECTION_CY;
+            let parts = '';
+            // Outer casing/frame
+            parts += `<circle cx="${cx}" cy="${cy}" r="120" fill="#e7e5e4" stroke="#1c1917" stroke-width="1.2" />`;
+            parts += `<circle cx="${cx}" cy="${cy}" r="100" fill="var(--bg-card)" stroke="#1c1917" stroke-width="0.6" />`;
+            // Two field magnets bonded to the frame
+            parts += arcSector(cx, cy, 78, 100, 200, 340, '#1d4ed8'); // left half = N
+            parts += arcSector(cx, cy, 78, 100, 20, 160, '#dc2626');  // right half = S
+            // N / S labels
+            const nPos = polarPoint(cx, cy, 270, 89);
+            const sPos = polarPoint(cx, cy, 90, 89);
+            parts += `<text x="${nPos.x.toFixed(1)}" y="${(nPos.y + 5).toFixed(1)}" text-anchor="middle" fill="white" font-size="14" font-weight="700">N</text>`;
+            parts += `<text x="${sPos.x.toFixed(1)}" y="${(sPos.y + 5).toFixed(1)}" text-anchor="middle" fill="white" font-size="14" font-weight="700">S</text>`;
+            // Air gap dashed ring
+            parts += `<circle cx="${cx}" cy="${cy}" r="74" fill="none" stroke="#1c1917" stroke-width="0.4" stroke-dasharray="2 2" />`;
+            // Wound armature (slotted rotor)
+            parts += `<circle cx="${cx}" cy="${cy}" r="68" fill="#57534e" stroke="#1c1917" stroke-width="1" />`;
+            // 8 armature slots offset 22.5 degrees from field-magnet centers
+            for (let i = 0; i < 8; i++) {
+                const c = i * 45 + 22.5;
+                parts += arcSector(cx, cy, 38, 68, c - 5, c + 5, '#1c1917');
+            }
+            // Commutator ring
+            parts += `<circle cx="${cx}" cy="${cy}" r="22" fill="#fbbf24" stroke="#78350f" stroke-width="1" />`;
+            // Commutator segment dividers
+            for (let i = 0; i < 8; i++) {
+                const a = (i * 45 + 22.5) * Math.PI / 180;
+                const x1 = cx + Math.cos(a) * 14;
+                const y1 = cy + Math.sin(a) * 14;
+                const x2 = cx + Math.cos(a) * 22;
+                const y2 = cy + Math.sin(a) * 22;
+                parts += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#78350f" stroke-width="0.7" />`;
+            }
+            // Brushes pressed onto commutator from top and bottom (carbon blocks with springs implied)
+            parts += `<rect x="${cx - 7}" y="${cy - 38}" width="14" height="16" rx="1" fill="#1f2937" stroke="white" stroke-width="0.8" />`;
+            parts += `<rect x="${cx - 7}" y="${cy + 22}" width="14" height="16" rx="1" fill="#1f2937" stroke="white" stroke-width="0.8" />`;
+            // Shaft
+            parts += `<circle cx="${cx}" cy="${cy}" r="8" fill="var(--bg-card)" stroke="#1c1917" stroke-width="1" />`;
+            return {
+                title: 'DC brushed: PM field on stator, wound armature with commutator',
+                body: parts,
+                callouts: [
+                    { ax: cx - 88, ay: cy - 4, label: 'Permanent-magnet field (stator)' },
+                    { ax: cx + 50, ay: cy - 50, label: 'Wound armature with slots' },
+                    { ax: cx + 12, ay: cy - 30, label: 'Brushes ride on commutator' },
+                ],
+            };
+        }
+
+        const SECTION_BUILDERS = {
+            pmsm_spm: pmsmSpmSection,
+            induction_squirrel_cage: inductionSection,
+            dc_brushed_pm: dcBrushedSection,
+        };
+
+        function createCrossSectionSvg(topologyKey) {
+            const builder = SECTION_BUILDERS[topologyKey];
+            if (!builder) return '';
+            const { title, body, callouts } = builder();
+            const calloutSvg = callouts.map((c, i) => {
+                const labelY = 96 + i * 88;
+                const labelX = 408;
+                return `
+                    <line x1="${c.ax.toFixed(1)}" y1="${c.ay.toFixed(1)}" x2="${labelX - 6}" y2="${labelY}" stroke="var(--text-light)" stroke-width="1.2" />
+                    <circle cx="${c.ax.toFixed(1)}" cy="${c.ay.toFixed(1)}" r="2.6" fill="var(--text-color)" />
+                    <text x="${labelX}" y="${labelY + 4}" fill="var(--text-color)" font-size="13" font-weight="600">${c.label}</text>
+                `;
+            }).join('');
+            return `
+                <svg class="motor-svg" viewBox="0 0 520 360" role="img" aria-labelledby="motor-svg-title">
+                    <title id="motor-svg-title">${title}</title>
+                    <rect x="8" y="8" width="504" height="344" rx="18" fill="var(--bg-card)" stroke="var(--border-color)" />
+                    <text x="24" y="34" fill="var(--text-color)" font-size="14" font-weight="700">${title}</text>
+                    ${body}
+                    ${calloutSvg}
+                    <text x="24" y="340" fill="var(--text-light)" font-size="11">Pedagogical cross-section, not a manufacturing drawing</text>
+                </svg>
+            `;
+        }
+
+        function renderOverview(overview) {
+            elements.diagramCard.innerHTML = createCrossSectionSvg(overview.topology_key);
+            elements.topologyFamily.textContent = overview.family;
+            elements.topologyName.textContent = overview.name;
+            elements.topologyTakeaway.textContent = overview.one_sentence;
+            elements.topologyDescription.textContent = overview.description;
+            renderChips(elements.applicationsList, overview.applications);
+            renderFacts(overview.distinguishing_facts);
+            renderList(elements.prosList, overview.pros);
+            renderList(elements.consList, overview.cons);
+            renderChips(elements.controlsList, overview.applicable_control_methods);
+            renderTradeoffs(overview);
+            renderList(elements.referencesList, overview.references);
+        }
+
+        function selectTopology(topologyKey) {
+            clearError();
+            try {
+                const overview = topologyOverviews[topologyKey];
+                if (!overview) {
+                    throw new Error(`Unknown topology: ${topologyKey}`);
+                }
+                currentTopology = topologyKey;
+                updateActiveTopologyButton();
+                renderOverview(overview);
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        async function initializePyodide() {
+            elements.loadingText.textContent = 'Loading Pyodide...';
+            pyodide = await loadPyodide();
+
+            elements.loadingText.textContent = 'Loading motor topology database...';
+            const motorsResponse = await fetch('../../pycalcs/motors.py');
+            if (!motorsResponse.ok) {
+                throw new Error('Unable to load pycalcs/motors.py');
+            }
+            const motorsSource = await motorsResponse.text();
+
+            pyodide.FS.mkdirTree('/home/pycalcs');
+            pyodide.FS.writeFile('/home/pycalcs/__init__.py', '');
+            pyodide.FS.writeFile('/home/pycalcs/motors.py', motorsSource);
+            pyodide.runPython(`
+import sys
+sys.path.insert(0, '/home')
+`);
+
+            const dataJson = pyodide.runPython(`
+import json
+from pycalcs import motors
+json.dumps(motors.MOTOR_TOPOLOGIES)
+`);
+            topologyDatabase = JSON.parse(dataJson);
+            topologyOverviews = Object.fromEntries(
+                Object.entries(topologyDatabase).map(([key, data]) => [
+                    key,
+                    { ...data, topology_key: key },
+                ])
+            );
+        }
+
+        async function initializeTool() {
+            initializeTheme();
+            try {
+                await initializePyodide();
+                renderTopologyList();
+                renderOverview(topologyOverviews[currentTopology]);
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                elements.loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeTool);
+    </script>
+</body>
+</html>
