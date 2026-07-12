@@ -95,23 +95,30 @@ button that opens this tool with the same plate-fin geometry pre-loaded.
 9. Duty cycle overload triggers time-to-limit and unacceptable status
 10. Validation errors (disconnected nodes, negative capacitance, zero resistance)
 
+`tests/test_transient_heatsink_ui.py` also verifies the HTML/JavaScript ID
+wiring, Pyodide module bootstrap, sample links, and every declared expectation
+in the tool-local JSON examples.
+
 ## Scope and deferred items
 
-This is the v1 (MVP) implementation per
+This implementation covers Phases 1–5 of
 [`plans/2026-04-25_transient_heatsink_tool_plan.md`](../../plans/2026-04-25_transient_heatsink_tool_plan.md):
 
-- Single template (Package On Heatsink, 3-node series).
-- Step, pulse, duty-cycle profiles.
-- One fixed ambient, one heat-input node.
-- Implicit Euler with auto time step.
+- Package-on-heatsink series RC modeling with step, pulse, and duty-cycle loads.
+- Implicit Euler integration, time-to-limit, cooldown, and cyclic walk-up.
+- Direct resistance/capacitance entry or plate-fin geometry-derived sink values.
+- Sensitivity sweeps and resistance-versus-capacitance design-lever guidance.
+- Background theory, five executable examples, JSON model exchange, and
+  Markdown calculation reports.
 
-Deferred (planned for later phases):
+Deferred beyond this release:
 
-- Plate-fin geometry-derived `R_sa` and sink mass (Phase 3 in the plan).
-- Sensitivity sweeps (Phase 4).
-- Background tab with worked examples (Phase 5).
 - Multiple templates (Single Lump, Plate-Fin From Geometry, Known Thermal Path).
 - Arbitrary RC graph editor.
+- Multiple heat sources or ambient boundaries.
+- Temperature-dependent properties, fan-control transients, and JEDEC
+  transient-impedance curve fitting.
+- Full browser automation; current UI smoke tests are static and backend-driven.
 
 ## References
 

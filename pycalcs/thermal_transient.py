@@ -14,7 +14,16 @@ import copy
 import math
 from typing import Any
 
-from . import heatsinks
+# Dual-mode import so the same source file works in both pytest (where
+# `pycalcs` is a real package on the import path) and Pyodide (which
+# downloads each module to a flat `/home/pyodide/` directory and imports
+# them by bare name with no parent package).  Tools that need the
+# plate-fin bridge must also fetch heatsinks.py before importing this
+# module — see the transient-heatsink Pyodide bootstrap.
+try:
+    from . import heatsinks
+except ImportError:  # pragma: no cover — Pyodide-only path
+    import heatsinks  # type: ignore[no-redef]
 
 
 # Default density and specific heat for thermal-capacitance presets (SI).

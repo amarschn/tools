@@ -1,7 +1,7 @@
 # Transient Heatsink Tool Plan
 
 Date: 2026-04-25
-Status: Proposed implementation plan for critique before development
+Status: Implemented through Phase 5
 
 > Purpose: Define a focused transient heatsink tool that predicts warmup,
 > cooldown, pulse survival, duty-cycle sustainability, and time-to-limit for

@@ -107,6 +107,21 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-text { margin-top: 16px; font-weight: 600; }
 
+        .sample-cases {
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
+        .sample-cases summary {
+            cursor: pointer;
+            color: var(--text-light);
+            user-select: none;
+        }
+        .sample-cases ul {
+            margin: 6px 0 0;
+            padding-left: 18px;
+            line-height: 1.9;
+        }
+
         /* Navigation */
         .navbar {
             background: var(--bg-card);
@@ -682,8 +697,19 @@
                     <div class="io-actions">
                         <button type="button" class="btn btn-secondary" id="export-btn">Export model JSON</button>
                         <button type="button" class="btn btn-secondary" id="import-btn">Import model JSON</button>
+                        <button type="button" class="btn btn-secondary" id="report-btn" disabled title="Run a calculation first">Export report (.md)</button>
                         <input type="file" id="import-file" accept="application/json,.json" style="display:none;">
                     </div>
+                    <details class="sample-cases">
+                        <summary>Sample Test Cases</summary>
+                        <ul>
+                            <li><a href="#" class="load-sample" data-src="test-cases/continuous_step_load.json">Continuous Step Load — IGBT on Aluminum Sink (30 W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/overload_pulse_survival.json">Overload Pulse Survival — 250 W for 8 s</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/duty_cycle_sustainable.json">Sustainable Duty Cycle — 30% on, fan cooled</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/duty_cycle_walk_up.json">Duty Cycle Walk-Up — exceeds limit</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/cooldown_to_service.json">Cooldown to Service Temperature (40 °C)</a></li>
+                        </ul>
+                    </details>
                 </form>
             </section>
 
@@ -694,6 +720,7 @@
                     <button class="tab-link" data-tab="rc">RC Model</button>
                     <button class="tab-link" data-tab="sensitivity">Sensitivity</button>
                     <button class="tab-link" data-tab="math">Math</button>
+                    <button class="tab-link" data-tab="background">Background</button>
                 </div>
 
                 <div id="tab-results" class="tab-content active">
@@ -847,6 +874,90 @@
                     <h3>Substituted result</h3>
                     <div id="subst-block" class="math-block">Run a calculation to see the substituted form.</div>
                 </div>
+
+                <div id="tab-background" class="tab-content">
+                    <h3>Resistance vs. capacitance — what each one controls</h3>
+                    <p>
+                        A heatsink design has two largely independent levers. <strong>Thermal resistance</strong>
+                        (R<sub>jc</sub>, R<sub>sa</sub>) sets the steady-state temperature: at steady state,
+                        \(T_{source} = T_\infty + Q\,(R_{jc} + R_{sa})\) regardless of any thermal mass in the system.
+                        <strong>Thermal capacitance</strong> (C<sub>source</sub>, C<sub>sink</sub>) sets <em>how fast</em>
+                        the system gets there. Their product, the time constant \(\tau = RC\), governs the rise and decay.
+                    </p>
+                    <p>
+                        Practical consequences:
+                    </p>
+                    <ul>
+                        <li><strong>Long, continuous load</strong> — peak temperature converges to the asymptote, so resistance dominates. Mass only delays the inevitable.</li>
+                        <li><strong>Short, intense pulse</strong> — the system never reaches the asymptote. Peak rise is roughly \(Q\,t / C\) for a lumped sink, so capacitance dominates and resistance barely matters within the pulse.</li>
+                        <li><strong>Repeated duty cycle</strong> — both matter. Cycle-to-cycle walk-up is set by mean power × R; ripple amplitude is set by on-time × Q / C.</li>
+                    </ul>
+
+                    <h3>Why source temperature can rise much faster than the sink</h3>
+                    <p>
+                        If the source has a small thermal mass (C<sub>source</sub>) and the path to the sink is
+                        resistive (R<sub>jc</sub> &gt; 0), its temperature can rise sharply while the heavier sink
+                        remains comparatively cool. For a constant positive load starting from a uniform ambient
+                        temperature, this passive linear RC model approaches its constant-power steady-state
+                        temperature from below; it does not overshoot that asymptote. A finite pulse can still violate
+                        the source limit long before the sink appears hot, so <em>peak source temperature</em> remains
+                        the safety criterion for transient loads.
+                    </p>
+
+                    <h3>Why mass delays without changing the asymptote</h3>
+                    <p>
+                        Doubling C<sub>sink</sub> doubles the slow time constant — useful when the load duration is
+                        comparable to or shorter than \(\tau\). But for an infinite-duration load, the steady-state
+                        asymptote depends only on R and the heat input. Adding mass is therefore the right move for
+                        <em>pulse</em> and <em>burst</em> survival; it is the wrong move when continuous heat dissipation
+                        is the constraint.
+                    </p>
+                    <p>
+                        Use the <strong>Sensitivity</strong> tab's "Compare design levers" button to see which lever
+                        applies to your specific profile.
+                    </p>
+
+                    <h3>Estimating capacitance responsibly</h3>
+                    <p>
+                        Heatsink C is usually defensible: \(C = \rho V c_p\), with the geometry-from-plate-fin mode
+                        giving you V directly. Source/package C is harder — package datasheets rarely publish
+                        capacitance, and "die" doesn't equal "thermal mass that participates." Common practice:
+                    </p>
+                    <ul>
+                        <li>Use vendor-supplied transient impedance curves (Z<sub>θJC</sub>(t)) when available; fit a single-time-constant pole to the early portion.</li>
+                        <li>For an unknown package, estimate from observed warm-up time of a real unit at known power.</li>
+                        <li>Treat C<sub>source</sub> as approximate; a factor-of-2 uncertainty is common.</li>
+                    </ul>
+
+                    <h3>Limitations of lumped RC models</h3>
+                    <p>
+                        This tool models a single dominant temperature per body. Real heatsinks have
+                        <em>spreading</em> (hot under the source, cool at the edges), <em>fin gradients</em>
+                        (the fin tip is cooler than the base), and <em>airflow non-uniformity</em>
+                        (downstream channels are hotter than upstream). The lumped model is accurate when:
+                    </p>
+                    <ul>
+                        <li>Bi &lt; 0.1 inside each lump (the body is approximately isothermal)</li>
+                        <li>Heat path topology is series-dominated, not multi-path</li>
+                        <li>Material properties don't change much over the temperature range (typical for metals 25–150 °C)</li>
+                        <li>Convection coefficients are roughly constant over the transient (may break under fan ramping)</li>
+                    </ul>
+
+                    <h3>When to escalate</h3>
+                    <ul>
+                        <li><strong>3D temperature gradients matter</strong> — die-attach hotspots, fin-base spreading, embedded sensors at specific locations: use FEA.</li>
+                        <li><strong>Airflow is the unknown</strong> — bypass, recirculation, fan placement: use CFD or flow visualization.</li>
+                        <li><strong>Validation against hardware</strong> — pulse a real unit and instrument it. Lumped RC models are very accurate for averaged temperatures of components they model, and very weak for things they don't.</li>
+                    </ul>
+
+                    <h3>References</h3>
+                    <ul>
+                        <li>Incropera, DeWitt, Bergman, Lavine. <em>Fundamentals of Heat and Mass Transfer.</em> Wiley.</li>
+                        <li>Çengel, Ghajar. <em>Heat and Mass Transfer: Fundamentals and Applications.</em> McGraw-Hill.</li>
+                        <li>Bar-Cohen, Kraus. <em>Advances in Thermal Modeling of Electronic Components and Systems.</em> ASME Press.</li>
+                        <li>JEDEC JESD51 family — thermal resistance and transient thermal impedance terminology for semiconductor packages.</li>
+                    </ul>
+                </div>
             </section>
         </div>
     </main>
@@ -896,15 +1007,22 @@
 
                 loadingText.textContent = 'Loading Python modules…';
                 await pyodide.loadPackage('micropip');
+                // The transient module imports `heatsinks` for the plate-fin
+                // bridge (compute_plate_fin_sink_properties). Fetch it before
+                // the tool module so the import resolves in flat-file mode.
                 await pyodide.runPythonAsync(`
                     from pyodide.http import pyfetch
                     response_utils = await pyfetch('../../pycalcs/utils.py?v=${Date.now()}')
                     with open('utils.py', 'w') as f:
                         f.write(await response_utils.string())
+                    response_heatsinks = await pyfetch('../../pycalcs/heatsinks.py?v=${Date.now()}')
+                    with open('heatsinks.py', 'w') as f:
+                        f.write(await response_heatsinks.string())
                     response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py?v=${Date.now()}')
                     with open('${TOOL_MODULE_NAME}.py', 'w') as f:
                         f.write(await response_tool.string())
                     import utils
+                    import heatsinks
                     import ${TOOL_MODULE_NAME}
                 `);
                 pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
@@ -1243,12 +1361,193 @@
         // JSON import/export — round-trip the same model dict the solver
         // accepts, so saved files also load directly into pytest fixtures.
         // -----------------------------------------------------------------
+        // Build a Markdown calculation report from the most-recent simulate
+        // result + the model that produced it. Captures inputs, summary,
+        // RC table, cycle summary (if any), and warnings — so the user can
+        // attach it to a design review without re-running anything.
+        function buildMarkdownReport() {
+            if (!lastResult || !lastModel) return null;
+            const r = lastResult;
+            const m = lastModel;
+            const lines = [];
+            const fmt = (v, d = 2) =>
+                (v == null || !Number.isFinite(v)) ? '—' : Number(v).toFixed(d);
+            const fmtMaybeS = (v, d = 1) =>
+                (v == null || !Number.isFinite(v)) ? '—' : `${Number(v).toFixed(d)} s`;
+
+            const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
+            lines.push(`# Transient Heatsink Report`);
+            lines.push(``);
+            lines.push(`Generated: ${stamp} UTC`);
+            lines.push(``);
+            lines.push(`## Status`);
+            lines.push(``);
+            const status = r.status || 'unknown';
+            lines.push(`**${status.toUpperCase()}**`);
+            const statusLine = document.getElementById('status-banner');
+            if (statusLine && statusLine.textContent) {
+                lines.push(``);
+                lines.push(statusLine.textContent.trim());
+            }
+            lines.push(``);
+
+            const s = r.summary || {};
+            lines.push(`## Summary`);
+            lines.push(``);
+            lines.push(`| Metric | Value |`);
+            lines.push(`|---|---|`);
+            lines.push(`| Peak temperature | ${fmt(s.peak_temperature_c)} °C (${s.peak_node_id || '—'}) |`);
+            lines.push(`| Final temperature | ${fmt(s.final_temperature_c)} °C |`);
+            lines.push(`| Steady-state asymptote | ${fmt(s.steady_state_temperature_c)} °C |`);
+            lines.push(`| Time to limit | ${fmtMaybeS(s.time_to_limit_s)} |`);
+            lines.push(`| Cooldown to target | ${fmtMaybeS(s.cooldown_time_to_target_s)} |`);
+            lines.push(`| Slowest mode τ | ${fmtMaybeS(s.slowest_mode_tau_s)} |`);
+            if (s.cyclic_steady_state_reached != null) {
+                lines.push(`| Cyclic steady state reached | ${s.cyclic_steady_state_reached ? 'yes' : 'no'} |`);
+            }
+            if (s.auto_extended_duration) {
+                lines.push(`| Window auto-extended | ${fmt(s.requested_duration_s)} s → ${fmt(s.simulated_duration_s)} s |`);
+            }
+            lines.push(``);
+
+            lines.push(`## Inputs`);
+            lines.push(``);
+            lines.push(`### Profile`);
+            lines.push(``);
+            lines.push(`- Type: \`${m.profile.type}\``);
+            for (const [k, v] of Object.entries(m.profile)) {
+                if (k === 'type') continue;
+                lines.push(`- ${k}: ${v}`);
+            }
+            lines.push(``);
+            lines.push(`### Time`);
+            lines.push(``);
+            for (const [k, v] of Object.entries(m.time)) {
+                if (v == null) continue;
+                lines.push(`- ${k}: ${v}`);
+            }
+            lines.push(``);
+
+            lines.push(`### Network`);
+            lines.push(``);
+            lines.push(`| Node | Kind | Capacitance (J/K) | Max T (°C) | Fixed T (°C) |`);
+            lines.push(`|---|---|---|---|---|`);
+            for (const node of m.network.nodes) {
+                lines.push(
+                    `| ${node.label || node.id} | ${node.kind} | ` +
+                    `${fmt(node.capacitance_j_per_k, 1)} | ` +
+                    `${node.max_temperature_c == null ? '—' : fmt(node.max_temperature_c, 1)} | ` +
+                    `${node.fixed_temperature_c == null ? '—' : fmt(node.fixed_temperature_c, 1)} |`
+                );
+            }
+            lines.push(``);
+            lines.push(`| Segment | From | To | R (K/W) |`);
+            lines.push(`|---|---|---|---|`);
+            for (const seg of m.network.segments) {
+                lines.push(
+                    `| ${seg.label || seg.id} | ${seg.from_node_id} | ${seg.to_node_id} | ` +
+                    `${fmt(seg.resistance_k_per_w, 4)} |`
+                );
+            }
+            lines.push(``);
+
+            const taus = r.time_constants || [];
+            if (taus.length) {
+                lines.push(`## RC time constants`);
+                lines.push(``);
+                lines.push(`| Node | C (J/K) | ΣG (W/K) | τ (s) |`);
+                lines.push(`|---|---|---|---|`);
+                for (const t of taus) {
+                    lines.push(
+                        `| ${t.label || t.node_id} | ${fmt(t.capacitance_j_per_k, 1)} | ` +
+                        `${fmt(t.sum_conductance_w_per_k, 4)} | ${fmt(t.tau_s, 1)} |`
+                    );
+                }
+                lines.push(``);
+            }
+
+            const cycles = r.cycle_summary || [];
+            if (cycles.length) {
+                lines.push(`## Cycle summary`);
+                lines.push(``);
+                lines.push(`| Cycle | Peak (°C) | Min (°C) | Walk-up (°C) |`);
+                lines.push(`|---|---|---|---|`);
+                for (const c of cycles) {
+                    const walk = c.walk_up_c == null
+                        ? '—'
+                        : (c.walk_up_c > 0 ? '+' : '') + fmt(c.walk_up_c, 2);
+                    lines.push(`| ${c.cycle} | ${fmt(c.peak_c, 2)} | ${fmt(c.min_c, 2)} | ${walk} |`);
+                }
+                lines.push(``);
+            }
+
+            if (r.diagnosis && r.diagnosis.length) {
+                lines.push(`## Diagnosis`);
+                lines.push(``);
+                for (const d of r.diagnosis) lines.push(`- ${d}`);
+                lines.push(``);
+            }
+            if (r.recommendations && r.recommendations.length) {
+                lines.push(`## Recommendations`);
+                lines.push(``);
+                for (const rec of r.recommendations) lines.push(`- ${rec}`);
+                lines.push(``);
+            }
+            if (r.warnings && r.warnings.length) {
+                lines.push(`## Warnings`);
+                lines.push(``);
+                for (const w of r.warnings) lines.push(`- ${w}`);
+                lines.push(``);
+            }
+            return lines.join('\n');
+        }
+
+        function handleReportExport() {
+            const md = buildMarkdownReport();
+            if (md == null) {
+                alert('Run a calculation first; there is no result to report.');
+                return;
+            }
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `transient-heatsink-report-${stamp}.md`;
+            const blob = new Blob([md], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
         function bindIOButtons() {
             document.getElementById('export-btn').addEventListener('click', handleExport);
             document.getElementById('import-btn').addEventListener('click', () => {
                 document.getElementById('import-file').click();
             });
             document.getElementById('import-file').addEventListener('change', handleImportFile);
+            document.getElementById('report-btn').addEventListener('click', handleReportExport);
+            // Sample test-case loader: each <a class="load-sample"> fetches a
+            // JSON file and feeds its `model` into applyImportedModel().
+            document.querySelectorAll('.load-sample').forEach(link => {
+                link.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    const src = link.dataset.src;
+                    try {
+                        const response = await fetch(src + '?v=' + Date.now());
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const payload = await response.json();
+                        // Sample files wrap the model in metadata; user-exported
+                        // files are flat. Accept either.
+                        const model = payload.model || payload;
+                        applyImportedModel(model);
+                    } catch (err) {
+                        alert(`Could not load sample "${src}": ${err.message}`);
+                        console.error(err);
+                    }
+                });
+            });
         }
 
         function handleExport() {
@@ -1703,6 +2002,8 @@
         function enableSensitivityButtons() {
             document.getElementById('sens-run').disabled = false;
             document.getElementById('lever-run').disabled = false;
+            document.getElementById('report-btn').disabled = false;
+            document.getElementById('report-btn').title = 'Download a Markdown report of the latest calculation';
             const status = document.getElementById('sens-status');
             if (status.textContent.startsWith('Run a calculation first')) {
                 status.textContent = 'Baseline ready — pick a parameter and run a sweep.';
