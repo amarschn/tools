@@ -142,7 +142,50 @@
         .input-group { margin-bottom: 14px; }
         .input-group label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: .88rem; font-weight: 650; }
         .input-group small { display: block; margin-top: 5px; color: var(--text-light); font-size: .75rem; }
-        input[type="number"], select {
+        .tooltip-trigger {
+            position: relative;
+            display: inline-grid;
+            place-items: center;
+            width: 18px;
+            height: 18px;
+            margin-left: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            color: var(--text-light);
+            background: var(--bg-card);
+            font-size: .68rem;
+            font-weight: 750;
+            line-height: 1;
+            cursor: help;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 9px);
+            z-index: 30;
+            width: min(300px, 75vw);
+            padding: 9px 10px;
+            border-radius: 6px;
+            color: #fff;
+            background: #111827;
+            box-shadow: var(--shadow-lg);
+            font-size: .75rem;
+            font-weight: 450;
+            line-height: 1.4;
+            opacity: 0;
+            visibility: hidden;
+            transform: translate(-50%, 4px);
+            transition: .15s;
+            pointer-events: none;
+        }
+        .tooltip-trigger:hover::after,
+        .tooltip-trigger:focus::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, 0);
+        }
+        input[type="number"], select, textarea {
             width: 100%;
             padding: 10px 11px;
             border: 1px solid var(--border-color);
@@ -150,6 +193,7 @@
             color: var(--text-color);
             background: var(--bg-card);
         }
+        textarea { min-height: 112px; resize: vertical; font-family: var(--font-mono); font-size: .75rem; }
         input:focus, select:focus, button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
         .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--primary-light); }
         .segmented button { padding: 5px 9px; border: 0; border-radius: 5px; color: var(--text-light); background: transparent; cursor: pointer; font-size: .78rem; }
@@ -173,6 +217,9 @@
         .btn-secondary { color: var(--text-color); background: var(--bg-card); }
         .btn:disabled { opacity: .55; cursor: wait; }
         .sample-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
+        .work-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 10px; }
+        .work-actions .btn { min-height: 36px; padding: 7px 8px; font-size: .75rem; }
+        .file-status { min-height: 1.2em; margin: 8px 0 0; color: var(--text-light); font-size: .72rem; }
         .results-panel { min-width: 0; }
         .placeholder { min-height: 360px; display: grid; place-items: center; padding: 40px; text-align: center; color: var(--text-light); }
         .placeholder[hidden] { display: none; }
@@ -216,6 +263,18 @@
         th { color: var(--text-light); background: var(--primary-light); font-size: .7rem; text-transform: uppercase; }
         tr:last-child td { border-bottom: 0; }
         .chart { min-height: 360px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+        .chart-intro, .chart-reading { color: var(--secondary-color); font-size: .85rem; }
+        .chart-reading { margin: 8px 0 22px; padding: 10px 12px; border-left: 3px solid var(--callout-info-border); background: var(--callout-info-bg); }
+        .visual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .visual-card { padding: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+        .bearing-svg { width: 100%; min-height: 280px; color: var(--text-color); }
+        .visual-copy { color: var(--secondary-color); font-size: .84rem; }
+        .diagram-key { display: flex; flex-wrap: wrap; gap: 12px; color: var(--text-light); font-size: .72rem; }
+        .diagram-key span::before { content: ''; display: inline-block; width: 16px; height: 3px; margin-right: 5px; vertical-align: middle; background: currentColor; }
+        .technology-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .technology-card { padding: 14px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+        .technology-card.triggered { border-color: var(--callout-info-border); background: var(--callout-info-bg); }
+        .technology-card p { margin: 7px 0; color: var(--secondary-color); font-size: .82rem; }
         .chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
         .callout { margin: 14px 0; padding: 12px 14px; border-left: 3px solid var(--callout-warning-border); background: var(--callout-warning-bg); color: var(--secondary-color); font-size: .85rem; }
         .background { max-width: 850px; }
@@ -252,6 +311,8 @@
             .candidate-name { grid-column: 1 / -1; }
             .metric-grid { grid-template-columns: 1fr 1fr; }
             .status-banner { display: none; flex-direction: column; }
+            .visual-grid { grid-template-columns: 1fr; }
+            .technology-grid { grid-template-columns: 1fr; }
         }
     </style>
     <script src="/shared/json-ld.js"></script>
@@ -309,12 +370,12 @@
         <div class="eyebrow">Mechanical design · concept selection</div>
         <h1>Bearing Selector</h1>
         <p class="tool-description">Compare five rolling-bearing families at one shaft bore. Screen catalog L10 life, static safety, allowable speed, and the arrangement limits that simple rating calculations tend to hide.</p>
-        <div class="scope-chip">NTN catalog slice · 30 bearings · 25–50 mm bore</div>
+        <div class="scope-chip">NTN catalog No. 2203/E · 1,074 bearings · 10–200 mm bore</div>
 
         <details class="purpose-section">
             <summary>Scope, method, and limitations</summary>
             <div class="purpose-content">
-                <p>This is a bore-first concept selector. Enter reactions at one bearing—not total shaft load—and compare one representative NTN series for each family. Ratings and speed limits are manufacturer-specific.</p>
+                <p>This is a bore-first concept selector. Enter reactions at one bearing—not total shaft load—and compare sourced NTN series at that bore. Ratings and speed limits are manufacturer-specific.</p>
                 <p>The result is not a final arrangement design. It does not calculate shaft reactions, opposed-pair induced thrust, preload, fits, internal clearance, lubrication life, contamination, temperature, or modified life. Always confirm a selected part in the current manufacturer catalog.</p>
             </div>
         </details>
@@ -331,20 +392,20 @@
                 </div>
                 <form id="calc-form">
                     <div class="input-group">
-                        <label for="radial_load_n">Radial load at bearing <span id="radial-unit">N</span></label>
+                        <label for="radial_load_n"><span>Radial load at bearing <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for radial load" data-tooltip="Radial reaction carried by one bearing, perpendicular to the shaft axis. Enter the bearing reaction—not total shaft load. Example: 3000 N at the selected bearing.">?</span></span><span id="radial-unit">N</span></label>
                         <input type="number" id="radial_load_n" value="3000" min="0" step="any" required>
                         <small>Use the resolved radial reaction at one bearing.</small>
                     </div>
                     <div class="input-group">
-                        <label for="axial_load_n">Axial load at bearing <span id="axial-unit">N</span></label>
+                        <label for="axial_load_n"><span>Axial load at bearing <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for axial load" data-tooltip="Thrust reaction carried by one bearing, parallel to the shaft axis. Direction and paired-bearing load sharing matter for angular-contact and tapered bearings.">?</span></span><span id="axial-unit">N</span></label>
                         <input type="number" id="axial_load_n" value="800" min="0" step="any" required>
                     </div>
                     <div class="input-group">
-                        <label for="speed_rpm">Shaft speed <span>rpm</span></label>
+                        <label for="speed_rpm"><span>Shaft speed <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for shaft speed" data-tooltip="Constant rotational speed for this duty point. It converts rating life from revolutions to hours and is checked against the selected catalog lubrication speed limit.">?</span></span><span>rpm</span></label>
                         <input type="number" id="speed_rpm" value="1800" min="1" step="any" required>
                     </div>
                     <div class="input-group">
-                        <label for="bore_mm">Required shaft bore</label>
+                        <label for="bore_mm"><span>Required shaft bore <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for bearing bore" data-tooltip="Nominal bearing bore matched to the shaft seat. V1 searches exact catalog bores; V2 catalog expansion will add nearest-size and range searches.">?</span></span></label>
                         <select id="bore_mm">
                             <option value="25">25 mm · 0.984 in</option>
                             <option value="30" selected>30 mm · 1.181 in</option>
@@ -363,16 +424,48 @@
                     <div class="advanced-section">
                         <div class="section-label">Acceptance targets</div>
                         <div class="input-group">
-                            <label for="required_life_hours">Required L10 life <span>h</span></label>
+                            <label for="required_life_hours"><span>Required L10 life <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for required life" data-tooltip="Basic rating life that 90% of a sufficiently large population is expected to attain or exceed under the stated constant duty. It is not guaranteed service life.">?</span></span><span>h</span></label>
                             <input type="number" id="required_life_hours" value="20000" min="1" step="any" required>
                         </div>
                         <div class="input-group">
-                            <label for="required_static_safety_factor">Required static safety <span>C₀/P₀</span></label>
+                            <label for="required_static_safety_factor"><span>Required static safety <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for static safety" data-tooltip="Minimum ratio of basic static rating C₀ to equivalent static load P₀. Higher targets may be needed for shock, vibration, quiet operation, or high precision.">?</span></span><span>C₀/P₀</span></label>
                             <input type="number" id="required_static_safety_factor" value="1.0" min="0.1" step="any" required>
                         </div>
                         <div class="input-group">
-                            <label for="lubrication">Allowable-speed column</label>
-                            <select id="lubrication"><option value="grease">Grease</option><option value="oil">Oil</option></select>
+                            <label for="lubrication"><span>Lubrication concept <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for lubrication concept" data-tooltip="Select the intended lubrication architecture. Unknown and sealed modes remain unverified; dry or special-solid modes exclude standard catalog rows unless a sourced product explicitly permits them.">?</span></span></label>
+                            <select id="lubrication"><option value="unknown">Unknown / undecided</option><option value="grease" selected>Grease</option><option value="oil">Oil</option><option value="sealed_lifetime">Sealed / lubricated for life</option><option value="solid_special">Solid lubricant / special coating</option><option value="none">No lubricant permitted</option></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="operating_temperature_c"><span>Operating temperature <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for operating temperature" data-tooltip="Expected stabilized bearing temperature, not ambient temperature. It affects lubricant viscosity, grease life, seals, clearance, and fits; V2 currently reports guidance rather than modified life.">?</span></span><span>°C</span></label>
+                            <input type="number" id="operating_temperature_c" value="60" step="any" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="environment"><span>Environment <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for environment" data-tooltip="Select the dominant contamination or compatibility condition. The result provides design considerations; it does not apply an undocumented life factor.">?</span></span></label>
+                            <select id="environment"><option value="normal">Normal industrial</option><option value="wet">Wet / washdown</option><option value="dusty">Dusty / particulate</option><option value="vacuum">Vacuum</option><option value="food">Food / medical contact</option><option value="corrosive">Corrosive / chemical</option><option value="cleanroom">Cleanroom</option></select>
+                        </div>
+                        <div class="section-label">Arrangement and preload</div>
+                        <div class="input-group">
+                            <label for="arrangement"><span>Bearing arrangement <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for bearing arrangement" data-tooltip="Classifies the shaft support and axial load path. Paired arrangements need bearing stiffness and induced-thrust analysis beyond a single-bearing L10 calculation.">?</span></span></label>
+                            <select id="arrangement"><option value="single_known">Known reaction at one bearing</option><option value="locating_floating">Two-bearing locating / floating</option><option value="back_to_back">Opposed pair · back-to-back (DB)</option><option value="face_to_face">Opposed pair · face-to-face (DF)</option><option value="tandem">Tandem pair (DT)</option></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="preload_method"><span>Preload method <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for preload method" data-tooltip="Fixed-position preload is set geometrically; constant-pressure preload uses a spring; catalog classes apply to matched sets. Preload is advisory unless load-deflection data are available.">?</span></span></label>
+                            <select id="preload_method"><option value="none">No explicit preload</option><option value="fixed_position">Fixed position / spacer</option><option value="constant_pressure">Constant pressure / spring</option><option value="catalog_class">Manufacturer preload class</option></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="preload_n"><span>Known preload force <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for preload force" data-tooltip="Initial axial preload force for the set. It is reported but not added to internal loads unless candidate-specific stiffness/load-deflection data support that calculation.">?</span></span><span>N</span></label>
+                            <input type="number" id="preload_n" value="0" min="0" step="any">
+                        </div>
+                        <div class="section-label">Variable duty</div>
+                        <div class="input-group">
+                            <label for="duty_segments_json"><span>Repeated duty segments <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for duty segments" data-tooltip="Optional JSON array. Each segment needs radial_load_n, axial_load_n, speed_rpm, and duration_hours. Damage is accumulated by bearing revolutions and candidate-specific equivalent load.">?</span></span></label>
+                            <textarea id="duty_segments_json" placeholder='[{"radial_load_n":3000,"axial_load_n":800,"speed_rpm":1800,"duration_hours":8}]'></textarea>
+                            <small>Leave blank for the constant duty point above.</small>
+                        </div>
+                        <div class="input-group">
+                            <label for="bearing_positions_json"><span>Additional bearing positions <span class="tooltip-trigger" tabindex="0" role="button" aria-label="Help for additional bearing positions" data-tooltip="Optional JSON array of already-solved bearing reactions. Each position can specify name, radial_load_n, axial_load_n, speed_rpm, and bore_mm. Positions are screened independently; this is not a shaft equilibrium solver.">?</span></span></label>
+                            <textarea id="bearing_positions_json" placeholder='[{"name":"Position B","radial_load_n":1800,"axial_load_n":0,"speed_rpm":1800,"bore_mm":30}]'></textarea>
+                            <small>Use for known reactions at B, C, and later positions.</small>
                         </div>
                         <div class="section-label">Families to compare</div>
                         <div class="type-grid" id="type-grid">
@@ -394,6 +487,13 @@
                         </select>
                         <button type="button" class="btn btn-secondary" id="load-sample">Load</button>
                     </div>
+                    <div class="work-actions" aria-label="Work files">
+                        <button type="button" class="btn btn-secondary" id="save-inputs-btn">Save Inputs</button>
+                        <button type="button" class="btn btn-secondary" id="load-work-btn">Load Work</button>
+                        <button type="button" class="btn btn-secondary" id="export-btn" disabled>Export Analysis</button>
+                        <input type="file" id="load-work-file" accept="application/json,.json" hidden>
+                    </div>
+                    <p class="file-status" id="file-status" aria-live="polite"></p>
                 </form>
             </section>
 
@@ -402,7 +502,6 @@
                     <div><div class="status-kicker" id="status-kicker">Screening result</div><div class="status-title" id="status-title"></div><div class="status-copy" id="status-copy"></div></div>
                     <span class="badge" id="overall-badge"></span>
                 </div>
-                <div class="result-actions"><button type="button" class="btn btn-secondary" id="export-btn" hidden>Export analysis</button></div>
                 <div class="metric-grid" id="metric-grid">
                     <div class="metric"><div class="metric-label">Top candidate</div><div class="metric-value" id="metric-designation">—</div><div class="metric-sub" id="metric-type">—</div></div>
                     <div class="metric"><div class="metric-label">L10 life</div><div class="metric-value" id="metric-life">—</div><div class="metric-sub">90% reliability basis</div></div>
@@ -415,11 +514,60 @@
                     <button type="button" class="tab-button active" data-tab="candidates">Candidates</button>
                     <button type="button" class="tab-button" data-tab="comparison">Comparison</button>
                     <button type="button" class="tab-button" data-tab="charts">Charts</button>
+                    <button type="button" class="tab-button" data-tab="visuals">Visuals</button>
+                    <button type="button" class="tab-button" data-tab="system">System</button>
+                    <button type="button" class="tab-button" data-tab="alternatives">Alternatives</button>
                     <button type="button" class="tab-button" data-tab="background">Background</button>
                 </div>
-                <div class="tab-panel active" id="tab-candidates"><div class="candidate-list" id="candidate-list"></div><div id="guidance"></div></div>
+                <div class="tab-panel active" id="tab-candidates"><div class="candidate-list" id="candidate-list"></div><button type="button" class="btn btn-secondary" id="show-all-candidates" hidden>Show all candidates</button><div id="guidance"></div></div>
                 <div class="tab-panel" id="tab-comparison"><div class="comparison-wrap"><table><thead><tr><th>Designation</th><th>Family</th><th>Envelope mm</th><th>C kN</th><th>C₀ kN</th><th>P kN</th><th>L10 h</th><th>s₀</th><th>Speed margin</th><th>Status</th></tr></thead><tbody id="comparison-body"></tbody></table></div></div>
-                <div class="tab-panel" id="tab-charts"><div class="chart-grid"><div><h2>Life by candidate</h2><div id="life-chart" class="chart"></div></div><div><h2>Proportional load sensitivity</h2><div id="sensitivity-chart" class="chart"></div></div></div></div>
+                <div class="tab-panel" id="tab-charts">
+                    <div class="chart-grid">
+                        <div>
+                            <h2>Life by candidate</h2>
+                            <p class="chart-intro">Compares calculated basic L10 life at the entered constant duty. The vertical axis is logarithmic so candidates separated by orders of magnitude remain visible; equal vertical spacing does not mean equal hours. The dashed line is the required-life target.</p>
+                            <div id="life-chart" class="chart" role="img" aria-label="Logarithmic bar chart comparing candidate L10 life with the required-life threshold"></div>
+                            <p class="chart-reading" id="life-chart-reading">Calculate to see how many applicable candidates meet the target.</p>
+                        </div>
+                        <div>
+                            <h2>Proportional load sensitivity</h2>
+                            <p class="chart-intro">Scales radial and axial load together while holding speed, load ratio, catalog factors, and lubrication basis fixed. The entered duty is 1.0×. This is a sensitivity study—not a variable-duty or independent radial/axial sweep.</p>
+                            <div id="sensitivity-chart" class="chart" role="img" aria-label="Logarithmic line chart showing candidate L10 life as radial and axial loads scale together"></div>
+                            <p class="chart-reading" id="sensitivity-chart-reading">The steeper roller-bearing curves reflect the 10/3 life exponent; ball-bearing curves use an exponent of 3.</p>
+                        </div>
+                        <div id="duty-chart-section" hidden>
+                            <h2>Duty-segment life consumption</h2>
+                            <p class="chart-intro">Shows each repeated segment's share of the top candidate's calculated damage per duty pattern. A short severe segment can dominate life even when it occupies little clock time.</p>
+                            <div id="duty-chart" class="chart" role="img" aria-label="Bar chart of rating-life damage contribution by duty segment"></div>
+                            <p class="chart-reading" id="duty-chart-reading"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-panel" id="tab-visuals">
+                    <div class="visual-grid">
+                        <section class="visual-card">
+                            <h2 id="bearing-visual-title">Bearing cross-section</h2>
+                            <div id="bearing-visual" class="bearing-svg"></div>
+                            <p class="visual-copy" id="bearing-visual-copy"></p>
+                        </section>
+                        <section class="visual-card">
+                            <h2>Arrangement concept</h2>
+                            <div id="arrangement-visual" class="bearing-svg"></div>
+                            <p class="visual-copy" id="arrangement-visual-copy"></p>
+                        </section>
+                    </div>
+                    <div class="diagram-key"><span>Rings / shaft</span><span class="load-key">Applied load</span><span class="contact-key">Contact or locating direction</span></div>
+                    <div class="callout">Diagrams are functional schematics, not manufacturing drawings. Envelope proportions use catalog bore and OD; internal raceway and rolling-element geometry are illustrative.</div>
+                </div>
+                <div class="tab-panel" id="tab-alternatives">
+                    <div class="callout"><strong>Technology triage, not sizing:</strong> highlighted options have transparent screening triggers at this duty. They require different physics, specialist data, and often a dedicated system design.</div>
+                    <div class="technology-grid" id="technology-grid"></div>
+                </div>
+                <div class="tab-panel" id="tab-system">
+                    <div class="callout"><strong>Known-reaction system screen:</strong> each position is selected independently. The tool identifies the limiting position but does not solve shaft equilibrium or stiffness-based load sharing.</div>
+                    <div class="comparison-wrap"><table><thead><tr><th>Position</th><th>Status</th><th>Bore mm</th><th>Fr kN</th><th>Fa kN</th><th>rpm</th><th>Candidate</th><th>L10 h</th></tr></thead><tbody id="system-body"></tbody></table></div>
+                    <p class="chart-reading" id="system-reading"></p>
+                </div>
                 <div class="tab-panel" id="tab-background">
                     <article class="background">
                         <div class="callout"><strong>Screening boundary:</strong> The input loads must already be reactions at one bearing. Angular-contact and tapered bearings normally require an opposed-pair equilibrium calculation, while the NU cylindrical series cannot carry axial load.</div>
@@ -438,6 +586,16 @@
                         <ul class="variable-legend"><li><em>s<sub>0</sub></em>: basic static safety factor</li><li><em>C<sub>0</sub></em>: manufacturer basic static rating</li></ul>
                         <h2>What the recommendation means</h2>
                         <p>Only candidates passing the requested life and static targets, the selected catalog speed limit, and NTN's stated basic-life formula range can qualify. The recommendation then favors family suitability for the axial/radial ratio before comparing envelope size. It is a starting family and part—not an automatic design approval.</p>
+                        <h2>Lubrication concepts</h2>
+                        <p><strong>Grease</strong> is oil held in a thickener. Selection requires the base-oil type and viscosity, thickener compatibility, NLGI consistency, additives, operating temperature, speed factor, load, water/contamination exposure, fill quantity, and replenishment interval. A stiffer NLGI grade is not automatically a higher-viscosity oil, and mixing incompatible thickeners can destroy consistency.</p>
+                        <p><strong>Oil</strong> can support higher speed and remove heat, but delivery matters: bath and splash systems are simple but can churn; circulation adds filtration and cooling; jet delivery targets high-speed contacts; air-oil supplies small metered quantities with carrier air. Check operating-temperature viscosity, level, drains, orientation, seals, filtration, start-up supply, and failure behavior.</p>
+                        <p><strong>Sealed-for-life</strong> means a specific bearing, grease, fill, seal, temperature, and duty combination—not infinite life. <strong>Solid/special lubricants</strong> need explicit product ratings. Selecting <strong>no lubricant</strong> excludes the standard rows in this catalog and elevates plain, gas, foil, or magnetic alternatives.</p>
+                        <h2>Preload, clearance, and pairs</h2>
+                        <p>Operating clearance is the installed internal clearance after fits, temperature, centrifugal effects, and elastic deformation. Preload is negative operating clearance or an intentional axial force used to increase stiffness, positioning accuracy, and resistance to rolling-element skidding. Too much preload raises torque and temperature and can sharply reduce life.</p>
+                        <p>Fixed-position preload is established by ring/spacer geometry and is sensitive to tolerance and thermal growth. Constant-pressure preload uses a spring and is less thermally sensitive but generally less stiff. Back-to-back pairs provide a wide effective spread and moment stiffness; face-to-face pairs accommodate more misalignment; tandem pairs share thrust in only one direction. This tool does not convert preload force into internal contact loads without candidate-specific stiffness data.</p>
+                        <h2>Multi-bearing systems</h2>
+                        <p>A shaft system needs an explicit axial locating strategy and a thermal-expansion path. One common arrangement uses a locating bearing and an NU/N-style floating position. Fixed-fixed arrangements can create unintended thrust as shaft and housing temperatures diverge. Loads in statically indeterminate three-or-more-bearing systems depend on shaft, housing, and bearing stiffness and require a coupled model.</p>
+                        <p>The variable-duty input evaluates repeated known reactions; it does not solve shaft reactions. Use shaft free-body analysis first, then verify fits, shoulders, deflection/misalignment, minimum load, seals, mounting, and maintenance.</p>
                         <h2>Official references</h2>
                         <ul class="reference-list">
                             <li><a href="https://www.ntnglobal.com/en/products/catalog/en/2203/index.html">NTN Ball and Roller Bearings, catalog No. 2203/E</a></li>
@@ -458,7 +616,7 @@
     <script>
         const TOOL_MODULE_NAME = 'bearings';
         const TOOL_FUNCTION_NAME = 'select_bearings';
-        const PARAM_ORDER = ['radial_load_n', 'axial_load_n', 'speed_rpm', 'bore_mm', 'bearing_types_csv', 'lubrication', 'required_life_hours', 'required_static_safety_factor'];
+        const PARAM_ORDER = ['radial_load_n', 'axial_load_n', 'speed_rpm', 'bore_mm', 'bearing_types_csv', 'lubrication', 'required_life_hours', 'required_static_safety_factor', 'operating_temperature_c', 'environment', 'arrangement', 'preload_method', 'preload_n', 'duty_segments_json', 'bearing_positions_json'];
         const STORAGE_KEY = 'bearing-selector-settings';
         const LBF_PER_N = 0.2248089431;
         const defaultSettings = { theme: 'system', density: 'comfortable', precision: 2 };
@@ -473,6 +631,9 @@
         let unitSystem = 'si';
         let pyToolModule = null;
         let lastResults = null;
+        let lastAnalyzedRawInputs = null;
+        let showAllCandidates = false;
+        const WORK_FILE_VERSION = 2;
 
         function loadSettings() {
             try { settings = { ...defaultSettings, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; }
@@ -513,6 +674,11 @@
             if (hours >= 1000) return `${formatNumber(hours / 1000, 1)}k h`;
             return `${formatNumber(hours, 0)} h`;
         }
+        function escapeHtml(value) {
+            const element = document.createElement('span');
+            element.textContent = String(value ?? '');
+            return element.innerHTML;
+        }
         function plotColors() {
             const css = getComputedStyle(document.body);
             return { text: css.getPropertyValue('--text-color').trim(), grid: css.getPropertyValue('--border-color').trim(), card: css.getPropertyValue('--bg-card').trim() };
@@ -548,10 +714,115 @@
             document.getElementById('required_static_safety_factor').value = safety;
             document.getElementById('lubrication').value = lubrication;
         }
+        function gatherRawInputs() {
+            return {
+                unit_system: unitSystem,
+                radial_load: document.getElementById('radial_load_n').value,
+                axial_load: document.getElementById('axial_load_n').value,
+                speed_rpm: document.getElementById('speed_rpm').value,
+                bore_mm: document.getElementById('bore_mm').value,
+                required_life_hours: document.getElementById('required_life_hours').value,
+                required_static_safety_factor: document.getElementById('required_static_safety_factor').value,
+                lubrication: document.getElementById('lubrication').value,
+                operating_temperature_c: document.getElementById('operating_temperature_c').value,
+                environment: document.getElementById('environment').value,
+                arrangement: document.getElementById('arrangement').value,
+                preload_method: document.getElementById('preload_method').value,
+                preload_n: document.getElementById('preload_n').value,
+                duty_segments_json: document.getElementById('duty_segments_json').value,
+                bearing_positions_json: document.getElementById('bearing_positions_json').value,
+                expert_mode: document.getElementById('expert-mode-toggle').checked,
+                bearing_types: [...document.querySelectorAll('#type-grid input:checked')].map(input => input.value)
+            };
+        }
+        function applyRawInputs(inputs) {
+            if (!inputs || typeof inputs !== 'object') throw new Error('Work file has no usable input object.');
+            const targetUnits = inputs.unit_system === 'us' ? 'us' : 'si';
+            setUnitSystem(targetUnits);
+            const assignments = {
+                radial_load_n: inputs.radial_load,
+                axial_load_n: inputs.axial_load,
+                speed_rpm: inputs.speed_rpm,
+                bore_mm: inputs.bore_mm,
+                required_life_hours: inputs.required_life_hours,
+                required_static_safety_factor: inputs.required_static_safety_factor,
+                lubrication: inputs.lubrication,
+                operating_temperature_c: inputs.operating_temperature_c,
+                environment: inputs.environment,
+                arrangement: inputs.arrangement,
+                preload_method: inputs.preload_method,
+                preload_n: inputs.preload_n,
+                duty_segments_json: inputs.duty_segments_json,
+                bearing_positions_json: inputs.bearing_positions_json
+            };
+            Object.entries(assignments).forEach(([id, value]) => {
+                if (value !== undefined && value !== null) document.getElementById(id).value = value;
+            });
+            const expert = Boolean(inputs.expert_mode);
+            document.getElementById('expert-mode-toggle').checked = expert;
+            document.body.classList.toggle('expert-mode', expert);
+            if (Array.isArray(inputs.bearing_types)) {
+                document.querySelectorAll('#type-grid input').forEach(input => {
+                    input.checked = inputs.bearing_types.includes(input.value);
+                });
+            }
+        }
+        function downloadJson(filename, payload) {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+        function saveInputs() {
+            downloadJson('bearing-selector-inputs.json', {
+                tool: 'bearing-selector',
+                type: 'saved_inputs',
+                version: WORK_FILE_VERSION,
+                timestamp: new Date().toISOString(),
+                display_inputs: gatherRawInputs()
+            });
+            document.getElementById('file-status').textContent = 'Saved display-unit inputs.';
+        }
+        function loadWorkFile(file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const payload = JSON.parse(reader.result);
+                    if (payload.tool !== 'bearing-selector') throw new Error('This is not a Bearing Selector work file.');
+                    if (payload.version !== WORK_FILE_VERSION) throw new Error(`Unsupported work-file version ${payload.version ?? 'unknown'}; expected ${WORK_FILE_VERSION}.`);
+                    if (!['saved_inputs', 'analysis'].includes(payload.type)) throw new Error('Unsupported Bearing Selector work-file type.');
+                    applyRawInputs(payload.display_inputs);
+                    document.getElementById('file-status').textContent = payload.type === 'analysis'
+                        ? 'Analysis inputs loaded. Recalculating with the current solver and catalog…'
+                        : 'Inputs loaded. Recalculating…';
+                    if (pyToolModule) document.getElementById('calc-form').requestSubmit();
+                } catch (error) {
+                    document.getElementById('file-status').textContent = `Could not load file: ${error.message}`;
+                } finally {
+                    document.getElementById('load-work-file').value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
         function toPlain(value) {
             if (value instanceof Map) return Object.fromEntries([...value].map(([key, item]) => [key, toPlain(item)]));
             if (Array.isArray(value)) return value.map(toPlain);
             return value;
+        }
+        function populateBoreOptions() {
+            const proxy = pyToolModule.list_bore_sizes();
+            const bores = Array.from(proxy.toJs());
+            proxy.destroy();
+            const select = document.getElementById('bore_mm');
+            const previous = Number(select.value) || 30;
+            select.innerHTML = bores.map(bore => {
+                const inches = bore / 25.4;
+                return `<option value="${bore}">${formatNumber(bore, 0)} mm · ${inches.toFixed(3)} in</option>`;
+            }).join('');
+            select.value = bores.includes(previous) ? String(previous) : String(bores[0]);
         }
 
         async function initialize() {
@@ -562,13 +833,19 @@
                 const pyodide = await loadPyodide();
                 loadingText.textContent = 'Loading bearing catalog and equations…';
                 await pyodide.runPythonAsync(`
+                    from pathlib import Path
                     from pyodide.http import pyfetch
                     response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
                     with open('${TOOL_MODULE_NAME}.py', 'w') as f:
                         f.write(await response_tool.string())
+                    Path('data').mkdir(exist_ok=True)
+                    response_catalog = await pyfetch('../../pycalcs/data/ntn_2203e_bearings.json')
+                    with open('data/ntn_2203e_bearings.json', 'w') as f:
+                        f.write(await response_catalog.string())
                     import ${TOOL_MODULE_NAME}
                 `);
                 pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+                populateBoreOptions();
                 document.getElementById('calc-form').addEventListener('submit', handleCalculate);
                 const button = document.getElementById('calculate-btn');
                 button.disabled = false;
@@ -593,11 +870,20 @@
                     selectedTypes(),
                     document.getElementById('lubrication').value,
                     Number(document.getElementById('required_life_hours').value),
-                    Number(document.getElementById('required_static_safety_factor').value)
+                    Number(document.getElementById('required_static_safety_factor').value),
+                    Number(document.getElementById('operating_temperature_c').value),
+                    document.getElementById('environment').value,
+                    document.getElementById('arrangement').value,
+                    document.getElementById('preload_method').value,
+                    Number(document.getElementById('preload_n').value),
+                    document.getElementById('duty_segments_json').value,
+                    document.getElementById('bearing_positions_json').value
                 );
                 lastResults = toPlain(resultProxy.toJs({ dict_converter: Object.fromEntries }));
                 resultProxy.destroy();
+                lastAnalyzedRawInputs = gatherRawInputs();
                 displayResults(lastResults);
+                document.getElementById('file-status').textContent = 'Analysis is current.';
             } catch (error) {
                 const placeholder = document.getElementById('results-placeholder');
                 placeholder.hidden = false;
@@ -609,30 +895,107 @@
         }
 
         function displayResults(results) {
-            const top = results.candidates.find(item => item.designation === results.recommendation.designation);
+            const top = results.candidates.find(item => item.designation === results.recommendation.designation) || null;
             document.getElementById('results-placeholder').hidden = true;
             const banner = document.getElementById('status-banner');
             banner.style.display = 'flex'; banner.className = `status-banner ${results.status}`;
-            document.getElementById('status-title').textContent = `${results.recommendation.designation} · ${results.recommendation.type_label}`;
-            document.getElementById('status-copy').textContent = results.recommendation.basis;
+            document.getElementById('status-title').textContent = results.recommendation.designation
+                ? `${results.recommendation.designation} · ${results.recommendation.type_label}`
+                : results.recommendation.type_label;
+            document.getElementById('status-copy').textContent = `${results.recommendation.basis} Evaluated ${results.catalog_meta.evaluated_count} same-bore candidates from ${results.catalog_meta.searched_count} sourced records.`;
             const badge = document.getElementById('overall-badge');
             badge.className = `badge ${results.status}`; badge.textContent = results.status;
             document.getElementById('metric-grid').style.display = 'grid';
-            document.getElementById('metric-designation').textContent = top.designation;
-            document.getElementById('metric-type').textContent = top.type_label;
-            document.getElementById('metric-life').textContent = formatLife(top.life_hours);
-            document.getElementById('metric-static').textContent = formatNumber(top.static_safety_factor);
-            document.getElementById('metric-speed').textContent = formatNumber(top.speed_margin);
+            document.getElementById('metric-designation').textContent = top?.designation || 'None';
+            document.getElementById('metric-type').textContent = top?.type_label || 'Review Alternatives';
+            document.getElementById('metric-life').textContent = formatLife(top?.life_hours);
+            document.getElementById('metric-static').textContent = formatNumber(top?.static_safety_factor);
+            document.getElementById('metric-speed').textContent = formatNumber(top?.speed_margin);
             document.getElementById('result-tabs').style.display = 'flex';
-            document.getElementById('export-btn').hidden = false;
+            document.getElementById('export-btn').disabled = false;
             renderCandidates(results.candidates);
             renderComparison(results.candidates);
             renderGuidance(results.recommendations);
             renderCharts(results);
+            renderVisuals(top, results.duty_point, results.arrangement_assessment);
+            renderTechnologies(results.alternative_technologies);
+            renderSystem(results.system_analysis);
             if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise();
         }
+        function bearingCrossSectionSvg(candidate) {
+            const type = candidate.bearing_type;
+            const boreRatio = Math.max(0.18, Math.min(0.72, candidate.bore_mm / candidate.outside_diameter_mm));
+            const shaftHeight = 120 * boreRatio;
+            const shaftTop = 140 - shaftHeight / 2;
+            const upperY = 82;
+            const lowerY = 198;
+            let elements = '';
+            if (type.includes('ball')) {
+                const count = type === 'angular_contact_ball' ? 4 : 5;
+                for (let index = 0; index < count; index += 1) {
+                    const x = 120 + index * (180 / (count - 1));
+                    elements += `<circle cx="${x}" cy="${upperY}" r="13" fill="#bfdbfe" stroke="currentColor" stroke-width="2"/><circle cx="${x}" cy="${lowerY}" r="13" fill="#bfdbfe" stroke="currentColor" stroke-width="2"/>`;
+                    if (type === 'angular_contact_ball') elements += `<path d="M ${x - 16} ${upperY + 22} L ${x + 16} ${upperY - 22} M ${x - 16} ${lowerY + 22} L ${x + 16} ${lowerY - 22}" stroke="#b45309" stroke-width="2" stroke-dasharray="5 4"/>`;
+                }
+            } else if (type === 'tapered_roller') {
+                for (let index = 0; index < 4; index += 1) {
+                    const x = 125 + index * 55;
+                    elements += `<path d="M ${x - 13} 67 L ${x + 16} 73 L ${x + 12} 101 L ${x - 17} 94 Z M ${x - 13} 213 L ${x + 16} 207 L ${x + 12} 179 L ${x - 17} 186 Z" fill="#fed7aa" stroke="currentColor" stroke-width="2"/><path d="M ${x - 22} 108 L ${x + 23} 54 M ${x - 22} 172 L ${x + 23} 226" stroke="#b45309" stroke-width="2" stroke-dasharray="5 4"/>`;
+                }
+            } else if (type === 'spherical_roller') {
+                for (let index = 0; index < 4; index += 1) {
+                    const x = 125 + index * 55;
+                    elements += `<ellipse cx="${x}" cy="${upperY}" rx="13" ry="23" transform="rotate(${index < 2 ? -12 : 12} ${x} ${upperY})" fill="#d1fae5" stroke="currentColor" stroke-width="2"/><ellipse cx="${x}" cy="${lowerY}" rx="13" ry="23" transform="rotate(${index < 2 ? 12 : -12} ${x} ${lowerY})" fill="#d1fae5" stroke="currentColor" stroke-width="2"/>`;
+                }
+            } else {
+                for (let index = 0; index < 5; index += 1) {
+                    const x = 115 + index * 47;
+                    elements += `<rect x="${x}" y="62" width="24" height="40" rx="3" fill="#ddd6fe" stroke="currentColor" stroke-width="2"/><rect x="${x}" y="178" width="24" height="40" rx="3" fill="#ddd6fe" stroke="currentColor" stroke-width="2"/>`;
+                }
+            }
+            return `<svg viewBox="0 0 420 280" role="img" aria-labelledby="bearing-svg-title bearing-svg-desc"><title id="bearing-svg-title">${candidate.type_label} schematic for ${candidate.designation}</title><desc id="bearing-svg-desc">Sectional diagram showing rings, shaft, rolling elements, and supported contact directions.</desc><rect x="55" y="40" width="310" height="38" rx="8" fill="var(--primary-light)" stroke="currentColor" stroke-width="3"/><rect x="55" y="202" width="310" height="38" rx="8" fill="var(--primary-light)" stroke="currentColor" stroke-width="3"/><rect x="78" y="${shaftTop}" width="264" height="${shaftHeight}" rx="8" fill="#94a3b8" opacity=".55"/><rect x="88" y="105" width="244" height="25" rx="7" fill="var(--primary-light)" stroke="currentColor" stroke-width="3"/><rect x="88" y="150" width="244" height="25" rx="7" fill="var(--primary-light)" stroke="currentColor" stroke-width="3"/>${elements}<path d="M 380 140 L 380 80 M 380 80 L 372 94 M 380 80 L 388 94" stroke="#b91c1c" stroke-width="4"/><text x="390" y="112" fill="currentColor" font-size="13">Fr</text></svg>`;
+        }
+        function arrangementSvg(candidate, duty) {
+            const paired = ['back_to_back', 'face_to_face', 'tandem'].includes(duty.arrangement);
+            const floating = duty.arrangement === 'locating_floating' || candidate.bearing_type === 'cylindrical_roller';
+            const bearingSymbol = (x, label) => `<rect x="${x - 14}" y="82" width="28" height="116" rx="5" fill="var(--primary-light)" stroke="currentColor" stroke-width="3"/><circle cx="${x}" cy="105" r="9" fill="#bfdbfe" stroke="currentColor"/><circle cx="${x}" cy="175" r="9" fill="#bfdbfe" stroke="currentColor"/><text x="${x}" y="225" fill="currentColor" text-anchor="middle" font-size="12">${label}</text>`;
+            let overlay = '';
+            if (paired) {
+                overlay = `<path d="M 108 184 L 168 92 M 292 184 L 232 92" stroke="#b45309" stroke-width="3" stroke-dasharray="7 5"/><path d="M 184 140 L 216 140" stroke="#0f766e" stroke-width="5"/><path d="M 184 140 L 196 132 M 184 140 L 196 148 M 216 140 L 204 132 M 216 140 L 204 148" stroke="#0f766e" stroke-width="3"/><text x="200" y="125" text-anchor="middle" fill="currentColor" font-size="12">preload / thrust path</text>`;
+            } else {
+                overlay = `<path d="M 100 72 L 100 48 M 300 72 L 300 48" stroke="#0f766e" stroke-width="4"/><text x="100" y="35" text-anchor="middle" fill="currentColor" font-size="12">locating</text><path d="M 275 58 L 325 58 M 275 58 L 287 50 M 275 58 L 287 66 M 325 58 L 313 50 M 325 58 L 313 66" stroke="#0f766e" stroke-width="3"/><text x="300" y="35" text-anchor="middle" fill="currentColor" font-size="12">${floating ? 'NU floating' : 'non-locating'}</text>`;
+            }
+            const axialArrow = duty.axial_load_n > 0 ? `<path d="M 370 140 L 330 140 M 370 140 L 356 132 M 370 140 L 356 148" stroke="#b91c1c" stroke-width="4"/><text x="370" y="125" fill="currentColor" font-size="12">Fa</text>` : '';
+            return `<svg viewBox="0 0 420 260" role="img" aria-labelledby="arrangement-svg-title arrangement-svg-desc"><title id="arrangement-svg-title">Conceptual shaft bearing arrangement</title><desc id="arrangement-svg-desc">Two bearings supporting a shaft with locating, floating, or opposed contact directions.</desc><rect x="35" y="125" width="350" height="30" rx="14" fill="#94a3b8" opacity=".6"/>${bearingSymbol(100, paired ? 'A' : 'locating')}${bearingSymbol(300, paired ? 'B' : 'floating')}${overlay}${axialArrow}<path d="M 200 120 L 200 75 M 200 75 L 192 89 M 200 75 L 208 89" stroke="#b91c1c" stroke-width="4"/><text x="210" y="95" fill="currentColor" font-size="12">Fr</text></svg>`;
+        }
+        function renderVisuals(candidate, duty, assessment) {
+            if (!candidate) {
+                document.getElementById('bearing-visual-title').textContent = 'No applicable rolling candidate';
+                document.getElementById('bearing-visual').innerHTML = '<div class="placeholder"><div><span class="placeholder-mark">ALT</span><strong>Open the Alternatives tab.</strong></div></div>';
+                document.getElementById('bearing-visual-copy').textContent = 'The selected lubrication or duty condition is outside the sourced standard rolling-bearing rows.';
+                document.getElementById('arrangement-visual').innerHTML = '';
+                document.getElementById('arrangement-visual-copy').textContent = assessment.load_path;
+                return;
+            }
+            document.getElementById('bearing-visual-title').textContent = `${candidate.designation} · ${candidate.type_label}`;
+            document.getElementById('bearing-visual').innerHTML = bearingCrossSectionSvg(candidate);
+            document.getElementById('bearing-visual-copy').textContent = `Catalog envelope: ${candidate.bore_mm} mm bore × ${candidate.outside_diameter_mm} mm OD × ${candidate.width_mm} mm width. The drawing scales bore relative to OD; internal details are schematic.`;
+            document.getElementById('arrangement-visual').innerHTML = arrangementSvg(candidate, duty);
+            document.getElementById('arrangement-visual-copy').textContent = `${assessment.label}: ${assessment.load_path} ${assessment.considerations[assessment.considerations.length - 1]}`;
+        }
         function renderCandidates(candidates) {
-            document.getElementById('candidate-list').innerHTML = candidates.map(candidate => {
+            const statusOrder = { acceptable: 0, marginal: 1, unacceptable: 2, not_applicable: 3 };
+            const topDesignation = lastResults?.recommendation?.designation;
+            const ordered = [...candidates].sort((a, b) => {
+                if (a.designation === topDesignation) return -1;
+                if (b.designation === topDesignation) return 1;
+                return statusOrder[a.status] - statusOrder[b.status] || a.outside_diameter_mm - b.outside_diameter_mm || a.designation.localeCompare(b.designation);
+            });
+            const visible = showAllCandidates ? ordered : ordered.slice(0, 12);
+            const toggle = document.getElementById('show-all-candidates');
+            toggle.hidden = ordered.length <= 12;
+            toggle.textContent = showAllCandidates ? 'Show top 12 candidates' : `Show all ${ordered.length} candidates`;
+            document.getElementById('candidate-list').innerHTML = visible.map(candidate => {
                 const applicable = candidate.applicable;
                 const warnings = (candidate.warnings || []).map(text => `<li>${text}</li>`).join('');
                 return `<details class="candidate">
@@ -661,29 +1024,72 @@
             </tr>`).join('');
         }
         function renderGuidance(items) {
-            document.getElementById('guidance').innerHTML = `<div class="callout"><strong>Before final selection</strong><ul class="warning-list">${items.map(item => `<li>${item}</li>`).join('')}</ul></div>`;
+            const lubricationItems = lastResults?.lubrication_assessment?.considerations || [];
+            document.getElementById('guidance').innerHTML = `<div class="callout"><strong>Before final selection</strong><ul class="warning-list">${items.map(item => `<li>${item}</li>`).join('')}</ul></div><div class="callout"><strong>Lubrication concept · ${lastResults.lubrication_assessment.mode.replaceAll('_', ' ')}</strong><ul class="warning-list">${lubricationItems.map(item => `<li>${item}</li>`).join('')}</ul></div>`;
+        }
+        function renderTechnologies(technologies) {
+            const ordered = [...technologies].sort((a, b) => Number(b.triggered) - Number(a.triggered));
+            document.getElementById('technology-grid').innerHTML = ordered.map(item => `<article class="technology-card ${item.triggered ? 'triggered' : ''}"><span class="badge ${item.triggered ? 'marginal' : 'acceptable'}">${item.triggered ? 'investigate' : 'context'}</span><h3>${item.name}</h3><p><strong>Why:</strong> ${item.why}</p><p><strong>Limits:</strong> ${item.limitations}</p><p><strong>Next information:</strong> ${item.next}</p></article>`).join('');
+        }
+        function renderSystem(system) {
+            document.getElementById('system-body').innerHTML = system.positions.map(position => `<tr><td>${escapeHtml(position.name)}</td><td><span class="badge ${position.status}">${position.status}</span></td><td>${formatNumber(position.bore_mm)}</td><td>${formatNumber(position.radial_load_n / 1000)}</td><td>${formatNumber(position.axial_load_n / 1000)}</td><td>${formatNumber(position.speed_rpm, 0)}</td><td>${position.recommended_designation || 'Alternative review'}</td><td>${formatLife(position.recommended_life_hours)}</td></tr>`).join('');
+            document.getElementById('system-reading').textContent = system.limiting_position
+                ? `${system.limiting_position} is the limiting independently screened position. Confirm reactions and coupled axial load paths before using this as a system decision.`
+                : 'No rolling-bearing position has a finite applicable life result; review the alternative-technology prompts.';
         }
         function renderCharts(results) {
             const colors = plotColors();
             const common = { paper_bgcolor: colors.card, plot_bgcolor: colors.card, font: { color: colors.text }, margin: { t: 24, r: 18, b: 60, l: 72 } };
             const life = results.life_chart;
             Plotly.react('life-chart', [{ type: 'bar', x: life.designations, y: life.life_hours, marker: { color: life.life_hours.map(value => value >= life.required_life_hours ? '#0f766e' : '#b45309') }, hovertemplate: '%{x}<br>%{y:,.0f} h<extra></extra>' }, { type: 'scatter', mode: 'lines', x: life.designations, y: life.designations.map(() => life.required_life_hours), line: { color: '#b91c1c', dash: 'dash' }, name: 'Required life', hoverinfo: 'skip' }], { ...common, showlegend: false, yaxis: { title: 'L10 life (h)', type: 'log', gridcolor: colors.grid }, xaxis: { type: 'category', gridcolor: colors.grid } }, { responsive: true, displaylogo: false });
+            const passingLife = life.life_hours.filter(value => value >= life.required_life_hours).length;
+            document.getElementById('life-chart-reading').textContent = `${passingLife} of ${life.life_hours.length} applicable candidates meet the ${formatLife(life.required_life_hours)} target. Candidates omitted from this chart are inapplicable, not zero-life.`;
             const sensitivity = results.load_sensitivity;
             const traces = sensitivity.series.map(series => ({ type: 'scatter', mode: 'lines+markers', name: series.designation, x: sensitivity.load_multipliers, y: series.life_hours, hovertemplate: '%{fullData.name}<br>%{x:.2f}× load<br>%{y:,.0f} h<extra></extra>' }));
             Plotly.react('sensitivity-chart', traces, { ...common, legend: { orientation: 'h', y: -0.24 }, xaxis: { title: 'Proportional load multiplier', gridcolor: colors.grid }, yaxis: { title: 'L10 life (h)', type: 'log', gridcolor: colors.grid } }, { responsive: true, displaylogo: false });
+            document.getElementById('sensitivity-chart-reading').textContent = `At 1.0×, the curves reproduce the entered duty. Moving right increases both Fr and Fa together; moving left reduces both. Roller-bearing life changes with exponent 10/3, while ball-bearing life uses exponent 3.`;
+            const top = results.candidates.find(item => item.designation === results.recommendation.designation);
+            const dutySection = document.getElementById('duty-chart-section');
+            if (top?.variable_duty) {
+                dutySection.hidden = false;
+                const segments = top.variable_duty.segments;
+                const totalDamage = top.variable_duty.pattern_damage;
+                Plotly.react('duty-chart', [{ type: 'bar', x: segments.map(item => `Segment ${item.segment}`), y: segments.map(item => 100 * item.damage_fraction_per_pattern / totalDamage), marker: { color: '#b45309' }, customdata: segments.map(item => [item.radial_load_n, item.axial_load_n, item.speed_rpm, item.duration_hours]), hovertemplate: '%{x}<br>%{y:.1f}% of damage<br>Fr %{customdata[0]:,.0f} N · Fa %{customdata[1]:,.0f} N<br>%{customdata[2]:,.0f} rpm · %{customdata[3]:.2f} h<extra></extra>' }], { ...common, xaxis: { title: 'Repeated duty segment', gridcolor: colors.grid }, yaxis: { title: 'Damage share (%)', rangemode: 'tozero', gridcolor: colors.grid } }, { responsive: true, displaylogo: false });
+                const dominant = segments.reduce((best, item) => item.damage_fraction_per_pattern > best.damage_fraction_per_pattern ? item : best);
+                document.getElementById('duty-chart-reading').textContent = `Segment ${dominant.segment} contributes the largest damage share. The repeated pattern predicts ${formatLife(top.variable_duty.life_hours)} of basic rating life for ${top.designation}.`;
+            } else {
+                dutySection.hidden = true;
+            }
         }
         function redrawCharts() { if (lastResults) renderCharts(lastResults); }
         function exportAnalysis() {
             if (!lastResults) return;
-            const payload = { tool: 'bearing-selector', version: 1, timestamp: new Date().toISOString(), results: lastResults };
-            const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-            const link = document.createElement('a'); link.href = url; link.download = 'bearing-selector-analysis.json'; link.click(); URL.revokeObjectURL(url);
+            downloadJson('bearing-selector-analysis.json', {
+                tool: 'bearing-selector',
+                type: 'analysis',
+                version: WORK_FILE_VERSION,
+                timestamp: new Date().toISOString(),
+                display_inputs: lastAnalyzedRawInputs || gatherRawInputs(),
+                normalized_inputs: lastResults.duty_point,
+                catalog: lastResults.catalog_meta,
+                results: lastResults
+            });
+            document.getElementById('file-status').textContent = 'Exported complete analysis.';
         }
 
         document.querySelectorAll('[data-unit]').forEach(button => button.addEventListener('click', () => setUnitSystem(button.dataset.unit)));
         document.getElementById('expert-mode-toggle').addEventListener('change', event => document.body.classList.toggle('expert-mode', event.target.checked));
         document.getElementById('load-sample').addEventListener('click', () => loadSample(document.getElementById('sample-case').value));
+        document.getElementById('save-inputs-btn').addEventListener('click', saveInputs);
+        document.getElementById('load-work-btn').addEventListener('click', () => document.getElementById('load-work-file').click());
+        document.getElementById('load-work-file').addEventListener('change', event => {
+            if (event.target.files[0]) loadWorkFile(event.target.files[0]);
+        });
         document.getElementById('export-btn').addEventListener('click', exportAnalysis);
+        document.getElementById('show-all-candidates').addEventListener('click', () => {
+            showAllCandidates = !showAllCandidates;
+            if (lastResults) renderCandidates(lastResults.candidates);
+        });
         document.querySelectorAll('.tab-button').forEach(button => button.addEventListener('click', () => {
             document.querySelectorAll('.tab-button').forEach(item => item.classList.toggle('active', item === button));
             document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `tab-${button.dataset.tab}`));

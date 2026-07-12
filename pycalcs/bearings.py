@@ -8,12 +8,12 @@ manufacturer.
 
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
 from typing import Any
 
-
-NTN_CATALOG_INDEX = (
-    "https://www.ntnglobal.com/en/products/catalog/en/2203/index.html"
-)
+NTN_CATALOG_INDEX = "https://www.ntnglobal.com/en/products/catalog/en/2203/index.html"
 
 TYPE_METADATA: dict[str, dict[str, Any]] = {
     "deep_groove_ball": {
@@ -58,180 +58,39 @@ TYPE_METADATA: dict[str, dict[str, Any]] = {
 }
 
 
-def _row(
-    designation: str,
-    bearing_type: str,
-    bore_mm: float,
-    outside_diameter_mm: float,
-    width_mm: float,
-    dynamic_rating_kn: float,
-    static_rating_kn: float,
-    grease_rpm: float,
-    oil_rpm: float,
-    mass_kg: float,
-    **factors: float,
-) -> dict[str, Any]:
-    """Build one normalized manufacturer catalog record.
+def _load_catalog_data() -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+    r"""Load and integrity-check the canonical NTN catalog data file.
 
     ---Parameters---
-    designation : str
-        NTN bearing designation as printed in catalog No. 2203/E.
-    bearing_type : str
-        Internal bearing-family identifier.
-    bore_mm : float
-        Nominal bore diameter in millimetres.
-    outside_diameter_mm : float
-        Nominal outside diameter in millimetres.
-    width_mm : float
-        Catalog width or overall width in millimetres.
-    dynamic_rating_kn : float
-        Basic dynamic load rating in kilonewtons.
-    static_rating_kn : float
-        Basic static load rating in kilonewtons.
-    grease_rpm : float
-        Catalog grease-lubricated allowable speed in revolutions per minute.
-    oil_rpm : float
-        Catalog oil-lubricated allowable speed in revolutions per minute.
-    mass_kg : float
-        Catalog bearing mass in kilograms.
-    factors : float
-        Manufacturer load factors required by the selected bearing family.
 
     ---Returns---
-    catalog_record : dict
-        Normalized catalog row with SI load ratings and source metadata.
+    catalog_data : tuple
+        Catalog metadata followed by an immutable tuple of normalized records.
 
     ---LaTeX---
-    C_{N} = 1000 C_{kN}
-    C_{0,N} = 1000 C_{0,kN}
+    h = \operatorname{SHA256}(\operatorname{canonicalJSON}(records))
     """
-    return {
-        "designation": designation,
-        "bearing_type": bearing_type,
-        "bore_mm": float(bore_mm),
-        "outside_diameter_mm": float(outside_diameter_mm),
-        "width_mm": float(width_mm),
-        "dynamic_rating_n": dynamic_rating_kn * 1000.0,
-        "static_rating_n": static_rating_kn * 1000.0,
-        "grease_speed_rpm": float(grease_rpm),
-        "oil_speed_rpm": float(oil_rpm),
-        "mass_kg": float(mass_kg),
-        "manufacturer": "NTN",
-        "catalog": "Ball and Roller Bearings, No. 2203/E",
-        "source_url": TYPE_METADATA[bearing_type]["source_url"],
-        **factors,
-    }
+    data_path = Path(__file__).with_name("data") / "ntn_2203e_bearings.json"
+    if not data_path.exists():
+        raise FileNotFoundError(
+            "Bearing catalog data is missing: data/ntn_2203e_bearings.json"
+        )
+    payload = json.loads(data_path.read_text(encoding="utf-8"))
+    records = payload.get("records")
+    if payload.get("schema_version") != 2 or not isinstance(records, list):
+        raise ValueError("Unsupported or malformed bearing catalog schema.")
+    if payload.get("record_count") != len(records):
+        raise ValueError("Bearing catalog record count does not match its metadata.")
+    encoded = json.dumps(records, sort_keys=True, separators=(",", ":")).encode()
+    actual_hash = hashlib.sha256(encoded).hexdigest()
+    if actual_hash != payload.get("sha256"):
+        raise ValueError("Bearing catalog checksum validation failed.")
+    metadata = {key: value for key, value in payload.items() if key != "records"}
+    return metadata, tuple(records)
 
 
-BEARING_CATALOG: tuple[dict[str, Any], ...] = (
-    # NTN 62 series deep-groove ball bearings.
-    _row(
-        "6205", "deep_groove_ball", 25, 52, 15, 15.5, 7.85,
-        13000, 15000, 0.128, f0=13.9,
-    ),
-    _row(
-        "6206", "deep_groove_ball", 30, 62, 16, 21.6, 11.3,
-        11000, 13000, 0.199, f0=13.8,
-    ),
-    _row(
-        "6207", "deep_groove_ball", 35, 72, 17, 28.4, 15.3,
-        9800, 11000, 0.288, f0=13.8,
-    ),
-    _row(
-        "6208", "deep_groove_ball", 40, 80, 18, 32.5, 17.8,
-        8700, 10000, 0.366, f0=14.0,
-    ),
-    _row(
-        "6209", "deep_groove_ball", 45, 85, 19, 36.0, 20.4,
-        7800, 9200, 0.398, f0=14.1,
-    ),
-    _row(
-        "6210", "deep_groove_ball", 50, 90, 20, 39.0, 23.2,
-        7100, 8300, 0.454, f0=14.4,
-    ),
-    # NTN 30-degree 72 series single-row angular-contact ball bearings.
-    _row(
-        "7205", "angular_contact_ball", 25, 52, 15, 18.0, 10.3,
-        14000, 19000, 0.125, e=0.80, y2=0.76,
-    ),
-    _row(
-        "7206", "angular_contact_ball", 30, 62, 16, 24.9, 14.8,
-        12000, 16000, 0.193, e=0.80, y2=0.76,
-    ),
-    _row(
-        "7207", "angular_contact_ball", 35, 72, 17, 33.0, 20.1,
-        11000, 14000, 0.281, e=0.80, y2=0.76,
-    ),
-    _row(
-        "7208", "angular_contact_ball", 40, 80, 18, 39.0, 25.1,
-        9600, 13000, 0.355, e=0.80, y2=0.76,
-    ),
-    _row(
-        "7209", "angular_contact_ball", 45, 85, 19, 44.0, 28.7,
-        8700, 12000, 0.404, e=0.80, y2=0.76,
-    ),
-    _row(
-        "7210", "angular_contact_ball", 50, 90, 20, 45.5, 31.5,
-        7900, 10000, 0.457, e=0.80, y2=0.76,
-    ),
-    # NTN NU-EA cylindrical roller bearings.
-    _row("NU205EA", "cylindrical_roller", 25, 52, 15, 34.5, 27.7, 13000, 18000, 0.151),
-    _row("NU206EA", "cylindrical_roller", 30, 62, 16, 46.0, 37.5, 11000, 15600, 0.226),
-    _row("NU207EA", "cylindrical_roller", 35, 72, 17, 59.5, 50.0, 9500, 13200, 0.327),
-    _row("NU208EA", "cylindrical_roller", 40, 80, 18, 66.0, 55.5, 8500, 12000, 0.426),
-    _row("NU209EA", "cylindrical_roller", 45, 85, 19, 74.5, 66.5, 7600, 10800, 0.495),
-    _row("NU210EA", "cylindrical_roller", 50, 90, 20, 81.5, 76.5, 6900, 9700, 0.503),
-    # NTN 4T-320 metric tapered roller bearings.
-    _row(
-        "4T-32005X", "tapered_roller", 25, 47, 15, 31.0, 33.5,
-        7900, 11000, 0.113, e=0.43, y2=1.39, y0=0.77,
-    ),
-    _row(
-        "4T-32006X", "tapered_roller", 30, 55, 17, 41.5, 46.0,
-        6900, 9200, 0.172, e=0.43, y2=1.39, y0=0.77,
-    ),
-    _row(
-        "4T-32007X", "tapered_roller", 35, 62, 18, 46.0, 52.5,
-        6100, 8100, 0.223, e=0.45, y2=1.32, y0=0.73,
-    ),
-    _row(
-        "4T-32008X", "tapered_roller", 40, 68, 19, 55.5, 65.5,
-        5300, 7100, 0.272, e=0.38, y2=1.58, y0=0.87,
-    ),
-    _row(
-        "4T-32009X", "tapered_roller", 45, 75, 20, 64.0, 76.5,
-        4800, 6400, 0.341, e=0.39, y2=1.53, y0=0.84,
-    ),
-    _row(
-        "4T-32010X", "tapered_roller", 50, 80, 20, 69.5, 88.0,
-        4400, 5800, 0.373, e=0.42, y2=1.42, y0=0.78,
-    ),
-    # NTN 222-EA spherical roller bearings.
-    _row(
-        "22205EAW33", "spherical_roller", 25, 52, 18, 57.3, 46.1,
-        10400, 13000, 0.173, e=0.34, y1=2.00, y2=2.98, y0=1.96,
-    ),
-    _row(
-        "22206EAW33", "spherical_roller", 30, 62, 20, 75.7, 64.5,
-        8800, 11000, 0.278, e=0.31, y1=2.15, y2=3.20, y0=2.10,
-    ),
-    _row(
-        "22207EAW33", "spherical_roller", 35, 72, 23, 100.0, 92.0,
-        7500, 9400, 0.438, e=0.31, y1=2.21, y2=3.29, y0=2.16,
-    ),
-    _row(
-        "22208EAD1", "spherical_roller", 40, 80, 23, 116.0, 105.0,
-        6800, 8500, 0.528, e=0.27, y1=2.47, y2=3.67, y0=2.41,
-    ),
-    _row(
-        "22209EAD1", "spherical_roller", 45, 85, 23, 121.0, 113.0,
-        6100, 7700, 0.572, e=0.26, y1=2.64, y2=3.93, y0=2.58,
-    ),
-    _row(
-        "22210EAD1", "spherical_roller", 50, 90, 23, 130.0, 124.0,
-        5700, 7200, 0.614, e=0.24, y1=2.84, y2=4.23, y0=2.78,
-    ),
-)
+# The external, checksummed dataset is the runtime source of truth.
+CATALOG_DATA, BEARING_CATALOG = _load_catalog_data()
 
 
 DEEP_GROOVE_FACTORS: tuple[tuple[float, float, float], ...] = (
@@ -405,7 +264,7 @@ def equivalent_static_load(
     if bearing_type == "deep_groove_ball":
         x0, y0 = 0.60, 0.50
     elif bearing_type == "angular_contact_ball":
-        x0, y0 = 0.50, 0.33
+        x0, y0 = 0.50, bearing.get("y0", 0.33)
     elif bearing_type == "cylindrical_roller":
         if axial_load_n > 0:
             raise ValueError(
@@ -506,6 +365,20 @@ def evaluate_bearing(
     result = dict(bearing)
     result["type_label"] = TYPE_METADATA[bearing["bearing_type"]]["label"]
     result["warnings"] = []
+    unsupported_lubrication = lubrication in {"solid_special", "none"}
+    if unsupported_lubrication:
+        reason = "This standard catalog row has no sourced dry/solid-lubricant rating."
+        result.update(
+            {
+                "applicable": False,
+                "qualified": False,
+                "status": "not_applicable",
+                "status_reason": reason,
+                "warnings": [reason],
+                "lubrication_verified": False,
+            }
+        )
+        return result
     if bearing["bearing_type"] in {"angular_contact_ball", "tapered_roller"}:
         result["warnings"].append(
             "Evaluate the opposed bearing arrangement and induced axial forces "
@@ -533,26 +406,33 @@ def evaluate_bearing(
         TYPE_METADATA[bearing["bearing_type"]]["life_exponent"],
     )
     static_safety = bearing["static_rating_n"] / static["load_n"]
-    speed_limit = bearing[f"{lubrication}_speed_rpm"]
+    speed_basis = "oil" if lubrication == "oil" else "grease"
+    speed_limit = bearing[f"{speed_basis}_speed_rpm"]
     speed_margin = speed_limit / speed_rpm
-    formula_limit = min(
-        bearing["static_rating_n"], 0.50 * bearing["dynamic_rating_n"]
-    )
+    lubrication_verified = lubrication in {"grease", "oil"}
+    if lubrication == "unknown":
+        result["warnings"].append(
+            "Lubricant is not selected; the grease speed column is only a "
+            "conservative placeholder."
+        )
+    elif lubrication == "sealed_lifetime":
+        result["warnings"].append(
+            "The open-bearing catalog row does not verify seal-specific speed, "
+            "grease life, or fill. Confirm an actual sealed designation."
+        )
+    formula_limit = min(bearing["static_rating_n"], 0.50 * bearing["dynamic_rating_n"])
     life_formula_valid = dynamic["load_n"] <= formula_limit
     checks = {
         "life": life["life_hours"] >= required_life_hours,
         "static": static_safety >= required_static_safety_factor,
         "speed": speed_margin >= 1.0,
         "life_formula_range": life_formula_valid,
+        "lubrication": lubrication_verified,
     }
-    hard_failure = (
-        static_safety < 1.0 or speed_margin < 1.0 or not life_formula_valid
-    )
+    hard_failure = static_safety < 1.0 or speed_margin < 1.0 or not life_formula_valid
     qualified = all(checks.values())
     status = (
-        "acceptable"
-        if qualified
-        else ("unacceptable" if hard_failure else "marginal")
+        "acceptable" if qualified else ("unacceptable" if hard_failure else "marginal")
     )
     if not life_formula_valid:
         result["warnings"].append(
@@ -568,6 +448,8 @@ def evaluate_bearing(
             "static_safety_factor": static_safety,
             "speed_limit_rpm": speed_limit,
             "speed_margin": speed_margin,
+            "speed_basis": speed_basis,
+            "lubrication_verified": lubrication_verified,
             "life_formula_limit_n": formula_limit,
             "life_formula_valid": life_formula_valid,
             "checks": checks,
@@ -599,6 +481,386 @@ def evaluate_bearing(
         }
     )
     return result
+
+
+def lubrication_guidance(
+    lubrication: str,
+    speed_rpm: float,
+    bore_mm: float,
+    operating_temperature_c: float,
+    environment: str,
+) -> dict[str, Any]:
+    r"""Return property-based lubrication guidance without choosing a product.
+
+    ---Parameters---
+    lubrication : str
+        Unknown, grease, oil, sealed-for-life, special solid, or no lubricant.
+    speed_rpm : float
+        Operating speed in revolutions per minute.
+    bore_mm : float
+        Nominal bearing bore in millimetres.
+    operating_temperature_c : float
+        Expected stabilized bearing temperature in degrees Celsius.
+    environment : str
+        Normal, wet, dusty, vacuum, food, corrosive, or cleanroom environment.
+
+    ---Returns---
+    lubrication_assessment : dict
+        Mode, preliminary speed factor, considerations, and verification status.
+
+    ---LaTeX---
+    n d = n \times d
+    """
+    speed_factor = speed_rpm * bore_mm
+    common = [
+        "Verify lubricant viscosity at operating—not room—temperature.",
+        "Check cage, seal, fill quantity, relubrication interval, and compatibility.",
+        "Use the actual bearing mean diameter for a final n·dm check.",
+    ]
+    mode_guidance = {
+        "unknown": [
+            "Select a lubrication concept before treating any candidate as qualified.",
+            "Grease is often the simpler baseline; oil can remove heat and support "
+            "higher speed but adds a supply and sealing system.",
+        ],
+        "grease": [
+            "Specify base-oil type and viscosity, thickener, NLGI consistency, and "
+            "additive compatibility with load and environment.",
+            "Avoid overfilling at speed; establish replenishment quantity and interval.",
+        ],
+        "oil": [
+            "Choose bath, splash, circulation, jet, mist, or air-oil delivery based "
+            "on speed, heat removal, orientation, and cleanliness.",
+            "Check churning level, filtration, drain capacity, seals, and start-up supply.",
+        ],
+        "sealed_lifetime": [
+            "Confirm the exact sealed suffix, factory grease, seal temperature, and "
+            "seal-limited speed from the product table.",
+            "A sealed bearing is not automatically lubricated for the machine life.",
+        ],
+        "solid_special": [
+            "Use only a product with an explicit solid-lubricant/coating rating for "
+            "the load, speed, temperature, and atmosphere.",
+        ],
+        "none": [
+            "Standard catalog rolling bearings are not qualified for intentional dry "
+            "operation; investigate a purpose-designed alternative technology.",
+        ],
+    }
+    environmental = {
+        "wet": "Prioritize water resistance, corrosion protection, and seal integrity.",
+        "dusty": "Prioritize exclusion seals, purge strategy, and contamination control.",
+        "vacuum": "Check outgassing, vapor pressure, heat rejection, and vacuum-rated materials.",
+        "food": "Require the applicable food-grade registration and contamination plan.",
+        "corrosive": "Verify chemical compatibility of lubricant, seals, cage, and rings.",
+        "cleanroom": "Control particle generation, lubricant migration, and outgassing.",
+        "normal": "Confirm ambient contamination and moisture assumptions remain valid.",
+    }
+    temperature_note = (
+        "Temperature is outside a typical general-purpose grease screening range; "
+        "use a manufacturer temperature/life calculation."
+        if operating_temperature_c < -20 or operating_temperature_c > 120
+        else "Temperature still requires viscosity and grease-life verification."
+    )
+    return {
+        "mode": lubrication,
+        "verified_for_catalog_screen": lubrication in {"grease", "oil"},
+        "bore_speed_factor_nd": speed_factor,
+        "operating_temperature_c": operating_temperature_c,
+        "environment": environment,
+        "considerations": [
+            *mode_guidance[lubrication],
+            environmental[environment],
+            temperature_note,
+            *common,
+        ],
+    }
+
+
+def technology_triage(
+    radial_load_n: float,
+    axial_load_n: float,
+    speed_rpm: float,
+    bore_mm: float,
+    lubrication: str,
+) -> list[dict[str, Any]]:
+    r"""Identify non-rolling bearing technologies worth specialist investigation.
+
+    The rules are transparent prompts, not sizing equations or universal rankings.
+
+    ---Parameters---
+    radial_load_n : float
+        Radial reaction in newtons.
+    axial_load_n : float
+        Axial reaction in newtons.
+    speed_rpm : float
+        Shaft speed in revolutions per minute.
+    bore_mm : float
+        Nominal shaft diameter in millimetres.
+    lubrication : str
+        Selected lubrication mode.
+
+    ---Returns---
+    technology_options : list
+        Alternative profiles with triggers, benefits, limitations, and next questions.
+
+    ---LaTeX---
+    n d = n \times d
+    """
+    nd_value = speed_rpm * bore_mm
+    dry_required = lubrication in {"none", "solid_special"}
+    high_speed = nd_value >= 300_000
+    very_high_speed = nd_value >= 700_000
+    low_speed = speed_rpm <= 2_000
+    heavy_load = radial_load_n + axial_load_n >= 10_000
+
+    profiles = [
+        {
+            "id": "hydrodynamic_journal",
+            "name": "Hydrodynamic journal / thrust bearing",
+            "triggered": lubrication == "oil" or (heavy_load and not dry_required),
+            "why": "Strong candidate for continuous rotation, high load, damping, and an available oil system.",
+            "limitations": "Has start/stop contact, needs oil supply/thermal design, and requires stability analysis.",
+            "next": "Define journal geometry, viscosity-temperature curve, clearance, supply, heat rejection, and stability margin.",
+        },
+        {
+            "id": "hydrostatic",
+            "name": "Hydrostatic liquid bearing",
+            "triggered": heavy_load and low_speed and lubrication != "none",
+            "why": "Externally pressurized support can carry load at zero or low speed with high stiffness and precision.",
+            "limitations": "Requires continuous clean pressurized fluid, restrictors, seals, and failure planning.",
+            "next": "Define supply pressure, available flow, stiffness, accuracy, fluid, and emergency landing behavior.",
+        },
+        {
+            "id": "plain_sleeve",
+            "name": "Sleeve, sintered, or polymer plain bearing",
+            "triggered": low_speed or dry_required,
+            "why": "Can be compact, inexpensive, tolerant of oscillation, and available in self-lubricating materials.",
+            "limitations": "PV, wear, creep, temperature, friction, and shaft-finish limits replace L10 sizing.",
+            "next": "Provide pressure-velocity duty, motion cycle, shaft finish/hardness, temperature, and environment.",
+        },
+        {
+            "id": "aerostatic",
+            "name": "Aerostatic air bearing",
+            "triggered": dry_required or very_high_speed,
+            "why": "Externally supplied gas offers non-contact operation, low friction, and high precision at zero speed.",
+            "limitations": "Needs clean compressed gas, tight geometry, restrictor design, and loss-of-supply planning.",
+            "next": "Define gas supply, stiffness, flow, accuracy, contamination, thrust support, and touchdown strategy.",
+        },
+        {
+            "id": "foil_gas",
+            "name": "Aerodynamic / foil gas bearing",
+            "triggered": high_speed and dry_required,
+            "why": "Oil-free high-speed turbomachinery can use self-acting gas films after lift-off.",
+            "limitations": "Start/stop wear, thermal management, rotor dynamics, coatings, and minimum lift-off speed are critical.",
+            "next": "Engage a foil-bearing specialist with rotor mass, speed map, starts, temperature, gas, and load direction.",
+        },
+        {
+            "id": "active_magnetic",
+            "name": "Active magnetic bearing",
+            "triggered": very_high_speed or dry_required,
+            "why": "Non-contact controllable support is worth considering where oil-free operation or active vibration control matters.",
+            "limitations": "Requires sensors, controls, amplifiers, power, rotor-dynamic validation, and touchdown bearings.",
+            "next": "Define static/dynamic force spectra, air gap, power loss, control bandwidth, fault cases, and backup bearings.",
+        },
+    ]
+    for profile in profiles:
+        profile["screening_basis"] = {
+            "nd_rpm_mm": nd_value,
+            "dry_required": dry_required,
+            "high_speed_prompt": high_speed,
+            "heavy_load_prompt": heavy_load,
+        }
+    return profiles
+
+
+def arrangement_guidance(
+    arrangement: str,
+    preload_method: str,
+    preload_n: float,
+) -> dict[str, Any]:
+    r"""Assess a common bearing arrangement and its preload calculation boundary.
+
+    ---Parameters---
+    arrangement : str
+        Single known reaction, locating/floating, back-to-back, face-to-face, or tandem.
+    preload_method : str
+        None, fixed-position, constant-pressure, or manufacturer catalog class.
+    preload_n : float
+        Explicit initial preload force in newtons when known.
+
+    ---Returns---
+    arrangement_assessment : dict
+        Topology, load-path explanation, benefits, risks, and calculation support.
+
+    ---LaTeX---
+    C_{op} = C_{installed} - \Delta C_{fit} - \Delta C_{thermal}
+    """
+    profiles = {
+        "single_known": {
+            "label": "Known reaction at one bearing",
+            "load_path": "The entered Fr and Fa are applied directly to one bearing.",
+            "considerations": [
+                "Confirm another component provides the shaft's remaining radial and axial support.",
+                "Do not enter total shaft load unless it equals this bearing reaction.",
+            ],
+        },
+        "locating_floating": {
+            "label": "Two-bearing locating / floating system",
+            "load_path": "One position locates the shaft axially; the other supports radial load while permitting thermal expansion.",
+            "considerations": [
+                "Define which bearing and ring provide axial location in each direction.",
+                "Ensure the floating position can actually move under its selected fits and housing design.",
+                "Check shaft and housing temperature gradients before fixing both positions.",
+            ],
+        },
+        "back_to_back": {
+            "label": "Opposed pair — back-to-back (DB)",
+            "load_path": "Diverging contact lines resist overturning moment and locate the shaft in both axial directions.",
+            "considerations": [
+                "Pair load sharing depends on contact angle, preload, stiffness, fits, and temperature.",
+                "DB generally provides a wider effective spread than DF but is sensitive to alignment and mounting accuracy.",
+            ],
+        },
+        "face_to_face": {
+            "label": "Opposed pair — face-to-face (DF)",
+            "load_path": "Converging contact lines locate the shaft in both directions with more angular accommodation than DB.",
+            "considerations": [
+                "Pair load sharing depends on contact angle, preload, stiffness, fits, and temperature.",
+                "DF has a narrower effective spread and lower moment stiffness than a comparable DB pair.",
+            ],
+        },
+        "tandem": {
+            "label": "Tandem pair (DT)",
+            "load_path": "Parallel contact lines share axial load in one direction; another bearing must react reverse thrust.",
+            "considerations": [
+                "Use a matched set or validated spacer/deflection design for reliable load sharing.",
+                "Tandem is not a two-direction locating arrangement by itself.",
+            ],
+        },
+    }
+    preload_profiles = {
+        "none": [
+            "Operating clearance still changes with fits, temperature, and centrifugal effects."
+        ],
+        "fixed_position": [
+            "Fixed-position preload is stiff but changes strongly with fits and differential thermal growth.",
+            "Spacer and shoulder tolerances become part of the preload stack-up.",
+        ],
+        "constant_pressure": [
+            "Spring/constant-pressure preload is less sensitive to thermal growth but has lower system stiffness.",
+            "Verify spring travel, force tolerance, speed, and resonance behavior.",
+        ],
+        "catalog_class": [
+            "Manufacturer preload classes apply only to the stated matched bearing set and catalog conditions.",
+            "Do not transfer a preload class or force between manufacturers or series.",
+        ],
+    }
+    profile = profiles[arrangement]
+    preload_requested = preload_method != "none" or preload_n > 0
+    paired = arrangement in {"back_to_back", "face_to_face", "tandem"}
+    return {
+        "arrangement": arrangement,
+        "label": profile["label"],
+        "load_path": profile["load_path"],
+        "paired": paired,
+        "preload_method": preload_method,
+        "preload_n": preload_n,
+        "preload_requested": preload_requested,
+        "preload_calculation_supported": not preload_requested,
+        "considerations": [
+            *profile["considerations"],
+            *preload_profiles[preload_method],
+            (
+                "Preload was not added to internal bearing load because catalog "
+                "load-deflection/stiffness data are not available for every candidate."
+                if preload_requested
+                else "No explicit preload force was applied in the life calculation."
+            ),
+        ],
+    }
+
+
+def variable_duty_life(
+    bearing: dict[str, Any],
+    duty_segments: list[dict[str, float]],
+) -> dict[str, Any]:
+    r"""Accumulate basic rating-life damage for repeated load/speed segments.
+
+    ---Parameters---
+    bearing : dict
+        Normalized catalog bearing record.
+    duty_segments : list
+        Segment dictionaries with radial load, axial load, speed, and duration hours.
+
+    ---Returns---
+    variable_duty_result : dict
+        Segment loads, cycles, damage fractions, equivalent load, and life hours.
+
+    ---LaTeX---
+    D = \sum_i \frac{N_i}{L_{10,i}},\qquad
+    P_{eq} = \left(\frac{\sum_i P_i^p N_i}{\sum_i N_i}\right)^{1/p}
+    """
+    if not duty_segments:
+        raise ValueError("Variable duty requires at least one segment.")
+    exponent = TYPE_METADATA[bearing["bearing_type"]]["life_exponent"]
+    segment_results = []
+    total_cycles = 0.0
+    weighted_load_power = 0.0
+    pattern_hours = 0.0
+    pattern_damage = 0.0
+    maximum_static_load = 0.0
+    maximum_speed = 0.0
+    for index, segment in enumerate(duty_segments, start=1):
+        try:
+            radial = float(segment["radial_load_n"])
+            axial = float(segment.get("axial_load_n", 0.0))
+            speed = float(segment["speed_rpm"])
+            duration = float(segment["duration_hours"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"Invalid variable-duty segment {index}.") from error
+        if radial < 0 or axial < 0 or speed <= 0 or duration <= 0:
+            raise ValueError(
+                f"Segment {index} loads must be non-negative and speed/duration positive."
+            )
+        dynamic = equivalent_dynamic_load(radial, axial, bearing)
+        static = equivalent_static_load(radial, axial, bearing)
+        cycles = 60.0 * speed * duration
+        rating_revolutions = (
+            1_000_000.0 * (bearing["dynamic_rating_n"] / dynamic["load_n"]) ** exponent
+        )
+        damage = cycles / rating_revolutions
+        total_cycles += cycles
+        pattern_hours += duration
+        pattern_damage += damage
+        maximum_static_load = max(maximum_static_load, static["load_n"])
+        maximum_speed = max(maximum_speed, speed)
+        weighted_load_power += dynamic["load_n"] ** exponent * cycles
+        segment_results.append(
+            {
+                "segment": index,
+                "radial_load_n": radial,
+                "axial_load_n": axial,
+                "speed_rpm": speed,
+                "duration_hours": duration,
+                "equivalent_load_n": dynamic["load_n"],
+                "cycles": cycles,
+                "damage_fraction_per_pattern": damage,
+            }
+        )
+    equivalent_load = (weighted_load_power / total_cycles) ** (1.0 / exponent)
+    pattern_repetitions = 1.0 / pattern_damage
+    return {
+        "segments": segment_results,
+        "pattern_hours": pattern_hours,
+        "pattern_damage": pattern_damage,
+        "pattern_repetitions_to_l10": pattern_repetitions,
+        "life_hours": pattern_hours * pattern_repetitions,
+        "equivalent_dynamic_load_n": equivalent_load,
+        "total_cycles_per_pattern": total_cycles,
+        "maximum_static_load_n": maximum_static_load,
+        "maximum_speed_rpm": maximum_speed,
+    }
 
 
 def _selection_rank(candidate: dict[str, Any], load_ratio: float) -> tuple[float, ...]:
@@ -679,6 +941,13 @@ def select_bearings(
     lubrication: str = "grease",
     required_life_hours: float = 20000.0,
     required_static_safety_factor: float = 1.0,
+    operating_temperature_c: float = 60.0,
+    environment: str = "normal",
+    arrangement: str = "single_known",
+    preload_method: str = "none",
+    preload_n: float = 0.0,
+    duty_segments_json: str = "",
+    bearing_positions_json: str = "",
 ) -> dict[str, Any]:
     r"""Screen same-bore NTN bearing types for a specified constant duty point.
 
@@ -704,6 +973,20 @@ def select_bearings(
         Minimum requested basic rating life in operating hours.
     required_static_safety_factor : float
         Minimum requested basic static safety factor ``C0/P0``.
+    operating_temperature_c : float
+        Expected stabilized bearing temperature in degrees Celsius.
+    environment : str
+        Normal, wet, dusty, vacuum, food, corrosive, or cleanroom environment.
+    arrangement : str
+        Single known reaction, locating/floating, DB, DF, or tandem topology.
+    preload_method : str
+        None, fixed-position, constant-pressure, or catalog-class preload.
+    preload_n : float
+        Explicit preload force in newtons when known; advisory until stiffness data exist.
+    duty_segments_json : str
+        Optional JSON array of repeated load/speed/duration segments.
+    bearing_positions_json : str
+        Optional JSON array of additional positions with already-solved reactions.
 
     ---Returns---
     status : str
@@ -726,6 +1009,14 @@ def select_bearings(
         Manufacturer, catalog scope, bore sizes, and official references.
     subst_recommendation : str
         Plain-text statement of the recommendation ranking basis.
+    lubrication_assessment : dict
+        Property-based lubrication guidance and verification boundary.
+    alternative_technologies : list
+        Non-rolling technologies worth investigating and their tradeoffs.
+    arrangement_assessment : dict
+        Load-path, preload, thermal-growth, and calculation-boundary guidance.
+    system_analysis : dict
+        Position-by-position known-reaction screen and limiting status.
 
     ---LaTeX---
     P = XF_r + YF_a
@@ -739,6 +1030,8 @@ def select_bearings(
         "bore": bore_mm,
         "required life": required_life_hours,
         "required static safety factor": required_static_safety_factor,
+        "operating temperature": operating_temperature_c,
+        "preload": preload_n,
     }
     for name, value in numeric_inputs.items():
         if not isinstance(value, (int, float)):
@@ -751,8 +1044,79 @@ def select_bearings(
         raise ValueError("Speed and required life must be positive.")
     if required_static_safety_factor <= 0:
         raise ValueError("Required static safety factor must be positive.")
-    if lubrication not in {"grease", "oil"}:
-        raise ValueError("Lubrication must be 'grease' or 'oil'.")
+    if preload_n < 0:
+        raise ValueError("Preload force must be non-negative.")
+    lubrication_modes = {
+        "unknown",
+        "grease",
+        "oil",
+        "sealed_lifetime",
+        "solid_special",
+        "none",
+    }
+    if lubrication not in lubrication_modes:
+        raise ValueError(
+            "Lubrication must be unknown, grease, oil, sealed_lifetime, "
+            "solid_special, or none."
+        )
+    environments = {
+        "normal",
+        "wet",
+        "dusty",
+        "vacuum",
+        "food",
+        "corrosive",
+        "cleanroom",
+    }
+    if environment not in environments:
+        raise ValueError(
+            f"Environment must be one of: {', '.join(sorted(environments))}."
+        )
+    arrangements = {
+        "single_known",
+        "locating_floating",
+        "back_to_back",
+        "face_to_face",
+        "tandem",
+    }
+    if arrangement not in arrangements:
+        raise ValueError(
+            f"Arrangement must be one of: {', '.join(sorted(arrangements))}."
+        )
+    preload_methods = {
+        "none",
+        "fixed_position",
+        "constant_pressure",
+        "catalog_class",
+    }
+    if preload_method not in preload_methods:
+        raise ValueError(
+            f"Preload method must be one of: {', '.join(sorted(preload_methods))}."
+        )
+    if preload_method == "none" and preload_n > 0:
+        raise ValueError(
+            "Choose a preload method when preload force is greater than zero."
+        )
+    duty_segments: list[dict[str, float]] = []
+    if duty_segments_json.strip():
+        try:
+            parsed_segments = json.loads(duty_segments_json)
+        except json.JSONDecodeError as error:
+            raise ValueError("Variable-duty segments must be valid JSON.") from error
+        if not isinstance(parsed_segments, list):
+            raise ValueError("Variable-duty JSON must contain an array of segments.")
+        duty_segments = parsed_segments
+    additional_positions: list[dict[str, Any]] = []
+    if bearing_positions_json.strip():
+        try:
+            parsed_positions = json.loads(bearing_positions_json)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "Additional bearing positions must be valid JSON."
+            ) from error
+        if not isinstance(parsed_positions, list):
+            raise ValueError("Additional bearing positions must be a JSON array.")
+        additional_positions = parsed_positions
     if float(bore_mm) not in list_bore_sizes():
         available = ", ".join(f"{value:g}" for value in list_bore_sizes())
         raise ValueError(f"Bore must be one of: {available} mm.")
@@ -761,8 +1125,7 @@ def select_bearings(
     catalog_rows = [
         row
         for row in BEARING_CATALOG
-        if row["bore_mm"] == float(bore_mm)
-        and row["bearing_type"] in selected_types
+        if row["bore_mm"] == float(bore_mm) and row["bearing_type"] in selected_types
     ]
     if not catalog_rows:
         raise ValueError("No catalog bearings match the selected bore and types.")
@@ -779,6 +1142,49 @@ def select_bearings(
         )
         for row in catalog_rows
     ]
+    if duty_segments:
+        for candidate in candidates:
+            if not candidate["applicable"]:
+                continue
+            variable = variable_duty_life(candidate, duty_segments)
+            candidate["variable_duty"] = variable
+            candidate["life_hours"] = variable["life_hours"]
+            candidate["load_n"] = variable["equivalent_dynamic_load_n"]
+            candidate["static_load_n"] = variable["maximum_static_load_n"]
+            candidate["static_safety_factor"] = (
+                candidate["static_rating_n"] / variable["maximum_static_load_n"]
+            )
+            candidate["speed_margin"] = (
+                candidate["speed_limit_rpm"] / variable["maximum_speed_rpm"]
+            )
+            candidate["life_formula_valid"] = (
+                candidate["load_n"] <= candidate["life_formula_limit_n"]
+            )
+            candidate["checks"].update(
+                {
+                    "life": candidate["life_hours"] >= required_life_hours,
+                    "static": candidate["static_safety_factor"]
+                    >= required_static_safety_factor,
+                    "speed": candidate["speed_margin"] >= 1.0,
+                    "life_formula_range": candidate["life_formula_valid"],
+                }
+            )
+            candidate["qualified"] = all(candidate["checks"].values())
+            hard_failure = (
+                candidate["static_safety_factor"] < 1.0
+                or candidate["speed_margin"] < 1.0
+                or not candidate["life_formula_valid"]
+            )
+            candidate["status"] = (
+                "acceptable"
+                if candidate["qualified"]
+                else ("unacceptable" if hard_failure else "marginal")
+            )
+            candidate["status_reason"] = (
+                "Meets all repeated-duty screening requirements."
+                if candidate["qualified"]
+                else "Review the failed repeated-duty screening checks."
+            )
     load_ratio = axial_load_n / radial_load_n if radial_load_n else float("inf")
     qualified = [candidate for candidate in candidates if candidate["qualified"]]
     applicable = [candidate for candidate in candidates if candidate["applicable"]]
@@ -797,16 +1203,19 @@ def select_bearings(
                 sum(item["checks"].values()),
                 min(item["life_hours"] / required_life_hours, 3.0)
                 + min(
-                    item["static_safety_factor"]
-                    / required_static_safety_factor,
+                    item["static_safety_factor"] / required_static_safety_factor,
                     3.0,
                 )
                 + min(item["speed_margin"], 3.0),
             ),
         )
-        status = "marginal" if not all(
-            candidate["status"] == "unacceptable" for candidate in applicable
-        ) else "unacceptable"
+        status = (
+            "marginal"
+            if not all(
+                candidate["status"] == "unacceptable" for candidate in applicable
+            )
+            else "unacceptable"
+        )
         basis = (
             "No candidate meets every requirement; this is the closest "
             "screening result."
@@ -815,6 +1224,19 @@ def select_bearings(
         top = candidates[0]
         status = "unacceptable"
         basis = "No selected bearing family is applicable to this duty point."
+
+    arrangement_assessment = arrangement_guidance(
+        arrangement, preload_method, preload_n
+    )
+    if (
+        arrangement_assessment["preload_requested"]
+        and not arrangement_assessment["preload_calculation_supported"]
+    ):
+        if status == "acceptable":
+            status = "marginal"
+        basis += (
+            " Preload is advisory because candidate stiffness data are unavailable."
+        )
 
     type_summary = []
     for candidate in candidates:
@@ -878,16 +1300,95 @@ def select_bearings(
             "The top NU bearing is a floating-position bearing; provide axial "
             "location elsewhere in the shaft arrangement."
         )
+    guidance.extend(arrangement_assessment["considerations"])
 
     recommendation = {
-        "designation": top["designation"],
-        "bearing_type": top["bearing_type"],
-        "type_label": top["type_label"],
-        "status": top["status"],
+        "designation": top["designation"] if applicable else None,
+        "bearing_type": top["bearing_type"] if applicable else None,
+        "type_label": (
+            top["type_label"] if applicable else "No applicable rolling candidate"
+        ),
+        "status": status,
         "basis": basis,
         "qualified_count": len(qualified),
         "candidate_count": len(candidates),
     }
+    top_life = top.get("life_hours") if applicable else None
+    system_positions = [
+        {
+            "name": "Position A",
+            "status": status,
+            "bore_mm": float(bore_mm),
+            "radial_load_n": radial_load_n,
+            "axial_load_n": axial_load_n,
+            "speed_rpm": speed_rpm,
+            "recommended_designation": recommendation["designation"],
+            "recommended_type": recommendation["type_label"],
+            "recommended_life_hours": top_life,
+        }
+    ]
+    for index, position in enumerate(additional_positions, start=2):
+        if not isinstance(position, dict):
+            raise ValueError(f"Bearing position {index} must be an object.")
+        try:
+            position_radial = float(position["radial_load_n"])
+            position_axial = float(position.get("axial_load_n", 0.0))
+            position_speed = float(position.get("speed_rpm", speed_rpm))
+            position_bore = float(position.get("bore_mm", bore_mm))
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"Bearing position {index} has invalid values.") from error
+        position_result = select_bearings(
+            radial_load_n=position_radial,
+            axial_load_n=position_axial,
+            speed_rpm=position_speed,
+            bore_mm=position_bore,
+            bearing_types_csv=bearing_types_csv,
+            lubrication=lubrication,
+            required_life_hours=required_life_hours,
+            required_static_safety_factor=required_static_safety_factor,
+            operating_temperature_c=operating_temperature_c,
+            environment=environment,
+            arrangement="single_known",
+        )
+        position_recommendation = position_result["recommendation"]
+        position_top = next(
+            (
+                item
+                for item in position_result["candidates"]
+                if item["designation"] == position_recommendation["designation"]
+            ),
+            None,
+        )
+        system_positions.append(
+            {
+                "name": str(position.get("name", f"Position {index}")),
+                "status": position_result["status"],
+                "bore_mm": position_bore,
+                "radial_load_n": position_radial,
+                "axial_load_n": position_axial,
+                "speed_rpm": position_speed,
+                "recommended_designation": position_recommendation["designation"],
+                "recommended_type": position_recommendation["type_label"],
+                "recommended_life_hours": (
+                    position_top.get("life_hours") if position_top else None
+                ),
+            }
+        )
+    severity = {"acceptable": 0, "marginal": 1, "unacceptable": 2}
+    system_status = max(
+        (position["status"] for position in system_positions),
+        key=lambda item: severity[item],
+    )
+    finite_positions = [
+        position
+        for position in system_positions
+        if position["recommended_life_hours"] is not None
+    ]
+    limiting_position = (
+        min(finite_positions, key=lambda item: item["recommended_life_hours"])["name"]
+        if finite_positions
+        else None
+    )
     return {
         "status": status,
         "recommendation": recommendation,
@@ -902,6 +1403,13 @@ def select_bearings(
             "lubrication": lubrication,
             "required_life_hours": required_life_hours,
             "required_static_safety_factor": required_static_safety_factor,
+            "operating_temperature_c": operating_temperature_c,
+            "environment": environment,
+            "arrangement": arrangement,
+            "preload_method": preload_method,
+            "preload_n": preload_n,
+            "duty_segments": duty_segments,
+            "additional_bearing_positions": additional_positions,
         },
         "life_chart": {
             "designations": [item["designation"] for item in applicable],
@@ -913,11 +1421,48 @@ def select_bearings(
             "series": sensitivity_series,
         },
         "recommendations": guidance,
+        "lubrication_assessment": lubrication_guidance(
+            lubrication,
+            speed_rpm,
+            float(bore_mm),
+            operating_temperature_c,
+            environment,
+        ),
+        "alternative_technologies": technology_triage(
+            radial_load_n,
+            axial_load_n,
+            speed_rpm,
+            float(bore_mm),
+            lubrication,
+        ),
+        "arrangement_assessment": arrangement_assessment,
+        "system_analysis": {
+            "method": "known_reactions_only",
+            "status": system_status,
+            "positions": system_positions,
+            "limiting_position": limiting_position,
+            "warnings": [
+                "Each position is screened independently from user-supplied reactions.",
+                "This does not solve shaft equilibrium, stiffness-based load sharing, "
+                "or coupled axial forces between positions.",
+            ],
+        },
         "catalog_meta": {
             "manufacturer": "NTN",
             "catalog": "Ball and Roller Bearings, No. 2203/E",
             "catalog_entry_count": len(BEARING_CATALOG),
+            "catalog_version": CATALOG_DATA["catalog_version"],
+            "catalog_sha256": CATALOG_DATA["sha256"],
             "available_bores_mm": list_bore_sizes(),
+            "searched_count": len(BEARING_CATALOG),
+            "same_bore_count": sum(
+                row["bore_mm"] == float(bore_mm) for row in BEARING_CATALOG
+            ),
+            "evaluated_count": len(candidates),
+            "qualified_count": len(qualified),
+            "inapplicable_count": sum(
+                not candidate["applicable"] for candidate in candidates
+            ),
             "catalog_index_url": NTN_CATALOG_INDEX,
             "load_life_source_url": (
                 "https://www.ntnglobal.com/en/products/catalog/pdf/2203E_a03.pdf"
@@ -925,7 +1470,15 @@ def select_bearings(
             "load_factor_source_url": (
                 "https://www.ntnglobal.com/en/products/catalog/pdf/2203E_a04.pdf"
             ),
-            "scope": "One representative NTN series per family at 25–50 mm bore.",
+            "scope": (
+                f"{len(BEARING_CATALOG)} sourced NTN records across "
+                f"{len(list_bore_sizes())} bores from "
+                f"{min(list_bore_sizes()):g} to {max(list_bore_sizes()):g} mm."
+            ),
         },
-        "subst_recommendation": f"{top['designation']}: {basis}",
+        "subst_recommendation": (
+            f"{top['designation']}: {basis}"
+            if applicable
+            else f"No applicable rolling candidate: {basis}"
+        ),
     }

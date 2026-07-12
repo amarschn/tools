@@ -1,7 +1,27 @@
 # Bearing Selector V2: Catalog, Arrangement, and Technology Triage
 
 Date: 2026-07-11
-Status: Proposed plan for implementation after review
+Status: Implemented 2026-07-12 (core V2 release)
+
+## Implementation Outcome
+
+The core V2 release implements the planned workflow as a single focused tool update:
+
+- 1,074 checksummed NTN catalog rows across 35 bores from 10 to 200 mm;
+- official source URL and PDF page retained per row, plus a reproducible extraction script;
+- versioned Save Inputs, Export Analysis, and Load Work workflows;
+- accessible tooltips for every current input;
+- explicit graph assumptions, dynamic interpretation, and duty-damage visualization;
+- scaled bearing-family SVGs and locating/floating or paired-arrangement diagrams;
+- unknown, grease, oil, sealed, special-solid, and no-lubricant modes;
+- property-based lubrication guidance without unsupported product claims;
+- preload/clearance education and an explicit stiffness-data calculation boundary;
+- locating/floating, DB, DF, and tandem arrangement assessment;
+- repeated variable-duty damage and independently screened known multi-bearing reactions;
+- transparent journal, hydrostatic, sleeve/plain, air, foil, and magnetic technology prompts;
+- expanded calculation, catalog-integrity, arrangement, lubrication, duty, and system tests.
+
+The intended boundaries remain: the tool does not solve shaft reactions, nonlinear multi-support load sharing, preload contact loads without stiffness data, rotor dynamics, or non-rolling bearing sizes. Additional rolling families such as thrust, needle, and self-aligning bearings remain candidates for a later sourced catalog extension rather than being approximated in this release.
 
 ## Objective
 
