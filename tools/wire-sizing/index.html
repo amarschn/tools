@@ -26,6 +26,7 @@
     <meta name="twitter:description" content="Select conductor gauges based on current, voltage drop, and temperature rise limits for electrical circuits.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
     <script src="/shared/analytics-autotrack.js" defer></script>
+    <script src="/shared/verdict.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -764,6 +765,14 @@
                         </select>
                     </div>
 
+                    <div class="form-group advanced-only">
+                        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" id="continuous" style="width:auto;">
+                            Continuous load (≥ 3 hrs)
+                        </label>
+                        <p class="form-hint">Sizes the breaker and conductor at 125% of load (NEC 210.19 / 210.20)</p>
+                    </div>
+
                     <div class="divider"></div>
 
                     <button id="calculateBtn" class="btn-calculate" disabled>Calculate Wire Size</button>
@@ -897,6 +906,7 @@
             conductors: document.getElementById('conductors'),
             maxVdrop: document.getElementById('maxVdrop'),
             circuitType: document.getElementById('circuitType'),
+            continuous: document.getElementById('continuous'),
             calculateBtn: document.getElementById('calculateBtn'),
             statusMsg: document.getElementById('statusMsg'),
             resultsContent: document.getElementById('resultsContent'),
@@ -952,17 +962,18 @@
                 const conductors = parseInt(elements.conductors.value) || 3;
                 const maxVdrop = parseFloat(elements.maxVdrop.value) || 3;
                 const circuitType = elements.circuitType.value;
+                const continuous = elements.continuous.checked;
 
                 // Validate inputs
                 if (isNaN(current) || current <= 0) throw new Error('Invalid current');
                 if (isNaN(voltage) || voltage <= 0) throw new Error('Invalid voltage');
                 if (isNaN(length) || length <= 0) throw new Error('Invalid length');
 
-                // Call Python
-                const calculateFn = wireSizingModule.get('calculate_wire_size');
+                // Call Python — full NEC evaluation (ampacity + VD + breaker + verdict)
+                const calculateFn = wireSizingModule.get('evaluate_circuit');
                 const resultProxy = calculateFn(
                     current, voltage, length, material, insulation,
-                    ambient, conductors, maxVdrop, circuitType
+                    ambient, conductors, maxVdrop, circuitType, continuous
                 );
 
                 const result = resultProxy.toJs({ dict_converter: Object.fromEntries });
@@ -987,9 +998,14 @@
         // =====================================================================
         function displayResults(result) {
             const warnings = result.warnings || [];
-            const overallOk = result.overall_ok;
+            const verdict = result.verdict || {};
+            const breaker = result.breaker || {};
+            const protection = result.protection || {};
+            const breakerRating = breaker.breaker_rating_a;
 
             let html = `
+                <div id="verdictBanner"></div>
+
                 <div class="wire-size-display">
                     <div class="wire-size-value">${result.recommended_size}</div>
                     <div class="wire-size-label">Recommended Wire Size</div>
@@ -1024,6 +1040,26 @@
                             <div class="metric-value">${result.bundling_factor.toFixed(2)}</div>
                         </div>
                     </div>
+                </div>
+
+                <div class="result-panel">
+                    <div class="result-header">
+                        <span class="result-title">Overcurrent Protection (NEC 240)</span>
+                        <span class="result-badge ${protection.protected ? 'badge-pass' : 'badge-fail'}">
+                            ${protection.protected ? 'PROTECTED' : 'NOT PROTECTED'}
+                        </span>
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Breaker / Fuse</div>
+                            <div class="metric-value">${breakerRating != null ? breakerRating : '—'}<span class="metric-unit">A</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Min Device Rating</div>
+                            <div class="metric-value">${breaker.required_ocpd_a != null ? breaker.required_ocpd_a.toFixed(1) : '—'}<span class="metric-unit">A</span></div>
+                        </div>
+                    </div>
+                    ${protection.note ? `<p class="form-hint" style="margin-top:12px;">${protection.note}</p>` : ''}
                 </div>
 
                 <div class="result-panel">
@@ -1068,6 +1104,16 @@
             }
 
             elements.resultsContent.innerHTML = html;
+
+            if (window.TransparentVerdict && verdict.status) {
+                TransparentVerdict.render(document.getElementById('verdictBanner'), {
+                    status: verdict.status,
+                    headline: verdict.headline,
+                    bindingConstraint: verdict.binding_constraint,
+                    reasons: verdict.reasons,
+                    checks: verdict.checks,
+                });
+            }
         }
 
         function displayDiagram(result) {
