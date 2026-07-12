@@ -38,6 +38,14 @@ python -m http.server
 ### Parameter JSON Test Cases
 Tools may include `test-cases/*.json` files with pre-configured input parameters.
 See AGENTS.md "Parameter JSON Test Cases" for the full specification.
+
+### Discoverability / SEO Automation
+After editing `catalog.json` (e.g. adding a tool), run both self-maintaining SEO scripts and commit their output:
+```bash
+python3 scripts/generate_sitemap.py   # rebuilds sitemap.xml from catalog.json (also runs on Netlify deploy)
+python3 scripts/inject_seo_meta.py     # idempotently backfills <head> meta/canonical/OG + analytics into tool pages
+```
+`catalog.json` is the single source of truth. Detail in AGENTS.md step 8 of "Creating a New Tool".
 ### Testing
 ```bash
 # Run pytest suite
