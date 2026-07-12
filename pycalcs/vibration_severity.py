@@ -405,6 +405,10 @@ def _score_fault(
     machine_list = fault["machine_types"]
     if "all" in machine_list or machine_type in machine_list:
         score += 15
+    else:
+        # A fault declared for specific machine categories should not appear
+        # merely because its direction and severity weights are high.
+        return 0
 
     # 2. Bearing type applicability (20 pts)
     bearing_types = fault["bearing_types"]

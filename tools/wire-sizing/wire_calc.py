@@ -144,21 +144,18 @@ def calculate_wire_parameters(
     load_current = None
     if current is not None and current > 0:
         load_current = current
+        if voltage is not None and voltage != 0:
+            if circuit_type == "DC":
+                results["calculated_power"] = voltage * current
+            else:
+                pf = power_factor if power_factor > 0 else 1.0
+                results["calculated_power"] = voltage * current * pf
     elif voltage is not None and power is not None and voltage != 0:
         if circuit_type == "DC":
             load_current = power / voltage
         else: # AC
              pf = power_factor if power_factor > 0 else 1.0
              load_current = power / (voltage * pf)
-    elif voltage is not None and current is not None : # V & I provided
-         load_current = current # Already set
-         # Calculate Power for info
-         if circuit_type == "DC":
-             calculated_power = voltage * current
-         else:
-             pf = power_factor if power_factor > 0 else 1.0
-             calculated_power = voltage * current * pf
-         results['calculated_power'] = calculated_power
     # Add other combinations (I&P -> V) if needed
 
     if load_current is None or load_current <= 0:

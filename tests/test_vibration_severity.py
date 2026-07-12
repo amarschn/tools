@@ -81,7 +81,9 @@ class TestZoneClassification:
             mounting="rigid",
             measurement_direction="radial_v",
             vibration_quantity="velocity_rms",
-            measured_value=4.0,
+            # This would be Zone B under the default Group 2 boundaries but
+            # is Zone C under the custom 2.3 / 4.5 / 7.1 boundaries below.
+            measured_value=5.0,
             machine_group="1",
             zone_ab=2.3,
             zone_bc=4.5,
