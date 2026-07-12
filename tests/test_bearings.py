@@ -32,14 +32,28 @@ def test_catalog_has_broad_sourced_coverage():
     assert len(BEARING_CATALOG) >= 500
     assert CATALOG_DATA["schema_version"] == 2
     assert len(CATALOG_DATA["sha256"]) == 64
-    assert min(list_bore_sizes()) <= 10
+    assert min(list_bore_sizes()) == 1.5
     assert max(list_bore_sizes()) >= 100
-    assert len(list_bore_sizes()) >= 25
+    assert len(list_bore_sizes()) >= 45
     expected_types = set(get_bearing_type_metadata())
     assert {row["bearing_type"] for row in BEARING_CATALOG} == expected_types
     for bearing_type in expected_types:
         count = sum(row["bearing_type"] == bearing_type for row in BEARING_CATALOG)
         assert count >= 50
+    miniature = [row for row in BEARING_CATALOG if row.get("miniature")]
+    assert len(miniature) >= 60
+    assert {row["bore_mm"] for row in miniature} >= {
+        1.5,
+        2.0,
+        2.5,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+    }
 
 
 def test_catalog_values_retain_ntn_units_and_source_metadata():
@@ -53,6 +67,33 @@ def test_catalog_values_retain_ntn_units_and_source_metadata():
     assert bearing["manufacturer"] == "NTN"
     assert bearing["source_url"].startswith("https://www.ntnglobal.com/")
     assert bearing["source_pdf_page"] > 0
+
+
+def test_miniature_catalog_row_retains_newton_and_gram_source_units():
+    """Sub-10 mm source rows are normalized to N and kg without scaling errors."""
+    bearing = catalog_bearing("68/1.5")
+    assert bearing["bore_mm"] == 1.5
+    assert bearing["outside_diameter_mm"] == 4.0
+    assert bearing["width_mm"] == 1.2
+    assert bearing["dynamic_rating_n"] == 113.0
+    assert bearing["static_rating_n"] == 29.0
+    assert bearing["mass_kg"] == pytest.approx(0.00007)
+    assert bearing["source_url"].endswith("2203E_b03.pdf")
+
+
+@pytest.mark.parametrize("bore_mm", [1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9])
+def test_every_miniature_bore_is_selectable(bore_mm):
+    """Every new miniature bore produces sourced deep-groove candidates."""
+    result = select_bearings(
+        10,
+        1,
+        10_000,
+        bore_mm,
+        bearing_types_csv="deep_groove_ball",
+        required_life_hours=100,
+    )
+    assert result["candidates"]
+    assert all(candidate["bore_mm"] == bore_mm for candidate in result["candidates"])
 
 
 def test_basic_ball_bearing_life_matches_hand_calculation():

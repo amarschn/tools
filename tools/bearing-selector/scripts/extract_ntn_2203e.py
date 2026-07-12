@@ -24,6 +24,7 @@ SOURCE_URLS = {
     "tapered_roller": "https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b07.pdf",
     "spherical_roller": "https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b08.pdf",
 }
+MINIATURE_SOURCE_URL = "https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b03.pdf"
 
 
 def _page_lines(path: Path, first: int, last: int) -> Iterable[tuple[int, list[str]]]:
@@ -38,7 +39,7 @@ def _speed(tokens: list[str], index: int) -> tuple[float, int]:
     """Parse a speed whose thousands group may be a separate PDF text token."""
     if (
         index + 1 < len(tokens)
-        and re.fullmatch(r"\d{1,2}", tokens[index])
+        and re.fullmatch(r"\d{1,3}", tokens[index])
         and re.fullmatch(r"\d{3}", tokens[index + 1])
     ):
         return float(tokens[index] + tokens[index + 1]), index + 2
@@ -217,6 +218,68 @@ def extract_deep_groove(
                     axial_capability="both_directions_moderate",
                 )
             )
+    return rows
+
+
+def _footnoted_number(token: str) -> float:
+    """Parse a PDF number token that may end in a footnote marker."""
+    match = re.match(r"[-+]?\d+(?:\.\d+)?", token)
+    if not match:
+        raise ValueError(f"Not a numeric catalog token: {token!r}")
+    return float(match.group(0))
+
+
+def extract_miniature(path: Path) -> list[dict[str, Any]]:
+    """Extract metric miniature and small-size open ball bearings below 10 mm."""
+    rows = []
+    for page, lines in _page_lines(path, 3, 4):
+        header = next(
+            line for line in lines if re.search(r"d [\d.]+[–-][\d.]+ mm", line)
+        )
+        bore = float(re.search(r"d ([\d.]+)", header).group(1))
+        for line in lines:
+            tokens = line.strip().split()
+            if len(tokens) == 1 and re.fullmatch(r"\d+(?:\.\d+)?", tokens[0]):
+                bore = float(tokens[0])
+                continue
+            if len(tokens) < 16:
+                continue
+            try:
+                outside_diameter = float(tokens[0])
+                width = float(tokens[1])
+                dynamic_n, field_index = _rating(tokens, 8)
+                static_n, field_index = _rating(tokens, field_index)
+                field_index = _skip_rating(tokens, field_index)
+                f0 = float(tokens[field_index])
+                grease_speed, field_index = _speed(tokens, field_index + 1)
+                oil_speed, designation_index = _speed(tokens, field_index)
+                designation = tokens[designation_index]
+                if designation in {"", "—", "-"}:
+                    continue
+                mass_g = _footnoted_number(tokens[-2])
+            except (ValueError, IndexError):
+                continue
+            if not (0 < bore < 10 and outside_diameter > bore and width > 0):
+                continue
+            row = _record(
+                designation,
+                "deep_groove_ball",
+                bore,
+                outside_diameter,
+                width,
+                dynamic_n / 1000.0,
+                static_n / 1000.0,
+                grease_speed,
+                oil_speed,
+                mass_g / 1000.0,
+                page,
+                f0=f0,
+                contact_angle_deg=0.0,
+                axial_capability="both_directions_moderate",
+                miniature=True,
+            )
+            row["source_url"] = MINIATURE_SOURCE_URL
+            rows.append(row)
     return rows
 
 
@@ -465,6 +528,7 @@ def main() -> None:
     """Extract, validate, checksum, and write the normalized catalog JSON."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--deep", type=Path, required=True)
+    parser.add_argument("--miniature", type=Path, required=True)
     parser.add_argument("--angular", type=Path, required=True)
     parser.add_argument("--cylindrical", type=Path, required=True)
     parser.add_argument("--tapered", type=Path, required=True)
@@ -474,6 +538,7 @@ def main() -> None:
     args = parser.parse_args()
 
     rows = [
+        *extract_miniature(args.miniature),
         *extract_deep_groove(args.deep, args.maximum_bore),
         *extract_angular_contact(args.angular, args.maximum_bore),
         *extract_cylindrical(args.cylindrical, args.maximum_bore),
@@ -483,7 +548,7 @@ def main() -> None:
     unique = {}
     for row in rows:
         if not (
-            5 <= row["bore_mm"] <= args.maximum_bore
+            1 <= row["bore_mm"] <= args.maximum_bore
             and row["bore_mm"] < row["outside_diameter_mm"]
             and 0 < row["width_mm"] < row["outside_diameter_mm"]
             and row["dynamic_rating_n"] > 0
@@ -516,7 +581,10 @@ def main() -> None:
         "maximum_bore_mm": args.maximum_bore,
         "record_count": len(rows),
         "sha256": hashlib.sha256(encoded_rows).hexdigest(),
-        "source_urls": SOURCE_URLS,
+        "source_urls": {
+            **SOURCE_URLS,
+            "miniature_deep_groove_ball": MINIATURE_SOURCE_URL,
+        },
         "records": rows,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

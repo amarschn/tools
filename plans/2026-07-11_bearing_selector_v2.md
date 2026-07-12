@@ -7,7 +7,7 @@ Status: Implemented 2026-07-12 (core V2 release)
 
 The core V2 release implements the planned workflow as a single focused tool update:
 
-- 1,074 checksummed NTN catalog rows across 35 bores from 10 to 200 mm;
+- 1,136 checksummed NTN catalog rows across 45 bores from 1.5 to 200 mm, including sourced miniature and small-size bearings;
 - official source URL and PDF page retained per row, plus a reproducible extraction script;
 - versioned Save Inputs, Export Analysis, and Load Work workflows;
 - accessible tooltips for every current input;

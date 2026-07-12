@@ -6,9 +6,9 @@ A bore-first rolling-bearing catalog screen, arrangement assistant, repeated-dut
 
 The tool helps an engineer answer an early design question: given a required shaft bore and known bearing reactions, which catalog bearing is a sensible starting point, what arrangement issues remain, and when should a non-rolling technology be investigated?
 
-The checksummed V2 dataset contains **1,074 official NTN catalog rows** at 35 standard bores from 10 to 200 mm across five families:
+The checksummed V2 dataset contains **1,136 official NTN catalog rows** at 45 standard bores from 1.5 to 200 mm across five families:
 
-- deep-groove ball bearings across multiple dimensional series;
+- miniature, small-size, and standard deep-groove ball bearings across multiple dimensional series;
 - 30-degree and 40-degree single-row angular-contact ball bearings;
 - NU cylindrical roller bearings across light through heavy series;
 - metric tapered roller bearings across multiple series;
@@ -96,7 +96,7 @@ Regression-case JSON is deliberately a different schema and cannot be loaded as 
 
 ## Catalog Maintenance
 
-`scripts/extract_ntn_2203e.py` reads the five official family PDFs with `pypdf`, normalizes the rows, validates physical plausibility and uniqueness, and writes a deterministic SHA-256 checksum. Runtime loading rejects a missing, malformed, count-mismatched, or checksum-mismatched catalog.
+`scripts/extract_ntn_2203e.py` reads six official catalog PDFs with `pypdf`, normalizes the rows, validates physical plausibility and uniqueness, and writes a deterministic SHA-256 checksum. Runtime loading rejects a missing, malformed, count-mismatched, or checksum-mismatched catalog.
 
 The catalog ratings and allowable speeds are manufacturer-specific. A similarly dimensioned bearing from another manufacturer may have different ratings.
 
@@ -118,6 +118,7 @@ The JSON files under `test-cases/` are executable regression examples:
 - [Load ratings and bearing life](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_a03.pdf)
 - [Bearing load calculation](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_a04.pdf)
 - [Deep-groove ball bearing tables](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b02.pdf)
+- [Miniature and small-size ball bearing tables](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b03.pdf)
 - [Angular-contact ball bearing tables](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b04.pdf)
 - [Cylindrical roller bearing tables](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b06.pdf)
 - [Tapered roller bearing tables](https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b07.pdf)
