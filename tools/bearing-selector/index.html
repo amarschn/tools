@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Bearing Selector - Engineering Tools</title>
+    <meta name="description" content="Compare rolling-bearing types at one bore using NTN catalog ratings, L10 life, static safety, and allowable speed.">
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+            --callout-info-bg: #dbeafe;
+            --callout-info-border: #3b82f6;
+            --callout-warning-bg: #fef3c7;
+            --callout-warning-border: #f59e0b;
+            --callout-danger-bg: #fef2f2;
+            --callout-danger-border: #ef4444;
+            --callout-success-bg: #d1fae5;
+            --callout-success-border: #22c55e;
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            --btn-primary-bg: #3b82f6;
+            --callout-info-bg: #1e3a5f;
+            --callout-warning-bg: #422006;
+            --callout-danger-bg: #450a0a;
+            --callout-success-bg: #052e16;
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+                --btn-primary-bg: #3b82f6;
+                --callout-info-bg: #1e3a5f;
+                --callout-warning-bg: #422006;
+                --callout-danger-bg: #450a0a;
+                --callout-success-bg: #052e16;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            color: var(--text-color);
+            background: var(--bg-color);
+            font-family: var(--font-sans);
+            line-height: 1.55;
+        }
+        button, input, select { font: inherit; }
+        a { color: var(--text-color); }
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            border-bottom: 1px solid var(--border-color);
+            background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+            backdrop-filter: blur(10px);
+        }
+        .nav-container {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .nav-brand { font-weight: 700; text-decoration: none; letter-spacing: -0.02em; }
+        .settings-button, .settings-close {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-color);
+            background: var(--bg-card);
+            cursor: pointer;
+        }
+        .container { max-width: 1320px; margin: 0 auto; padding: 40px 24px 72px; }
+        h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.05; letter-spacing: -0.045em; }
+        h2 { margin-top: 0; font-size: 1.2rem; }
+        h3 { margin: 0 0 8px; font-size: 1rem; }
+        .eyebrow { margin-bottom: 10px; color: var(--text-light); font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+        .tool-description { max-width: 760px; margin: 0 0 20px; color: var(--text-light); font-size: 1.05rem; }
+        .scope-chip { display: inline-flex; gap: 8px; padding: 7px 10px; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-light); font-size: .8rem; }
+        .purpose-section { margin: 24px 0; border-bottom: 1px solid var(--border-color); }
+        .purpose-section summary { padding: 12px 0; cursor: pointer; font-weight: 650; }
+        .purpose-content { max-width: 900px; padding: 0 0 20px; color: var(--secondary-color); }
+        .workspace { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 24px; align-items: start; }
+        .card { border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); box-shadow: var(--shadow); }
+        .input-panel { position: sticky; top: 76px; padding: 20px; }
+        .section-label { margin: 18px 0 10px; color: var(--text-light); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+        .input-group { margin-bottom: 14px; }
+        .input-group label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: .88rem; font-weight: 650; }
+        .input-group small { display: block; margin-top: 5px; color: var(--text-light); font-size: .75rem; }
+        input[type="number"], select {
+            width: 100%;
+            padding: 10px 11px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-color);
+            background: var(--bg-card);
+        }
+        input:focus, select:focus, button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+        .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--primary-light); }
+        .segmented button { padding: 5px 9px; border: 0; border-radius: 5px; color: var(--text-light); background: transparent; cursor: pointer; font-size: .78rem; }
+        .segmented button.active { color: var(--text-color); background: var(--bg-card); box-shadow: var(--shadow); }
+        .unit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+        .expert-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px -20px 0; padding: 13px 20px; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
+        .expert-hint { color: var(--text-light); font-size: .74rem; }
+        .switch { position: relative; width: 42px; height: 24px; flex: 0 0 auto; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; inset: 0; border-radius: 999px; background: var(--border-color); cursor: pointer; transition: .2s; }
+        .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; border-radius: 50%; background: white; transition: .2s; box-shadow: var(--shadow); }
+        .switch input:checked + .slider { background: var(--success-color); }
+        .switch input:checked + .slider::before { transform: translateX(18px); }
+        .advanced-section { display: none; padding-top: 16px; }
+        body.expert-mode .advanced-section { display: block; }
+        .type-grid { display: grid; gap: 7px; }
+        .check-row { display: flex; align-items: flex-start; gap: 9px; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: .8rem; cursor: pointer; }
+        .check-row input { margin-top: 3px; accent-color: var(--success-color); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 10px 15px; border: 1px solid var(--border-color); border-radius: 6px; font-weight: 700; cursor: pointer; }
+        .btn-primary { width: 100%; margin-top: 18px; color: var(--btn-primary-text); border-color: var(--btn-primary-bg); background: var(--btn-primary-bg); }
+        .btn-secondary { color: var(--text-color); background: var(--bg-card); }
+        .btn:disabled { opacity: .55; cursor: wait; }
+        .sample-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
+        .results-panel { min-width: 0; }
+        .placeholder { min-height: 360px; display: grid; place-items: center; padding: 40px; text-align: center; color: var(--text-light); }
+        .placeholder[hidden] { display: none; }
+        .placeholder-mark { display: block; font-family: var(--font-mono); font-size: 2rem; margin-bottom: 10px; }
+        .status-banner { display: none; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding: 16px 18px; border: 1px solid var(--callout-info-border); border-radius: var(--border-radius); background: var(--callout-info-bg); }
+        .status-banner.acceptable { border-color: var(--callout-success-border); background: var(--callout-success-bg); }
+        .status-banner.marginal { border-color: var(--callout-warning-border); background: var(--callout-warning-bg); }
+        .status-banner.unacceptable { border-color: var(--callout-danger-border); background: var(--callout-danger-bg); }
+        .status-kicker { color: var(--text-light); font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+        .status-title { margin: 2px 0 3px; font-size: 1.35rem; font-weight: 750; }
+        .status-copy { color: var(--secondary-color); font-size: .85rem; }
+        .result-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+        .metric-grid { display: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .metric { padding: 15px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+        .metric-label { color: var(--text-light); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+        .metric-value { margin-top: 5px; font-size: 1.45rem; font-weight: 750; letter-spacing: -.025em; }
+        .metric-sub { color: var(--text-light); font-size: .75rem; }
+        .tabs { display: none; border-bottom: 1px solid var(--border-color); gap: 2px; overflow-x: auto; }
+        .tab-button { padding: 11px 14px; border: 0; border-bottom: 2px solid transparent; color: var(--text-light); background: transparent; cursor: pointer; white-space: nowrap; }
+        .tab-button.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+        .tab-panel { display: none; padding: 18px 0; }
+        .tab-panel.active { display: block; }
+        .candidate-list { display: grid; gap: 10px; }
+        .candidate { border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); overflow: hidden; }
+        .candidate summary { list-style: none; display: grid; grid-template-columns: minmax(160px, 1.4fr) repeat(4, minmax(90px, .8fr)); align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
+        .candidate summary::-webkit-details-marker { display: none; }
+        .candidate-name { font-weight: 750; }
+        .candidate-type { color: var(--text-light); font-size: .75rem; }
+        .candidate-stat span { display: block; color: var(--text-light); font-size: .67rem; text-transform: uppercase; }
+        .candidate-detail { padding: 0 16px 16px; border-top: 1px solid var(--border-color); }
+        .badge { display: inline-flex; padding: 3px 7px; border-radius: 999px; font-size: .68rem; font-weight: 750; text-transform: uppercase; }
+        .badge.acceptable { color: var(--success-color); background: var(--callout-success-bg); }
+        .badge.marginal { color: var(--warning-color); background: var(--callout-warning-bg); }
+        .badge.unacceptable, .badge.not_applicable { color: var(--danger-color); background: var(--callout-danger-bg); }
+        .equation { margin: 12px 0; padding: 10px 12px; border-left: 3px solid var(--border-color); background: var(--primary-light); font-family: var(--font-mono); font-size: .8rem; overflow-x: auto; }
+        .warning-list { margin: 10px 0 0; padding-left: 20px; color: var(--secondary-color); font-size: .82rem; }
+        .comparison-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--border-radius); }
+        table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        th, td { padding: 10px 11px; border-bottom: 1px solid var(--border-color); text-align: right; white-space: nowrap; }
+        th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+        th { color: var(--text-light); background: var(--primary-light); font-size: .7rem; text-transform: uppercase; }
+        tr:last-child td { border-bottom: 0; }
+        .chart { min-height: 360px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); }
+        .chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        .callout { margin: 14px 0; padding: 12px 14px; border-left: 3px solid var(--callout-warning-border); background: var(--callout-warning-bg); color: var(--secondary-color); font-size: .85rem; }
+        .background { max-width: 850px; }
+        .background h3 { margin-top: 26px; }
+        .variable-legend { padding-left: 18px; color: var(--secondary-color); font-size: .85rem; }
+        .reference-list a { word-break: break-word; }
+        .settings-overlay { position: fixed; inset: 0; z-index: 40; opacity: 0; visibility: hidden; background: rgba(0,0,0,.4); transition: .2s; }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+        .settings-panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 50; width: min(390px, 100%); display: flex; flex-direction: column; transform: translateX(100%); transition: .22s; background: var(--bg-card); box-shadow: var(--shadow-lg); }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header, .settings-footer { padding: 18px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+        .settings-footer { margin-top: auto; border-top: 1px solid var(--border-color); border-bottom: 0; }
+        .settings-content { padding: 20px; overflow-y: auto; }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+        .setting-label { font-size: .88rem; font-weight: 650; }
+        .setting-help { color: var(--text-light); font-size: .72rem; }
+        .loading-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; gap: 14px; text-align: center; background: var(--bg-color); transition: opacity .25s, visibility .25s; }
+        .loading-overlay.hidden { opacity: 0; visibility: hidden; }
+        .spinner { width: 34px; height: 34px; margin: auto; border: 3px solid var(--border-color); border-top-color: var(--text-color); border-radius: 50%; animation: spin .8s linear infinite; }
+        .loading-text { color: var(--text-light); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        body[data-density="compact"] .input-panel { padding: 15px; }
+        body[data-density="compact"] .input-group { margin-bottom: 9px; }
+        body[data-density="compact"] .candidate summary { padding: 10px 12px; }
+        @media (max-width: 980px) {
+            .workspace { grid-template-columns: 1fr; }
+            .input-panel { position: static; }
+            .metric-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 700px) {
+            .container { padding: 28px 14px 60px; }
+            .nav-container { padding: 10px 14px; }
+            .candidate summary { grid-template-columns: 1fr 1fr; }
+            .candidate-name { grid-column: 1 / -1; }
+            .metric-grid { grid-template-columns: 1fr 1fr; }
+            .status-banner { display: none; flex-direction: column; }
+        }
+    </style>
+    <script src="/shared/json-ld.js"></script>
+</head>
+<body data-theme="system" data-density="comfortable">
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Loading Pyodide…</div>
+    </div>
+
+    <header class="navbar">
+        <nav class="nav-container" aria-label="Primary navigation">
+            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+        </nav>
+    </header>
+
+    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true" aria-label="Tool settings">
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="section-label">Appearance</div>
+            <div class="setting-row">
+                <div><div class="setting-label">Theme</div><div class="setting-help">Light, dark, or system default.</div></div>
+                <div class="segmented" aria-label="Theme">
+                    <button type="button" data-theme-choice="light">Light</button>
+                    <button type="button" data-theme-choice="dark">Dark</button>
+                    <button type="button" data-theme-choice="system">System</button>
+                </div>
+            </div>
+            <div class="setting-row">
+                <div><div class="setting-label">Density</div><div class="setting-help">Adjust control spacing.</div></div>
+                <div class="segmented" aria-label="Density">
+                    <button type="button" data-density-choice="comfortable">Comfort</button>
+                    <button type="button" data-density-choice="compact">Compact</button>
+                </div>
+            </div>
+            <div class="setting-row">
+                <div><div class="setting-label">Precision</div><div class="setting-help">Displayed decimal places.</div></div>
+                <div class="segmented" aria-label="Precision">
+                    <button type="button" data-precision-choice="2">2</button>
+                    <button type="button" data-precision-choice="3">3</button>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="btn btn-secondary" id="settings-reset" type="button">Reset defaults</button>
+        </div>
+    </aside>
+
+    <main class="container">
+        <div class="eyebrow">Mechanical design · concept selection</div>
+        <h1>Bearing Selector</h1>
+        <p class="tool-description">Compare five rolling-bearing families at one shaft bore. Screen catalog L10 life, static safety, allowable speed, and the arrangement limits that simple rating calculations tend to hide.</p>
+        <div class="scope-chip">NTN catalog slice · 30 bearings · 25–50 mm bore</div>
+
+        <details class="purpose-section">
+            <summary>Scope, method, and limitations</summary>
+            <div class="purpose-content">
+                <p>This is a bore-first concept selector. Enter reactions at one bearing—not total shaft load—and compare one representative NTN series for each family. Ratings and speed limits are manufacturer-specific.</p>
+                <p>The result is not a final arrangement design. It does not calculate shaft reactions, opposed-pair induced thrust, preload, fits, internal clearance, lubrication life, contamination, temperature, or modified life. Always confirm a selected part in the current manufacturer catalog.</p>
+            </div>
+        </details>
+
+        <div class="workspace">
+            <section class="card input-panel" aria-labelledby="inputs-heading">
+                <h2 id="inputs-heading">Duty point</h2>
+                <div class="unit-row">
+                    <span class="expert-hint">Display units</span>
+                    <div class="segmented" aria-label="Display units">
+                        <button type="button" class="active" data-unit="si">SI</button>
+                        <button type="button" data-unit="us">US</button>
+                    </div>
+                </div>
+                <form id="calc-form">
+                    <div class="input-group">
+                        <label for="radial_load_n">Radial load at bearing <span id="radial-unit">N</span></label>
+                        <input type="number" id="radial_load_n" value="3000" min="0" step="any" required>
+                        <small>Use the resolved radial reaction at one bearing.</small>
+                    </div>
+                    <div class="input-group">
+                        <label for="axial_load_n">Axial load at bearing <span id="axial-unit">N</span></label>
+                        <input type="number" id="axial_load_n" value="800" min="0" step="any" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="speed_rpm">Shaft speed <span>rpm</span></label>
+                        <input type="number" id="speed_rpm" value="1800" min="1" step="any" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="bore_mm">Required shaft bore</label>
+                        <select id="bore_mm">
+                            <option value="25">25 mm · 0.984 in</option>
+                            <option value="30" selected>30 mm · 1.181 in</option>
+                            <option value="35">35 mm · 1.378 in</option>
+                            <option value="40">40 mm · 1.575 in</option>
+                            <option value="45">45 mm · 1.772 in</option>
+                            <option value="50">50 mm · 1.969 in</option>
+                        </select>
+                    </div>
+
+                    <div class="expert-bar">
+                        <div><strong>Expert options</strong><div class="expert-hint">Requirements, lubrication, and families</div></div>
+                        <label class="switch"><input type="checkbox" id="expert-mode-toggle"><span class="slider"></span></label>
+                    </div>
+
+                    <div class="advanced-section">
+                        <div class="section-label">Acceptance targets</div>
+                        <div class="input-group">
+                            <label for="required_life_hours">Required L10 life <span>h</span></label>
+                            <input type="number" id="required_life_hours" value="20000" min="1" step="any" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="required_static_safety_factor">Required static safety <span>C₀/P₀</span></label>
+                            <input type="number" id="required_static_safety_factor" value="1.0" min="0.1" step="any" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="lubrication">Allowable-speed column</label>
+                            <select id="lubrication"><option value="grease">Grease</option><option value="oil">Oil</option></select>
+                        </div>
+                        <div class="section-label">Families to compare</div>
+                        <div class="type-grid" id="type-grid">
+                            <label class="check-row"><input type="checkbox" value="deep_groove_ball" checked><span><strong>Deep-groove ball</strong><br>General-purpose radial and moderate thrust.</span></label>
+                            <label class="check-row"><input type="checkbox" value="angular_contact_ball" checked><span><strong>Angular-contact ball</strong><br>Combined load; normally an opposed pair.</span></label>
+                            <label class="check-row"><input type="checkbox" value="cylindrical_roller" checked><span><strong>Cylindrical roller, NU</strong><br>High radial capacity; floating position only.</span></label>
+                            <label class="check-row"><input type="checkbox" value="tapered_roller" checked><span><strong>Tapered roller</strong><br>Combined load; normally an opposed pair.</span></label>
+                            <label class="check-row"><input type="checkbox" value="spherical_roller" checked><span><strong>Spherical roller</strong><br>Heavy load and misalignment tolerance.</span></label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="calculate-btn" disabled>Loading calculation engine…</button>
+                    <div class="sample-row">
+                        <select id="sample-case" aria-label="Example duty">
+                            <option value="nominal">Combined-load baseline</option>
+                            <option value="radial">Motor radial duty</option>
+                            <option value="belt">Belt drive</option>
+                            <option value="heavy">Heavy-duty marginal</option>
+                            <option value="axial">Axial-dominant pair</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary" id="load-sample">Load</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="results-panel" aria-live="polite">
+                <div class="status-banner" id="status-banner">
+                    <div><div class="status-kicker" id="status-kicker">Screening result</div><div class="status-title" id="status-title"></div><div class="status-copy" id="status-copy"></div></div>
+                    <span class="badge" id="overall-badge"></span>
+                </div>
+                <div class="result-actions"><button type="button" class="btn btn-secondary" id="export-btn" hidden>Export analysis</button></div>
+                <div class="metric-grid" id="metric-grid">
+                    <div class="metric"><div class="metric-label">Top candidate</div><div class="metric-value" id="metric-designation">—</div><div class="metric-sub" id="metric-type">—</div></div>
+                    <div class="metric"><div class="metric-label">L10 life</div><div class="metric-value" id="metric-life">—</div><div class="metric-sub">90% reliability basis</div></div>
+                    <div class="metric"><div class="metric-label">Static safety</div><div class="metric-value" id="metric-static">—</div><div class="metric-sub">C₀ / P₀</div></div>
+                    <div class="metric"><div class="metric-label">Speed margin</div><div class="metric-value" id="metric-speed">—</div><div class="metric-sub">allowable / operating</div></div>
+                </div>
+                <div class="card placeholder" id="results-placeholder"><div><span class="placeholder-mark">C / P</span><strong>Ready when the calculation engine finishes loading.</strong><p>Defaults are usable immediately. Calculate to compare all five bearing families.</p></div></div>
+
+                <div class="tabs" id="result-tabs" role="tablist">
+                    <button type="button" class="tab-button active" data-tab="candidates">Candidates</button>
+                    <button type="button" class="tab-button" data-tab="comparison">Comparison</button>
+                    <button type="button" class="tab-button" data-tab="charts">Charts</button>
+                    <button type="button" class="tab-button" data-tab="background">Background</button>
+                </div>
+                <div class="tab-panel active" id="tab-candidates"><div class="candidate-list" id="candidate-list"></div><div id="guidance"></div></div>
+                <div class="tab-panel" id="tab-comparison"><div class="comparison-wrap"><table><thead><tr><th>Designation</th><th>Family</th><th>Envelope mm</th><th>C kN</th><th>C₀ kN</th><th>P kN</th><th>L10 h</th><th>s₀</th><th>Speed margin</th><th>Status</th></tr></thead><tbody id="comparison-body"></tbody></table></div></div>
+                <div class="tab-panel" id="tab-charts"><div class="chart-grid"><div><h2>Life by candidate</h2><div id="life-chart" class="chart"></div></div><div><h2>Proportional load sensitivity</h2><div id="sensitivity-chart" class="chart"></div></div></div></div>
+                <div class="tab-panel" id="tab-background">
+                    <article class="background">
+                        <div class="callout"><strong>Screening boundary:</strong> The input loads must already be reactions at one bearing. Angular-contact and tapered bearings normally require an opposed-pair equilibrium calculation, while the NU cylindrical series cannot carry axial load.</div>
+                        <h2>Calculation method</h2>
+                        <h3>Equation (1) · Equivalent dynamic radial load</h3>
+                        <div class="equation">\[P = X F_r + Y F_a\]</div>
+                        <ul class="variable-legend"><li><em>P</em>: equivalent dynamic radial load</li><li><em>F<sub>r</sub></em>: applied radial bearing reaction</li><li><em>F<sub>a</sub></em>: applied axial bearing reaction</li><li><em>X, Y</em>: NTN family and load-ratio factors</li></ul>
+                        <h3>Equation (2) · Basic rating life</h3>
+                        <div class="equation">\[L_{10h}=\frac{10^6}{60n}\left(\frac{C}{P}\right)^p\]</div>
+                        <ul class="variable-legend"><li><em>L<sub>10h</sub></em>: basic rating life in hours at 90% reliability</li><li><em>C</em>: manufacturer basic dynamic rating</li><li><em>n</em>: rotational speed in rpm</li><li><em>p</em>: 3 for ball bearings; 10/3 for roller bearings</li></ul>
+                        <h3>Equation (3) · Equivalent static load</h3>
+                        <div class="equation">\[P_0=\max(X_0F_r+Y_0F_a, F_r)\]</div>
+                        <ul class="variable-legend"><li><em>P<sub>0</sub></em>: equivalent static radial load</li><li><em>X<sub>0</sub>, Y<sub>0</sub></em>: NTN static-load factors</li></ul>
+                        <h3>Equation (4) · Static safety factor</h3>
+                        <div class="equation">\[s_0=\frac{C_0}{P_0}\]</div>
+                        <ul class="variable-legend"><li><em>s<sub>0</sub></em>: basic static safety factor</li><li><em>C<sub>0</sub></em>: manufacturer basic static rating</li></ul>
+                        <h2>What the recommendation means</h2>
+                        <p>Only candidates passing the requested life and static targets, the selected catalog speed limit, and NTN's stated basic-life formula range can qualify. The recommendation then favors family suitability for the axial/radial ratio before comparing envelope size. It is a starting family and part—not an automatic design approval.</p>
+                        <h2>Official references</h2>
+                        <ul class="reference-list">
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/en/2203/index.html">NTN Ball and Roller Bearings, catalog No. 2203/E</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_a03.pdf">NTN load ratings and bearing life</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_a04.pdf">NTN bearing load calculation</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b02.pdf">Deep-groove ball bearing tables</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b04.pdf">Angular-contact ball bearing tables</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b06.pdf">Cylindrical roller bearing tables</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b07.pdf">Tapered roller bearing tables</a></li>
+                            <li><a href="https://www.ntnglobal.com/en/products/catalog/pdf/2203E_b08.pdf">Spherical roller bearing tables</a></li>
+                        </ul>
+                    </article>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const TOOL_MODULE_NAME = 'bearings';
+        const TOOL_FUNCTION_NAME = 'select_bearings';
+        const PARAM_ORDER = ['radial_load_n', 'axial_load_n', 'speed_rpm', 'bore_mm', 'bearing_types_csv', 'lubrication', 'required_life_hours', 'required_static_safety_factor'];
+        const STORAGE_KEY = 'bearing-selector-settings';
+        const LBF_PER_N = 0.2248089431;
+        const defaultSettings = { theme: 'system', density: 'comfortable', precision: 2 };
+        const samples = {
+            nominal: [3000, 800, 1800, 30, 20000, 1.0, 'grease'],
+            radial: [2500, 0, 1800, 30, 20000, 1.0, 'grease'],
+            belt: [5000, 900, 1200, 35, 30000, 1.5, 'grease'],
+            heavy: [12000, 2500, 600, 40, 15000, 2.0, 'grease'],
+            axial: [1500, 3000, 900, 30, 20000, 1.0, 'grease']
+        };
+        let settings = { ...defaultSettings };
+        let unitSystem = 'si';
+        let pyToolModule = null;
+        let lastResults = null;
+
+        function loadSettings() {
+            try { settings = { ...defaultSettings, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; }
+            catch (_) { settings = { ...defaultSettings }; }
+        }
+        function saveSettings() { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); }
+        function setActive(selector, value, attribute) {
+            document.querySelectorAll(selector).forEach(button => button.classList.toggle('active', button.dataset[attribute] === String(value)));
+        }
+        function applySettings() {
+            document.body.dataset.theme = settings.theme;
+            document.body.dataset.density = settings.density;
+            setActive('[data-theme-choice]', settings.theme, 'themeChoice');
+            setActive('[data-density-choice]', settings.density, 'densityChoice');
+            setActive('[data-precision-choice]', settings.precision, 'precisionChoice');
+        }
+        function bindSettings() {
+            document.querySelectorAll('[data-theme-choice]').forEach(button => button.addEventListener('click', () => { settings.theme = button.dataset.themeChoice; saveSettings(); applySettings(); redrawCharts(); }));
+            document.querySelectorAll('[data-density-choice]').forEach(button => button.addEventListener('click', () => { settings.density = button.dataset.densityChoice; saveSettings(); applySettings(); }));
+            document.querySelectorAll('[data-precision-choice]').forEach(button => button.addEventListener('click', () => { settings.precision = Number(button.dataset.precisionChoice); saveSettings(); applySettings(); if (lastResults) displayResults(lastResults); }));
+            document.getElementById('settings-reset').addEventListener('click', () => { settings = { ...defaultSettings }; saveSettings(); applySettings(); });
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettings(true));
+            document.getElementById('settings-close').addEventListener('click', () => toggleSettings(false));
+            document.getElementById('settings-overlay').addEventListener('click', () => toggleSettings(false));
+        }
+        function toggleSettings(open) {
+            document.getElementById('settings-panel').classList.toggle('open', open);
+            document.getElementById('settings-overlay').classList.toggle('open', open);
+            document.getElementById('settings-panel').setAttribute('aria-hidden', String(!open));
+        }
+        function formatNumber(value, digits = settings.precision) {
+            if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+            return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
+        }
+        function formatLife(hours) {
+            if (!Number.isFinite(hours)) return '—';
+            if (hours >= 1e6) return `${formatNumber(hours / 1e6, 2)}M h`;
+            if (hours >= 1000) return `${formatNumber(hours / 1000, 1)}k h`;
+            return `${formatNumber(hours, 0)} h`;
+        }
+        function plotColors() {
+            const css = getComputedStyle(document.body);
+            return { text: css.getPropertyValue('--text-color').trim(), grid: css.getPropertyValue('--border-color').trim(), card: css.getPropertyValue('--bg-card').trim() };
+        }
+        function selectedTypes() {
+            const values = [...document.querySelectorAll('#type-grid input:checked')].map(input => input.value);
+            if (!values.length) throw new Error('Select at least one bearing family.');
+            return values.join(',');
+        }
+        function normalizedLoad(id) {
+            const value = Number(document.getElementById(id).value);
+            return unitSystem === 'si' ? value : value / LBF_PER_N;
+        }
+        function setUnitSystem(next) {
+            if (next === unitSystem) return;
+            ['radial_load_n', 'axial_load_n'].forEach(id => {
+                const input = document.getElementById(id);
+                const value = Number(input.value);
+                input.value = next === 'us' ? (value * LBF_PER_N).toFixed(2) : (value / LBF_PER_N).toFixed(0);
+            });
+            unitSystem = next;
+            document.getElementById('radial-unit').textContent = next === 'si' ? 'N' : 'lbf';
+            document.getElementById('axial-unit').textContent = next === 'si' ? 'N' : 'lbf';
+            setActive('[data-unit]', next, 'unit');
+        }
+        function loadSample(key) {
+            const [fr, fa, speed, bore, life, safety, lubrication] = samples[key];
+            document.getElementById('radial_load_n').value = unitSystem === 'si' ? fr : (fr * LBF_PER_N).toFixed(2);
+            document.getElementById('axial_load_n').value = unitSystem === 'si' ? fa : (fa * LBF_PER_N).toFixed(2);
+            document.getElementById('speed_rpm').value = speed;
+            document.getElementById('bore_mm').value = bore;
+            document.getElementById('required_life_hours').value = life;
+            document.getElementById('required_static_safety_factor').value = safety;
+            document.getElementById('lubrication').value = lubrication;
+        }
+        function toPlain(value) {
+            if (value instanceof Map) return Object.fromEntries([...value].map(([key, item]) => [key, toPlain(item)]));
+            if (Array.isArray(value)) return value.map(toPlain);
+            return value;
+        }
+
+        async function initialize() {
+            loadSettings(); applySettings(); bindSettings();
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide…';
+                const pyodide = await loadPyodide();
+                loadingText.textContent = 'Loading bearing catalog and equations…';
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+                    import ${TOOL_MODULE_NAME}
+                `);
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+                const button = document.getElementById('calculate-btn');
+                button.disabled = false;
+                button.textContent = 'Compare bearings';
+                document.getElementById('loading-overlay').classList.add('hidden');
+            } catch (error) {
+                loadingText.textContent = `Unable to load calculation engine: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        async function handleCalculate(event) {
+            event.preventDefault();
+            const button = document.getElementById('calculate-btn');
+            button.disabled = true; button.textContent = 'Comparing…';
+            try {
+                const resultProxy = pyToolModule.select_bearings(
+                    normalizedLoad('radial_load_n'),
+                    normalizedLoad('axial_load_n'),
+                    Number(document.getElementById('speed_rpm').value),
+                    Number(document.getElementById('bore_mm').value),
+                    selectedTypes(),
+                    document.getElementById('lubrication').value,
+                    Number(document.getElementById('required_life_hours').value),
+                    Number(document.getElementById('required_static_safety_factor').value)
+                );
+                lastResults = toPlain(resultProxy.toJs({ dict_converter: Object.fromEntries }));
+                resultProxy.destroy();
+                displayResults(lastResults);
+            } catch (error) {
+                const placeholder = document.getElementById('results-placeholder');
+                placeholder.hidden = false;
+                placeholder.innerHTML = `<div><strong>Calculation error</strong><p>${String(error.message || error)}</p></div>`;
+                console.error(error);
+            } finally {
+                button.disabled = false; button.textContent = 'Compare bearings';
+            }
+        }
+
+        function displayResults(results) {
+            const top = results.candidates.find(item => item.designation === results.recommendation.designation);
+            document.getElementById('results-placeholder').hidden = true;
+            const banner = document.getElementById('status-banner');
+            banner.style.display = 'flex'; banner.className = `status-banner ${results.status}`;
+            document.getElementById('status-title').textContent = `${results.recommendation.designation} · ${results.recommendation.type_label}`;
+            document.getElementById('status-copy').textContent = results.recommendation.basis;
+            const badge = document.getElementById('overall-badge');
+            badge.className = `badge ${results.status}`; badge.textContent = results.status;
+            document.getElementById('metric-grid').style.display = 'grid';
+            document.getElementById('metric-designation').textContent = top.designation;
+            document.getElementById('metric-type').textContent = top.type_label;
+            document.getElementById('metric-life').textContent = formatLife(top.life_hours);
+            document.getElementById('metric-static').textContent = formatNumber(top.static_safety_factor);
+            document.getElementById('metric-speed').textContent = formatNumber(top.speed_margin);
+            document.getElementById('result-tabs').style.display = 'flex';
+            document.getElementById('export-btn').hidden = false;
+            renderCandidates(results.candidates);
+            renderComparison(results.candidates);
+            renderGuidance(results.recommendations);
+            renderCharts(results);
+            if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise();
+        }
+        function renderCandidates(candidates) {
+            document.getElementById('candidate-list').innerHTML = candidates.map(candidate => {
+                const applicable = candidate.applicable;
+                const warnings = (candidate.warnings || []).map(text => `<li>${text}</li>`).join('');
+                return `<details class="candidate">
+                    <summary>
+                        <div><div class="candidate-name">${candidate.designation}</div><div class="candidate-type">${candidate.type_label}</div></div>
+                        <div class="candidate-stat"><span>L10 life</span>${formatLife(candidate.life_hours)}</div>
+                        <div class="candidate-stat"><span>Static safety</span>${formatNumber(candidate.static_safety_factor)}</div>
+                        <div class="candidate-stat"><span>Speed margin</span>${formatNumber(candidate.speed_margin)}</div>
+                        <div><span class="badge ${candidate.status}">${candidate.status.replace('_', ' ')}</span></div>
+                    </summary>
+                    <div class="candidate-detail">
+                        <p>${candidate.status_reason}</p>
+                        <p><strong>Envelope:</strong> ${candidate.bore_mm} × ${candidate.outside_diameter_mm} × ${candidate.width_mm} mm · <strong>Mass:</strong> ${formatNumber(candidate.mass_kg, 3)} kg</p>
+                        ${applicable ? `<div class="equation">\\[${candidate.subst_equivalent_load}\\]</div><div class="equation">\\[${candidate.subst_life_hours}\\]</div><div class="equation">\\[${candidate.subst_static_safety}\\]</div>` : ''}
+                        ${warnings ? `<ul class="warning-list">${warnings}</ul>` : ''}
+                        <p><a href="${candidate.source_url}">Open the official NTN family table</a></p>
+                    </div>
+                </details>`;
+            }).join('');
+        }
+        function renderComparison(candidates) {
+            document.getElementById('comparison-body').innerHTML = candidates.map(c => `<tr>
+                <td>${c.designation}</td><td>${c.type_label}</td><td>${c.bore_mm} × ${c.outside_diameter_mm} × ${c.width_mm}</td>
+                <td>${formatNumber(c.dynamic_rating_n / 1000)}</td><td>${formatNumber(c.static_rating_n / 1000)}</td><td>${c.applicable ? formatNumber(c.load_n / 1000) : '—'}</td>
+                <td>${formatLife(c.life_hours)}</td><td>${formatNumber(c.static_safety_factor)}</td><td>${formatNumber(c.speed_margin)}</td><td><span class="badge ${c.status}">${c.status.replace('_', ' ')}</span></td>
+            </tr>`).join('');
+        }
+        function renderGuidance(items) {
+            document.getElementById('guidance').innerHTML = `<div class="callout"><strong>Before final selection</strong><ul class="warning-list">${items.map(item => `<li>${item}</li>`).join('')}</ul></div>`;
+        }
+        function renderCharts(results) {
+            const colors = plotColors();
+            const common = { paper_bgcolor: colors.card, plot_bgcolor: colors.card, font: { color: colors.text }, margin: { t: 24, r: 18, b: 60, l: 72 } };
+            const life = results.life_chart;
+            Plotly.react('life-chart', [{ type: 'bar', x: life.designations, y: life.life_hours, marker: { color: life.life_hours.map(value => value >= life.required_life_hours ? '#0f766e' : '#b45309') }, hovertemplate: '%{x}<br>%{y:,.0f} h<extra></extra>' }, { type: 'scatter', mode: 'lines', x: life.designations, y: life.designations.map(() => life.required_life_hours), line: { color: '#b91c1c', dash: 'dash' }, name: 'Required life', hoverinfo: 'skip' }], { ...common, showlegend: false, yaxis: { title: 'L10 life (h)', type: 'log', gridcolor: colors.grid }, xaxis: { type: 'category', gridcolor: colors.grid } }, { responsive: true, displaylogo: false });
+            const sensitivity = results.load_sensitivity;
+            const traces = sensitivity.series.map(series => ({ type: 'scatter', mode: 'lines+markers', name: series.designation, x: sensitivity.load_multipliers, y: series.life_hours, hovertemplate: '%{fullData.name}<br>%{x:.2f}× load<br>%{y:,.0f} h<extra></extra>' }));
+            Plotly.react('sensitivity-chart', traces, { ...common, legend: { orientation: 'h', y: -0.24 }, xaxis: { title: 'Proportional load multiplier', gridcolor: colors.grid }, yaxis: { title: 'L10 life (h)', type: 'log', gridcolor: colors.grid } }, { responsive: true, displaylogo: false });
+        }
+        function redrawCharts() { if (lastResults) renderCharts(lastResults); }
+        function exportAnalysis() {
+            if (!lastResults) return;
+            const payload = { tool: 'bearing-selector', version: 1, timestamp: new Date().toISOString(), results: lastResults };
+            const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+            const link = document.createElement('a'); link.href = url; link.download = 'bearing-selector-analysis.json'; link.click(); URL.revokeObjectURL(url);
+        }
+
+        document.querySelectorAll('[data-unit]').forEach(button => button.addEventListener('click', () => setUnitSystem(button.dataset.unit)));
+        document.getElementById('expert-mode-toggle').addEventListener('change', event => document.body.classList.toggle('expert-mode', event.target.checked));
+        document.getElementById('load-sample').addEventListener('click', () => loadSample(document.getElementById('sample-case').value));
+        document.getElementById('export-btn').addEventListener('click', exportAnalysis);
+        document.querySelectorAll('.tab-button').forEach(button => button.addEventListener('click', () => {
+            document.querySelectorAll('.tab-button').forEach(item => item.classList.toggle('active', item === button));
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `tab-${button.dataset.tab}`));
+            if (button.dataset.tab === 'charts') redrawCharts();
+        }));
+        initialize();
+    </script>
+</body>
+</html>

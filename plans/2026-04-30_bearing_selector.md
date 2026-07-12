@@ -1,7 +1,11 @@
 # Rolling-Element Bearing Selector
 
 Date: 2026-04-30
-Status: Proposed plan for critique before implementation
+Status: Implemented 2026-07-11
+
+## Implementation Outcome
+
+The v1 selector is implemented with a traceable 30-record slice of NTN catalog No. 2203/E: one representative series for each of five bearing families at six bores from 25 to 50 mm. The narrower catalog is intentional; it validates the end-to-end method without inventing or blending manufacturer-specific ratings. Five tool-local JSON examples are executable regression tests, and the page includes the comparison, derivation, chart, reference, unit-toggle, and export behavior described below.
 
 ## Problem Statement
 
@@ -46,7 +50,7 @@ A tool that answers: **"For a given duty point (Fr, Fa, n), what L10 life does e
   - Cylindrical roller (NU2xx, NU3xx)
   - Tapered roller (302xx, 303xx, 322xx)
   - Spherical roller (222xx, 223xx)
-- ~80–120 catalog entries total (representative bores 10–100 mm)
+- 30 catalog entries total (representative bores 25–50 mm)
 - X/Y factors for combined radial+axial loading
 - Static safety factor `s0 = C0 / P0`
 - Speed limit check (catalog `n_lim` for grease vs oil)
@@ -236,12 +240,12 @@ $$s_0 = \frac{C_0}{P_0}$$
 
 Targets: `s0 ≥ 1.0` for normal duty, `≥ 1.5` for shock loads, `≥ 2.0` for high precision.
 
-## Open Questions / Decisions Needed
+## Resolved Decisions
 
-1. **Catalog source** — SKF tables are most complete and publicly published. Acceptable to use SKF dimension/rating numbers as the canonical dataset, cited inline? Or hand-pick a "consensus" set across SKF/Schaeffler/Timken to avoid implying SKF endorsement?
-2. **Imperial display** — Tool inputs in N/mm by default with imperial toggle, or both visible? The fastener tool uses an explicit standard dropdown (ISO vs SAE) — bearings have no parallel split, so a unit toggle (`MKS` / `MMGS`) is the cleaner pattern.
-3. **Bore-first vs OD-first selection** — bore is the conventional anchor (you size around the shaft). I'm proposing bore-first. Confirm this matches how you'd actually use the tool.
-4. **Type comparison when bore varies between types** — a 25 mm tapered roller has very different OD/width than a 25 mm deep-groove ball. Should comparison enforce same bore (current proposal) or also match envelope dimensions when possible?
+1. **Catalog source** — use explicitly labeled NTN data from catalog No. 2203/E; do not create a synthetic manufacturer "consensus."
+2. **Imperial display** — use an SI/US load-display toggle while keeping the Python core in SI units.
+3. **Selection anchor** — use bore-first selection.
+4. **Comparison basis** — enforce the same bore and show each candidate's actual OD and width rather than implying equal envelopes.
 
 ## Implementation Steps
 
@@ -271,6 +275,6 @@ The natural progression: **shaft sizing (beam bending) → bearing selection (th
 1. **ISO 281:2007** — Rolling bearings — Dynamic load ratings and rating life
 2. **ISO 76:2006** — Rolling bearings — Static load ratings
 3. **ABMA Std 9** — Load Ratings and Fatigue Life for Ball Bearings (US equivalent)
-4. **SKF General Catalogue** (publicly available PDF) — dimensional and rating tables
+4. **NTN Ball and Roller Bearings, catalog No. 2203/E** — dimensional, rating, load-factor, and allowable-speed tables
 5. **Harris & Kotzalas** — *Rolling Bearing Analysis*, 5th Edition, CRC Press
 6. **Shigley's Mechanical Engineering Design**, 11th ed., Chapter 11
