@@ -1611,6 +1611,11 @@
                             Load
                         </button>
                         <input type="file" id="load-inputs-file" accept=".json" style="display:none;">
+                        <button type="button" id="send-to-transient-btn"
+                            title="Open the Transient Heatsink Simulator with this geometry pre-loaded"
+                            style="margin-left:auto;background:var(--bg-card);color:var(--text-color);border:1px solid var(--border-color);padding:6px 14px;border-radius:var(--border-radius);cursor:pointer;font-size:0.82rem;">
+                            Send to Transient →
+                        </button>
                     </div>
                     <details style="margin-top:10px;font-size:0.82rem;">
                         <summary style="cursor:pointer;color:var(--text-light);user-select:none;">Sample Test Cases</summary>
@@ -4735,6 +4740,32 @@
                 document.getElementById('save-inputs-btn').addEventListener('click', saveInputsToFile);
                 document.getElementById('load-inputs-btn').addEventListener('click', () => {
                     document.getElementById('load-inputs-file').click();
+                });
+                document.getElementById('send-to-transient-btn').addEventListener('click', () => {
+                    // Hand off the plate-fin geometry to the transient tool via
+                    // sessionStorage. The transient tool reads this on load when
+                    // it sees ?from=plate_fin in the query string.
+                    const inputs = gatherInputs();
+                    const payload = {
+                        base_length: inputs.base_length,           // metres
+                        base_width: inputs.base_width,
+                        base_thickness: inputs.base_thickness,
+                        fin_height: inputs.fin_height,
+                        fin_thickness: inputs.fin_thickness,
+                        fin_count: inputs.fin_count,
+                        material_conductivity: inputs.material_conductivity,
+                        surface_emissivity: inputs.surface_emissivity,
+                        airflow_mode: inputs.airflow_mode,
+                        approach_velocity: inputs.approach_velocity,
+                        ambient_temperature_c: inputs.ambient_temperature,
+                        heat_load_w: inputs.heat_load,
+                    };
+                    try {
+                        sessionStorage.setItem('transient_heatsink_handoff', JSON.stringify(payload));
+                    } catch (err) {
+                        console.warn('Could not write handoff payload:', err);
+                    }
+                    window.open('../transient-heatsink/?from=plate_fin', '_blank');
                 });
                 document.getElementById('load-inputs-file').addEventListener('change', (e) => {
                     if (e.target.files.length > 0) {

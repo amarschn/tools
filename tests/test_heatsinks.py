@@ -643,6 +643,129 @@ def test_radiation_significant_at_high_emissivity_low_load() -> None:
 # and is now run by tests/test_heatsink_benchmarks.py.
 
 
+def test_choked_fan_curve_collapses_cooling() -> None:
+    """At very tight fin spacing, a stalled fan must not yield ambient T_b.
+
+    Regression test for the ε-NTU fix: with fin_count high enough that the fan
+    curve is forced past its stall point, the channel mass flow drops to a
+    handful of mg/s.  The bare h·A·ΔT formula previously claimed full heat
+    rejection (T_b ≈ ambient) because it ignored the stream heat capacity.
+    With the ε-NTU correction, the air saturates toward T_b and the heatsink
+    cannot dissipate the load — the bisection should report a high T_b and
+    the user-visible status should not be "acceptable".
+    """
+    result = analyze_plate_fin_heatsink(
+        heat_load=20.0,
+        ambient_temperature=25.0,
+        target_junction_temperature=100.0,
+        base_length=0.100,
+        base_width=0.080,
+        base_thickness=0.005,
+        fin_height=0.030,
+        fin_thickness=0.0010,
+        fin_count=70,
+        material_conductivity=200.0,
+        surface_emissivity=0.85,
+        airflow_mode="fan_curve",
+        fan_max_pressure=30.0,
+        fan_max_flow_rate=0.005,
+        orientation="vertical",
+        interface_resistance=0.20,
+        junction_to_case_resistance=0.50,
+    )
+    # Stream capacity is the bottleneck — surface capacity is enormous, NTU huge,
+    # ε ≈ 1, so Q is capped at ṁ·c_p·ΔT.
+    assert result["ntu"] > 100.0, "Tight channel + stalled fan should drive NTU very high"
+    assert result["effectiveness"] > 0.99
+    assert result["mass_flow_rate"] < 1e-3  # less than 1 g/s
+    # The capped Q can't dissipate 20 W: bisection should drive T_b far above
+    # ambient.  Allow either "exceeds capability" (bisection saturates) or a
+    # very hot but finite T_b — both are correct in this physically infeasible
+    # regime.  What must NOT happen is the pre-fix outcome of T_b ≈ ambient.
+    assert result["base_temperature"] > 100.0, (
+        f"With ṁ·c_p ≈ {result['stream_capacity']:.4f} W/K the heatsink cannot "
+        f"reject 20 W at modest ΔT, but the model reports T_b = "
+        f"{result['base_temperature']:.1f} °C — ε-NTU correction is missing."
+    )
+    assert result["status"] != "acceptable"
+
+
+def test_fan_curve_unducted_applies_bypass() -> None:
+    """Unducted fan-curve mode must apply bypass like forced mode does.
+
+    Pre-fix, the ``ducted`` flag was silently ignored in fan_curve mode: the
+    operating point was solved as if all fan flow traversed the channels,
+    even unshrouded.  The bypass-fraction model should reduce the channel
+    flow that the fins actually see and raise the predicted base
+    temperature.
+    """
+    common = dict(
+        heat_load=20.0,
+        ambient_temperature=25.0,
+        target_junction_temperature=120.0,
+        base_length=0.10,
+        base_width=0.08,
+        base_thickness=0.005,
+        fin_height=0.030,
+        fin_thickness=0.0010,
+        fin_count=15,
+        material_conductivity=200.0,
+        airflow_mode="fan_curve",
+        fan_max_pressure=30.0,
+        fan_max_flow_rate=0.005,
+        orientation="vertical",
+    )
+    ducted = analyze_plate_fin_heatsink(**common, ducted=True)
+    open_air = analyze_plate_fin_heatsink(**common, ducted=False)
+
+    # Bypass should pull air around the fins, so the channels see less flow,
+    # less heat moves, and the base runs hotter.
+    assert open_air["bypass_fraction"] > 0.0
+    assert ducted["bypass_fraction"] == 0.0
+    assert open_air["volumetric_flow_rate"] < ducted["volumetric_flow_rate"]
+    assert open_air["base_temperature"] > ducted["base_temperature"] + 0.5
+
+
+def test_epsilon_ntu_recovers_h_a_dt_in_high_flow_limit() -> None:
+    """At high flow (NTU « 1), ε·ṁ·c_p·ΔT must reduce to h·A·ΔT.
+
+    This guards against the ε-NTU correction over-applying in well-ventilated
+    designs where the fluid stream barely warms.
+    """
+    result = analyze_plate_fin_heatsink(
+        heat_load=10.0,
+        ambient_temperature=25.0,
+        target_junction_temperature=200.0,
+        base_length=0.05,
+        base_width=0.05,
+        base_thickness=0.005,
+        fin_height=0.020,
+        fin_thickness=0.001,
+        fin_count=8,
+        material_conductivity=200.0,
+        surface_emissivity=0.85,
+        airflow_mode="forced",
+        approach_velocity=20.0,  # very high flow, NTU should be small
+        orientation="vertical",
+        ducted=True,
+    )
+    assert result["ntu"] < 0.2, f"Expected high-flow regime, got NTU={result['ntu']:.3f}"
+    # At NTU=0.2, ε ≈ 0.18, so ε·ṁ·c_p ≈ 0.18·ṁ·c_p ≈ η_o·h·A within ~10%.
+    # Cross-check: ε·ṁ·c_p should match η_o·h·A to within 1 - ε/NTU = NTU/2
+    # (Taylor expansion of (1 - exp(-NTU))/NTU).
+    surface_capacity = (
+        result["overall_surface_efficiency"]
+        * result["convection_coefficient"]
+        * result["total_surface_area"]
+    )
+    eps_capacity = result["effectiveness"] * result["stream_capacity"]
+    rel_error = abs(eps_capacity - surface_capacity) / surface_capacity
+    assert rel_error < 0.15, (
+        f"ε-NTU result {eps_capacity:.4f} should approach h·A {surface_capacity:.4f} "
+        f"in high-flow limit, got {rel_error*100:.1f}% off"
+    )
+
+
 # --- Spreading solver tests ---
 
 SPREADING_BASE = dict(

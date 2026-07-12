@@ -1,0 +1,2149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transient Heatsink Simulator - Engineering Tools</title>
+    <meta name="description" content="Simulate heatsink warmup, cooldown, pulse loads, and duty cycles with a lumped thermal RC model. Predicts time-to-limit, peak temperature, cyclic steady state, and cooldown time.">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --danger-color: #b91c1c;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            --btn-primary-bg: #111827;
+            --btn-primary-text: #ffffff;
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb;
+            --primary-light: #1f2937;
+            --secondary-color: #9ca3af;
+            --accent-color: #f9fafb;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --bg-color: #0b0d12;
+            --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+            --btn-primary-bg: #3b82f6;
+            --btn-primary-text: #ffffff;
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"] {
+                --primary-color: #f9fafb;
+                --primary-light: #1f2937;
+                --secondary-color: #9ca3af;
+                --accent-color: #f9fafb;
+                --success-color: #34d399;
+                --warning-color: #fbbf24;
+                --danger-color: #f87171;
+                --text-color: #f9fafb;
+                --text-light: #9ca3af;
+                --border-color: #374151;
+                --bg-color: #0b0d12;
+                --bg-card: #111827;
+                --btn-primary-bg: #3b82f6;
+                --btn-primary-text: #ffffff;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.55;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex; flex-direction: column;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed; inset: 0;
+            background: var(--bg-color);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-weight: 600; }
+
+        .sample-cases {
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
+        .sample-cases summary {
+            cursor: pointer;
+            color: var(--text-light);
+            user-select: none;
+        }
+        .sample-cases ul {
+            margin: 6px 0 0;
+            padding-left: 18px;
+            line-height: 1.9;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 5%;
+        }
+        .nav-container {
+            display: flex; justify-content: space-between; align-items: center;
+            height: 64px; max-width: 1400px; margin: 0 auto;
+        }
+        .nav-brand {
+            font-size: 1.35rem; font-weight: 600;
+            color: var(--text-color); text-decoration: none;
+        }
+        .nav-brand:hover { text-decoration: none; }
+
+        /* Container */
+        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
+        main.container { flex-grow: 1; }
+        h1 {
+            font-size: 2.25rem; letter-spacing: -0.02em;
+            font-weight: 600; color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.25rem; font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px; margin-bottom: 1rem;
+        }
+        h3 {
+            font-size: 1rem; font-weight: 600;
+            color: var(--secondary-color); margin-bottom: 0.6rem;
+        }
+        p { color: var(--text-light); margin-bottom: 1em; }
+        a { color: var(--accent-color); }
+
+        .tool-description { font-size: 1.02rem; max-width: 80ch; margin-bottom: 1.5rem; }
+        .tool-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.85fr) minmax(480px, 1.15fr);
+            gap: 28px;
+            align-items: start;
+        }
+        @media (max-width: 1000px) {
+            .tool-layout { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+        .card + .card { margin-top: 18px; }
+
+        /* Forms */
+        .field { margin-bottom: 0.95rem; }
+        .field label {
+            display: block; font-weight: 500;
+            margin-bottom: 4px; font-size: 0.85rem;
+            color: var(--text-color);
+        }
+        .field input[type="number"],
+        .field input[type="text"],
+        .field select {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            background: var(--bg-card); color: var(--text-color);
+        }
+        .field input:focus, .field select:focus {
+            outline: none; border-color: var(--text-color);
+        }
+        .field input[type="number"]::-webkit-inner-spin-button,
+        .field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .field input[type="number"] { -moz-appearance: textfield; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .field-help {
+            font-size: 0.78rem; color: var(--text-light);
+            margin-top: 4px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 11px 16px; font-size: 0.95rem; font-weight: 600;
+            border: none; border-radius: var(--border-radius);
+            cursor: pointer; text-align: center;
+            transition: opacity 0.15s, background 0.15s;
+        }
+        .btn-primary {
+            background: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+            width: 100%;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Profile panels: show the inputs that match the selected profile */
+        .profile-panel, .cap-panel { display: none; }
+        .profile-panel.active, .cap-panel.active { display: block; }
+
+        /* Segmented control */
+        .segmented {
+            display: inline-flex;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            background: var(--bg-card);
+        }
+        .seg-btn {
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 0.85rem; font-weight: 600;
+            padding: 8px 14px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .seg-btn + .seg-btn { border-left: 1px solid var(--border-color); }
+        .seg-btn.active {
+            background: var(--accent-color);
+            color: var(--bg-card);
+        }
+
+        /* Secondary buttons + IO actions row */
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            padding: 9px 12px;
+        }
+        .btn-secondary:hover { background: var(--primary-light); }
+        .io-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .io-actions .btn { flex: 1; }
+
+        /* Auto-extension callout */
+        .info-callout {
+            background: #dbeafe; color: #1e40af;
+            padding: 10px 14px; border-radius: var(--border-radius);
+            margin-bottom: 14px; font-size: 0.88rem;
+        }
+        body[data-theme="dark"] .info-callout { background: #1e3a5f; color: #93c5fd; }
+
+        /* Sink-mode panels (Direct / Plate-fin geometry) */
+        .sink-panel { display: none; }
+        .sink-panel.active { display: block; }
+
+        /* Plate-fin computed-values readout */
+        .pf-readout {
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 10px 14px;
+            margin: 10px 0;
+            font-size: 0.88rem;
+            color: var(--text-color);
+        }
+        .pf-readout-row { display: flex; justify-content: space-between; padding: 2px 0; }
+        .pf-readout-row strong { font-family: var(--font-monospace, monospace); }
+        .pf-warning {
+            color: #92400e;
+            background: #fef3c7;
+            border-left: 3px solid #d97706;
+            padding: 6px 10px;
+            margin-top: 6px;
+            font-size: 0.85rem;
+            border-radius: 4px;
+        }
+        body[data-theme="dark"] .pf-warning {
+            color: #fcd34d; background: #422006; border-left-color: #d97706;
+        }
+
+        /* Section heading */
+        .section-title {
+            text-transform: uppercase; letter-spacing: 0.04em;
+            font-size: 0.75rem; font-weight: 600; color: var(--text-light);
+            margin: 1.4rem 0 0.5rem;
+        }
+        .section-title:first-child { margin-top: 0; }
+
+        /* Tabs */
+        .tabs {
+            display: flex; border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px; gap: 4px; flex-wrap: wrap;
+        }
+        .tab-link {
+            padding: 11px 14px; cursor: pointer;
+            background: transparent; border: none;
+            font-size: 0.82rem; font-weight: 600;
+            letter-spacing: 0.04em; text-transform: uppercase;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        .tab-link:hover { color: var(--text-color); }
+        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Status banner */
+        .status-banner {
+            padding: 12px 16px; border-radius: var(--border-radius);
+            margin-bottom: 16px; font-weight: 600; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .status-banner.acceptable { background: #d1fae5; color: #065f46; }
+        .status-banner.marginal { background: #fef3c7; color: #92400e; }
+        .status-banner.unacceptable { background: #fee2e2; color: #991b1b; }
+        .status-banner.not_converged { background: #dbeafe; color: #1e40af; }
+        .status-banner.invalid { background: #fee2e2; color: #991b1b; }
+        body[data-theme="dark"] .status-banner.acceptable { background: #052e16; color: #34d399; }
+        body[data-theme="dark"] .status-banner.marginal { background: #422006; color: #fbbf24; }
+        body[data-theme="dark"] .status-banner.unacceptable { background: #450a0a; color: #f87171; }
+        body[data-theme="dark"] .status-banner.not_converged { background: #1e3a5f; color: #93c5fd; }
+        body[data-theme="dark"] .status-banner.invalid { background: #450a0a; color: #f87171; }
+
+        /* Summary grid */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .summary-cell {
+            background: var(--bg-color);
+            padding: 14px;
+            border-radius: var(--border-radius);
+        }
+        .summary-cell .label {
+            font-size: 0.75rem; color: var(--text-light);
+            margin-bottom: 4px; text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .summary-cell .value {
+            font-family: var(--font-mono); font-size: 1.2rem; font-weight: 600;
+        }
+        .summary-cell .unit {
+            font-size: 0.75rem; color: var(--text-light); margin-left: 3px;
+        }
+
+        /* Plot containers */
+        .plot {
+            width: 100%;
+            min-height: 300px;
+            border-radius: var(--border-radius);
+            background: var(--bg-color);
+            margin-bottom: 16px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.9rem; margin-bottom: 12px;
+        }
+        thead th {
+            text-align: left; padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--text-light);
+        }
+        tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+        tbody td.num { font-family: var(--font-mono); text-align: right; }
+
+        /* Recommendations */
+        .recs { padding-left: 1.2em; margin-top: 8px; }
+        .recs li { margin-bottom: 6px; color: var(--text-color); }
+
+        /* Errors */
+        .error-list {
+            background: #fee2e2; color: #991b1b;
+            padding: 12px 16px; border-radius: var(--border-radius);
+            margin-bottom: 16px;
+        }
+        body[data-theme="dark"] .error-list { background: #450a0a; color: #fca5a5; }
+
+        /* Results placeholder */
+        .placeholder {
+            text-align: center; padding: 40px 20px;
+            color: var(--text-light); font-style: italic;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            padding: 22px 5%;
+            margin-top: 32px;
+            font-size: 0.85rem; color: var(--text-light); text-align: center;
+        }
+        footer a { color: var(--text-color); }
+
+        /* Math derivation block */
+        .math-block {
+            background: var(--primary-light);
+            padding: 14px;
+            border-radius: var(--border-radius);
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body data-theme="system">
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text" class="loading-text">Loading Pyodide…</div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">Engineering Tools</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <h1>Transient Heatsink Simulator</h1>
+        <p class="tool-description">
+            Lumped thermal RC model that predicts how a heat source on a heatsink warms,
+            cools, and responds to pulses or duty cycles. Reports time-to-limit, peak
+            temperature, cyclic steady state, and cooldown time. For steady-state plate-fin
+            sizing use the <a href="../simple_thermal/">Heatsink Designer</a>; for resistance-
+            only network budgets use the <a href="../thermal-path-budget/">Thermal Path Budget</a>.
+        </p>
+
+        <div class="tool-layout">
+            <!-- LEFT COLUMN: INPUTS -->
+            <section class="card">
+                <h2>Inputs</h2>
+                <form id="calc-form">
+                    <div class="section-title">Thermal Stack (Package On Heatsink)</div>
+                    <div class="field">
+                        <label for="ambient">Ambient temperature (°C)</label>
+                        <input type="number" id="ambient" value="25" step="any">
+                    </div>
+                    <div class="field">
+                        <label for="initial">Initial temperature (°C)</label>
+                        <input type="number" id="initial" value="25" step="any">
+                        <div class="field-help">Starting temperature of all dynamic nodes.</div>
+                    </div>
+                    <div class="field">
+                        <label for="source_limit">Source max temperature (°C)</label>
+                        <input type="number" id="source_limit" value="110" step="any">
+                    </div>
+                    <div class="field">
+                        <label for="r_jc">R<sub>jc</sub> (K/W)</label>
+                        <input type="number" id="r_jc" value="0.5" step="any" min="0.001">
+                        <div class="field-help">Source-to-case (junction-to-case + interface)</div>
+                    </div>
+
+                    <div class="field">
+                        <label>Sink properties source</label>
+                        <div class="segmented" role="tablist">
+                            <button type="button" class="seg-btn active" data-sink-mode="direct">Direct R<sub>sa</sub> + C<sub>sink</sub></button>
+                            <button type="button" class="seg-btn" data-sink-mode="plate_fin">From plate-fin geometry</button>
+                        </div>
+                    </div>
+
+                    <!-- Direct sink mode: user types R_sa and chooses how to give C_sink -->
+                    <div class="sink-panel active" data-sink-mode="direct">
+                        <div class="field">
+                            <label for="r_sa">R<sub>sa</sub> (K/W)</label>
+                            <input type="number" id="r_sa" value="1.5" step="any" min="0.001">
+                            <div class="field-help">Sink-to-ambient (steady-state)</div>
+                        </div>
+                        <div class="field">
+                            <label>Capacitance input mode</label>
+                            <div class="segmented" role="tablist">
+                                <button type="button" class="seg-btn active" data-cap-mode="direct">Direct (J/K)</button>
+                                <button type="button" class="seg-btn" data-cap-mode="geometry">From geometry</button>
+                            </div>
+                        </div>
+
+                        <!-- Direct: user enters J/K outright -->
+                        <div class="cap-panel active" data-cap-mode="direct">
+                            <div class="row">
+                                <div class="field">
+                                    <label for="c_source">C<sub>source</sub> (J/K)</label>
+                                    <input type="number" id="c_source" value="12" step="any" min="0.01">
+                                    <div class="field-help">Source/package thermal mass</div>
+                                </div>
+                                <div class="field">
+                                    <label for="c_sink">C<sub>sink</sub> (J/K)</label>
+                                    <input type="number" id="c_sink" value="310" step="any" min="0.01">
+                                    <div class="field-help">Heatsink thermal mass</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- From geometry: user picks material + volume; J/K computed client-side -->
+                        <div class="cap-panel" data-cap-mode="geometry">
+                            <h3 style="margin-top:0.4rem;">Source body</h3>
+                            <div class="row">
+                                <div class="field">
+                                    <label for="source_material">Material</label>
+                                    <select id="source_material"></select>
+                                </div>
+                                <div class="field">
+                                    <label for="source_volume_cm3">Volume (cm³)</label>
+                                    <input type="number" id="source_volume_cm3" value="5" step="any" min="0.001">
+                                </div>
+                            </div>
+                            <div class="field-help" id="source_cap_readout">C = ρ V c_p = —</div>
+                            <h3>Heatsink body</h3>
+                            <div class="row">
+                                <div class="field">
+                                    <label for="sink_material">Material</label>
+                                    <select id="sink_material"></select>
+                                </div>
+                                <div class="field">
+                                    <label for="sink_volume_cm3">Volume (cm³)</label>
+                                    <input type="number" id="sink_volume_cm3" value="130" step="any" min="0.001">
+                                </div>
+                            </div>
+                            <div class="field-help" id="sink_cap_readout">C = ρ V c_p = —</div>
+                        </div>
+                    </div>
+
+                    <!-- Plate-fin sink mode: full geometry → both R_sa and C_sink computed -->
+                    <div class="sink-panel" data-sink-mode="plate_fin">
+                        <div class="field-help" style="margin-bottom: 0.5rem;">
+                            R<sub>sa</sub> and C<sub>sink</sub> are computed from heatsink geometry using
+                            the <a href="../simple_thermal/" target="_blank">plate-fin steady-state solver</a>.
+                            You still enter C<sub>source</sub> below.
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="pf_base_length">Base length L (mm)</label>
+                                <input type="number" id="pf_base_length" value="100" step="any" min="1">
+                                <div class="field-help">Along airflow</div>
+                            </div>
+                            <div class="field">
+                                <label for="pf_base_width">Base width W (mm)</label>
+                                <input type="number" id="pf_base_width" value="100" step="any" min="1">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="pf_base_thickness">Base thickness (mm)</label>
+                                <input type="number" id="pf_base_thickness" value="6" step="any" min="0.1">
+                            </div>
+                            <div class="field">
+                                <label for="pf_fin_height">Fin height (mm)</label>
+                                <input type="number" id="pf_fin_height" value="25" step="any" min="1">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="pf_fin_thickness">Fin thickness (mm)</label>
+                                <input type="number" id="pf_fin_thickness" value="1.5" step="any" min="0.1">
+                            </div>
+                            <div class="field">
+                                <label for="pf_fin_count">Fin count</label>
+                                <input type="number" id="pf_fin_count" value="12" step="1" min="2">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="pf_material">Heatsink material</label>
+                                <select id="pf_material">
+                                    <option value="aluminum_6063" data-conductivity="201" data-emissivity="0.10">Aluminum 6063 (k=201)</option>
+                                    <option value="aluminum_6061" data-conductivity="167" data-emissivity="0.10">Aluminum 6061 (k=167)</option>
+                                    <option value="copper_c110" data-conductivity="385" data-emissivity="0.05">Copper C110 (k=385)</option>
+                                    <option value="aluminum_6063_anodized" data-conductivity="201" data-emissivity="0.85">Anodized aluminum (k=201, ε=0.85)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="pf_airflow">Airflow</label>
+                                <select id="pf_airflow">
+                                    <option value="natural">Natural convection</option>
+                                    <option value="forced">Forced (m/s)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="field" id="pf_velocity_field" style="display:none;">
+                            <label for="pf_velocity">Approach velocity (m/s)</label>
+                            <input type="number" id="pf_velocity" value="2" step="any" min="0.1">
+                        </div>
+                        <div class="pf-readout" id="pf_readout">
+                            <div class="pf-readout-row"><span>R<sub>sa</sub></span><strong id="pf_r_sa_out">—</strong></div>
+                            <div class="pf-readout-row"><span>C<sub>sink</sub></span><strong id="pf_c_sink_out">—</strong></div>
+                            <div class="pf-readout-row"><span>Sink volume</span><strong id="pf_volume_out">—</strong></div>
+                            <div class="pf-readout-row"><span>Sink mass</span><strong id="pf_mass_out">—</strong></div>
+                            <div id="pf_warnings"></div>
+                        </div>
+                        <div class="field">
+                            <label for="pf_c_source">C<sub>source</sub> (J/K)</label>
+                            <input type="number" id="pf_c_source" value="12" step="any" min="0.01">
+                            <div class="field-help">Source/package thermal mass — not derivable from heatsink geometry</div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Power Profile</div>
+                    <div class="field">
+                        <label for="profile_type">Profile type</label>
+                        <select id="profile_type">
+                            <option value="step">Step (continuous load)</option>
+                            <option value="pulse">Pulse (single overload)</option>
+                            <option value="duty_cycle">Duty cycle (repeating)</option>
+                        </select>
+                    </div>
+
+                    <div class="profile-panel active" data-profile="step">
+                        <div class="row">
+                            <div class="field">
+                                <label for="step_power">Power (W)</label>
+                                <input type="number" id="step_power" value="50" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="step_duration">Run time (s)</label>
+                                <input type="number" id="step_duration" value="600" step="any" min="0.1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-panel" data-profile="pulse">
+                        <div class="row">
+                            <div class="field">
+                                <label for="pulse_power">Pulse power (W)</label>
+                                <input type="number" id="pulse_power" value="120" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="pulse_duration">Pulse duration (s)</label>
+                                <input type="number" id="pulse_duration" value="20" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="pulse_cooldown">Cooldown duration (s)</label>
+                            <input type="number" id="pulse_cooldown" value="180" step="any" min="0">
+                        </div>
+                    </div>
+
+                    <div class="profile-panel" data-profile="duty_cycle">
+                        <div class="row">
+                            <div class="field">
+                                <label for="duty_on_power">On power (W)</label>
+                                <input type="number" id="duty_on_power" value="80" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="duty_on_time">On time (s)</label>
+                                <input type="number" id="duty_on_time" value="30" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="duty_off_power">Off power (W)</label>
+                                <input type="number" id="duty_off_power" value="0" step="any" min="0">
+                            </div>
+                            <div class="field">
+                                <label for="duty_off_time">Off time (s)</label>
+                                <input type="number" id="duty_off_time" value="120" step="any" min="0.1">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="duty_run_time">Total simulation time (s)</label>
+                            <input type="number" id="duty_run_time" value="1200" step="any" min="1">
+                            <div class="field-help">Long enough to reach cyclic steady state — try 8–10× the slowest time constant.</div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Cooldown Target (optional)</div>
+                    <div class="field">
+                        <label for="cooldown_target">Cool-to temperature (°C)</label>
+                        <input type="number" id="cooldown_target" value="40" step="any">
+                        <div class="field-help">Reports the time to drop below this value after the simulated peak. Only meaningful when the profile includes a cooldown phase (pulse or duty); reads "—" for steady-state step loads.</div>
+                    </div>
+
+                    <button type="submit" id="calculate-btn" class="btn btn-primary" disabled>Calculate</button>
+                    <div class="io-actions">
+                        <button type="button" class="btn btn-secondary" id="export-btn">Export model JSON</button>
+                        <button type="button" class="btn btn-secondary" id="import-btn">Import model JSON</button>
+                        <button type="button" class="btn btn-secondary" id="report-btn" disabled title="Run a calculation first">Export report (.md)</button>
+                        <input type="file" id="import-file" accept="application/json,.json" style="display:none;">
+                    </div>
+                    <details class="sample-cases">
+                        <summary>Sample Test Cases</summary>
+                        <ul>
+                            <li><a href="#" class="load-sample" data-src="test-cases/continuous_step_load.json">Continuous Step Load — IGBT on Aluminum Sink (30 W)</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/overload_pulse_survival.json">Overload Pulse Survival — 250 W for 8 s</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/duty_cycle_sustainable.json">Sustainable Duty Cycle — 30% on, fan cooled</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/duty_cycle_walk_up.json">Duty Cycle Walk-Up — exceeds limit</a></li>
+                            <li><a href="#" class="load-sample" data-src="test-cases/cooldown_to_service.json">Cooldown to Service Temperature (40 °C)</a></li>
+                        </ul>
+                    </details>
+                </form>
+            </section>
+
+            <!-- RIGHT COLUMN: RESULTS -->
+            <section class="card">
+                <div class="tabs">
+                    <button class="tab-link active" data-tab="results">Results</button>
+                    <button class="tab-link" data-tab="rc">RC Model</button>
+                    <button class="tab-link" data-tab="sensitivity">Sensitivity</button>
+                    <button class="tab-link" data-tab="math">Math</button>
+                    <button class="tab-link" data-tab="background">Background</button>
+                </div>
+
+                <div id="tab-results" class="tab-content active">
+                    <div id="results-placeholder" class="placeholder">
+                        Set inputs and press Calculate to simulate.
+                    </div>
+                    <div id="results-body" style="display: none;">
+                        <div id="status-banner" class="status-banner"></div>
+                        <div id="auto-extend-callout" class="info-callout" style="display:none;"></div>
+                        <div id="summary-grid" class="summary-grid"></div>
+                        <h3>Temperature vs time</h3>
+                        <div id="temp-plot" class="plot"></div>
+                        <h3>Power input</h3>
+                        <div id="power-plot" class="plot"></div>
+                        <h3>Diagnosis</h3>
+                        <ul id="diagnosis-list" class="recs"></ul>
+                        <h3>Recommendations</h3>
+                        <ul id="recs-list" class="recs"></ul>
+                    </div>
+                </div>
+
+                <div id="tab-rc" class="tab-content">
+                    <h3>Nodes</h3>
+                    <table id="nodes-table">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>Capacitance (J/K)</th>
+                                <th>Limit (°C)</th>
+                                <th>Peak (°C)</th>
+                                <th>Margin (K)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <h3>Segments</h3>
+                    <table id="segments-table">
+                        <thead>
+                            <tr>
+                                <th>Segment</th>
+                                <th>R (K/W)</th>
+                                <th>τ = R·C<sub>eff</sub> (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <h3>Time constants (per node)</h3>
+                    <table id="tau-table">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>C (J/K)</th>
+                                <th>Σ G (W/K)</th>
+                                <th>τ = C / Σ G (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <h3>Cycle summary (duty cycle only)</h3>
+                    <div id="cycle-summary-status" class="field-help" style="margin-bottom:8px;"></div>
+                    <table id="cycle-table">
+                        <thead>
+                            <tr>
+                                <th>Cycle</th>
+                                <th>Peak (°C)</th>
+                                <th>Min (°C)</th>
+                                <th>Walk-up (°C)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div id="tab-sensitivity" class="tab-content">
+                    <h3>Single-parameter sweep</h3>
+                    <p style="color:var(--text-light);font-size:0.9rem;">
+                        Hold every other input constant and vary one parameter across a relative range.
+                        Useful for ranking design levers when peak temperature or time-to-limit is borderline.
+                        Run the main calculation first; the sweep uses those inputs as the baseline.
+                    </p>
+                    <div class="row">
+                        <div class="field">
+                            <label for="sens-parameter">Parameter</label>
+                            <select id="sens-parameter">
+                                <option value="r_sa">R<sub>sa</sub> (sink to ambient)</option>
+                                <option value="r_jc">R<sub>jc</sub> (source to sink)</option>
+                                <option value="c_sink">C<sub>sink</sub></option>
+                                <option value="c_source">C<sub>source</sub></option>
+                                <option value="on_time">Duty on time</option>
+                                <option value="off_time">Duty off time</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="sens-fractions">Fractions of baseline</label>
+                            <input type="text" id="sens-fractions" value="0.5, 0.75, 1.0, 1.25, 1.5">
+                            <div class="field-help">Comma-separated multipliers. Baseline (1.0) is always included.</div>
+                        </div>
+                    </div>
+                    <button type="button" id="sens-run" class="btn btn-primary" style="margin-top:8px;" disabled>Run sweep</button>
+                    <div id="sens-status" class="field-help" style="margin-top:8px;">Run a calculation first to set the baseline.</div>
+                    <div id="sens-peak-plot" class="plot" style="display:none;"></div>
+                    <div id="sens-ttl-plot" class="plot" style="display:none;"></div>
+
+                    <h3 style="margin-top:24px;">Resistance vs. thermal mass</h3>
+                    <p style="color:var(--text-light);font-size:0.9rem;">
+                        Compares the peak-temperature drop from <em>halving R<sub>sa</sub></em>
+                        against the drop from <em>doubling C<sub>sink</sub></em> at the current
+                        baseline.
+                    </p>
+                    <button type="button" id="lever-run" class="btn btn-primary" style="margin-top:4px;" disabled>Compare design levers</button>
+                    <div id="lever-output" class="info-callout" style="display:none;margin-top:10px;"></div>
+                </div>
+
+                <div id="tab-math" class="tab-content">
+                    <h3>Governing equation</h3>
+                    <div class="math-block">
+                        $$ C_i \frac{dT_i}{dt} = Q_i(t) + \sum_j \frac{T_j - T_i}{R_{ij}} $$
+                    </div>
+                    <p>
+                        Each dynamic node carries thermal capacitance \(C_i\) and exchanges
+                        heat with its neighbors through thermal resistances \(R_{ij}\). The
+                        right-hand side balances time-varying heat input \(Q_i(t)\) against
+                        conductive flow to the rest of the network.
+                    </p>
+
+                    <h3>Implicit-Euler discretization</h3>
+                    <div class="math-block">
+                        $$ \left(\frac{C_i}{\Delta t} + \sum_j G_{ij}\right) T_i^{n+1}
+                          - \sum_j G_{ij} T_j^{n+1}
+                          = \frac{C_i}{\Delta t} T_i^n + Q_i^{n+1}
+                          + \sum_{j \in \text{boundary}} G_{ij} T_j $$
+                    </div>
+                    <p>
+                        Implicit Euler is unconditionally stable for the linear thermal
+                        problem, so the time step is chosen for resolution rather than
+                        stability. Boundary-node terms move to the right-hand side.
+                    </p>
+
+                    <h3>One-lump analytical reference</h3>
+                    <div class="math-block">
+                        $$ T(t) = T_\infty + Q R \left(1 - e^{-t/\tau}\right)
+                          + (T_0 - T_\infty)\, e^{-t/\tau},
+                          \quad \tau = R C $$
+                    </div>
+                    <p>
+                        For one dynamic node and a constant heat input, this is the closed-
+                        form response. The general numerical solver reduces to this case in
+                        the simple-lump limit.
+                    </p>
+
+                    <h3>Substituted result</h3>
+                    <div id="subst-block" class="math-block">Run a calculation to see the substituted form.</div>
+                </div>
+
+                <div id="tab-background" class="tab-content">
+                    <h3>Resistance vs. capacitance — what each one controls</h3>
+                    <p>
+                        A heatsink design has two largely independent levers. <strong>Thermal resistance</strong>
+                        (R<sub>jc</sub>, R<sub>sa</sub>) sets the steady-state temperature: at steady state,
+                        \(T_{source} = T_\infty + Q\,(R_{jc} + R_{sa})\) regardless of any thermal mass in the system.
+                        <strong>Thermal capacitance</strong> (C<sub>source</sub>, C<sub>sink</sub>) sets <em>how fast</em>
+                        the system gets there. Their product, the time constant \(\tau = RC\), governs the rise and decay.
+                    </p>
+                    <p>
+                        Practical consequences:
+                    </p>
+                    <ul>
+                        <li><strong>Long, continuous load</strong> — peak temperature converges to the asymptote, so resistance dominates. Mass only delays the inevitable.</li>
+                        <li><strong>Short, intense pulse</strong> — the system never reaches the asymptote. Peak rise is roughly \(Q\,t / C\) for a lumped sink, so capacitance dominates and resistance barely matters within the pulse.</li>
+                        <li><strong>Repeated duty cycle</strong> — both matter. Cycle-to-cycle walk-up is set by mean power × R; ripple amplitude is set by on-time × Q / C.</li>
+                    </ul>
+
+                    <h3>Why source temperature can rise much faster than the sink</h3>
+                    <p>
+                        If the source has a small thermal mass (C<sub>source</sub>) and the path to the sink is
+                        resistive (R<sub>jc</sub> &gt; 0), its temperature can rise sharply while the heavier sink
+                        remains comparatively cool. For a constant positive load starting from a uniform ambient
+                        temperature, this passive linear RC model approaches its constant-power steady-state
+                        temperature from below; it does not overshoot that asymptote. A finite pulse can still violate
+                        the source limit long before the sink appears hot, so <em>peak source temperature</em> remains
+                        the safety criterion for transient loads.
+                    </p>
+
+                    <h3>Why mass delays without changing the asymptote</h3>
+                    <p>
+                        Doubling C<sub>sink</sub> doubles the slow time constant — useful when the load duration is
+                        comparable to or shorter than \(\tau\). But for an infinite-duration load, the steady-state
+                        asymptote depends only on R and the heat input. Adding mass is therefore the right move for
+                        <em>pulse</em> and <em>burst</em> survival; it is the wrong move when continuous heat dissipation
+                        is the constraint.
+                    </p>
+                    <p>
+                        Use the <strong>Sensitivity</strong> tab's "Compare design levers" button to see which lever
+                        applies to your specific profile.
+                    </p>
+
+                    <h3>Estimating capacitance responsibly</h3>
+                    <p>
+                        Heatsink C is usually defensible: \(C = \rho V c_p\), with the geometry-from-plate-fin mode
+                        giving you V directly. Source/package C is harder — package datasheets rarely publish
+                        capacitance, and "die" doesn't equal "thermal mass that participates." Common practice:
+                    </p>
+                    <ul>
+                        <li>Use vendor-supplied transient impedance curves (Z<sub>θJC</sub>(t)) when available; fit a single-time-constant pole to the early portion.</li>
+                        <li>For an unknown package, estimate from observed warm-up time of a real unit at known power.</li>
+                        <li>Treat C<sub>source</sub> as approximate; a factor-of-2 uncertainty is common.</li>
+                    </ul>
+
+                    <h3>Limitations of lumped RC models</h3>
+                    <p>
+                        This tool models a single dominant temperature per body. Real heatsinks have
+                        <em>spreading</em> (hot under the source, cool at the edges), <em>fin gradients</em>
+                        (the fin tip is cooler than the base), and <em>airflow non-uniformity</em>
+                        (downstream channels are hotter than upstream). The lumped model is accurate when:
+                    </p>
+                    <ul>
+                        <li>Bi &lt; 0.1 inside each lump (the body is approximately isothermal)</li>
+                        <li>Heat path topology is series-dominated, not multi-path</li>
+                        <li>Material properties don't change much over the temperature range (typical for metals 25–150 °C)</li>
+                        <li>Convection coefficients are roughly constant over the transient (may break under fan ramping)</li>
+                    </ul>
+
+                    <h3>When to escalate</h3>
+                    <ul>
+                        <li><strong>3D temperature gradients matter</strong> — die-attach hotspots, fin-base spreading, embedded sensors at specific locations: use FEA.</li>
+                        <li><strong>Airflow is the unknown</strong> — bypass, recirculation, fan placement: use CFD or flow visualization.</li>
+                        <li><strong>Validation against hardware</strong> — pulse a real unit and instrument it. Lumped RC models are very accurate for averaged temperatures of components they model, and very weak for things they don't.</li>
+                    </ul>
+
+                    <h3>References</h3>
+                    <ul>
+                        <li>Incropera, DeWitt, Bergman, Lavine. <em>Fundamentals of Heat and Mass Transfer.</em> Wiley.</li>
+                        <li>Çengel, Ghajar. <em>Heat and Mass Transfer: Fundamentals and Applications.</em> McGraw-Hill.</li>
+                        <li>Bar-Cohen, Kraus. <em>Advances in Thermal Modeling of Electronic Components and Systems.</em> ASME Press.</li>
+                        <li>JEDEC JESD51 family — thermal resistance and transient thermal impedance terminology for semiconductor packages.</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <p>
+            Open-source engineering tools.
+            <a href="https://github.com/amarschn/tools" target="_blank" rel="noopener">Source</a>
+            · <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        const TOOL_MODULE_NAME = 'thermal_transient';
+        const TOOL_FUNCTION_NAME = 'simulate_transient_thermal_model';
+        let pyodideInstance = null;
+        let pyToolModule = null;
+        let lastResult = null;
+        let lastModel = null;
+        // Cache of the most recent plate-fin bridge call. Populated by
+        // updatePlateFinReadout() and consumed by buildModel() when the user
+        // is in plate-fin sink mode. Holds { rSa, cSink, warnings } or null.
+        let lastPlateFinResult = null;
+        let plateFinDebounce = null;
+
+        // Mirror of pycalcs/thermal_transient.MATERIAL_PRESETS — kept in JS so
+        // the capacitance-from-geometry mode doesn't need a Pyodide round-trip
+        // on every input change. If the Python presets change, update both.
+        const MATERIAL_PRESETS = {
+            aluminum_6063: { label: 'Aluminum 6063', density: 2700, cp: 900 },
+            aluminum_6061: { label: 'Aluminum 6061', density: 2700, cp: 896 },
+            copper_c110:   { label: 'Copper C110',  density: 8960, cp: 385 },
+            steel:         { label: 'Carbon steel', density: 7850, cp: 470 },
+            fr4:           { label: 'FR-4',         density: 1850, cp: 900 },
+            silicon:       { label: 'Silicon die',  density: 2330, cp: 700 },
+        };
+
+        // -----------------------------------------------------------------
+        // Pyodide bootstrap
+        // -----------------------------------------------------------------
+        async function main() {
+            const loadingText = document.getElementById('loading-text');
+            try {
+                loadingText.textContent = 'Loading Pyodide…';
+                const pyodide = await loadPyodide();
+                pyodideInstance = pyodide;
+
+                loadingText.textContent = 'Loading Python modules…';
+                await pyodide.loadPackage('micropip');
+                // The transient module imports `heatsinks` for the plate-fin
+                // bridge (compute_plate_fin_sink_properties). Fetch it before
+                // the tool module so the import resolves in flat-file mode.
+                await pyodide.runPythonAsync(`
+                    from pyodide.http import pyfetch
+                    response_utils = await pyfetch('../../pycalcs/utils.py?v=${Date.now()}')
+                    with open('utils.py', 'w') as f:
+                        f.write(await response_utils.string())
+                    response_heatsinks = await pyfetch('../../pycalcs/heatsinks.py?v=${Date.now()}')
+                    with open('heatsinks.py', 'w') as f:
+                        f.write(await response_heatsinks.string())
+                    response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py?v=${Date.now()}')
+                    with open('${TOOL_MODULE_NAME}.py', 'w') as f:
+                        f.write(await response_tool.string())
+                    import utils
+                    import heatsinks
+                    import ${TOOL_MODULE_NAME}
+                `);
+                pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
+
+                document.getElementById('calc-form').addEventListener('submit', handleCalculate);
+                document.getElementById('calculate-btn').disabled = false;
+                document.getElementById('loading-overlay').classList.add('hidden');
+                bindCapacitanceModeUI();
+                bindSinkModeUI();
+                bindIOButtons();
+                bindSensitivityUI();
+                tryApplyHandoffFromQuery();
+            } catch (error) {
+                loadingText.textContent = 'Failed to load: ' + error.message;
+                console.error(error);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // UI plumbing
+        // -----------------------------------------------------------------
+        document.getElementById('profile_type').addEventListener('change', (e) => {
+            document.querySelectorAll('.profile-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.dataset.profile === e.target.value);
+            });
+        });
+
+        document.querySelectorAll('.tab-link').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.dataset.tab;
+                document.querySelectorAll('.tab-link').forEach(b => b.classList.toggle('active', b === btn));
+                document.querySelectorAll('.tab-content').forEach(c => {
+                    c.classList.toggle('active', c.id === 'tab-' + target);
+                });
+            });
+        });
+
+        function num(id) { return parseFloat(document.getElementById(id).value); }
+
+        // -----------------------------------------------------------------
+        // Capacitance-from-geometry: compute C = rho * V * cp client-side
+        // -----------------------------------------------------------------
+        function getCapMode() {
+            const active = document.querySelector('.seg-btn.active[data-cap-mode]');
+            return active ? active.dataset.capMode : 'direct';
+        }
+        function populateMaterialDropdowns() {
+            const opts = Object.entries(MATERIAL_PRESETS).map(([id, m]) =>
+                `<option value="${id}">${m.label}</option>`
+            ).join('');
+            const src = document.getElementById('source_material');
+            const snk = document.getElementById('sink_material');
+            if (src) src.innerHTML = opts;
+            if (snk) snk.innerHTML = opts;
+            if (src && !src.value) src.value = 'silicon';
+            if (snk && !snk.value) snk.value = 'aluminum_6063';
+        }
+        function computeCapFromGeometry(materialId, volumeCm3) {
+            const m = MATERIAL_PRESETS[materialId];
+            if (!m || !Number.isFinite(volumeCm3) || volumeCm3 <= 0) return NaN;
+            return m.density * (volumeCm3 * 1e-6) * m.cp;  // V cm³ → m³
+        }
+        function updateGeometryReadouts() {
+            const cs = computeCapFromGeometry(
+                document.getElementById('source_material').value,
+                num('source_volume_cm3'),
+            );
+            const ck = computeCapFromGeometry(
+                document.getElementById('sink_material').value,
+                num('sink_volume_cm3'),
+            );
+            document.getElementById('source_cap_readout').textContent =
+                'C = ρ V c_p = ' + (Number.isFinite(cs) ? cs.toFixed(2) + ' J/K' : '—');
+            document.getElementById('sink_cap_readout').textContent =
+                'C = ρ V c_p = ' + (Number.isFinite(ck) ? ck.toFixed(2) + ' J/K' : '—');
+        }
+        function bindCapacitanceModeUI() {
+            populateMaterialDropdowns();
+            document.querySelectorAll('.seg-btn[data-cap-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.seg-btn[data-cap-mode]')
+                        .forEach(b => b.classList.toggle('active', b === btn));
+                    document.querySelectorAll('.cap-panel')
+                        .forEach(p => p.classList.toggle('active', p.dataset.capMode === btn.dataset.capMode));
+                });
+            });
+            ['source_material', 'sink_material', 'source_volume_cm3', 'sink_volume_cm3']
+                .forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', updateGeometryReadouts);
+                });
+            updateGeometryReadouts();
+        }
+
+        function getCapacitances() {
+            if (getCapMode() === 'geometry') {
+                const cs = computeCapFromGeometry(
+                    document.getElementById('source_material').value,
+                    num('source_volume_cm3'),
+                );
+                const ck = computeCapFromGeometry(
+                    document.getElementById('sink_material').value,
+                    num('sink_volume_cm3'),
+                );
+                return { cSource: cs, cSink: ck };
+            }
+            return { cSource: num('c_source'), cSink: num('c_sink') };
+        }
+
+        // -----------------------------------------------------------------
+        // Plate-fin sink mode: compute R_sa + C_sink from heatsink geometry
+        // by calling pycalcs.thermal_transient.compute_plate_fin_sink_properties
+        // through Pyodide. Debounced on input change.
+        // -----------------------------------------------------------------
+        function getSinkMode() {
+            const active = document.querySelector('.seg-btn.active[data-sink-mode]');
+            return active ? active.dataset.sinkMode : 'direct';
+        }
+        function plateFinReferencePower() {
+            const profileType = document.getElementById('profile_type').value;
+            if (profileType === 'step') {
+                return Math.max(num('step_power') || 0, 1.0);
+            }
+            if (profileType === 'pulse') {
+                return Math.max(num('pulse_power') || 0, 1.0);
+            }
+            // Duty cycle: mean power.
+            const onP = num('duty_on_power') || 0;
+            const offP = num('duty_off_power') || 0;
+            const onT = num('duty_on_time') || 0;
+            const offT = num('duty_off_time') || 0;
+            const period = onT + offT;
+            return Math.max(period > 0 ? (onP * onT + offP * offT) / period : onP, 1.0);
+        }
+        function plateFinInputs() {
+            const matEl = document.getElementById('pf_material');
+            const opt = matEl.options[matEl.selectedIndex];
+            const conductivity = parseFloat(opt.dataset.conductivity);
+            const emissivity = parseFloat(opt.dataset.emissivity);
+            // Materials with low emissivity (bare aluminum) get rough-anodized
+            // coverage on real production sinks; we still respect the user's
+            // explicit choice here.
+            const airflow = document.getElementById('pf_airflow').value;
+            const inputs = {
+                base_length: num('pf_base_length') / 1000.0,
+                base_width: num('pf_base_width') / 1000.0,
+                base_thickness: num('pf_base_thickness') / 1000.0,
+                fin_height: num('pf_fin_height') / 1000.0,
+                fin_thickness: num('pf_fin_thickness') / 1000.0,
+                fin_count: parseInt(document.getElementById('pf_fin_count').value, 10),
+                material_conductivity: conductivity,
+                surface_emissivity: emissivity,
+                airflow_mode: airflow,
+                approach_velocity: airflow === 'forced' ? num('pf_velocity') : 0.0,
+                volumetric_flow_rate: 0.0,
+                fan_max_pressure: 0.0,
+                fan_max_flow_rate: 0.0,
+                pressure_pa: 101325.0,
+                orientation: 'vertical',
+                ducted: true,
+                reference_heat_load_w: plateFinReferencePower(),
+                ambient_temperature_c: num('ambient'),
+                // Map heatsink alloy → transient-side material preset for cp/rho.
+                // Anodized aluminum uses the same density/cp as 6063.
+                sink_material_id:
+                    matEl.value === 'copper_c110' ? 'copper_c110'
+                    : matEl.value === 'aluminum_6061' ? 'aluminum_6061'
+                    : 'aluminum_6063',
+            };
+            return inputs;
+        }
+        function setPlateFinReadout(text, fields, warnings) {
+            ['pf_r_sa_out', 'pf_c_sink_out', 'pf_volume_out', 'pf_mass_out'].forEach(id => {
+                document.getElementById(id).textContent = fields[id] || '—';
+            });
+            const warnEl = document.getElementById('pf_warnings');
+            warnEl.innerHTML = '';
+            (warnings || []).forEach(w => {
+                const div = document.createElement('div');
+                div.className = 'pf-warning';
+                div.textContent = w;
+                warnEl.appendChild(div);
+            });
+        }
+        async function updatePlateFinReadout() {
+            if (!pyToolModule || getSinkMode() !== 'plate_fin') return;
+            const inputs = plateFinInputs();
+            try {
+                const proxy = pyToolModule.compute_plate_fin_sink_properties.callKwargs(inputs);
+                const result = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                lastPlateFinResult = {
+                    rSa: result.sink_thermal_resistance_k_per_w,
+                    cSink: result.sink_capacitance_j_per_k,
+                    volume: result.sink_volume_m3,
+                    mass: result.sink_mass_kg,
+                    warnings: result.warnings || [],
+                };
+                setPlateFinReadout(null, {
+                    pf_r_sa_out: lastPlateFinResult.rSa.toFixed(3) + ' K/W',
+                    pf_c_sink_out: lastPlateFinResult.cSink.toFixed(1) + ' J/K',
+                    pf_volume_out: (lastPlateFinResult.volume * 1e6).toFixed(1) + ' cm³',
+                    pf_mass_out: lastPlateFinResult.mass.toFixed(2) + ' kg',
+                }, lastPlateFinResult.warnings);
+            } catch (err) {
+                lastPlateFinResult = null;
+                setPlateFinReadout(null,
+                    { pf_r_sa_out: '—', pf_c_sink_out: '—', pf_volume_out: '—', pf_mass_out: '—' },
+                    [String(err.message || err)],
+                );
+            }
+        }
+        function schedulePlateFinUpdate() {
+            if (plateFinDebounce) clearTimeout(plateFinDebounce);
+            plateFinDebounce = setTimeout(updatePlateFinReadout, 150);
+        }
+        function bindSinkModeUI() {
+            document.querySelectorAll('.seg-btn[data-sink-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.seg-btn[data-sink-mode]')
+                        .forEach(b => b.classList.toggle('active', b === btn));
+                    document.querySelectorAll('.sink-panel')
+                        .forEach(p => p.classList.toggle('active', p.dataset.sinkMode === btn.dataset.sinkMode));
+                    if (btn.dataset.sinkMode === 'plate_fin') updatePlateFinReadout();
+                });
+            });
+            // Geometry inputs that drive the readout.
+            const pfIds = [
+                'pf_base_length', 'pf_base_width', 'pf_base_thickness',
+                'pf_fin_height', 'pf_fin_thickness', 'pf_fin_count',
+                'pf_material', 'pf_airflow', 'pf_velocity',
+            ];
+            pfIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', schedulePlateFinUpdate);
+            });
+            // Profile / ambient changes shift the reference operating point.
+            ['ambient', 'profile_type', 'step_power', 'pulse_power',
+             'duty_on_power', 'duty_off_power', 'duty_on_time', 'duty_off_time']
+                .forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', schedulePlateFinUpdate);
+                });
+            document.getElementById('pf_airflow').addEventListener('change', () => {
+                const isForced = document.getElementById('pf_airflow').value === 'forced';
+                document.getElementById('pf_velocity_field').style.display = isForced ? 'block' : 'none';
+            });
+        }
+
+        // -----------------------------------------------------------------
+        // Build the model dictionary the Python solver expects
+        // -----------------------------------------------------------------
+        function buildModel() {
+            const profileType = document.getElementById('profile_type').value;
+            const ambient = num('ambient');
+            const initial = num('initial');
+            const sourceLimit = num('source_limit');
+            const rJC = num('r_jc');
+
+            let rSA, cSource, cSink;
+            if (getSinkMode() === 'plate_fin') {
+                if (!lastPlateFinResult) {
+                    throw new Error(
+                        'Plate-fin geometry has not been evaluated yet. ' +
+                        'Adjust an input or wait for Pyodide to finish loading.'
+                    );
+                }
+                rSA = lastPlateFinResult.rSa;
+                cSink = lastPlateFinResult.cSink;
+                cSource = num('pf_c_source');
+            } else {
+                rSA = num('r_sa');
+                ({ cSource, cSink } = getCapacitances());
+            }
+
+            let profile, duration;
+            if (profileType === 'step') {
+                profile = { type: 'step', power_w: num('step_power') };
+                duration = num('step_duration');
+            } else if (profileType === 'pulse') {
+                const pulseDur = num('pulse_duration');
+                const cooldown = num('pulse_cooldown');
+                profile = {
+                    type: 'pulse',
+                    pulse_power_w: num('pulse_power'),
+                    pulse_duration_s: pulseDur,
+                    cooldown_power_w: 0,
+                };
+                duration = pulseDur + cooldown;
+            } else {
+                profile = {
+                    type: 'duty_cycle',
+                    on_power_w: num('duty_on_power'),
+                    on_time_s: num('duty_on_time'),
+                    off_power_w: num('duty_off_power'),
+                    off_time_s: num('duty_off_time'),
+                };
+                duration = num('duty_run_time');
+            }
+
+            const cooldownInput = document.getElementById('cooldown_target');
+            const cooldownTarget = cooldownInput && cooldownInput.value !== ''
+                ? parseFloat(cooldownInput.value)
+                : null;
+
+            return {
+                time: {
+                    duration_s: duration,
+                    initial_temperature_c: initial,
+                    cooldown_target_c: cooldownTarget,
+                },
+                profile,
+                network: {
+                    nodes: [
+                        { id: 'source', label: 'Source', kind: 'dynamic',
+                          capacitance_j_per_k: cSource, max_temperature_c: sourceLimit },
+                        { id: 'sink', label: 'Heatsink', kind: 'dynamic',
+                          capacitance_j_per_k: cSink },
+                        { id: 'ambient', label: 'Ambient', kind: 'boundary',
+                          fixed_temperature_c: ambient },
+                    ],
+                    segments: [
+                        { id: 'r_jc', label: 'Source → Sink',
+                          from_node_id: 'source', to_node_id: 'sink',
+                          resistance_k_per_w: rJC },
+                        { id: 'r_sa', label: 'Sink → Ambient',
+                          from_node_id: 'sink', to_node_id: 'ambient',
+                          resistance_k_per_w: rSA },
+                    ],
+                    heat_inputs: [{ node_id: 'source', profile_role: 'primary' }],
+                },
+            };
+        }
+
+        // -----------------------------------------------------------------
+        // JSON import/export — round-trip the same model dict the solver
+        // accepts, so saved files also load directly into pytest fixtures.
+        // -----------------------------------------------------------------
+        // Build a Markdown calculation report from the most-recent simulate
+        // result + the model that produced it. Captures inputs, summary,
+        // RC table, cycle summary (if any), and warnings — so the user can
+        // attach it to a design review without re-running anything.
+        function buildMarkdownReport() {
+            if (!lastResult || !lastModel) return null;
+            const r = lastResult;
+            const m = lastModel;
+            const lines = [];
+            const fmt = (v, d = 2) =>
+                (v == null || !Number.isFinite(v)) ? '—' : Number(v).toFixed(d);
+            const fmtMaybeS = (v, d = 1) =>
+                (v == null || !Number.isFinite(v)) ? '—' : `${Number(v).toFixed(d)} s`;
+
+            const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
+            lines.push(`# Transient Heatsink Report`);
+            lines.push(``);
+            lines.push(`Generated: ${stamp} UTC`);
+            lines.push(``);
+            lines.push(`## Status`);
+            lines.push(``);
+            const status = r.status || 'unknown';
+            lines.push(`**${status.toUpperCase()}**`);
+            const statusLine = document.getElementById('status-banner');
+            if (statusLine && statusLine.textContent) {
+                lines.push(``);
+                lines.push(statusLine.textContent.trim());
+            }
+            lines.push(``);
+
+            const s = r.summary || {};
+            lines.push(`## Summary`);
+            lines.push(``);
+            lines.push(`| Metric | Value |`);
+            lines.push(`|---|---|`);
+            lines.push(`| Peak temperature | ${fmt(s.peak_temperature_c)} °C (${s.peak_node_id || '—'}) |`);
+            lines.push(`| Final temperature | ${fmt(s.final_temperature_c)} °C |`);
+            lines.push(`| Steady-state asymptote | ${fmt(s.steady_state_temperature_c)} °C |`);
+            lines.push(`| Time to limit | ${fmtMaybeS(s.time_to_limit_s)} |`);
+            lines.push(`| Cooldown to target | ${fmtMaybeS(s.cooldown_time_to_target_s)} |`);
+            lines.push(`| Slowest mode τ | ${fmtMaybeS(s.slowest_mode_tau_s)} |`);
+            if (s.cyclic_steady_state_reached != null) {
+                lines.push(`| Cyclic steady state reached | ${s.cyclic_steady_state_reached ? 'yes' : 'no'} |`);
+            }
+            if (s.auto_extended_duration) {
+                lines.push(`| Window auto-extended | ${fmt(s.requested_duration_s)} s → ${fmt(s.simulated_duration_s)} s |`);
+            }
+            lines.push(``);
+
+            lines.push(`## Inputs`);
+            lines.push(``);
+            lines.push(`### Profile`);
+            lines.push(``);
+            lines.push(`- Type: \`${m.profile.type}\``);
+            for (const [k, v] of Object.entries(m.profile)) {
+                if (k === 'type') continue;
+                lines.push(`- ${k}: ${v}`);
+            }
+            lines.push(``);
+            lines.push(`### Time`);
+            lines.push(``);
+            for (const [k, v] of Object.entries(m.time)) {
+                if (v == null) continue;
+                lines.push(`- ${k}: ${v}`);
+            }
+            lines.push(``);
+
+            lines.push(`### Network`);
+            lines.push(``);
+            lines.push(`| Node | Kind | Capacitance (J/K) | Max T (°C) | Fixed T (°C) |`);
+            lines.push(`|---|---|---|---|---|`);
+            for (const node of m.network.nodes) {
+                lines.push(
+                    `| ${node.label || node.id} | ${node.kind} | ` +
+                    `${fmt(node.capacitance_j_per_k, 1)} | ` +
+                    `${node.max_temperature_c == null ? '—' : fmt(node.max_temperature_c, 1)} | ` +
+                    `${node.fixed_temperature_c == null ? '—' : fmt(node.fixed_temperature_c, 1)} |`
+                );
+            }
+            lines.push(``);
+            lines.push(`| Segment | From | To | R (K/W) |`);
+            lines.push(`|---|---|---|---|`);
+            for (const seg of m.network.segments) {
+                lines.push(
+                    `| ${seg.label || seg.id} | ${seg.from_node_id} | ${seg.to_node_id} | ` +
+                    `${fmt(seg.resistance_k_per_w, 4)} |`
+                );
+            }
+            lines.push(``);
+
+            const taus = r.time_constants || [];
+            if (taus.length) {
+                lines.push(`## RC time constants`);
+                lines.push(``);
+                lines.push(`| Node | C (J/K) | ΣG (W/K) | τ (s) |`);
+                lines.push(`|---|---|---|---|`);
+                for (const t of taus) {
+                    lines.push(
+                        `| ${t.label || t.node_id} | ${fmt(t.capacitance_j_per_k, 1)} | ` +
+                        `${fmt(t.sum_conductance_w_per_k, 4)} | ${fmt(t.tau_s, 1)} |`
+                    );
+                }
+                lines.push(``);
+            }
+
+            const cycles = r.cycle_summary || [];
+            if (cycles.length) {
+                lines.push(`## Cycle summary`);
+                lines.push(``);
+                lines.push(`| Cycle | Peak (°C) | Min (°C) | Walk-up (°C) |`);
+                lines.push(`|---|---|---|---|`);
+                for (const c of cycles) {
+                    const walk = c.walk_up_c == null
+                        ? '—'
+                        : (c.walk_up_c > 0 ? '+' : '') + fmt(c.walk_up_c, 2);
+                    lines.push(`| ${c.cycle} | ${fmt(c.peak_c, 2)} | ${fmt(c.min_c, 2)} | ${walk} |`);
+                }
+                lines.push(``);
+            }
+
+            if (r.diagnosis && r.diagnosis.length) {
+                lines.push(`## Diagnosis`);
+                lines.push(``);
+                for (const d of r.diagnosis) lines.push(`- ${d}`);
+                lines.push(``);
+            }
+            if (r.recommendations && r.recommendations.length) {
+                lines.push(`## Recommendations`);
+                lines.push(``);
+                for (const rec of r.recommendations) lines.push(`- ${rec}`);
+                lines.push(``);
+            }
+            if (r.warnings && r.warnings.length) {
+                lines.push(`## Warnings`);
+                lines.push(``);
+                for (const w of r.warnings) lines.push(`- ${w}`);
+                lines.push(``);
+            }
+            return lines.join('\n');
+        }
+
+        function handleReportExport() {
+            const md = buildMarkdownReport();
+            if (md == null) {
+                alert('Run a calculation first; there is no result to report.');
+                return;
+            }
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `transient-heatsink-report-${stamp}.md`;
+            const blob = new Blob([md], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function bindIOButtons() {
+            document.getElementById('export-btn').addEventListener('click', handleExport);
+            document.getElementById('import-btn').addEventListener('click', () => {
+                document.getElementById('import-file').click();
+            });
+            document.getElementById('import-file').addEventListener('change', handleImportFile);
+            document.getElementById('report-btn').addEventListener('click', handleReportExport);
+            // Sample test-case loader: each <a class="load-sample"> fetches a
+            // JSON file and feeds its `model` into applyImportedModel().
+            document.querySelectorAll('.load-sample').forEach(link => {
+                link.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    const src = link.dataset.src;
+                    try {
+                        const response = await fetch(src + '?v=' + Date.now());
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const payload = await response.json();
+                        // Sample files wrap the model in metadata; user-exported
+                        // files are flat. Accept either.
+                        const model = payload.model || payload;
+                        applyImportedModel(model);
+                    } catch (err) {
+                        alert(`Could not load sample "${src}": ${err.message}`);
+                        console.error(err);
+                    }
+                });
+            });
+        }
+
+        function handleExport() {
+            const model = buildModel();
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `transient-heatsink-${model.profile.type}-${stamp}.json`;
+            const payload = JSON.stringify(model, null, 2);
+            const blob = new Blob([payload], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        async function handleImportFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const model = JSON.parse(text);
+                applyImportedModel(model);
+            } catch (err) {
+                alert('Could not import: ' + err.message);
+            } finally {
+                event.target.value = '';  // allow re-importing the same file
+            }
+        }
+
+        function applyImportedModel(model) {
+            if (!model || !model.network || !model.profile || !model.time) {
+                throw new Error('Imported file is missing required keys (time, profile, network).');
+            }
+            // Switch to direct sink + direct capacitance mode on import —
+            // geometry inputs aren't part of the saved model.
+            document.querySelectorAll('.seg-btn[data-sink-mode]')
+                .forEach(b => b.classList.toggle('active', b.dataset.sinkMode === 'direct'));
+            document.querySelectorAll('.sink-panel')
+                .forEach(p => p.classList.toggle('active', p.dataset.sinkMode === 'direct'));
+            document.querySelectorAll('.seg-btn[data-cap-mode]')
+                .forEach(b => b.classList.toggle('active', b.dataset.capMode === 'direct'));
+            document.querySelectorAll('.cap-panel')
+                .forEach(p => p.classList.toggle('active', p.dataset.capMode === 'direct'));
+
+            const setVal = (id, v) => {
+                const el = document.getElementById(id);
+                if (el && v != null && Number.isFinite(parseFloat(v))) el.value = v;
+            };
+            // Time + ambient + initial
+            setVal('initial', model.time.initial_temperature_c);
+            setVal('cooldown_target', model.time.cooldown_target_c);
+
+            const ambientNode = (model.network.nodes || []).find(n => n.kind === 'boundary');
+            if (ambientNode) setVal('ambient', ambientNode.fixed_temperature_c);
+
+            const sourceNode = (model.network.nodes || []).find(n => n.id === 'source')
+                || (model.network.nodes || []).find(n => n.kind === 'dynamic');
+            const sinkNode = (model.network.nodes || []).find(n => n.id === 'sink');
+            if (sourceNode) {
+                setVal('source_limit', sourceNode.max_temperature_c);
+                setVal('c_source', sourceNode.capacitance_j_per_k);
+            }
+            if (sinkNode) setVal('c_sink', sinkNode.capacitance_j_per_k);
+
+            const rJCSeg = (model.network.segments || []).find(s => s.id === 'r_jc');
+            const rSASeg = (model.network.segments || []).find(s => s.id === 'r_sa');
+            if (rJCSeg) setVal('r_jc', rJCSeg.resistance_k_per_w);
+            if (rSASeg) setVal('r_sa', rSASeg.resistance_k_per_w);
+
+            // Profile — switch tab, populate fields
+            const ptype = model.profile.type;
+            const profileSelect = document.getElementById('profile_type');
+            if (profileSelect && ['step', 'pulse', 'duty_cycle'].includes(ptype)) {
+                profileSelect.value = ptype;
+                profileSelect.dispatchEvent(new Event('change'));
+            }
+            if (ptype === 'step') {
+                setVal('step_power', model.profile.power_w);
+                setVal('step_duration', model.time.duration_s);
+            } else if (ptype === 'pulse') {
+                setVal('pulse_power', model.profile.pulse_power_w);
+                setVal('pulse_duration', model.profile.pulse_duration_s);
+                const dur = parseFloat(model.time.duration_s) || 0;
+                const pulseDur = parseFloat(model.profile.pulse_duration_s) || 0;
+                setVal('pulse_cooldown', Math.max(0, dur - pulseDur));
+            } else if (ptype === 'duty_cycle') {
+                setVal('duty_on_power', model.profile.on_power_w);
+                setVal('duty_on_time', model.profile.on_time_s);
+                setVal('duty_off_power', model.profile.off_power_w);
+                setVal('duty_off_time', model.profile.off_time_s);
+                setVal('duty_run_time', model.time.duration_s);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Handoff from simple_thermal: when arriving with ?from=plate_fin
+        // and a sessionStorage payload, populate the plate-fin geometry
+        // panel and switch into plate-fin sink mode.
+        // -----------------------------------------------------------------
+        function tryApplyHandoffFromQuery() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('from') !== 'plate_fin') return;
+            let payload;
+            try {
+                const raw = sessionStorage.getItem('transient_heatsink_handoff');
+                if (!raw) return;
+                payload = JSON.parse(raw);
+                sessionStorage.removeItem('transient_heatsink_handoff');
+            } catch (err) {
+                console.warn('Handoff payload was unreadable:', err);
+                return;
+            }
+
+            const setVal = (id, v) => {
+                const el = document.getElementById(id);
+                if (el && v != null && Number.isFinite(parseFloat(v))) el.value = v;
+            };
+            // Geometry: simple_thermal uses metres; the form uses millimetres.
+            if (payload.base_length != null)    setVal('pf_base_length',    payload.base_length    * 1000);
+            if (payload.base_width != null)     setVal('pf_base_width',     payload.base_width     * 1000);
+            if (payload.base_thickness != null) setVal('pf_base_thickness', payload.base_thickness * 1000);
+            if (payload.fin_height != null)     setVal('pf_fin_height',     payload.fin_height     * 1000);
+            if (payload.fin_thickness != null)  setVal('pf_fin_thickness',  payload.fin_thickness  * 1000);
+            if (payload.fin_count != null)      setVal('pf_fin_count',      payload.fin_count);
+
+            // Map conductivity → material option whose data-conductivity matches.
+            if (payload.material_conductivity != null) {
+                const matEl = document.getElementById('pf_material');
+                let bestIdx = 0;
+                let bestErr = Infinity;
+                for (let i = 0; i < matEl.options.length; i++) {
+                    const k = parseFloat(matEl.options[i].dataset.conductivity);
+                    const err = Math.abs(k - payload.material_conductivity);
+                    if (err < bestErr) { bestErr = err; bestIdx = i; }
+                }
+                matEl.selectedIndex = bestIdx;
+            }
+            if (payload.airflow_mode) {
+                document.getElementById('pf_airflow').value =
+                    payload.airflow_mode === 'fan_curve' ? 'forced' : payload.airflow_mode;
+                const isForced = document.getElementById('pf_airflow').value === 'forced';
+                document.getElementById('pf_velocity_field').style.display = isForced ? 'block' : 'none';
+            }
+            if (payload.approach_velocity != null) setVal('pf_velocity', payload.approach_velocity);
+            if (payload.ambient_temperature_c != null) setVal('ambient', payload.ambient_temperature_c);
+            if (payload.heat_load_w != null) setVal('step_power', payload.heat_load_w);
+
+            // Switch into plate-fin sink mode.
+            document.querySelectorAll('.seg-btn[data-sink-mode]')
+                .forEach(b => b.classList.toggle('active', b.dataset.sinkMode === 'plate_fin'));
+            document.querySelectorAll('.sink-panel')
+                .forEach(p => p.classList.toggle('active', p.dataset.sinkMode === 'plate_fin'));
+            updatePlateFinReadout();
+        }
+
+        // -----------------------------------------------------------------
+        // Calculate
+        // -----------------------------------------------------------------
+        async function handleCalculate(event) {
+            event.preventDefault();
+            const btn = document.getElementById('calculate-btn');
+            btn.textContent = 'Simulating…';
+            btn.disabled = true;
+            try {
+                const model = buildModel();
+                const proxy = pyToolModule.simulate_transient_thermal_model(
+                    pyodideInstance.toPy(model)
+                );
+                const result = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                normalizeResult(result);
+                lastResult = result;
+                lastModel = model;
+                renderResult(result);
+                enableSensitivityButtons();
+            } catch (error) {
+                console.error('Simulation error:', error);
+                document.getElementById('results-placeholder').textContent = 'Error: ' + error.message;
+                document.getElementById('results-placeholder').style.display = 'block';
+                document.getElementById('results-body').style.display = 'none';
+            } finally {
+                btn.textContent = 'Calculate';
+                btn.disabled = false;
+            }
+        }
+
+        // Pyodide returns nested Maps/Arrays — flatten what the renderer needs.
+        function normalizeResult(r) {
+            const flatten = (v) => {
+                if (v instanceof Map) return Object.fromEntries([...v.entries()].map(([k, vv]) => [k, flatten(vv)]));
+                if (Array.isArray(v)) return v.map(flatten);
+                return v;
+            };
+            for (const k of Object.keys(r)) r[k] = flatten(r[k]);
+        }
+
+        // -----------------------------------------------------------------
+        // Rendering
+        // -----------------------------------------------------------------
+        function fmt(v, digits = 2) {
+            if (v === null || v === undefined || Number.isNaN(v)) return '—';
+            if (!Number.isFinite(v)) return v > 0 ? '∞' : '-∞';
+            const abs = Math.abs(v);
+            if (abs !== 0 && (abs < 0.01 || abs >= 1e6)) return v.toExponential(digits);
+            return v.toFixed(digits);
+        }
+
+        function renderResult(r) {
+            document.getElementById('results-placeholder').style.display = 'none';
+            document.getElementById('results-body').style.display = 'block';
+
+            const banner = document.getElementById('status-banner');
+            banner.className = 'status-banner ' + r.status;
+            banner.textContent = statusMessage(r.status, r.summary);
+
+            if (r.status === 'invalid') {
+                document.getElementById('summary-grid').innerHTML = '';
+                document.getElementById('temp-plot').innerHTML = '';
+                document.getElementById('power-plot').innerHTML = '';
+                document.getElementById('diagnosis-list').innerHTML = '';
+                const errs = (r.errors || []).map(e => `<li>${e}</li>`).join('');
+                document.getElementById('recs-list').innerHTML = errs || '<li>Validation failed.</li>';
+                return;
+            }
+
+            renderSummary(r.summary);
+            renderAutoExtensionCallout(r);
+            renderTempPlot(r.series, r.summary);
+            renderPowerPlot(r.series);
+            renderList('diagnosis-list', r.diagnosis);
+            renderList('recs-list', r.recommendations);
+            renderRCTab(r);
+            renderMathTab(r);
+        }
+
+        function renderAutoExtensionCallout(r) {
+            const el = document.getElementById('auto-extend-callout');
+            const extWarnings = (r.warnings || []).filter(w => /extended/i.test(w));
+            if (r.summary && r.summary.auto_extended_duration && extWarnings.length) {
+                el.textContent = extWarnings[0];
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
+        }
+
+        function statusMessage(status, summary) {
+            const map = {
+                acceptable: 'Acceptable — temperature limit not exceeded',
+                marginal: 'Marginal — within 5 K of the limit',
+                unacceptable: 'Unacceptable — temperature limit exceeded',
+                not_converged: 'Duty cycle has not reached cyclic steady state',
+                invalid: 'Invalid model — see error details below',
+            };
+            const base = map[status] || status;
+            if (summary && summary.time_to_limit_s != null) {
+                return `${base} (limit reached at t = ${fmt(summary.time_to_limit_s)} s)`;
+            }
+            return base;
+        }
+
+        function renderSummary(s) {
+            const cells = [
+                { label: 'Peak T (sim)', value: fmt(s.peak_temperature_c), unit: '°C' },
+                { label: 'Steady-state T', value: s.steady_state_temperature_c == null ? '—' : fmt(s.steady_state_temperature_c), unit: s.steady_state_temperature_c == null ? '' : '°C' },
+                { label: 'Time to limit', value: s.time_to_limit_s == null ? '—' : fmt(s.time_to_limit_s), unit: s.time_to_limit_s == null ? '' : 's' },
+                { label: 'Final T', value: fmt(s.final_temperature_c), unit: '°C' },
+                { label: 'Cooldown to target', value: s.cooldown_time_to_target_s == null ? '—' : fmt(s.cooldown_time_to_target_s), unit: s.cooldown_time_to_target_s == null ? '' : 's' },
+                { label: 'Slowest τ', value: fmt(s.slowest_mode_tau_s ?? s.dominant_time_constant_s, 1), unit: 's' },
+                { label: 'Peak node', value: s.peak_node_id || '—', unit: '' },
+                { label: 'Cyclic steady state', value: s.cyclic_steady_state_reached ? 'Yes' : 'No', unit: '' },
+            ];
+            document.getElementById('summary-grid').innerHTML = cells.map(c =>
+                `<div class="summary-cell">
+                    <div class="label">${c.label}</div>
+                    <div class="value">${c.value}<span class="unit">${c.unit}</span></div>
+                </div>`
+            ).join('');
+        }
+
+        function plotTheme() {
+            const dark = document.body.dataset.theme === 'dark'
+                || (document.body.dataset.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            return {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: dark ? '#f9fafb' : '#111827', family: 'Helvetica Neue, system-ui, sans-serif' },
+                xaxis: { gridcolor: dark ? '#374151' : '#e5e7eb', zerolinecolor: dark ? '#374151' : '#e5e7eb' },
+                yaxis: { gridcolor: dark ? '#374151' : '#e5e7eb', zerolinecolor: dark ? '#374151' : '#e5e7eb' },
+            };
+        }
+
+        function renderTempPlot(series, summary) {
+            const traces = [];
+            const palette = ['#dc2626', '#0ea5e9', '#16a34a', '#a855f7', '#f59e0b'];
+            let i = 0;
+            for (const [nodeId, temps] of Object.entries(series.node_temperatures_c)) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: series.time_s, y: temps,
+                    name: nodeId,
+                    line: { color: palette[i % palette.length], width: 2 },
+                });
+                i++;
+            }
+            // Limit line on the source node, if available.
+            if (summary && summary.peak_temperature_c != null) {
+                const sourceLimit = num('source_limit');
+                if (Number.isFinite(sourceLimit)) {
+                    traces.push({
+                        type: 'scatter', mode: 'lines',
+                        x: [series.time_s[0], series.time_s[series.time_s.length - 1]],
+                        y: [sourceLimit, sourceLimit],
+                        name: 'Source limit',
+                        line: { color: '#b91c1c', width: 1, dash: 'dot' },
+                    });
+                }
+                if (summary.steady_state_temperature_c != null && Number.isFinite(summary.steady_state_temperature_c)) {
+                    traces.push({
+                        type: 'scatter', mode: 'lines',
+                        x: [series.time_s[0], series.time_s[series.time_s.length - 1]],
+                        y: [summary.steady_state_temperature_c, summary.steady_state_temperature_c],
+                        name: 'Steady-state T',
+                        line: { color: '#6b7280', width: 1, dash: 'dash' },
+                    });
+                }
+            }
+            const layout = Object.assign({
+                margin: { t: 20, r: 20, b: 50, l: 60 },
+                xaxis: { title: 'Time (s)' },
+                yaxis: { title: 'Temperature (°C)' },
+                legend: { orientation: 'h', y: -0.2 },
+                height: 320,
+            }, plotTheme());
+            Plotly.newPlot('temp-plot', traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        function renderPowerPlot(series) {
+            const trace = {
+                type: 'scatter', mode: 'lines',
+                x: series.time_s, y: series.power_w,
+                line: { color: '#f59e0b', width: 2, shape: 'hv' },
+                fill: 'tozeroy', fillcolor: 'rgba(245, 158, 11, 0.15)',
+            };
+            const layout = Object.assign({
+                margin: { t: 20, r: 20, b: 50, l: 60 },
+                xaxis: { title: 'Time (s)' },
+                yaxis: { title: 'Power (W)' },
+                showlegend: false,
+                height: 220,
+            }, plotTheme());
+            Plotly.newPlot('power-plot', [trace], layout, { responsive: true, displayModeBar: false });
+        }
+
+        function renderList(id, items) {
+            const el = document.getElementById(id);
+            if (!items || items.length === 0) {
+                el.innerHTML = '<li><em>No notes.</em></li>';
+                return;
+            }
+            el.innerHTML = items.map(t => `<li>${t}</li>`).join('');
+        }
+
+        function renderRCTab(r) {
+            const nodeRows = (r.nodes || []).filter(n => n.kind === 'dynamic').map(n => `
+                <tr>
+                    <td>${n.label || n.id}</td>
+                    <td class="num">${fmt(n.capacitance_j_per_k, 1)}</td>
+                    <td class="num">${n.max_temperature_c == null ? '—' : fmt(n.max_temperature_c, 1)}</td>
+                    <td class="num">${fmt(n.peak_temperature_c, 2)}</td>
+                    <td class="num">${n.temperature_margin_c == null ? '—' : fmt(n.temperature_margin_c, 2)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#nodes-table tbody').innerHTML = nodeRows;
+
+            const segRows = (r.segments || []).map(s => `
+                <tr>
+                    <td>${s.label || s.id}</td>
+                    <td class="num">${fmt(s.resistance_k_per_w, 4)}</td>
+                    <td class="num">${s.tau_s == null ? '—' : fmt(s.tau_s, 1)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#segments-table tbody').innerHTML = segRows;
+
+            const tauRows = (r.time_constants || []).map(t => `
+                <tr>
+                    <td>${t.label || t.node_id}</td>
+                    <td class="num">${fmt(t.capacitance_j_per_k, 1)}</td>
+                    <td class="num">${fmt(t.sum_conductance_w_per_k, 4)}</td>
+                    <td class="num">${fmt(t.tau_s, 1)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#tau-table tbody').innerHTML = tauRows;
+
+            const cycles = r.cycle_summary || [];
+            const cycleRows = cycles.map(c => `
+                <tr>
+                    <td class="num">${c.cycle}</td>
+                    <td class="num">${fmt(c.peak_c, 2)}</td>
+                    <td class="num">${fmt(c.min_c, 2)}</td>
+                    <td class="num">${c.walk_up_c == null ? '—' : (c.walk_up_c > 0 ? '+' : '') + fmt(c.walk_up_c, 2)}</td>
+                </tr>
+            `).join('');
+            document.querySelector('#cycle-table tbody').innerHTML = cycleRows
+                || '<tr><td colspan="4" style="color: var(--text-light); text-align:center;">No cycle data (step or pulse profile).</td></tr>';
+
+            const statusEl = document.getElementById('cycle-summary-status');
+            if (cycles.length === 0) {
+                statusEl.textContent = '';
+            } else if (r.summary && r.summary.cyclic_steady_state_reached) {
+                const last = cycles[cycles.length - 1];
+                statusEl.innerHTML =
+                    `<strong style="color:#059669;">Cyclic steady state reached</strong> ` +
+                    `at cycle ${last.cycle} (peak ${fmt(last.peak_c, 1)} °C, min ${fmt(last.min_c, 1)} °C, ` +
+                    `walk-up &lt;0.05 °C between consecutive cycles).`;
+            } else if (cycles.length >= 2) {
+                const last = cycles[cycles.length - 1];
+                const drift = last.walk_up_c == null ? 0 : Math.abs(last.walk_up_c);
+                statusEl.innerHTML =
+                    `<strong style="color:#d97706;">Not converged</strong> — ` +
+                    `last-cycle peak still drifting by ${fmt(drift, 2)} °C. ` +
+                    `Extend simulation duration or expect more thermal walk-up.`;
+            }
+        }
+
+        function renderMathTab(r) {
+            const block = document.getElementById('subst-block');
+            if (r.subst_governing) {
+                block.innerHTML = `\\[ ${r.subst_governing} \\]`;
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise([block]);
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Sensitivity tab: drive generate_transient_sensitivity and
+        // compute_design_lever_recommendation through Pyodide. Uses the
+        // most recent buildModel() output as the baseline; both buttons
+        // stay disabled until the user has run the main calculation.
+        // -----------------------------------------------------------------
+        function bindSensitivityUI() {
+            const sensRun = document.getElementById('sens-run');
+            const leverRun = document.getElementById('lever-run');
+            sensRun.addEventListener('click', runSensitivitySweep);
+            leverRun.addEventListener('click', runDesignLeverComparison);
+        }
+
+        function enableSensitivityButtons() {
+            document.getElementById('sens-run').disabled = false;
+            document.getElementById('lever-run').disabled = false;
+            document.getElementById('report-btn').disabled = false;
+            document.getElementById('report-btn').title = 'Download a Markdown report of the latest calculation';
+            const status = document.getElementById('sens-status');
+            if (status.textContent.startsWith('Run a calculation first')) {
+                status.textContent = 'Baseline ready — pick a parameter and run a sweep.';
+            }
+        }
+
+        function parseFractions(text) {
+            return (text || '')
+                .split(/[,\s]+/)
+                .map(s => parseFloat(s))
+                .filter(v => Number.isFinite(v) && v > 0);
+        }
+
+        async function runSensitivitySweep() {
+            if (!lastModel) {
+                document.getElementById('sens-status').textContent =
+                    'Run a calculation first to set the baseline.';
+                return;
+            }
+            const param = document.getElementById('sens-parameter').value;
+            const fractions = parseFractions(document.getElementById('sens-fractions').value);
+            const status = document.getElementById('sens-status');
+            const btn = document.getElementById('sens-run');
+            btn.disabled = true;
+            btn.textContent = 'Running…';
+            status.textContent = `Sweeping ${param} across ${fractions.length || 'default'} fractions…`;
+            try {
+                const proxy = pyToolModule.generate_transient_sensitivity.callKwargs({
+                    model: pyodideInstance.toPy(lastModel),
+                    parameter: param,
+                    fractions: fractions.length ? fractions : null,
+                });
+                const sweep = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                renderSensitivityResult(sweep);
+            } catch (err) {
+                status.textContent = 'Sweep failed: ' + (err.message || err);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run sweep';
+            }
+        }
+
+        function renderSensitivityResult(sweep) {
+            const status = document.getElementById('sens-status');
+            const peakDiv = document.getElementById('sens-peak-plot');
+            const ttlDiv = document.getElementById('sens-ttl-plot');
+            if (sweep.errors && sweep.errors.length && sweep.baseline_value == null) {
+                status.textContent = sweep.errors.map(e => e.message).join(' ');
+                peakDiv.style.display = 'none';
+                ttlDiv.style.display = 'none';
+                return;
+            }
+            const errSummary = (sweep.errors || []).length
+                ? ` ${sweep.errors.length} run${sweep.errors.length === 1 ? '' : 's'} skipped.`
+                : '';
+            const slopeBits = [];
+            if (sweep.local_peak_slope != null) {
+                slopeBits.push(
+                    `Local slope ∂T_peak/∂${sweep.parameter} = ${sweep.local_peak_slope.toFixed(3)} °C / (${sweep.units})`
+                );
+            }
+            if (sweep.local_peak_elasticity != null) {
+                slopeBits.push(`elasticity = ${sweep.local_peak_elasticity.toFixed(2)}`);
+            }
+            status.textContent =
+                `Baseline ${sweep.label} = ${sweep.baseline_value.toFixed(3)} ${sweep.units}.` +
+                (slopeBits.length ? ' ' + slopeBits.join('; ') + '.' : '') +
+                errSummary;
+
+            // Peak temperature vs parameter value
+            const xs = sweep.values;
+            const peaks = sweep.peak_temperature_c;
+            const peakTrace = {
+                x: xs, y: peaks, type: 'scatter', mode: 'lines+markers',
+                name: 'Peak T', line: { color: '#dc2626' },
+            };
+            const baselineX = sweep.baseline_value;
+            const baselineY = sweep.baseline_peak_c;
+            const peakBaseline = baselineY != null ? {
+                x: [baselineX], y: [baselineY], type: 'scatter', mode: 'markers',
+                name: 'Baseline', marker: { color: '#111827', size: 12, symbol: 'diamond' },
+            } : null;
+            Plotly.newPlot(peakDiv, peakBaseline ? [peakTrace, peakBaseline] : [peakTrace], {
+                title: `Peak temperature vs ${sweep.label}`,
+                xaxis: { title: `${sweep.label} (${sweep.units})` },
+                yaxis: { title: 'Peak T (°C)' },
+                margin: { t: 40, r: 10, b: 50, l: 60 },
+            }, { responsive: true });
+            peakDiv.style.display = 'block';
+
+            // Time-to-limit (only if at least one run produced a value)
+            const ttls = sweep.time_to_limit_s;
+            const finitePairs = xs
+                .map((x, i) => [x, ttls[i]])
+                .filter(([, t]) => t != null && Number.isFinite(t));
+            if (finitePairs.length >= 2) {
+                Plotly.newPlot(ttlDiv, [{
+                    x: finitePairs.map(p => p[0]),
+                    y: finitePairs.map(p => p[1]),
+                    type: 'scatter', mode: 'lines+markers',
+                    name: 'Time to limit', line: { color: '#2563eb' },
+                }], {
+                    title: `Time to limit vs ${sweep.label}`,
+                    xaxis: { title: `${sweep.label} (${sweep.units})` },
+                    yaxis: { title: 'Time to limit (s)' },
+                    margin: { t: 40, r: 10, b: 50, l: 60 },
+                }, { responsive: true });
+                ttlDiv.style.display = 'block';
+            } else {
+                ttlDiv.style.display = 'none';
+            }
+        }
+
+        async function runDesignLeverComparison() {
+            if (!lastModel) return;
+            const btn = document.getElementById('lever-run');
+            const out = document.getElementById('lever-output');
+            btn.disabled = true;
+            btn.textContent = 'Running…';
+            try {
+                const proxy = pyToolModule.compute_design_lever_recommendation(
+                    pyodideInstance.toPy(lastModel)
+                );
+                const rec = proxy.toJs({ dict_converter: Object.fromEntries });
+                proxy.destroy();
+                out.style.display = 'block';
+                out.innerHTML = `<strong>${rec.recommendation.replace(/_/g, ' ')}:</strong> ${rec.message}`;
+            } catch (err) {
+                out.style.display = 'block';
+                out.textContent = 'Comparison failed: ' + (err.message || err);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Compare design levers';
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

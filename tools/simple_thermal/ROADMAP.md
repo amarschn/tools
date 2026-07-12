@@ -89,7 +89,7 @@ For the full audit and detailed implementation plan, see:
   - API/schema captured in [plans/thermal_path_budget_tool_schema.md](/Users/drew/code/tools/plans/thermal_path_budget_tool_schema.md)
 - [ ] Plan a separate spreader plate / chassis wall thermal tool
 - [ ] Plan a separate radial-fin / cylindrical-body heatsink tool
-- [ ] Plan a separate transient thermal RC tool
+- [x] Build a separate transient thermal RC tool — implemented as `tools/transient-heatsink/` through Phases 1–5 of `plans/2026-04-25_transient_heatsink_tool_plan.md`, including the plate-fin bridge, sensitivity analysis, worked examples, and report export.
 - [ ] Plan a separate pin-fin / impingement cooling tool only after higher-leverage thermal tools exist
 - [ ] Refactor shared thermal equations into reusable `pycalcs` modules as the tool family grows
 - [ ] Use `plans/thermal_tool_family_future_plan.md` as the boundary document for what should remain in `simple_thermal` versus become a separate tool

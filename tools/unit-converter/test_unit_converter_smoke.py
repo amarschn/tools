@@ -1,4 +1,4 @@
-"""Smoke tests for the shared unit conversion helpers."""
+"""Tool-local smoke tests for the shared unit conversion helpers."""
 
 from __future__ import annotations
 
