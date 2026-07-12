@@ -217,7 +217,20 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
     ***This step is critical.*** Without it, your tool will exist in the repository but will not appear on the main tools hub.
 
-8.  **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
+8.  **Refresh discoverability metadata (self-maintaining SEO)**
+    * `catalog.json` is the single source of truth for discoverability. Two scripts read it and keep the site's SEO in sync so it never drifts as tools are added — run both from the repo root after editing the catalog:
+
+        ```bash
+        python3 scripts/generate_sitemap.py   # rebuilds sitemap.xml from catalog.json
+        python3 scripts/inject_seo_meta.py     # backfills <head> SEO tags into tool pages
+        ```
+
+    * **`scripts/generate_sitemap.py`** regenerates `sitemap.xml` from `catalog.json` (excludes `example_tool*`/prototypes; `human-verified` tools get higher priority). Netlify also runs this on every deploy via `netlify.toml`, but commit the regenerated file so the GitHub Pages legacy host stays current too.
+    * **`scripts/inject_seo_meta.py`** injects `<meta name="description">`, `<link rel="canonical">`, OpenGraph/Twitter cards (pulled from the catalog `title`/`description`), and the `/shared/analytics-autotrack.js` include into each tool's `index.html`. It is **idempotent** — it only adds tags that are missing, so re-running is a safe no-op. Use `--check` for a dry run.
+    * `shared/analytics-autotrack.js` fires a GA4 `export_action` event when a user clicks an export/download/copy control, giving us a per-tool demand signal. Add `data-track="export"` to opt a control in explicitly, or `data-track="off"` to exclude one.
+    * Rationale and the SEO-tool backlog live in `plans/2026-07-12_seo_distribution_wins.md`. transparent.tools' current bottleneck is distribution, not more tools — prioritize discoverability accordingly.
+
+9.  **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
 
 ## Git Workflow
 
@@ -1094,9 +1107,10 @@ netlify deploy
 
 ### Build Configuration
 
-- **Build step:** None (pure static HTML/JS site)
+- **Build step:** `python3 scripts/generate_sitemap.py` (regenerates `sitemap.xml` from `catalog.json` on every deploy). No bundling/compilation — the site is otherwise pure static HTML/JS.
 - **Publish directory:** `.` (root)
 - **Config:** `netlify.toml` in repo root
+- **Note:** The GitHub Pages legacy host does **not** run this build step, so always run the SEO scripts locally and commit their output (see step 8 of "Creating a New Tool") to keep both hosts in sync.
 
 ### Analytics
 
