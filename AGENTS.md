@@ -230,7 +230,9 @@ When retroactively normalizing an older plan, preserve an existing stated date w
     * `shared/analytics-autotrack.js` fires a GA4 `export_action` event when a user clicks an export/download/copy control, giving us a per-tool demand signal. Add `data-track="export"` to opt a control in explicitly, or `data-track="off"` to exclude one.
     * Rationale and the SEO-tool backlog live in `plans/2026-07-12_seo_distribution_wins.md`. transparent.tools' current bottleneck is distribution, not more tools — prioritize discoverability accordingly.
 
-9.  **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
+9.  **Run the Tool Release Checklist** in `docs/RELEASE.md` ("Tool Release Checklist") before merging — theme (light + dark), settings panel, input tooltips, legible copy-link, browser smoke test, etc. This is REQUIRED for any new or modified tool; documentation of the standards alone has proven insufficient.
+
+10. **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
 
 ## Git Workflow
 

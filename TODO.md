@@ -6,7 +6,7 @@ This backlog consolidates platform work, template upgrades, and future tool idea
 
 - [ ] Implement a reusable SI/Imperial unit toggle in the shared template and apply it across tools.
 - [ ] Design a schema-driven input renderer for tools with large parameter counts (auto-tooltips, validation, tabs).
-- [ ] Convert legacy tools to the standard template (`beam-bending`, `simple_thermal`, `door-spring-app`, `fits`, `mtbf`, `trajectory`, `wire-sizing`).
+- [ ] Convert legacy tools to the standard template (`beam-bending`, `simple_thermal`, `door-spring-app`, `fits`, `mtbf`, `trajectory`). (`wire-sizing` converted 2026-07-13.)
 - [ ] Establish automated docstring validation to enforce `---Parameters---` / `---Returns---` / `---LaTeX---` sections.
 - [ ] Build a shared visualization helper (Plotly/Chart.js adapters) to reduce duplicated plotting code.
 - [ ] Create integration tests that load each tool in Pyodide and exercise nominal + error paths.
