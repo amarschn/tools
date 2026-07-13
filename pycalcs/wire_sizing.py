@@ -828,3 +828,329 @@ def list_insulation_types() -> Dict[str, Dict]:
         Insulation type codes with temperature ratings and descriptions.
     """
     return INSULATION_TYPES.copy()
+
+
+# =============================================================================
+# Overcurrent Protection (breaker / fuse) sizing — NEC 240
+# =============================================================================
+
+# NEC 240.6(A): standard ampere ratings for fuses and inverse-time breakers.
+NEC_STANDARD_OCPD_RATINGS: List[int] = [
+    15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175,
+    200, 225, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1200, 1600,
+    2000, 2500, 3000, 4000, 5000, 6000,
+]
+
+# NEC 240.4(D): small-conductor overcurrent protection limits (absolute caps,
+# applied after any ampacity correction/adjustment). Aluminum 14 AWG is not a
+# recognized building-wiring size, so it is omitted.
+SMALL_CONDUCTOR_MAX_OCPD: Dict[str, Dict[str, int]] = {
+    "copper": {"14 AWG": 15, "12 AWG": 20, "10 AWG": 30},
+    "aluminum": {"12 AWG": 15, "10 AWG": 25},
+}
+
+# Verdict tuning: a code-compliant result with very little ampacity headroom
+# (< 5%) is flagged "marginal". Common sizings (e.g. 60 A on 6 AWG / 65 A, ~8%)
+# stay a clean "pass".
+_AMPACITY_MARGINAL_PCT = 5.0
+
+
+def next_standard_ocpd(current_a: float) -> Optional[int]:
+    """
+    Return the smallest NEC 240.6(A) standard OCPD rating >= ``current_a``.
+
+    ---Parameters---
+    current_a : float
+        Required protective-device current in amperes.
+
+    ---Returns---
+    rating : Optional[int]
+        Smallest standard ampere rating that is >= current_a, or None if the
+        requirement exceeds the largest tabulated standard rating (6000 A).
+
+    ---References---
+    NFPA 70 (NEC), 240.6(A): Standard ampere ratings.
+    """
+    for rating in NEC_STANDARD_OCPD_RATINGS:
+        if rating >= current_a - 1e-9:
+            return rating
+    return None
+
+
+def select_breaker(load_current_a: float, continuous_load: bool = False) -> dict:
+    """
+    Select the minimum standard breaker/fuse rating to serve a load.
+
+    For a continuous load (operating >= 3 hours) the overcurrent device must be
+    rated for at least 125% of the load current per NEC 210.20(A)/215.3.
+
+    ---Parameters---
+    load_current_a : float
+        Operating load current in amperes.
+    continuous_load : bool
+        True if the load is continuous (>= 3 hours). Default: False.
+
+    ---Returns---
+    result : dict
+        {required_ocpd_a, breaker_rating_a, continuous_load}. ``breaker_rating_a``
+        is None if the requirement exceeds the standard-rating table.
+
+    ---LaTeX---
+    I_{OCPD} \\geq k \\cdot I_{load}, \\quad k = 1.25 \\text{ (continuous)}, 1.0 \\text{ (otherwise)}
+
+    ---References---
+    NFPA 70 (NEC), 210.20(A), 215.3, 240.6(A).
+    """
+    if load_current_a <= 0:
+        raise ValueError("Load current must be positive")
+    factor = 1.25 if continuous_load else 1.0
+    required = load_current_a * factor
+    return {
+        "required_ocpd_a": required,
+        "breaker_rating_a": next_standard_ocpd(required),
+        "continuous_load": continuous_load,
+    }
+
+
+def check_conductor_protection(
+    breaker_rating_a: float,
+    corrected_ampacity_a: float,
+    wire_size: str,
+    material: str,
+) -> dict:
+    """
+    Check whether an OCPD rating properly protects a conductor per NEC 240.4.
+
+    Applies the general rule (OCPD <= conductor ampacity), the 240.4(B)
+    next-standard-size-up allowance (permitted up to 800 A when the conductor
+    ampacity does not correspond to a standard rating), and the 240.4(D)
+    small-conductor caps, which override the next-size-up allowance.
+
+    ---Parameters---
+    breaker_rating_a : float
+        Selected standard OCPD rating in amperes.
+    corrected_ampacity_a : float
+        Conductor ampacity after temperature/bundling correction, in amperes.
+    wire_size : str
+        Conductor size (e.g. "12 AWG").
+    material : str
+        "copper" or "aluminum".
+
+    ---Returns---
+    result : dict
+        {protected, small_conductor_cap_a, allowance, note}.
+
+    ---References---
+    NFPA 70 (NEC), 240.4(B) next standard size, 240.4(D) small conductors.
+    """
+    material = material.lower()
+    cap = SMALL_CONDUCTOR_MAX_OCPD.get(material, {}).get(wire_size)
+    allowance = "none"
+
+    if breaker_rating_a <= corrected_ampacity_a + 1e-9:
+        protected = True
+        note = "OCPD rating does not exceed conductor ampacity (NEC 240.4)."
+    else:
+        # 240.4(B): the next standard rating above the conductor ampacity is
+        # permitted, for ratings <= 800 A.
+        next_up = next_standard_ocpd(corrected_ampacity_a + 1e-9)
+        if next_up is not None and breaker_rating_a == next_up and breaker_rating_a <= 800:
+            protected = True
+            allowance = "240.4(B)"
+            note = ("Protected via NEC 240.4(B): next standard OCPD size above "
+                    "conductor ampacity is permitted (<= 800 A).")
+        else:
+            protected = False
+            note = ("OCPD rating exceeds conductor ampacity; conductor is not "
+                    "protected (NEC 240.4).")
+
+    # 240.4(D) small-conductor cap is an absolute override.
+    if cap is not None and breaker_rating_a > cap:
+        protected = False
+        allowance = "none"
+        note = (f"NEC 240.4(D): {wire_size} {material} is limited to a {cap} A "
+                f"overcurrent device.")
+
+    return {
+        "protected": protected,
+        "small_conductor_cap_a": cap,
+        "allowance": allowance,
+        "note": note,
+    }
+
+
+def evaluate_circuit(
+    current_a: float,
+    voltage_v: float,
+    length_m: float,
+    material: str = "copper",
+    insulation_temp_rating: int = 75,
+    ambient_temp_c: float = 30.0,
+    num_conductors: int = 3,
+    max_voltage_drop_percent: float = 3.0,
+    circuit_type: str = "DC",
+    continuous_load: bool = False,
+) -> dict:
+    """
+    Full NEC branch-circuit evaluation with a single pass/fail verdict.
+
+    Recommends the code-minimum conductor: the smallest size that satisfies
+    ampacity, overcurrent protection (NEC 240.4/240.6), and — for continuous
+    loads — the 125% conductor rule (NEC 210.19(A)). Voltage drop is treated as
+    advisory (NEC Informational Notes), so it never drives the recommendation or
+    the pass/fail verdict; instead the result reports the drop at the recommended
+    conductor and, if it exceeds the target, the smallest conductor that would
+    meet it.
+
+    ---Parameters---
+    current_a : float
+        Operating load current in amperes.
+    voltage_v : float
+        System voltage in volts.
+    length_m : float
+        One-way run length in meters.
+    material : str
+        "copper" or "aluminum". Default: "copper".
+    insulation_temp_rating : int
+        Insulation rating 60, 75, or 90 (°C). Default: 75.
+    ambient_temp_c : float
+        Ambient temperature (°C). Default: 30.0.
+    num_conductors : int
+        Current-carrying conductors in the raceway. Default: 3.
+    max_voltage_drop_percent : float
+        Voltage-drop limit (NEC recommends 3% branch, 5% total). Default: 3.0.
+    circuit_type : str
+        "DC" or "AC". Default: "DC".
+    continuous_load : bool
+        True if the load runs >= 3 hours. Default: False.
+
+    ---Returns---
+    result : dict
+        The recommended-conductor sizing dict, augmented with ``breaker``
+        (selection), ``protection`` (240.4 check), ``continuous_conductor_ok``,
+        ``voltage_drop_advisory`` = {target_percent, actual_percent,
+        within_target, suggested_size, suggested_percent}, and a ``verdict`` =
+        {status, headline, binding_constraint, reasons, checks}. ``checks``
+        covers only the mandatory code checks (ampacity, overcurrent_protection,
+        continuous_conductor). ``status`` is one of "pass", "marginal", "fail".
+
+    ---References---
+    NFPA 70 (NEC), 210.19(A), 210.20(A), 240.4, 240.6, 310.16.
+    """
+    breaker = select_breaker(current_a, continuous_load)
+    breaker_rating = breaker["breaker_rating_a"]
+    sizes = get_wire_sizes_for_material(material)
+
+    def _evaluate_size(size: str):
+        """Return (check_dict, protection_dict, continuous_ok) for one size."""
+        chk = check_wire_size(
+            size, current_a, voltage_v, length_m, material,
+            insulation_temp_rating, ambient_temp_c, num_conductors,
+            max_voltage_drop_percent, circuit_type,
+        )
+        if breaker_rating is None:
+            prot = {"protected": False, "small_conductor_cap_a": None,
+                    "allowance": "none",
+                    "note": "Load exceeds the largest standard OCPD rating."}
+        else:
+            prot = check_conductor_protection(
+                breaker_rating, chk["corrected_ampacity_a"], size, material)
+        cont_ok = (chk["corrected_ampacity_a"] >= 1.25 * current_a - 1e-9
+                   if continuous_load else True)
+        return chk, prot, cont_ok
+
+    # Stage 1: smallest conductor meeting ampacity + overcurrent protection +
+    # (for continuous loads) the 125% conductor rule. Voltage drop handled next.
+    chosen = None
+    for size in sizes:
+        chk, prot, cont_ok = _evaluate_size(size)
+        if chk["ampacity_ok"] and prot["protected"] and cont_ok:
+            chosen = (size, chk, prot, cont_ok)
+            break
+    if chosen is None:
+        size = sizes[-1]
+        chosen = (size, *_evaluate_size(size))
+
+    # The recommendation is the code-minimum conductor from Stage 1. Voltage
+    # drop is advisory (NEC 210.19(A)/215.2(A) Informational Notes), so it does
+    # NOT drive the recommendation or the pass/fail verdict — only ampacity and
+    # overcurrent protection are code requirements.
+    size, chk, protection, continuous_conductor_ok = chosen
+
+    # Voltage-drop advisory, evaluated at the recommended conductor. If it
+    # exceeds the target, find the smallest larger conductor that would meet it.
+    vd_within_target = bool(chk["voltage_drop_ok"])
+    suggested_vd_size = None
+    suggested_vd_percent = None
+    if not vd_within_target:
+        idx = sizes.index(size)
+        for s2 in sizes[idx + 1:]:
+            c2, p2, ct2 = _evaluate_size(s2)
+            if c2["voltage_drop_ok"] and c2["ampacity_ok"] and p2["protected"] and ct2:
+                suggested_vd_size = s2
+                suggested_vd_percent = c2["voltage_drop_percent"]
+                break
+
+    # Normalize to the calculate_wire_size field names the UI expects.
+    sizing = dict(chk)
+    sizing["recommended_size"] = sizing.pop("wire_size")
+    sizing["recommended_base_ampacity_a"] = sizing.pop("base_ampacity_a")
+    sizing["max_voltage_drop_percent"] = max_voltage_drop_percent
+    derating = sizing.get("total_derating_factor") or 1.0
+    sizing["required_ampacity_a"] = current_a / derating
+
+    # Mandatory (code) checks only — voltage drop is advisory, not a check.
+    checks = {
+        "ampacity": bool(sizing["ampacity_ok"]),
+        "overcurrent_protection": bool(protection["protected"]),
+        "continuous_conductor": bool(continuous_conductor_ok),
+    }
+
+    reasons: List[str] = []
+    if not checks["ampacity"]:
+        reasons.append(
+            f"Ampacity: corrected {sizing['corrected_ampacity_a']:.0f} A < load "
+            f"{current_a:.0f} A (exceeds the largest standard conductor).")
+    if not checks["overcurrent_protection"]:
+        reasons.append(protection["note"])
+    if not checks["continuous_conductor"]:
+        reasons.append(
+            "Continuous load: conductor ampacity below 125% of load "
+            "(NEC 210.19(A)).")
+
+    if not all(checks.values()):
+        status = "fail"
+        for key in ("ampacity", "overcurrent_protection", "continuous_conductor"):
+            if not checks[key]:
+                binding = key
+                break
+        headline = f"FAIL — {reasons[0]}"
+    else:
+        # Code-compliant. A thin ampacity margin is flagged as marginal.
+        status = ("marginal"
+                  if sizing["ampacity_margin_percent"] < _AMPACITY_MARGINAL_PCT
+                  else "pass")
+        binding = "ampacity"
+        verb = "Marginal" if status == "marginal" else "Pass"
+        headline = (f"{verb} — {sizing['recommended_size']} {material} on a "
+                    f"{breaker_rating} A breaker (NEC code minimum).")
+
+    sizing["breaker"] = breaker
+    sizing["protection"] = protection
+    sizing["continuous_load"] = continuous_load
+    sizing["continuous_conductor_ok"] = continuous_conductor_ok
+    sizing["voltage_drop_advisory"] = {
+        "target_percent": max_voltage_drop_percent,
+        "actual_percent": sizing["voltage_drop_percent"],
+        "within_target": vd_within_target,
+        "suggested_size": suggested_vd_size,
+        "suggested_percent": suggested_vd_percent,
+    }
+    sizing["verdict"] = {
+        "status": status,
+        "headline": headline,
+        "binding_constraint": binding,
+        "reasons": reasons,
+        "checks": checks,
+    }
+    return sizing

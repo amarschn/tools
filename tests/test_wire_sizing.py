@@ -690,5 +690,127 @@ class TestRealWorldScenarios:
         # May warn about voltage drop depending on wire size
 
 
+# =============================================================================
+# Overcurrent Protection & Circuit Verdict (NEC 240 / 210)
+# =============================================================================
+
+class TestBreakerSelection:
+    """NEC 240.6(A) standard ratings and 210.20(A) continuous-load sizing."""
+
+    def test_next_standard_rounds_up(self):
+        """46 A must round up to the 50 A standard rating (NEC 240.6(A))."""
+        assert wire_sizing.next_standard_ocpd(46) == 50
+
+    def test_next_standard_exact_match(self):
+        """A value equal to a standard rating returns that rating."""
+        assert wire_sizing.next_standard_ocpd(20) == 20
+
+    def test_next_standard_exceeds_table(self):
+        """Above the largest standard rating returns None."""
+        assert wire_sizing.next_standard_ocpd(7000) is None
+
+    def test_noncontinuous_breaker(self):
+        """A 40 A non-continuous load takes a 40 A device."""
+        assert wire_sizing.select_breaker(40, continuous_load=False)["breaker_rating_a"] == 40
+
+    def test_continuous_breaker_125pct(self):
+        """A 40 A continuous load needs 1.25x -> 50 A (NEC 210.20(A))."""
+        assert wire_sizing.select_breaker(40, continuous_load=True)["breaker_rating_a"] == 50
+
+    def test_negative_current_raises(self):
+        with pytest.raises(ValueError):
+            wire_sizing.select_breaker(-5)
+
+
+class TestConductorProtection:
+    """NEC 240.4 protection rules."""
+
+    def test_general_rule_protected(self):
+        """OCPD <= conductor ampacity is protected."""
+        r = wire_sizing.check_conductor_protection(50, 65, "6 AWG", "copper")
+        assert r["protected"] is True
+
+    def test_small_conductor_cap_overrides(self):
+        """12 AWG Cu is capped at 20 A regardless of ampacity (NEC 240.4(D))."""
+        r = wire_sizing.check_conductor_protection(30, 30, "12 AWG", "copper")
+        assert r["protected"] is False
+        assert r["small_conductor_cap_a"] == 20
+
+    def test_next_size_up_allowance(self):
+        """125 A device on a 115 A-ampacity conductor is allowed (NEC 240.4(B))."""
+        r = wire_sizing.check_conductor_protection(125, 115, "2 AWG", "copper")
+        assert r["protected"] is True
+        assert r["allowance"] == "240.4(B)"
+
+    def test_overcurrent_not_protected(self):
+        """A device two sizes above ampacity is not protected."""
+        r = wire_sizing.check_conductor_protection(150, 115, "2 AWG", "copper")
+        assert r["protected"] is False
+
+
+class TestEvaluateCircuit:
+    """End-to-end verdict combining ampacity, voltage drop, and protection."""
+
+    def test_voltage_drop_is_advisory_not_a_verdict_check(self):
+        """40 A / 120 V / 30 m: recommends code-min 8 AWG and PASSES; high VD is
+        only advisory, with a suggested upsize."""
+        r = wire_sizing.evaluate_circuit(40, 120, 30, "copper", 75, 30, 3, 3.0, "DC")
+        assert r["recommended_size"] == "8 AWG"          # code minimum, not upsized
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        adv = r["voltage_drop_advisory"]
+        assert adv["within_target"] is False             # VD exceeds 3%
+        assert adv["suggested_size"] is not None          # offers an upsize
+        assert "voltage_drop" not in r["verdict"]["checks"]
+
+    def test_60a_shed_feeder_recommends_code_minimum(self):
+        """Real-world check: 60 A / 240 V / 50 m recommends 6 AWG (code min),
+        not an aggressively upsized conductor."""
+        r = wire_sizing.evaluate_circuit(60, 240, 50, "copper", 75, 30, 3, 3.0, "AC")
+        assert r["recommended_size"] == "6 AWG"
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        # VD at 6 AWG exceeds 3%, so it suggests upsizing (to 4 AWG or larger).
+        assert r["voltage_drop_advisory"]["within_target"] is False
+        assert r["voltage_drop_advisory"]["suggested_size"] is not None
+
+    def test_unsatisfiable_voltage_drop_still_passes_code(self):
+        """A run no conductor can bring under 3% VD still passes code (ampacity/
+        OCPD) with no VD upsize available."""
+        r = wire_sizing.evaluate_circuit(150, 12, 60, "copper", 75, 30, 3, 3.0, "DC")
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        assert r["voltage_drop_advisory"]["within_target"] is False
+        assert r["voltage_drop_advisory"]["suggested_size"] is None
+
+    def test_short_run_passes(self):
+        """A short, lightly loaded run passes all checks."""
+        r = wire_sizing.evaluate_circuit(20, 240, 5, "copper", 75, 30, 3, 3.0, "DC")
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        assert all(r["verdict"]["checks"].values())
+
+    def test_verdict_has_breaker_and_checks(self):
+        """Verdict exposes breaker selection and the four named checks."""
+        r = wire_sizing.evaluate_circuit(30, 120, 8, "copper", 75, 30, 3, 3.0, "DC")
+        assert r["breaker"]["breaker_rating_a"] is not None
+        assert set(r["verdict"]["checks"]) == {
+            "ampacity", "overcurrent_protection", "continuous_conductor"}
+
+    def test_continuous_load_upsizes_conductor(self):
+        """A continuous load is sized so conductor ampacity >= 125% of load."""
+        # 50 A continuous: conductor must carry >= 62.5 A, so 8 AWG (50 A) is
+        # rejected in favor of 6 AWG (65 A). Verdict should not fail on the
+        # continuous-conductor rule.
+        r = wire_sizing.evaluate_circuit(50, 240, 5, "copper", 75, 30, 3, 3.0,
+                                         "DC", continuous_load=True)
+        assert r["verdict"]["checks"]["continuous_conductor"] is True
+        assert r["corrected_ampacity_a"] >= 1.25 * 50
+
+    def test_small_conductor_upsizes_for_protection(self):
+        """20 A load upsizes 14 AWG -> 12 AWG so a 20 A breaker can protect it."""
+        # 14 AWG Cu ampacity is 20 A but NEC 240.4(D) caps it at a 15 A breaker,
+        # so a 20 A circuit must use 12 AWG (protected at 20 A).
+        r = wire_sizing.evaluate_circuit(20, 240, 5, "copper", 75, 30, 3, 3.0, "DC")
+        assert r["recommended_size"] == "12 AWG"
+        assert r["verdict"]["checks"]["overcurrent_protection"] is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

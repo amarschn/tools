@@ -13,19 +13,20 @@
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
 
-    <title>Wire Sizing Calculator | NEC Compliant</title>
-    <meta name="description" content="Select conductor gauges based on current, voltage drop, and temperature rise limits for electrical circuits.">
+    <title>NEC Wire Size &amp; Ampacity Calculator - Transparent Tools</title>
+    <meta name="description" content="NEC wire size calculator: conductor gauge, breaker/OCPD (NEC 240), voltage drop, and a pass/fail code verdict for copper and aluminum.">
     <link rel="canonical" href="https://transparent.tools/tools/wire-sizing/">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Wire Sizing Calculator | NEC Compliant">
-    <meta property="og:description" content="Select conductor gauges based on current, voltage drop, and temperature rise limits for electrical circuits.">
+    <meta property="og:title" content="NEC Wire Size & Ampacity Calculator - Transparent Tools">
+    <meta property="og:description" content="NEC wire size calculator: conductor gauge, breaker/OCPD (NEC 240), voltage drop, and a pass/fail code verdict for copper and aluminum.">
     <meta property="og:url" content="https://transparent.tools/tools/wire-sizing/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Wire Sizing Calculator | NEC Compliant">
-    <meta name="twitter:description" content="Select conductor gauges based on current, voltage drop, and temperature rise limits for electrical circuits.">
+    <meta name="twitter:title" content="NEC Wire Size & Ampacity Calculator - Transparent Tools">
+    <meta name="twitter:description" content="NEC wire size calculator: conductor gauge, breaker/OCPD (NEC 240), voltage drop, and a pass/fail code verdict for copper and aluminum.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
     <script src="/shared/analytics-autotrack.js" defer></script>
+    <script src="/shared/verdict.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -686,8 +687,8 @@
 
     <main class="container">
         <header class="tool-header">
-            <h1>Wire Sizing Calculator</h1>
-            <p>Calculate proper wire gauge per NEC 310.16 ampacity tables. Accounts for temperature derating, bundling factors, and voltage drop.</p>
+            <h1>NEC Wire Size &amp; Ampacity Calculator</h1>
+            <p>Size conductors per NEC 310.16 with temperature and bundling derates, select the breaker/OCPD (NEC 240), and get a pass/fail code verdict. Voltage drop is reported as advisory.</p>
         </header>
 
         <div class="mode-toggle">
@@ -702,6 +703,20 @@
                     <h2>Input Parameters</h2>
                 </div>
                 <div class="card-body">
+                    <div class="form-group">
+                        <label class="form-label">Circuit Type</label>
+                        <select id="preset" class="form-select">
+                            <option value="branch120">120 V branch circuit</option>
+                            <option value="branch240">240 V branch circuit</option>
+                            <option value="feeder240">240 V feeder / subpanel</option>
+                            <option value="dc12">12 V DC</option>
+                            <option value="dc24">24 V DC</option>
+                            <option value="dc48">48 V DC</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <p class="form-hint">Sets voltage, AC/DC, and the voltage-drop target</p>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label">Load Current (A)</label>
                         <input type="number" id="current" class="form-input" value="20" min="0.1" step="0.1">
@@ -762,6 +777,14 @@
                             <option value="DC">DC</option>
                             <option value="AC" selected>AC (Single Phase)</option>
                         </select>
+                    </div>
+
+                    <div class="form-group advanced-only">
+                        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" id="continuous" style="width:auto;">
+                            Continuous load (≥ 3 hrs)
+                        </label>
+                        <p class="form-hint">Sizes the breaker and conductor at 125% of load (NEC 210.19 / 210.20)</p>
                     </div>
 
                     <div class="divider"></div>
@@ -897,6 +920,8 @@
             conductors: document.getElementById('conductors'),
             maxVdrop: document.getElementById('maxVdrop'),
             circuitType: document.getElementById('circuitType'),
+            continuous: document.getElementById('continuous'),
+            preset: document.getElementById('preset'),
             calculateBtn: document.getElementById('calculateBtn'),
             statusMsg: document.getElementById('statusMsg'),
             resultsContent: document.getElementById('resultsContent'),
@@ -952,17 +977,18 @@
                 const conductors = parseInt(elements.conductors.value) || 3;
                 const maxVdrop = parseFloat(elements.maxVdrop.value) || 3;
                 const circuitType = elements.circuitType.value;
+                const continuous = elements.continuous.checked;
 
                 // Validate inputs
                 if (isNaN(current) || current <= 0) throw new Error('Invalid current');
                 if (isNaN(voltage) || voltage <= 0) throw new Error('Invalid voltage');
                 if (isNaN(length) || length <= 0) throw new Error('Invalid length');
 
-                // Call Python
-                const calculateFn = wireSizingModule.get('calculate_wire_size');
+                // Call Python — full NEC evaluation (ampacity + VD + breaker + verdict)
+                const calculateFn = wireSizingModule.get('evaluate_circuit');
                 const resultProxy = calculateFn(
                     current, voltage, length, material, insulation,
-                    ambient, conductors, maxVdrop, circuitType
+                    ambient, conductors, maxVdrop, circuitType, continuous
                 );
 
                 const result = resultProxy.toJs({ dict_converter: Object.fromEntries });
@@ -987,9 +1013,15 @@
         // =====================================================================
         function displayResults(result) {
             const warnings = result.warnings || [];
-            const overallOk = result.overall_ok;
+            const verdict = result.verdict || {};
+            const breaker = result.breaker || {};
+            const protection = result.protection || {};
+            const advisory = result.voltage_drop_advisory || {};
+            const breakerRating = breaker.breaker_rating_a;
 
             let html = `
+                <div id="verdictBanner"></div>
+
                 <div class="wire-size-display">
                     <div class="wire-size-value">${result.recommended_size}</div>
                     <div class="wire-size-label">Recommended Wire Size</div>
@@ -1028,11 +1060,38 @@
 
                 <div class="result-panel">
                     <div class="result-header">
-                        <span class="result-title">Voltage Drop</span>
-                        <span class="result-badge ${result.voltage_drop_ok ? 'badge-pass' : (result.voltage_drop_percent <= 5 ? 'badge-warn' : 'badge-fail')}">
+                        <span class="result-title">Overcurrent Protection (NEC 240)</span>
+                        <span class="result-badge ${protection.protected ? 'badge-pass' : 'badge-fail'}">
+                            ${protection.protected ? 'PROTECTED' : 'NOT PROTECTED'}
+                        </span>
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Breaker / Fuse</div>
+                            <div class="metric-value">${breakerRating != null ? breakerRating : '—'}<span class="metric-unit">A</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Min Device Rating</div>
+                            <div class="metric-value">${breaker.required_ocpd_a != null ? breaker.required_ocpd_a.toFixed(1) : '—'}<span class="metric-unit">A</span></div>
+                        </div>
+                    </div>
+                    ${protection.note ? `<p class="form-hint" style="margin-top:12px;">${protection.note}</p>` : ''}
+                </div>
+
+                <div class="result-panel">
+                    <div class="result-header">
+                        <span class="result-title">Voltage Drop <span style="font-weight:400;opacity:.6;">· advisory</span></span>
+                        <span class="result-badge ${advisory.within_target ? 'badge-pass' : 'badge-warn'}">
                             ${result.voltage_drop_percent.toFixed(1)}%
                         </span>
                     </div>
+                    ${!advisory.within_target ? `
+                    <p class="form-hint" style="margin:0 0 12px;">
+                        Above the ${advisory.target_percent}% guideline (a recommendation, not an NEC requirement).
+                        ${advisory.suggested_size
+                            ? `For ≤${advisory.target_percent}%, upsize to <strong>${advisory.suggested_size}</strong> (${advisory.suggested_percent.toFixed(1)}%).`
+                            : `No standard conductor meets ≤${advisory.target_percent}% on this run.`}
+                    </p>` : ''}
                     <div class="vdrop-bar-container">
                         <div class="vdrop-bar-bg">
                             <div class="vdrop-bar-fill ${result.voltage_drop_ok ? 'ok' : (result.voltage_drop_percent <= 5 ? 'warn' : 'fail')}"
@@ -1068,6 +1127,16 @@
             }
 
             elements.resultsContent.innerHTML = html;
+
+            if (window.TransparentVerdict && verdict.status) {
+                TransparentVerdict.render(document.getElementById('verdictBanner'), {
+                    status: verdict.status,
+                    headline: verdict.headline,
+                    bindingConstraint: verdict.binding_constraint,
+                    reasons: verdict.reasons,
+                    checks: verdict.checks,
+                });
+            }
         }
 
         function displayDiagram(result) {
@@ -1190,6 +1259,27 @@
         });
 
         elements.calculateBtn.addEventListener('click', calculate);
+
+        // Circuit presets: set voltage, AC/DC, and the voltage-drop target together.
+        const PRESETS = {
+            branch120: { voltage: 120, circuitType: 'AC', maxVdrop: 3 },
+            branch240: { voltage: 240, circuitType: 'AC', maxVdrop: 3 },
+            feeder240: { voltage: 240, circuitType: 'AC', maxVdrop: 3 },
+            dc12:      { voltage: 12,  circuitType: 'DC', maxVdrop: 3 },
+            dc24:      { voltage: 24,  circuitType: 'DC', maxVdrop: 3 },
+            dc48:      { voltage: 48,  circuitType: 'DC', maxVdrop: 3 },
+        };
+        elements.preset.addEventListener('change', () => {
+            const p = PRESETS[elements.preset.value];
+            if (!p) return; // "custom" leaves fields as-is
+            elements.voltage.value = p.voltage;
+            elements.circuitType.value = p.circuitType;
+            elements.maxVdrop.value = p.maxVdrop;
+            if (wireSizingModule) calculate();
+        });
+        // Editing voltage/type directly means the preset no longer describes it.
+        [elements.voltage, elements.circuitType].forEach(el =>
+            el.addEventListener('change', () => { elements.preset.value = 'custom'; }));
 
         // Calculate on Enter key
         document.querySelectorAll('.form-input').forEach(input => {
