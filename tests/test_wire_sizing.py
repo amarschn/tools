@@ -812,5 +812,45 @@ class TestEvaluateCircuit:
         assert r["verdict"]["checks"]["overcurrent_protection"] is True
 
 
+class TestFreeAirAmpacity:
+    """NEC Table 310.17 free-air ampacities (for PV / free-air circuits).
+
+    Values cross-checked across three references on 2026-07-14; small-conductor
+    copper (14/12/10 AWG) confirmed at 25/30/40 A (60 C), rejecting the outlier
+    source that listed 30/35/50.
+    """
+
+    def test_copper_small_conductors_60c(self):
+        t = wire_sizing.get_free_air_ampacity_table("copper", 60)
+        assert t["14 AWG"] == 25
+        assert t["12 AWG"] == 30
+        assert t["10 AWG"] == 40  # NOT 50 (rejected outlier source)
+
+    def test_copper_free_air_exceeds_raceway(self):
+        """Free air (310.17) ampacity must exceed raceway (310.16) for a size."""
+        free = wire_sizing.get_free_air_ampacity_table("copper", 75)
+        raceway = wire_sizing.get_ampacity_table("copper", 75)
+        assert free["6 AWG"] > raceway["6 AWG"]  # 95 > 65
+
+    def test_copper_midrange_values(self):
+        t = wire_sizing.get_free_air_ampacity_table("copper", 75)
+        assert t["6 AWG"] == 95
+        assert t["1/0 AWG"] == 230
+        assert t["4/0 AWG"] == 360
+
+    def test_aluminum_values(self):
+        t = wire_sizing.get_free_air_ampacity_table("aluminum", 75)
+        assert t["6 AWG"] == 75
+        assert t["4/0 AWG"] == 280
+
+    def test_invalid_material_raises(self):
+        with pytest.raises(ValueError):
+            wire_sizing.get_free_air_ampacity_table("gold", 75)
+
+    def test_invalid_rating_raises(self):
+        with pytest.raises(ValueError):
+            wire_sizing.get_free_air_ampacity_table("copper", 100)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

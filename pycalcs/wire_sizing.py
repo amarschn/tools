@@ -1154,3 +1154,105 @@ def evaluate_circuit(
         "checks": checks,
     }
     return sizing
+
+
+# =============================================================================
+# Free-air ampacity — NEC Table 310.17 (for PV / free-air installations)
+# =============================================================================
+#
+# Allowable ampacities of single-insulated conductors in FREE AIR, based on a
+# 30 C ambient. These are higher than the Table 310.16 (raceway) values used by
+# the premises calculator, and are the correct basis for PV array (single-
+# conductor, free-air) circuits.
+#
+# DATA PROVENANCE (sourced & cross-checked 2026-07-14):
+#   Cross-checked across three independent references. Copper small-conductor
+#   values (14/12/10 AWG = 25/30/40 A at 60 C) were confirmed by two of three;
+#   the Lapp Tannehill chart disagreed (listed 30/35/50) and was rejected.
+#   Aluminum 90 C values show <=5 A variance between sources at a few sizes;
+#   the values below follow buildmyowncabin's NEC 310-17 reproduction, which is
+#   complete and internally consistent. This table is UNVERIFIED by a human and
+#   the PV tool must remain Experimental until a maintainer checks it.
+#   Refs: wireref.com/ampacity/free-air (NEC 2023);
+#         buildmyowncabin.com/nec/nec2002_table310-17.html;
+#         lapptannehill.com ampacity chart (copper large sizes only).
+
+AMPACITY_FREE_AIR: Dict[str, Dict[int, Dict[str, int]]] = {
+    "copper": {
+        60: {
+            "14 AWG": 25, "12 AWG": 30, "10 AWG": 40, "8 AWG": 60, "6 AWG": 80,
+            "4 AWG": 105, "3 AWG": 120, "2 AWG": 140, "1 AWG": 165,
+            "1/0 AWG": 195, "2/0 AWG": 225, "3/0 AWG": 260, "4/0 AWG": 300,
+            "250 kcmil": 340, "300 kcmil": 375, "350 kcmil": 420, "400 kcmil": 455,
+            "500 kcmil": 515, "600 kcmil": 575, "700 kcmil": 630, "750 kcmil": 655,
+            "800 kcmil": 680, "900 kcmil": 730, "1000 kcmil": 780,
+        },
+        75: {
+            "14 AWG": 30, "12 AWG": 35, "10 AWG": 50, "8 AWG": 70, "6 AWG": 95,
+            "4 AWG": 125, "3 AWG": 145, "2 AWG": 170, "1 AWG": 195,
+            "1/0 AWG": 230, "2/0 AWG": 265, "3/0 AWG": 310, "4/0 AWG": 360,
+            "250 kcmil": 405, "300 kcmil": 445, "350 kcmil": 505, "400 kcmil": 545,
+            "500 kcmil": 620, "600 kcmil": 690, "700 kcmil": 755, "750 kcmil": 785,
+            "800 kcmil": 815, "900 kcmil": 870, "1000 kcmil": 935,
+        },
+        90: {
+            "14 AWG": 35, "12 AWG": 40, "10 AWG": 55, "8 AWG": 80, "6 AWG": 105,
+            "4 AWG": 140, "3 AWG": 165, "2 AWG": 190, "1 AWG": 220,
+            "1/0 AWG": 260, "2/0 AWG": 300, "3/0 AWG": 350, "4/0 AWG": 405,
+            "250 kcmil": 455, "300 kcmil": 505, "350 kcmil": 570, "400 kcmil": 615,
+            "500 kcmil": 700, "600 kcmil": 780, "700 kcmil": 855, "750 kcmil": 885,
+            "800 kcmil": 920, "900 kcmil": 985, "1000 kcmil": 1055,
+        },
+    },
+    "aluminum": {
+        60: {
+            "12 AWG": 25, "10 AWG": 35, "8 AWG": 45, "6 AWG": 60, "4 AWG": 80,
+            "3 AWG": 95, "2 AWG": 110, "1 AWG": 130, "1/0 AWG": 150, "2/0 AWG": 175,
+            "3/0 AWG": 200, "4/0 AWG": 235, "250 kcmil": 265, "300 kcmil": 290,
+            "350 kcmil": 330, "400 kcmil": 355, "500 kcmil": 405, "600 kcmil": 455,
+            "700 kcmil": 500, "750 kcmil": 515, "800 kcmil": 535, "900 kcmil": 580,
+            "1000 kcmil": 625,
+        },
+        75: {
+            "12 AWG": 30, "10 AWG": 40, "8 AWG": 55, "6 AWG": 75, "4 AWG": 100,
+            "3 AWG": 115, "2 AWG": 135, "1 AWG": 155, "1/0 AWG": 180, "2/0 AWG": 210,
+            "3/0 AWG": 240, "4/0 AWG": 280, "250 kcmil": 315, "300 kcmil": 350,
+            "350 kcmil": 395, "400 kcmil": 425, "500 kcmil": 485, "600 kcmil": 540,
+            "700 kcmil": 595, "750 kcmil": 620, "800 kcmil": 645, "900 kcmil": 700,
+            "1000 kcmil": 750,
+        },
+        90: {
+            "12 AWG": 35, "10 AWG": 40, "8 AWG": 60, "6 AWG": 80, "4 AWG": 110,
+            "3 AWG": 130, "2 AWG": 150, "1 AWG": 175, "1/0 AWG": 205, "2/0 AWG": 235,
+            "3/0 AWG": 275, "4/0 AWG": 315, "250 kcmil": 355, "300 kcmil": 395,
+            "350 kcmil": 445, "400 kcmil": 480, "500 kcmil": 545, "600 kcmil": 615,
+            "700 kcmil": 675, "750 kcmil": 700, "800 kcmil": 725, "900 kcmil": 785,
+            "1000 kcmil": 845,
+        },
+    },
+}
+
+
+def get_free_air_ampacity_table(material: str, insulation_temp_rating: int) -> Dict[str, int]:
+    """
+    Return the NEC Table 310.17 (free-air) ampacity table for a material/rating.
+
+    ---Parameters---
+    material : str
+        "copper" or "aluminum".
+    insulation_temp_rating : int
+        60, 75, or 90 (deg C).
+
+    ---Returns---
+    table : Dict[str, int]
+        Wire size -> free-air ampacity (A) at 30 C ambient.
+
+    ---References---
+    NFPA 70 (NEC), Table 310.17: single insulated conductors in free air.
+    """
+    material = material.lower()
+    if material not in AMPACITY_FREE_AIR:
+        raise ValueError("Material must be 'copper' or 'aluminum'")
+    if insulation_temp_rating not in (60, 75, 90):
+        raise ValueError("Insulation rating must be 60, 75, or 90")
+    return dict(AMPACITY_FREE_AIR[material][insulation_temp_rating])
