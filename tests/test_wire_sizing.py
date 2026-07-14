@@ -852,5 +852,46 @@ class TestFreeAirAmpacity:
             wire_sizing.get_free_air_ampacity_table("copper", 100)
 
 
+class TestPvCircuit:
+    """NEC 690.8 / 690.9 PV conductor sizing (free-air basis)."""
+
+    def test_max_current_and_required_base(self):
+        """690.8(A): Imax = 1.25*Isc; 690.8(B)(1) base >= 1.5625*Isc."""
+        r = wire_sizing.evaluate_pv_circuit(10, 40, 5)
+        assert r["design_current_a"] == pytest.approx(12.5)
+        assert r["required_base_ampacity_a"] == pytest.approx(15.625)
+
+    def test_ocpd_rounds_up_to_standard(self):
+        """690.9(B): OCPD = 156.25% of Isc rounded up (30 A -> 46.9 -> 50 A)."""
+        r = wire_sizing.evaluate_pv_circuit(30, 600, 10)
+        assert r["breaker"]["breaker_rating_a"] == 50
+
+    def test_recommends_conductor_meeting_690_8(self):
+        """Chosen conductor satisfies both 690.8(B) rules."""
+        r = wire_sizing.evaluate_pv_circuit(10, 40, 5)
+        assert r["ampacity_ok"] is True
+        assert r["recommended_base_ampacity_a"] >= r["required_base_ampacity_a"]
+        assert r["corrected_ampacity_a"] >= r["design_current_a"]
+        assert r["verdict"]["status"] in ("pass", "marginal")
+
+    def test_uses_free_air_table(self):
+        """PV sizing uses the higher free-air ampacity, not the raceway table."""
+        # 10 AWG copper 90C: free air = 55 A (raceway = 40 A). A circuit that
+        # needs ~47 A base fits 10 AWG only on the free-air table.
+        r = wire_sizing.evaluate_pv_circuit(30, 600, 5, insulation_temp_rating=90)
+        assert r["recommended_size"] == "10 AWG"
+
+    def test_voltage_drop_is_advisory(self):
+        """High VD on a long low-voltage string does not fail the verdict."""
+        r = wire_sizing.evaluate_pv_circuit(8, 48, 30)
+        assert r["verdict"]["status"] in ("pass", "marginal")
+        assert r["voltage_drop_advisory"]["within_target"] is False
+        assert r["voltage_drop_advisory"]["suggested_size"] is not None
+
+    def test_invalid_isc_raises(self):
+        with pytest.raises(ValueError):
+            wire_sizing.evaluate_pv_circuit(0, 40, 5)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

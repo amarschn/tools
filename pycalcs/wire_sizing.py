@@ -1256,3 +1256,195 @@ def get_free_air_ampacity_table(material: str, insulation_temp_rating: int) -> D
     if insulation_temp_rating not in (60, 75, 90):
         raise ValueError("Insulation rating must be 60, 75, or 90")
     return dict(AMPACITY_FREE_AIR[material][insulation_temp_rating])
+
+
+# =============================================================================
+# Solar PV conductor sizing — NEC 690.8 / 690.9 (free-air basis)
+# =============================================================================
+
+def evaluate_pv_circuit(
+    isc_a: float,
+    voltage_v: float,
+    length_m: float,
+    material: str = "copper",
+    insulation_temp_rating: int = 90,
+    ambient_temp_c: float = 45.0,
+    num_conductors: int = 1,
+    max_voltage_drop_percent: float = 2.0,
+) -> dict:
+    """
+    Size a PV source/output circuit conductor per NEC 690.8/690.9 (free air).
+
+    The maximum circuit current is 125% of the module/array short-circuit
+    current (NEC 690.8(A)(1)), accounting for irradiance/temperature. The
+    conductor must satisfy BOTH 690.8(B) rules:
+      (1) its table (un-derated) ampacity >= 156.25% of Isc (the 125% continuous
+          factor on top of the 125% in the maximum current), and
+      (2) its derated ampacity (temperature + conduit adjustment) >= the maximum
+          circuit current (125% of Isc).
+    The overcurrent device, where required, is 156.25% of Isc rounded up to a
+    standard rating (690.9(B)). Free-air ampacity (Table 310.17) is used, as PV
+    array conductors are single conductors in free air. Voltage drop is advisory.
+
+    PV wire (USE-2/PV) is typically 90 C rated, so the 90 C column is the
+    default basis for the ampacity/derating checks.
+
+    ---Parameters---
+    isc_a : float
+        Module/array rated short-circuit current (Isc), in amperes.
+    voltage_v : float
+        Nominal circuit voltage, for the voltage-drop percentage.
+    length_m : float
+        One-way run length in meters (doubled for round-trip voltage drop).
+    material : str
+        "copper" or "aluminum". Default: "copper".
+    insulation_temp_rating : int
+        Conductor temperature column: 60, 75, or 90 (deg C). Default: 90.
+    ambient_temp_c : float
+        Ambient temperature at the array (deg C). Default: 45 (hot rooftop).
+    num_conductors : int
+        Current-carrying conductors bundled together. Default: 1 (free air).
+    max_voltage_drop_percent : float
+        Advisory voltage-drop target. Default: 2.0% (typical PV target).
+
+    ---Returns---
+    result : dict
+        recommended_size, table/derated ampacities, design_current_a,
+        required_base_ampacity_a, ocpd (breaker), voltage_drop_advisory, and a
+        verdict {status, headline, binding_constraint, reasons, checks}. The
+        mandatory check is 690.8(B) ampacity; voltage drop is advisory.
+
+    ---LaTeX---
+    I_{max} = 1.25 \\, I_{sc}
+
+    A_{table} \\geq 1.25 \\, I_{max} = 1.5625 \\, I_{sc}
+
+    A_{table} \\cdot f_{temp} \\cdot f_{bundle} \\geq I_{max}
+
+    ---References---
+    NFPA 70 (NEC), 690.8(A)(1), 690.8(B)(1)/(2), 690.9(B), Table 310.17.
+    """
+    if isc_a <= 0:
+        raise ValueError("Isc must be positive")
+    if voltage_v <= 0:
+        raise ValueError("Voltage must be positive")
+    if length_m <= 0:
+        raise ValueError("Length must be positive")
+    material = material.lower()
+    if insulation_temp_rating not in (60, 75, 90):
+        raise ValueError("Insulation rating must be 60, 75, or 90")
+
+    design_current = 1.25 * isc_a                 # 690.8(A)(1) max circuit current
+    required_base = 1.25 * design_current         # 690.8(B)(1): 156.25% of Isc
+
+    temp_factor = get_temp_correction_factor(ambient_temp_c, insulation_temp_rating)
+    bundling_factor = get_bundling_factor(num_conductors)
+    total_derating = temp_factor * bundling_factor
+    if total_derating <= 0:
+        raise ValueError(
+            f"Cannot operate at {ambient_temp_c} C with {insulation_temp_rating} C insulation")
+
+    table = get_free_air_ampacity_table(material, insulation_temp_rating)
+    sizes = [s for s in AWG_SIZES if s in table]
+
+    # Smallest conductor satisfying BOTH 690.8(B) rules.
+    chosen = None
+    for size in sizes:
+        base = table[size]
+        if base >= required_base - 1e-9 and base * total_derating >= design_current - 1e-9:
+            chosen = size
+            break
+    if chosen is None:
+        chosen = sizes[-1]
+    base_ampacity = table[chosen]
+    corrected_ampacity = base_ampacity * total_derating
+    ampacity_ok = (base_ampacity >= required_base - 1e-9
+                   and corrected_ampacity >= design_current - 1e-9)
+
+    # OCPD (690.9(B)): 156.25% of Isc, next standard rating up.
+    # NOTE (unverified): the 240.4(D) small-conductor OCPD caps are NOT applied
+    # here — PV free-air ampacities are high and 690.8 governs sizing, but the
+    # 240.4(D) interaction for PV is a nuance for human review before this tool
+    # leaves Experimental.
+    ocpd_required = required_base
+    ocpd_rating = next_standard_ocpd(ocpd_required)
+
+    # Voltage drop (advisory), computed at the operating current (~Isc).
+    r_per_m = get_resistance_per_meter(chosen, material, insulation_temp_rating)
+    round_trip = 2 * length_m
+    resistance = r_per_m * round_trip
+    voltage_drop = isc_a * resistance
+    voltage_drop_percent = (voltage_drop / voltage_v) * 100.0
+    vd_within_target = voltage_drop_percent <= max_voltage_drop_percent
+
+    suggested_vd_size = None
+    suggested_vd_percent = None
+    if not vd_within_target:
+        idx = sizes.index(chosen)
+        for s2 in sizes[idx + 1:]:
+            r2 = get_resistance_per_meter(s2, material, insulation_temp_rating)
+            vd2 = isc_a * r2 * round_trip
+            vd2_pct = (vd2 / voltage_v) * 100.0
+            if vd2_pct <= max_voltage_drop_percent:
+                suggested_vd_size = s2
+                suggested_vd_percent = vd2_pct
+                break
+
+    checks = {"ampacity_690_8": bool(ampacity_ok)}
+    reasons: List[str] = []
+    if not ampacity_ok:
+        reasons.append(
+            f"No conductor meets NEC 690.8(B): need table ampacity >= "
+            f"{required_base:.0f} A and derated >= {design_current:.0f} A.")
+
+    if not ampacity_ok:
+        status = "fail"
+        binding = "ampacity_690_8"
+        headline = f"FAIL — {reasons[0]}"
+    else:
+        margin = (corrected_ampacity - design_current) / design_current * 100.0
+        status = "marginal" if margin < _AMPACITY_MARGINAL_PCT else "pass"
+        binding = "ampacity_690_8"
+        verb = "Marginal" if status == "marginal" else "Pass"
+        headline = (f"{verb} — {chosen} {material}, {ocpd_rating} A OCPD "
+                    f"(NEC 690.8 minimum).")
+
+    return {
+        "isc_a": isc_a,
+        "design_current_a": design_current,
+        "required_base_ampacity_a": required_base,
+        "voltage_v": voltage_v,
+        "length_m": length_m,
+        "material": material,
+        "insulation_temp_rating": insulation_temp_rating,
+        "ambient_temp_c": ambient_temp_c,
+        "num_conductors": num_conductors,
+        "max_voltage_drop_percent": max_voltage_drop_percent,
+        "temp_correction_factor": temp_factor,
+        "bundling_factor": bundling_factor,
+        "total_derating_factor": total_derating,
+        "recommended_size": chosen,
+        "recommended_base_ampacity_a": base_ampacity,
+        "corrected_ampacity_a": corrected_ampacity,
+        "ampacity_ok": ampacity_ok,
+        "resistance_ohm": resistance,
+        "voltage_drop_v": voltage_drop,
+        "voltage_drop_percent": voltage_drop_percent,
+        "power_loss_w": isc_a * isc_a * resistance,
+        "breaker": {"required_ocpd_a": ocpd_required, "breaker_rating_a": ocpd_rating,
+                    "continuous_load": True},
+        "voltage_drop_advisory": {
+            "target_percent": max_voltage_drop_percent,
+            "actual_percent": voltage_drop_percent,
+            "within_target": vd_within_target,
+            "suggested_size": suggested_vd_size,
+            "suggested_percent": suggested_vd_percent,
+        },
+        "verdict": {
+            "status": status,
+            "headline": headline,
+            "binding_constraint": binding,
+            "reasons": reasons,
+            "checks": checks,
+        },
+    }
