@@ -1390,7 +1390,7 @@ def evaluate_pv_circuit(
                 suggested_vd_percent = vd2_pct
                 break
 
-    checks = {"ampacity_690_8": bool(ampacity_ok)}
+    checks = {"ampacity": bool(ampacity_ok)}
     reasons: List[str] = []
     if not ampacity_ok:
         reasons.append(
@@ -1399,12 +1399,12 @@ def evaluate_pv_circuit(
 
     if not ampacity_ok:
         status = "fail"
-        binding = "ampacity_690_8"
+        binding = "ampacity"
         headline = f"FAIL — {reasons[0]}"
     else:
         margin = (corrected_ampacity - design_current) / design_current * 100.0
         status = "marginal" if margin < _AMPACITY_MARGINAL_PCT else "pass"
-        binding = "ampacity_690_8"
+        binding = "ampacity"
         verb = "Marginal" if status == "marginal" else "Pass"
         headline = (f"{verb} — {chosen} {material}, {ocpd_rating} A OCPD "
                     f"(NEC 690.8 minimum).")
