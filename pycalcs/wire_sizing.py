@@ -1448,3 +1448,46 @@ def evaluate_pv_circuit(
             "checks": checks,
         },
     }
+
+
+# =============================================================================
+# Automotive / low-voltage DC ampacity — single wire in free air (SAE-oriented)
+# =============================================================================
+#
+# Maximum current for a single insulated conductor in free air ("chassis
+# wiring") by AWG — the appropriate basis for automotive / RV / battery / DC
+# point-to-point runs. (SAE J1128 is a wire-construction spec; ampacity comes
+# from this free-air chart, per the SAE J1292 / J2183 tradition.)
+#
+# DATA PROVENANCE (sourced & cross-checked 2026-07-16): two independent
+# references agree EXACTLY on every gauge for the chassis/free-air column:
+#   powerstream.com/Wire_Size.htm ("maximum amps for chassis wiring")
+#   fqwireharness.com/wire-gauge-ampacity-guide-2025 (open-air column)
+# The classic chart's separate "power transmission" column is intentionally
+# NOT used: the two sources disagree on it, so bundling is instead handled by a
+# grouping derate applied to these free-air values (get_bundling_factor).
+# UNVERIFIED by a human; the DC/automotive tool must ship Experimental.
+
+AMPACITY_FREE_AIR_AUTOMOTIVE: Dict[str, int] = {
+    "20 AWG": 11, "18 AWG": 16, "16 AWG": 22, "14 AWG": 32, "12 AWG": 41,
+    "10 AWG": 55, "8 AWG": 73, "6 AWG": 101, "4 AWG": 135, "2 AWG": 181,
+    "1 AWG": 211, "1/0 AWG": 245, "2/0 AWG": 283, "3/0 AWG": 328, "4/0 AWG": 380,
+}
+
+
+def get_automotive_ampacity_table() -> Dict[str, int]:
+    """
+    Single-wire-in-free-air ("chassis wiring") ampacity by AWG for
+    automotive / low-voltage DC circuits. See the module note above for
+    provenance and why the "power transmission" column is not used.
+
+    ---Returns---
+    table : Dict[str, int]
+        Wire size -> free-air ("chassis") ampacity in amperes.
+
+    ---References---
+    Classic AWG chassis-wiring ampacity chart (Handbook of Electronic Tables and
+    Formulas), cross-checked against automotive vendor reproductions. SAE J1128
+    (wire construction); SAE J1292/J2183 (ampacity tradition).
+    """
+    return dict(AMPACITY_FREE_AIR_AUTOMOTIVE)

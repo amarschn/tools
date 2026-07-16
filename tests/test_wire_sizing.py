@@ -893,5 +893,31 @@ class TestPvCircuit:
             wire_sizing.evaluate_pv_circuit(0, 40, 5)
 
 
+class TestAutomotiveAmpacity:
+    """Automotive/DC free-air ("chassis wiring") ampacity by AWG.
+
+    Cross-checked 2026-07-16 across two independent references that agree
+    exactly on every gauge (powerstream + fqwireharness).
+    """
+
+    def test_chassis_values(self):
+        t = wire_sizing.get_automotive_ampacity_table()
+        assert t["18 AWG"] == 16
+        assert t["14 AWG"] == 32
+        assert t["10 AWG"] == 55
+        assert t["8 AWG"] == 73
+        assert t["4 AWG"] == 135
+        assert t["1/0 AWG"] == 245
+
+    def test_includes_small_signal_gauge(self):
+        """20 AWG (common automotive signal wire) is present."""
+        assert wire_sizing.get_automotive_ampacity_table()["20 AWG"] == 11
+
+    def test_monotonic_increasing(self):
+        t = wire_sizing.get_automotive_ampacity_table()
+        vals = list(t.values())
+        assert vals == sorted(vals)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
