@@ -33,6 +33,7 @@ AWG_SIZES: List[str] = [
 
 # Cross-sectional area in mm² (for visualization and calculations)
 WIRE_AREA_MM2: Dict[str, float] = {
+    "20 AWG": 0.519,
     "18 AWG": 0.823,
     "16 AWG": 1.31,
     "14 AWG": 2.08,
@@ -192,6 +193,7 @@ BUNDLING_FACTORS: List[Tuple[int, int, float]] = [
 # These are for stranded conductors (uncoated copper, aluminum)
 RESISTANCE_OHMS_PER_1000FT_20C: Dict[str, Dict[str, float]] = {
     "copper": {
+        "20 AWG": 12.36,
         "18 AWG": 7.77, "16 AWG": 4.89, "14 AWG": 3.07, "12 AWG": 1.93,
         "10 AWG": 1.21, "8 AWG": 0.764, "6 AWG": 0.491, "4 AWG": 0.308,
         "3 AWG": 0.245, "2 AWG": 0.194, "1 AWG": 0.154,
@@ -204,6 +206,7 @@ RESISTANCE_OHMS_PER_1000FT_20C: Dict[str, Dict[str, float]] = {
         "2000 kcmil": 0.00643,
     },
     "aluminum": {
+        "20 AWG": 20.35,
         "12 AWG": 3.18, "10 AWG": 2.00, "8 AWG": 1.26,
         "6 AWG": 0.808, "4 AWG": 0.508, "3 AWG": 0.403, "2 AWG": 0.319,
         "1 AWG": 0.253, "1/0 AWG": 0.201, "2/0 AWG": 0.159, "3/0 AWG": 0.126,
@@ -1491,3 +1494,167 @@ def get_automotive_ampacity_table() -> Dict[str, int]:
     (wire construction); SAE J1292/J2183 (ampacity tradition).
     """
     return dict(AMPACITY_FREE_AIR_AUTOMOTIVE)
+
+
+# =============================================================================
+# Automotive / low-voltage DC circuit sizing (voltage-drop-driven)
+# =============================================================================
+
+# Standard automotive/marine blade & ANL fuse ratings (A) for suggesting an
+# overcurrent device that protects the conductor.
+DC_STANDARD_FUSE_RATINGS: List[int] = [
+    1, 2, 3, 4, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 100, 125, 150,
+    175, 200, 225, 250, 300,
+]
+
+
+def evaluate_dc_circuit(
+    load_current_a: float,
+    voltage_v: float,
+    length_m: float,
+    num_conductors: int = 1,
+    max_voltage_drop_percent: float = 3.0,
+    material: str = "copper",
+) -> dict:
+    """
+    Size a low-voltage DC conductor (automotive / RV / marine / battery).
+
+    Unlike premises wiring, voltage drop is the governing design constraint at
+    12/24/48 V, so this sizes the conductor to satisfy BOTH the free-air
+    ("chassis wiring") ampacity floor and the voltage-drop target. The target is
+    user-set; the common conventions are 3% for critical circuits (pumps,
+    electronics, main feeders) and 10% for non-critical circuits (general
+    lighting).
+
+    Ampacity is the single-wire-in-free-air value (see
+    get_automotive_ampacity_table) reduced by a grouping/bundling derate for
+    multiple bundled conductors. A suggested fuse (protecting the conductor) is
+    also returned.
+
+    ---Parameters---
+    load_current_a : float
+        Continuous load current in amperes.
+    voltage_v : float
+        DC system voltage (e.g. 12, 24, 48).
+    length_m : float
+        One-way run length in meters (doubled for round-trip drop).
+    num_conductors : int
+        Bundled current-carrying conductors. Default: 1 (single in free air).
+    max_voltage_drop_percent : float
+        Voltage-drop target. Default: 3.0% (critical). Use 10% for non-critical.
+    material : str
+        "copper" (default) or "aluminum". Automotive wiring is copper.
+
+    ---Returns---
+    result : dict
+        recommended_size, ampacities, voltage-drop, a suggested fuse, and a
+        verdict {status, headline, binding_constraint, reasons, checks}. Both
+        ``ampacity`` and ``voltage_drop`` are mandatory checks here.
+
+    ---LaTeX---
+    V_{drop} = I \\cdot R \\cdot 2L, \\quad V_{drop\\%} = 100 \\cdot V_{drop} / V
+
+    ---References---
+    Free-air ("chassis wiring") AWG ampacity chart; ABYC E-11 voltage-drop
+    conventions (3% critical / 10% non-critical).
+    """
+    if load_current_a <= 0:
+        raise ValueError("Load current must be positive")
+    if voltage_v <= 0:
+        raise ValueError("Voltage must be positive")
+    if length_m <= 0:
+        raise ValueError("Length must be positive")
+
+    table = get_automotive_ampacity_table()
+    sizes = list(table.keys())  # small -> large (insertion order)
+    bundling = get_bundling_factor(num_conductors)
+    round_trip = 2.0 * length_m
+
+    def vdrop(size: str):
+        r_per_m = get_resistance_per_meter(size, material, RESISTANCE_REF_TEMP_C)
+        vd = load_current_a * r_per_m * round_trip
+        return vd, (vd / voltage_v) * 100.0, r_per_m
+
+    # Stage 1: smallest conductor meeting the ampacity floor.
+    amp_min = None
+    for size in sizes:
+        if table[size] * bundling >= load_current_a - 1e-9:
+            amp_min = size
+            break
+    if amp_min is None:
+        amp_min = sizes[-1]
+
+    # Stage 2: from there, smallest that also meets the voltage-drop target.
+    start = sizes.index(amp_min)
+    chosen = None
+    for size in sizes[start:]:
+        _, pct, _ = vdrop(size)
+        if pct <= max_voltage_drop_percent:
+            chosen = size
+            break
+    vd_within_target = chosen is not None
+    if chosen is None:
+        chosen = sizes[-1]  # nothing meets the target; report the largest
+
+    size = chosen
+    voltage_drop_v, voltage_drop_percent, r_per_m = vdrop(size)
+    free_air_ampacity = table[size]
+    ampacity = free_air_ampacity * bundling
+    ampacity_ok = ampacity >= load_current_a - 1e-9
+
+    # Suggested fuse: smallest standard rating >= load and <= conductor ampacity.
+    fuse_rating = None
+    for f in DC_STANDARD_FUSE_RATINGS:
+        if f >= load_current_a - 1e-9 and f <= ampacity + 1e-9:
+            fuse_rating = f
+            break
+
+    checks = {"ampacity": bool(ampacity_ok), "voltage_drop": bool(vd_within_target)}
+    reasons: List[str] = []
+    if not ampacity_ok:
+        reasons.append(
+            f"No standard gauge carries {load_current_a:.0f} A in free air "
+            f"(largest is {free_air_ampacity:.0f} A x {bundling:.2f} derate).")
+    if not vd_within_target:
+        reasons.append(
+            f"No standard gauge holds voltage drop <= {max_voltage_drop_percent:.0f}% "
+            f"on this run; smallest achievable is {voltage_drop_percent:.1f}%.")
+
+    if not all(checks.values()):
+        status = "fail"
+        binding = "ampacity" if not ampacity_ok else "voltage_drop"
+        headline = f"FAIL — {reasons[0]}"
+    else:
+        status = "pass"
+        binding = "voltage_drop"  # the governing design constraint at low voltage
+        headline = (f"Pass — {size} {material}, {voltage_drop_percent:.1f}% drop"
+                    + (f", {fuse_rating} A fuse." if fuse_rating else "."))
+
+    return {
+        "load_current_a": load_current_a,
+        "voltage_v": voltage_v,
+        "length_m": length_m,
+        "num_conductors": num_conductors,
+        "material": material,
+        "max_voltage_drop_percent": max_voltage_drop_percent,
+        "bundling_factor": bundling,
+        "recommended_size": size,
+        "free_air_ampacity_a": free_air_ampacity,
+        "corrected_ampacity_a": ampacity,
+        "ampacity_margin_percent": ((ampacity - load_current_a) / load_current_a * 100.0
+                                    if load_current_a > 0 else 0.0),
+        "ampacity_ok": ampacity_ok,
+        "resistance_ohm": r_per_m * round_trip,
+        "voltage_drop_v": voltage_drop_v,
+        "voltage_drop_percent": voltage_drop_percent,
+        "voltage_drop_ok": vd_within_target,
+        "power_loss_w": load_current_a * load_current_a * r_per_m * round_trip,
+        "fuse": {"rating_a": fuse_rating},
+        "verdict": {
+            "status": status,
+            "headline": headline,
+            "binding_constraint": binding,
+            "reasons": reasons,
+            "checks": checks,
+        },
+    }

@@ -919,5 +919,47 @@ class TestAutomotiveAmpacity:
         assert vals == sorted(vals)
 
 
+class TestDcCircuit:
+    """Low-voltage DC (automotive/marine) sizing — voltage-drop-driven."""
+
+    def test_sizes_for_voltage_drop_target(self):
+        """20 A / 12 V / 5 m at 3% -> 6 AWG (~2.7%), VD within target."""
+        r = wire_sizing.evaluate_dc_circuit(20, 12, 5, 1, 3.0)
+        assert r["recommended_size"] == "6 AWG"
+        assert r["voltage_drop_percent"] <= 3.0
+        assert r["verdict"]["status"] == "pass"
+
+    def test_relaxed_target_gives_smaller_wire(self):
+        """Allowing 10% (non-critical) yields a smaller conductor than 3%."""
+        crit = wire_sizing.evaluate_dc_circuit(20, 12, 5, 1, 3.0)
+        noncrit = wire_sizing.evaluate_dc_circuit(20, 12, 5, 1, 10.0)
+        # 10% is easier to meet, so it lands on a smaller-or-equal free-air rating.
+        assert noncrit["free_air_ampacity_a"] <= crit["free_air_ampacity_a"]
+        assert noncrit["voltage_drop_percent"] <= 10.0
+
+    def test_fuse_between_load_and_ampacity(self):
+        r = wire_sizing.evaluate_dc_circuit(20, 12, 5, 1, 3.0)
+        f = r["fuse"]["rating_a"]
+        assert f is not None
+        assert f >= 20
+        assert f <= r["corrected_ampacity_a"]
+
+    def test_bundling_derates_ampacity(self):
+        single = wire_sizing.evaluate_dc_circuit(20, 12, 2, 1, 10.0)
+        bundled = wire_sizing.evaluate_dc_circuit(20, 12, 2, 6, 10.0)
+        assert bundled["bundling_factor"] < single["bundling_factor"]
+        assert bundled["corrected_ampacity_a"] <= single["free_air_ampacity_a"]
+
+    def test_unsatisfiable_voltage_drop_fails(self):
+        """A long, low-voltage, high-current run no gauge can satisfy -> FAIL."""
+        r = wire_sizing.evaluate_dc_circuit(100, 12, 30, 1, 3.0)
+        assert r["verdict"]["status"] == "fail"
+        assert r["verdict"]["binding_constraint"] == "voltage_drop"
+
+    def test_zero_load_raises(self):
+        with pytest.raises(ValueError):
+            wire_sizing.evaluate_dc_circuit(0, 12, 3)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
