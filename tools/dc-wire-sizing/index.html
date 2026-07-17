@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>12V / DC Wire Size Calculator (Automotive) - Transparent Tools</title>
+    <meta name="description" content="12V/24V/48V DC wire size calculator for automotive, RV, marine, and battery circuits. Sizes for voltage drop and free-air ampacity, and suggests a fuse. Experimental.">
+    <link rel="canonical" href="https://transparent.tools/tools/dc-wire-sizing/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="12V / DC Wire Size Calculator (Automotive) - Transparent Tools">
+    <meta property="og:description" content="12V/24V/48V DC wire size calculator for automotive, RV, marine, and battery circuits. Sizes for voltage drop and free-air ampacity, and suggests a fuse. Experimental.">
+    <meta property="og:url" content="https://transparent.tools/tools/dc-wire-sizing/">
+    <meta property="og:image" content="https://transparent.tools/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="12V / DC Wire Size Calculator (Automotive) - Transparent Tools">
+    <meta name="twitter:description" content="12V/24V/48V DC wire size calculator for automotive, RV, marine, and battery circuits. Sizes for voltage drop and free-air ampacity, and suggests a fuse. Experimental.">
+    <meta name="twitter:image" content="https://transparent.tools/og-image.png">
+    <script src="/shared/analytics-autotrack.js" defer></script>
+    <script src="/shared/verdict.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        /* Light theme (default). Dark overrides below. */
+        :root {
+            --bg-primary: #f8f9fb;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --bg-input: #ffffff;
+            --border: #e5e7eb;
+            --border-light: #d1d5db;
+            --text: #111827;
+            --text-secondary: #4b5563;
+            --text-muted: #6b7280;
+            --accent: #111827;
+            --accent-soft: rgba(17, 24, 39, 0.06);
+            --primary-color: #0b0d12;
+            --secondary-color: #4b5563;
+            --success: #16a34a;
+            --success-soft: rgba(22, 163, 74, 0.12);
+            --warning: #b45309;
+            --warning-soft: rgba(180, 83, 9, 0.12);
+            --error: #b91c1c;
+            --error-soft: rgba(185, 28, 28, 0.12);
+            --copper: #b87333;
+            --aluminum: #848789;
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --radius-sm: 4px;
+            --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+            /* Aliases so shared components (url-state share button, etc.)
+               resolve correctly and follow the active theme. */
+            --text-color: var(--text);
+            --text-light: var(--text-secondary);
+            --bg-color: var(--bg-primary);
+            --border-color: var(--border);
+            --success-color: var(--success);
+            --primary-light: #f4f5f7;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+        }
+
+        /* Dark theme override values (the tool's original palette). */
+        body[data-theme="dark"] {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-card: #1a1a1a;
+            --bg-input: #222222;
+            --border: #2a2a2a;
+            --border-light: #333333;
+            --text: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --accent: #f9fafb;
+            --accent-soft: rgba(249, 250, 251, 0.10);
+            --primary-color: #f9fafb;
+            --secondary-color: #9ca3af;
+            --primary-light: #111827;
+            --text-color: #ffffff;
+            --text-light: #a0a0a0;
+            --bg-color: #0a0a0a;
+            --border-color: #2a2a2a;
+            --success-color: #22c55e;
+            --shadow: 0 1px 2px rgba(0,0,0,.45);
+            --shadow-lg: 0 16px 32px rgba(0,0,0,.55);
+            --success: #22c55e;
+            --success-soft: rgba(34, 197, 94, 0.15);
+            --warning: #f59e0b;
+            --warning-soft: rgba(245, 158, 11, 0.15);
+            --error: #ef4444;
+            --error-soft: rgba(239, 68, 68, 0.15);
+        }
+
+        /* System preference: apply dark unless the user forced light. */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) {
+                --bg-primary: #0a0a0a;
+                --bg-secondary: #141414;
+                --bg-card: #1a1a1a;
+                --bg-input: #222222;
+                --border: #2a2a2a;
+                --border-light: #333333;
+                --text: #ffffff;
+                --text-secondary: #a0a0a0;
+                --text-muted: #666666;
+                --accent: #f9fafb;
+                --accent-soft: rgba(249, 250, 251, 0.10);
+                --primary-color: #f9fafb;
+                --secondary-color: #9ca3af;
+                --primary-light: #111827;
+                --text-color: #ffffff;
+                --text-light: #a0a0a0;
+                --bg-color: #0a0a0a;
+                --border-color: #2a2a2a;
+                --success-color: #22c55e;
+                --shadow: 0 1px 2px rgba(0,0,0,.45);
+                --shadow-lg: 0 16px 32px rgba(0,0,0,.55);
+                --success: #22c55e;
+                --success-soft: rgba(34, 197, 94, 0.15);
+                --warning: #f59e0b;
+                --warning-soft: rgba(245, 158, 11, 0.15);
+                --error: #ef4444;
+                --error-soft: rgba(239, 68, 68, 0.15);
+            }
+        }
+
+        /* Settings panel */
+        .settings-button {
+            background: var(--bg-card); color: var(--text);
+            border: 1px solid var(--border); border-radius: 999px;
+            padding: 6px 14px; font: inherit; font-size: 0.85rem;
+            font-weight: 600; cursor: pointer;
+        }
+        .settings-button:hover { background: var(--bg-input); }
+        .settings-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.4);
+            opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 90;
+        }
+        .settings-overlay.open { opacity: 1; pointer-events: auto; }
+        .settings-panel {
+            position: fixed; top: 0; right: 0; height: 100%; width: 320px;
+            max-width: 90vw; background: var(--bg-secondary);
+            border-left: 1px solid var(--border); box-shadow: -8px 0 24px rgba(0,0,0,.25);
+            transform: translateX(100%); transition: transform .2s ease; z-index: 100;
+            display: flex; flex-direction: column;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 20px; border-bottom: 1px solid var(--border);
+        }
+        .settings-header h3 { margin: 0; font-size: 1rem; color: var(--text); }
+        .settings-close {
+            background: none; border: none; color: var(--text-secondary);
+            font-size: 1.1rem; cursor: pointer; line-height: 1;
+        }
+        .settings-content { padding: 20px; }
+        .setting-row { margin-bottom: 22px; }
+        .setting-label { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+        .setting-help { font-size: .8rem; color: var(--text-muted); margin-bottom: 10px; }
+        .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+        .segmented button {
+            background: var(--bg-card); color: var(--text-secondary);
+            border: none; padding: 7px 14px; font: inherit; font-size: .85rem;
+            cursor: pointer; border-right: 1px solid var(--border);
+        }
+        .segmented button:last-child { border-right: none; }
+        .segmented button[aria-pressed="true"] { background: var(--accent); color: var(--primary-light); }
+
+        /* Input tooltips */
+        .label-with-help { display: inline-flex; align-items: center; gap: 6px; }
+        .help-tip {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 15px; height: 15px; border-radius: 50%;
+            background: var(--border); color: var(--text-secondary);
+            font-size: 10px; font-weight: 700; cursor: help; position: relative;
+        }
+        .help-tip:hover::after {
+            content: attr(data-tip); position: absolute; bottom: 130%; left: 50%;
+            transform: translateX(-50%); width: max-content; max-width: 240px;
+            background: var(--text); color: var(--bg-card); padding: 7px 10px;
+            border-radius: var(--radius-sm); font-size: .78rem; font-weight: 400;
+            line-height: 1.4; white-space: normal; z-index: 200;
+            box-shadow: var(--shadow-lg, 0 6px 18px rgba(0,0,0,.3));
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            background: var(--bg-primary);
+            font-family: var(--font-sans);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: #0b0d12;
+            border-bottom: 1px solid #1f2937;
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-brand {
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        .nav-brand:hover { opacity: 0.85; }
+
+        .nav-title {
+            color: #9ca3af;
+            font-size: 1.05rem;
+            font-weight: 500;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* Header */
+        .tool-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .tool-header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+
+        .tool-header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Mode Toggle */
+        .mode-toggle {
+            display: inline-flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            background: var(--bg-card);
+            padding: 4px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+        }
+
+        .mode-btn {
+            padding: 8px 20px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .mode-btn:hover:not(.active) {
+            color: var(--text);
+            background: var(--primary-light);
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: var(--primary-light);
+        }
+
+        /* Main Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1000px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 24px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--bg-input);
+            color: var(--text);
+            font-size: 1rem;
+            font-family: var(--font-mono);
+            transition: border-color 0.15s ease;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a0a0a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 40px;
+        }
+
+        .form-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 20px 0;
+        }
+
+        /* Calculate Button */
+        .btn-calculate {
+            width: 100%;
+            padding: 14px 24px;
+            border-radius: var(--radius-md);
+            border: none;
+            background: var(--accent);
+            color: var(--primary-light);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-calculate:hover {
+            background: var(--secondary-color);
+        }
+
+        .btn-calculate:disabled {
+            background: var(--border-light);
+            cursor: not-allowed;
+        }
+
+        /* Status Message */
+        .status-msg {
+            text-align: center;
+            padding: 16px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Result Panels */
+        .result-panel {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .result-panel:last-child {
+            margin-bottom: 0;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .result-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .result-badge {
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-pass {
+            background: var(--success-soft);
+            color: var(--success);
+        }
+
+        .badge-fail {
+            background: var(--error-soft);
+            color: var(--error);
+        }
+
+        .badge-warn {
+            background: var(--warning-soft);
+            color: var(--warning);
+        }
+
+        /* Wire Size Display */
+        .wire-size-display {
+            text-align: center;
+            padding: 24px;
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .wire-size-value {
+            font-size: 3rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .wire-size-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .wire-material {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--bg-input);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            margin-top: 12px;
+        }
+
+        .material-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .material-dot.copper { background: var(--copper); }
+        .material-dot.aluminum { background: var(--aluminum); }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
+        .metric-unit {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 4px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 0;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text);
+        }
+
+        .tab-btn.active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Wire Diagram */
+        .wire-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 32px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+        }
+
+        .wire-cross-section {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .wire-conductor {
+            border-radius: 50%;
+            border: 3px solid var(--border-light);
+        }
+
+        .wire-conductor.copper {
+            background: radial-gradient(circle at 30% 30%, #d4956a, var(--copper), #8b5a2b);
+        }
+
+        .wire-conductor.aluminum {
+            background: radial-gradient(circle at 30% 30%, #a8acaf, var(--aluminum), #5a5d5f);
+        }
+
+        .wire-specs {
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            text-align: center;
+        }
+
+        .wire-spec-item {
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+        }
+
+        .wire-spec-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .wire-spec-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
+        /* Voltage Drop Bar */
+        .vdrop-bar-container {
+            margin-top: 16px;
+        }
+
+        .vdrop-bar-bg {
+            height: 24px;
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .vdrop-bar-fill {
+            height: 100%;
+            border-radius: var(--radius-md);
+            transition: width 0.3s ease;
+        }
+
+        .vdrop-bar-fill.ok { background: var(--success); }
+        .vdrop-bar-fill.warn { background: var(--warning); }
+        .vdrop-bar-fill.fail { background: var(--error); }
+
+        .vdrop-bar-markers {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .vdrop-limit-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--text);
+        }
+
+        /* Warning List */
+        .warning-list {
+            list-style: none;
+            margin-top: 16px;
+        }
+
+        .warning-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px;
+            background: var(--warning-soft);
+            border-radius: var(--radius-md);
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--warning);
+        }
+
+        .warning-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Ampacity Table */
+        .ampacity-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .ampacity-table th,
+        .ampacity-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ampacity-table th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .ampacity-table tr:hover td {
+            background: var(--bg-secondary);
+        }
+
+        .ampacity-table tr.highlight td {
+            background: var(--accent-soft);
+        }
+
+        /* Hidden for simple mode */
+        .advanced-only {
+            display: none;
+        }
+
+        body.advanced-mode .advanced-only {
+            display: block;
+        }
+
+        body.advanced-mode .form-row.advanced-only {
+            display: grid;
+        }
+
+        /* Equations */
+        .equation-block {
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--accent);
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px;
+            color: var(--text-secondary);
+        }
+
+        .loading::after {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .tool-header h1 { font-size: 1.8rem; }
+            .form-row { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: 1fr; }
+            .wire-specs { grid-template-columns: 1fr; }
+            .wire-size-value { font-size: 2.5rem; }
+        }
+    
+    .support-link {
+      color: inherit;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .support-link:hover {
+      text-decoration: underline;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 24px 24px 32px;
+      color: var(--text-secondary, var(--text-light, var(--muted, #6b7280)));
+      font-size: 0.9rem;
+    }
+    </style>
+    <script src="/shared/json-ld.js"></script>
+</head>
+<body>
+    <script>
+      // Apply saved theme before paint to avoid a flash.
+      try {
+        var _s = JSON.parse(localStorage.getItem('dc-wire-sizing-settings') || '{}');
+        if (_s.theme) document.body.dataset.theme = _s.theme === 'system' ? '' : _s.theme;
+      } catch (e) {}
+    </script>
+    <nav class="navbar">
+        <a href="/index.html" class="nav-brand">← Engineering Tools</a>
+        <span class="nav-title">12V / DC Wire Sizing</span>
+        <div class="nav-actions">
+            <button class="settings-button" id="settings-button" type="button" aria-haspopup="dialog">⚙ Settings</button>
+        </div>
+    </nav>
+
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <aside class="settings-panel" id="settings-panel" role="dialog" aria-modal="true" aria-label="Tool settings" aria-hidden="true">
+        <div class="settings-header">
+            <h3>Settings</h3>
+            <button class="settings-close" id="settings-close" type="button" aria-label="Close settings">✕</button>
+        </div>
+        <div class="settings-content">
+            <div class="setting-row">
+                <div class="setting-label">Theme</div>
+                <div class="setting-help">Light, dark, or follow your system.</div>
+                <div class="segmented" role="group" aria-label="Theme">
+                    <button type="button" data-theme-choice="light">Light</button>
+                    <button type="button" data-theme-choice="dark">Dark</button>
+                    <button type="button" data-theme-choice="system">Auto</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="container">
+        <div style="max-width:900px;margin:0 auto 20px;padding:12px 16px;border-radius:8px;
+                    background:var(--warning-soft);border:1px solid var(--warning);
+                    color:var(--warning);font-size:0.9rem;text-align:center;">
+            <strong>Experimental.</strong> The free-air ampacity data and DC sizing logic are
+            cross-checked but not yet human-verified. Do not use for final design without independent verification.
+        </div>
+        <header class="tool-header">
+            <h1>12V / DC Wire Size Calculator</h1>
+            <p>Size low-voltage DC wiring (automotive, RV, marine, battery) for voltage drop and free-air ("chassis") ampacity, and get a suggested fuse. Voltage drop is the governing constraint at 12/24/48 V.</p>
+            <p style="font-size:.9rem;color:var(--text-muted);margin-top:8px;">
+                US building/premises wiring? Use the
+                <a href="/tools/wire-sizing/" style="color:var(--accent);text-decoration:underline;">NEC Wire Size Calculator</a>.
+                Solar array? The <a href="/tools/solar-wire-sizing/" style="color:var(--accent);text-decoration:underline;">Solar PV Wire Size Calculator</a>.
+            </p>
+        </header>
+
+        <div class="mode-toggle">
+            <button class="mode-btn active" data-mode="simple">Simple</button>
+            <button class="mode-btn" data-mode="advanced">Advanced</button>
+        </div>
+
+        <div class="main-grid">
+            <!-- Input Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Input Parameters</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label class="form-label label-with-help">Load Current (A) <span class="help-tip" data-tip="Continuous current the circuit carries. Size to the maximum sustained load.">?</span></label>
+                        <input type="number" id="current" class="form-input" value="20" min="0.1" step="0.1">
+                        <p class="form-hint">Continuous load current</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label label-with-help">System Voltage (V) <span class="help-tip" data-tip="DC system voltage: 12 V (automotive/RV), 24 V, or 48 V (battery banks).">?</span></label>
+                        <input type="number" id="voltage" class="form-input" value="12" min="1" step="1">
+                        <p class="form-hint">12, 24, or 48 V typical</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label label-with-help">Run Length (m) <span class="help-tip" data-tip="One-way distance from source to load; the tool doubles it for round-trip DC voltage drop.">?</span></label>
+                        <input type="number" id="length" class="form-input" value="3" min="0.1" step="0.1">
+                        <p class="form-hint">One-way distance (round-trip used)</p>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="form-group">
+                        <label class="form-label label-with-help">Voltage-Drop Target (%) <span class="help-tip" data-tip="The design limit. Use 3% for critical circuits (bilge pumps, electronics, main feeders) and 10% for non-critical loads (general lighting). ABYC convention.">?</span></label>
+                        <input type="number" id="maxVdrop" class="form-input" value="3" min="0.5" max="15" step="0.5">
+                        <p class="form-hint">3% critical &middot; 10% non-critical</p>
+                    </div>
+
+                    <div class="form-row advanced-only">
+                        <div class="form-group">
+                            <label class="form-label label-with-help">Conductor Material <span class="help-tip" data-tip="Copper (standard for automotive/DC) or aluminum.">?</span></label>
+                            <select id="material" class="form-select">
+                                <option value="copper" selected>Copper</option>
+                                <option value="aluminum">Aluminum</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label label-with-help">Bundled Conductors <span class="help-tip" data-tip="Wires bundled or loomed together. 1 = single wire in free air; more bundled wires derate the ampacity.">?</span></label>
+                            <input type="number" id="conductors" class="form-input" value="1" min="1" max="100" step="1">
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <button id="calculateBtn" class="btn-calculate" disabled>Calculate Wire Size</button>
+                    <p id="statusMsg" class="status-msg">Loading calculation engine...</p>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Results</h2>
+                </div>
+                <div class="card-body">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="results">Results</button>
+                        <button class="tab-btn" data-tab="theory">Theory</button>
+                    </div>
+
+                    <!-- Results Tab -->
+                    <div id="tab-results" class="tab-content active">
+                        <div id="resultsContent">
+                            <p class="status-msg">Enter parameters and click Calculate</p>
+                        </div>
+                    </div>
+
+                    <!-- Theory Tab -->
+                    <div id="tab-theory" class="tab-content">
+                        <h3 style="margin-bottom: 16px;">Low-Voltage DC Wire Sizing</h3>
+
+                        <h4 style="color: var(--text-secondary); margin: 20px 0 10px;">Voltage drop is the driver</h4>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                            At 12/24/48 V, a small absolute drop is a large percentage, so voltage drop — not
+                            ampacity — usually decides the wire size. The tool picks the smallest conductor that
+                            meets both the ampacity floor and your voltage-drop target.
+                        </p>
+                        <div class="equation-block">
+                            V_drop = I × R × 2L
+                            V_drop% = (V_drop / V_system) × 100
+                        </div>
+
+                        <h4 style="color: var(--text-secondary); margin: 20px 0 10px;">Voltage-drop target</h4>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                            Common marine/automotive practice (ABYC E-11): 3% for critical circuits (bilge pumps,
+                            navigation, electronics, panel main feeders) and 10% for non-critical loads such as
+                            general lighting.
+                        </p>
+
+                        <h4 style="color: var(--text-secondary); margin: 20px 0 10px;">Ampacity (free-air / chassis)</h4>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                            The ampacity floor is the single-wire-in-free-air ("chassis wiring") rating by gauge,
+                            reduced by a bundling derate when multiple conductors are loomed together. It ensures the
+                            wire will not overheat even before voltage drop is considered.
+                        </p>
+
+                        <h4 style="color: var(--text-secondary); margin: 20px 0 10px;">Fusing</h4>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                            The suggested fuse is the smallest standard rating at or above the load and at or below the
+                            conductor's ampacity, so it protects the wire. Place it at the source (battery positive).
+                        </p>
+
+                        <h4 style="color: var(--text-secondary); margin: 20px 0 10px;">Data &amp; status</h4>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                            Free-air ampacities are the classic AWG "chassis wiring" chart, cross-checked across two
+                            independent references. This tool is <strong>Experimental</strong> and unverified; verify
+                            independently before final design.
+                        </p>
+
+                        <h4 style="color: var(--text-secondary); margin: 20px 0 10px;">References</h4>
+                        <ul style="color: var(--text-secondary); padding-left: 20px;">
+                            <li>SAE J1128 (low-voltage primary cable construction)</li>
+                            <li>ABYC E-11 (AC &amp; DC electrical systems on boats) — voltage-drop conventions</li>
+                            <li>AWG chassis-wiring ampacity chart (free-air single conductor)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>Engineering Tools &mdash; For educational and preliminary design purposes only. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
+    </footer>
+
+    <script>
+        // =====================================================================
+        // State & Elements
+        // =====================================================================
+        let pyodide = null;
+        let wireSizingModule = null;
+
+        const elements = {
+            current: document.getElementById('current'),
+            voltage: document.getElementById('voltage'),
+            length: document.getElementById('length'),
+            material: document.getElementById('material'),
+            conductors: document.getElementById('conductors'),
+            maxVdrop: document.getElementById('maxVdrop'),
+            calculateBtn: document.getElementById('calculateBtn'),
+            statusMsg: document.getElementById('statusMsg'),
+            resultsContent: document.getElementById('resultsContent'),
+            tableContent: document.getElementById('tableContent'),
+            wireConductor: document.getElementById('wireConductor'),
+            wireDiameter: document.getElementById('wireDiameter'),
+            wireArea: document.getElementById('wireArea'),
+            wireResistance: document.getElementById('wireResistance'),
+        };
+
+        // =====================================================================
+        // Initialization
+        // =====================================================================
+        async function init() {
+            try {
+                elements.statusMsg.textContent = 'Loading Python runtime...';
+                pyodide = await loadPyodide();
+
+                elements.statusMsg.textContent = 'Loading wire sizing module...';
+
+                // Fetch and load the module
+                const response = await fetch('../../pycalcs/wire_sizing.py');
+                if (!response.ok) throw new Error('Failed to load wire_sizing.py');
+                const code = await response.text();
+                await pyodide.runPythonAsync(code);
+
+                wireSizingModule = pyodide.globals;
+
+                elements.calculateBtn.disabled = false;
+                elements.statusMsg.textContent = 'Ready. Enter parameters and click Calculate.';
+                elements.statusMsg.style.color = 'var(--success)';
+
+            } catch (error) {
+                console.error('Init failed:', error);
+                elements.statusMsg.textContent = `Error: ${error.message}`;
+                elements.statusMsg.style.color = 'var(--error)';
+            }
+        }
+
+        // =====================================================================
+        // Calculations
+        // =====================================================================
+        function calculate() {
+            if (!wireSizingModule) return;
+
+            try {
+                const current = parseFloat(elements.current.value);
+                const voltage = parseFloat(elements.voltage.value);
+                const length = parseFloat(elements.length.value);
+                const material = elements.material.value;
+                const conductors = parseInt(elements.conductors.value) || 1;
+                const maxVdrop = parseFloat(elements.maxVdrop.value) || 3;
+
+                // Validate inputs
+                if (isNaN(current) || current <= 0) throw new Error('Invalid current');
+                if (isNaN(voltage) || voltage <= 0) throw new Error('Invalid voltage');
+                if (isNaN(length) || length <= 0) throw new Error('Invalid length');
+
+                // Call Python — low-voltage DC conductor sizing
+                const calculateFn = wireSizingModule.get('evaluate_dc_circuit');
+                const resultProxy = calculateFn(
+                    current, voltage, length, conductors, maxVdrop, material
+                );
+
+                const result = resultProxy.toJs({ dict_converter: Object.fromEntries });
+                resultProxy.destroy();
+
+                displayResults(result);
+
+            } catch (error) {
+                console.error('Calculation failed:', error);
+                elements.resultsContent.innerHTML = `
+                    <div class="result-panel" style="background: var(--error-soft);">
+                        <p style="color: var(--error);">Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // =====================================================================
+        // Display Results
+        // =====================================================================
+        function displayResults(result) {
+            const warnings = result.warnings || [];
+            const verdict = result.verdict || {};
+            const fuse = result.fuse || {};
+            const vdOk = result.voltage_drop_ok;
+
+            let html = `
+                <div id="verdictBanner"></div>
+
+                <div class="wire-size-display">
+                    <div class="wire-size-value">${result.recommended_size}</div>
+                    <div class="wire-size-label">Recommended Wire Size</div>
+                    <div class="wire-material">
+                        <span class="material-dot ${result.material}"></span>
+                        ${result.material.charAt(0).toUpperCase() + result.material.slice(1)}
+                    </div>
+                </div>
+
+                <div class="result-panel" style="margin-top: 20px;">
+                    <div class="result-header">
+                        <span class="result-title">Voltage Drop (design driver)</span>
+                        <span class="result-badge ${vdOk ? 'badge-pass' : 'badge-warn'}">
+                            ${result.voltage_drop_percent.toFixed(1)}% ${vdOk ? '≤' : '>'} ${result.max_voltage_drop_percent}%
+                        </span>
+                    </div>
+                    ${!vdOk ? `<p class="form-hint" style="margin:0 0 12px;">No standard gauge holds the ${result.max_voltage_drop_percent}% target on this run (${result.recommended_size} gives ${result.voltage_drop_percent.toFixed(1)}%). Shorten the run, raise the system voltage, or relax the target.</p>` : ''}
+                    <div class="vdrop-bar-container">
+                        <div class="vdrop-bar-bg">
+                            <div class="vdrop-bar-fill ${vdOk ? 'ok' : 'warn'}"
+                                 style="width: ${Math.min(result.voltage_drop_percent * 10, 100)}%"></div>
+                            <div class="vdrop-limit-line" style="left: ${Math.min(result.max_voltage_drop_percent * 10, 100)}%"></div>
+                        </div>
+                        <div class="vdrop-bar-markers">
+                            <span>0%</span>
+                            <span>3%</span>
+                            <span>5%</span>
+                            <span>10%</span>
+                        </div>
+                    </div>
+                    <div class="metrics-grid" style="margin-top: 16px;">
+                        <div class="metric-card">
+                            <div class="metric-label">Voltage Drop</div>
+                            <div class="metric-value">${result.voltage_drop_v.toFixed(2)}<span class="metric-unit">V</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Power Loss</div>
+                            <div class="metric-value">${result.power_loss_w.toFixed(1)}<span class="metric-unit">W</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="result-panel">
+                    <div class="result-header">
+                        <span class="result-title">Ampacity (free-air / chassis)</span>
+                        <span class="result-badge ${result.ampacity_ok ? 'badge-pass' : 'badge-fail'}">
+                            ${result.ampacity_ok ? 'PASS' : 'FAIL'}
+                        </span>
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Load Current</div>
+                            <div class="metric-value">${result.load_current_a.toFixed(1)}<span class="metric-unit">A</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Free-Air Ampacity</div>
+                            <div class="metric-value">${result.free_air_ampacity_a.toFixed(0)}<span class="metric-unit">A</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Bundling Factor</div>
+                            <div class="metric-value">${result.bundling_factor.toFixed(2)}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Derated Ampacity</div>
+                            <div class="metric-value">${result.corrected_ampacity_a.toFixed(0)}<span class="metric-unit">A</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="result-panel">
+                    <div class="result-header">
+                        <span class="result-title">Suggested Fuse</span>
+                        <span class="result-badge ${fuse.rating_a != null ? 'badge-pass' : 'badge-warn'}">
+                            ${fuse.rating_a != null ? fuse.rating_a + ' A' : 'N/A'}
+                        </span>
+                    </div>
+                    <p class="form-hint" style="margin:0;">Smallest standard fuse ≥ load and ≤ conductor ampacity, to protect the wire. Place it at the source (battery positive).</p>
+                </div>
+            `;
+
+            if (warnings.length > 0) {
+                html += `
+                    <ul class="warning-list">
+                        ${warnings.map(w => `<li class="warning-item">⚠️ ${w}</li>`).join('')}
+                    </ul>
+                `;
+            }
+
+            elements.resultsContent.innerHTML = html;
+
+            if (window.TransparentVerdict && verdict.status) {
+                TransparentVerdict.render(document.getElementById('verdictBanner'), {
+                    status: verdict.status,
+                    headline: verdict.headline,
+                    bindingConstraint: verdict.binding_constraint,
+                    reasons: verdict.reasons,
+                    checks: verdict.checks,
+                });
+            }
+        }
+
+
+        // =====================================================================
+        // Event Listeners
+        // =====================================================================
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.body.classList.toggle('advanced-mode', btn.dataset.mode === 'advanced');
+            });
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+            });
+        });
+
+        elements.calculateBtn.addEventListener('click', calculate);
+
+        // Live recalculation: update the recommendation as inputs change (debounced).
+        let _liveTimer;
+        function liveCalc() {
+            clearTimeout(_liveTimer);
+            _liveTimer = setTimeout(() => { if (wireSizingModule) calculate(); }, 150);
+        }
+        document.querySelectorAll('.form-input').forEach(el => el.addEventListener('input', liveCalc));
+        document.querySelectorAll('.form-select').forEach(el => el.addEventListener('change', liveCalc));
+
+        // Calculate on Enter key
+        document.querySelectorAll('.form-input').forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') calculate();
+            });
+        });
+
+        // Settings panel: theme preference (persisted).
+        (function initSettings() {
+            const KEY = 'dc-wire-sizing-settings';
+            const defaults = { theme: 'system' };
+            let s = { ...defaults };
+            try { s = { ...defaults, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch (e) {}
+
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const openBtn = document.getElementById('settings-button');
+            const closeBtn = document.getElementById('settings-close');
+            const themeButtons = [...document.querySelectorAll('[data-theme-choice]')];
+
+            function apply() {
+                document.body.dataset.theme = s.theme === 'system' ? '' : s.theme;
+                themeButtons.forEach(b =>
+                    b.setAttribute('aria-pressed', String(b.dataset.themeChoice === s.theme)));
+            }
+            function save() { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
+            function open() { panel.classList.add('open'); overlay.classList.add('open'); panel.setAttribute('aria-hidden', 'false'); }
+            function close() { panel.classList.remove('open'); overlay.classList.remove('open'); panel.setAttribute('aria-hidden', 'true'); }
+
+            openBtn.addEventListener('click', open);
+            closeBtn.addEventListener('click', close);
+            overlay.addEventListener('click', close);
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+            themeButtons.forEach(b => b.addEventListener('click', () => {
+                s.theme = b.dataset.themeChoice; apply(); save();
+            }));
+            apply();
+        })();
+
+        // Initialize
+        init();
+    </script>
+    <script src="/shared/url-state.js" defer></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+      }
+    </script>
+</body>
+</html>
