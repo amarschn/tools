@@ -567,11 +567,12 @@ def calculate_wire_size(
     # Use insulation temp rating as worst-case operating temperature
     r_per_m = get_resistance_per_meter(recommended_size, material, insulation_temp_rating)
 
-    # Round trip length for voltage drop
-    if circuit_type.upper() == "DC":
-        round_trip_length = 2 * length_m  # Both conductors
+    # Voltage-drop conductor-length factor: single-phase AC and DC use 2 (out and
+    # back); balanced three-phase uses sqrt(3) (line-to-line drop).
+    if circuit_type.upper() in ("3PH", "3-PHASE", "THREE-PHASE", "AC3"):
+        round_trip_length = math.sqrt(3) * length_m
     else:
-        round_trip_length = 2 * length_m  # Single phase: 2 conductors
+        round_trip_length = 2 * length_m
 
     total_resistance = r_per_m * round_trip_length
     voltage_drop = current_a * total_resistance
@@ -712,8 +713,9 @@ def check_wire_size(
     # Calculate voltage drop
     r_per_m = get_resistance_per_meter(wire_size, material, insulation_temp_rating)
 
-    if circuit_type.upper() == "DC":
-        round_trip_length = 2 * length_m
+    # See calculate_wire_size: sqrt(3) for balanced three-phase, else 2.
+    if circuit_type.upper() in ("3PH", "3-PHASE", "THREE-PHASE", "AC3"):
+        round_trip_length = math.sqrt(3) * length_m
     else:
         round_trip_length = 2 * length_m
 

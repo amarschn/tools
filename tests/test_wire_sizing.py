@@ -961,5 +961,20 @@ class TestDcCircuit:
             wire_sizing.evaluate_dc_circuit(0, 12, 3)
 
 
+class TestThreePhaseVoltageDrop:
+    """Balanced three-phase uses a sqrt(3) length factor vs single-phase's 2."""
+
+    def test_three_phase_is_sqrt3_over_2_of_single_phase(self):
+        one = wire_sizing.check_wire_size("6 AWG", 40, 240, 30, "copper", 75, 30, 3, 3.0, "AC")
+        three = wire_sizing.check_wire_size("6 AWG", 40, 240, 30, "copper", 75, 30, 3, 3.0, "3PH")
+        ratio = three["voltage_drop_percent"] / one["voltage_drop_percent"]
+        assert ratio == pytest.approx(math.sqrt(3) / 2, abs=1e-3)
+
+    def test_single_phase_equals_dc(self):
+        ac = wire_sizing.check_wire_size("6 AWG", 40, 240, 30, "copper", 75, 30, 3, 3.0, "AC")
+        dc = wire_sizing.check_wire_size("6 AWG", 40, 240, 30, "copper", 75, 30, 3, 3.0, "DC")
+        assert ac["voltage_drop_percent"] == pytest.approx(dc["voltage_drop_percent"])
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
