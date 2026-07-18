@@ -475,6 +475,7 @@ def calculate_wire_size(
     num_conductors: int = 3,
     max_voltage_drop_percent: float = 3.0,
     circuit_type: str = "DC",
+    termination_rating: Optional[int] = None,
 ) -> dict:
     """
     Calculate the recommended wire size for given electrical load.
@@ -643,6 +644,7 @@ def check_wire_size(
     num_conductors: int = 3,
     max_voltage_drop_percent: float = 3.0,
     circuit_type: str = "DC",
+    termination_rating: Optional[int] = None,
 ) -> dict:
     """
     Check if a specific wire size is adequate for the given load.
@@ -696,14 +698,25 @@ def check_wire_size(
     if total_derating <= 0:
         raise ValueError(f"Cannot operate at {ambient_temp_c}°C with {insulation_temp_rating}°C insulation")
 
-    # Get base ampacity for the specified size
+    # Base ampacity from the wire's own insulation column (used for derating).
     ampacity_table = get_ampacity_table(material, insulation_temp_rating)
     base_ampacity = ampacity_table.get(wire_size)
 
     if base_ampacity is None:
         raise ValueError(f"Unknown wire size: {wire_size}")
 
-    corrected_ampacity = base_ampacity * total_derating
+    derated_ampacity = base_ampacity * total_derating
+    # NEC 110.14(C): the usable ampacity is capped by the termination temperature
+    # column (60/75 C). Derating may use the 90 C column, but the final ampacity
+    # is min(derated, termination-column base).
+    if termination_rating is not None:
+        termination_cap = get_ampacity_table(material, termination_rating).get(wire_size)
+        corrected_ampacity = (min(derated_ampacity, termination_cap)
+                              if termination_cap is not None else derated_ampacity)
+    else:
+        termination_cap = None
+        corrected_ampacity = derated_ampacity
+
     ampacity_margin = ((corrected_ampacity - current_a) / current_a) * 100 if current_a > 0 else 0
     ampacity_ok = corrected_ampacity >= current_a
 
@@ -755,6 +768,9 @@ def check_wire_size(
 
         # Ampacity results
         "base_ampacity_a": base_ampacity,
+        "derated_ampacity_a": derated_ampacity,
+        "termination_rating": termination_rating,
+        "termination_cap_a": termination_cap,
         "corrected_ampacity_a": corrected_ampacity,
         "ampacity_margin_percent": ampacity_margin,
         "ampacity_ok": ampacity_ok,
@@ -995,9 +1011,13 @@ def evaluate_circuit(
     max_voltage_drop_percent: float = 3.0,
     circuit_type: str = "DC",
     continuous_load: bool = False,
+    termination_rating: int = 75,
 ) -> dict:
     """
     Full NEC branch-circuit evaluation with a single pass/fail verdict.
+
+    ``insulation_temp_rating`` is the WIRE's rating (used for derating); the
+    usable ampacity is capped by ``termination_rating`` per NEC 110.14(C).
 
     Recommends the code-minimum conductor: the smallest size that satisfies
     ampacity, overcurrent protection (NEC 240.4/240.6), and — for continuous
@@ -1051,7 +1071,7 @@ def evaluate_circuit(
         chk = check_wire_size(
             size, current_a, voltage_v, length_m, material,
             insulation_temp_rating, ambient_temp_c, num_conductors,
-            max_voltage_drop_percent, circuit_type,
+            max_voltage_drop_percent, circuit_type, termination_rating,
         )
         if breaker_rating is None:
             prot = {"protected": False, "small_conductor_cap_a": None,

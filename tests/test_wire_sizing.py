@@ -976,5 +976,36 @@ class TestThreePhaseVoltageDrop:
         assert ac["voltage_drop_percent"] == pytest.approx(dc["voltage_drop_percent"])
 
 
+class TestTerminationTemperature:
+    """NEC 110.14(C): usable ampacity is capped by the termination column."""
+
+    def test_90c_wire_capped_at_75c_termination(self):
+        """3 AWG @90C carries 115 A, but on 75C terminations it's limited to 100 A."""
+        capped = wire_sizing.check_wire_size(
+            "3 AWG", 105, 240, 5, "copper", 90, 30, 3, 3.0, "AC", termination_rating=75)
+        assert capped["corrected_ampacity_a"] == 100  # 75C column, not 115
+        assert capped["ampacity_ok"] is False
+
+    def test_no_termination_rating_means_no_cap(self):
+        """Backward compatible: omitting termination_rating uses the wire column."""
+        naive = wire_sizing.check_wire_size(
+            "3 AWG", 105, 240, 5, "copper", 90, 30, 3, 3.0, "AC")
+        assert naive["corrected_ampacity_a"] == 115  # 90C column, uncapped
+
+    def test_circuit_upsizes_for_termination_limit(self):
+        """105 A on 90C wire / 75C terminations needs 2 AWG, not the naive 3 AWG."""
+        r = wire_sizing.evaluate_circuit(
+            105, 240, 5, "copper", 90, 30, 3, 3.0, "AC", False, termination_rating=75)
+        assert r["recommended_size"] == "2 AWG"
+
+    def test_derating_uses_90c_column(self):
+        """The 90C column (higher) is used for derating headroom before the cap."""
+        r = wire_sizing.check_wire_size(
+            "2 AWG", 100, 240, 5, "copper", 90, 30, 3, 3.0, "AC", termination_rating=75)
+        assert r["derated_ampacity_a"] == 130   # 2 AWG @90C
+        assert r["termination_cap_a"] == 115     # 2 AWG @75C
+        assert r["corrected_ampacity_a"] == 115  # min
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
