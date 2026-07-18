@@ -1012,9 +1012,14 @@ def evaluate_circuit(
     circuit_type: str = "DC",
     continuous_load: bool = False,
     termination_rating: int = 75,
+    dwelling_service: bool = False,
 ) -> dict:
     """
     Full NEC branch-circuit evaluation with a single pass/fail verdict.
+
+    ``dwelling_service`` applies the NEC 310.12 dwelling allowance: the service/
+    feeder conductor may be sized at 83% of the rating, and the conductor being
+    smaller than the overcurrent device is permitted (protection check waived).
 
     ``insulation_temp_rating`` is the WIRE's rating (used for derating); the
     usable ampacity is capped by ``termination_rating`` per NEC 110.14(C).
@@ -1066,6 +1071,10 @@ def evaluate_circuit(
     breaker_rating = breaker["breaker_rating_a"]
     sizes = get_wire_sizes_for_material(material)
 
+    # NEC 310.12: a dwelling service/feeder conductor may be sized at 83% of the
+    # rating, and may be smaller than the OCPD (protection check waived).
+    ampacity_factor = 0.83 if dwelling_service else 1.0
+
     def _evaluate_size(size: str):
         """Return (check_dict, protection_dict, continuous_ok) for one size."""
         chk = check_wire_size(
@@ -1073,7 +1082,15 @@ def evaluate_circuit(
             insulation_temp_rating, ambient_temp_c, num_conductors,
             max_voltage_drop_percent, circuit_type, termination_rating,
         )
-        if breaker_rating is None:
+        # Apply the dwelling 83% ampacity allowance to the ampacity check.
+        chk["ampacity_ok"] = (chk["corrected_ampacity_a"]
+                              >= ampacity_factor * current_a - 1e-9)
+        if dwelling_service:
+            prot = {"protected": True, "small_conductor_cap_a": None,
+                    "allowance": "310.12",
+                    "note": "Dwelling service/feeder: conductor may be smaller "
+                            "than the OCPD (NEC 310.12)."}
+        elif breaker_rating is None:
             prot = {"protected": False, "small_conductor_cap_a": None,
                     "allowance": "none",
                     "note": "Load exceeds the largest standard OCPD rating."}
@@ -1081,7 +1098,7 @@ def evaluate_circuit(
             prot = check_conductor_protection(
                 breaker_rating, chk["corrected_ampacity_a"], size, material)
         cont_ok = (chk["corrected_ampacity_a"] >= 1.25 * current_a - 1e-9
-                   if continuous_load else True)
+                   if (continuous_load and not dwelling_service) else True)
         return chk, prot, cont_ok
 
     # Stage 1: smallest conductor meeting ampacity + overcurrent protection +
@@ -1679,4 +1696,289 @@ def evaluate_dc_circuit(
             "reasons": reasons,
             "checks": checks,
         },
+    }
+
+
+# =============================================================================
+# Motor circuits — NEC Article 430 (FLC tables + sizing)
+# =============================================================================
+#
+# Full-load currents from NEC Tables 430.248 (single-phase) and 430.250
+# (three-phase). Per NEC 430.6(A)(1) these table values — NOT the nameplate —
+# are used to size conductors, OCPD, and disconnects.
+#
+# DATA PROVENANCE (sourced & cross-checked 2026-07-18): buildmyowncabin's NEC
+# 2014 reproductions, cross-checked against search-summary values which agree
+# exactly (e.g. 3ph 10 HP: 28 A @230, 14 A @460; 1ph 5 HP: 28 A @230).
+# UNVERIFIED by a human; the motor tool ships Experimental.
+
+# HP -> FLC (A). Single-phase (Table 430.248).
+MOTOR_FLC_1PH: Dict[int, Dict[float, float]] = {
+    115: {0.166: 4.4, 0.25: 5.8, 0.333: 7.2, 0.5: 9.8, 0.75: 13.8, 1: 16,
+          1.5: 20, 2: 24, 3: 34, 5: 56, 7.5: 80, 10: 100},
+    230: {0.166: 2.2, 0.25: 2.9, 0.333: 3.6, 0.5: 4.9, 0.75: 6.9, 1: 8,
+          1.5: 10, 2: 12, 3: 17, 5: 28, 7.5: 40, 10: 50},
+}
+
+# HP -> FLC (A). Three-phase induction (Table 430.250).
+MOTOR_FLC_3PH: Dict[int, Dict[float, float]] = {
+    208: {0.5: 2.4, 0.75: 3.5, 1: 4.6, 1.5: 6.6, 2: 7.5, 3: 10.6, 5: 16.7,
+          7.5: 24.2, 10: 30.8, 15: 46.2, 20: 59.4, 25: 74.8, 30: 88, 40: 114,
+          50: 143, 60: 169, 75: 211, 100: 273, 125: 343, 150: 396, 200: 528},
+    230: {0.5: 2.2, 0.75: 3.2, 1: 4.2, 1.5: 6, 2: 6.8, 3: 9.6, 5: 15.2,
+          7.5: 22, 10: 28, 15: 42, 20: 54, 25: 68, 30: 80, 40: 104, 50: 130,
+          60: 154, 75: 192, 100: 248, 125: 312, 150: 360, 200: 480},
+    460: {0.5: 1.1, 0.75: 1.6, 1: 2.1, 1.5: 3, 2: 3.4, 3: 4.8, 5: 7.6,
+          7.5: 11, 10: 14, 15: 21, 20: 27, 25: 34, 30: 40, 40: 52, 50: 65,
+          60: 77, 75: 96, 100: 124, 125: 156, 150: 180, 200: 240},
+}
+
+
+def get_motor_flc(hp: float, voltage_v: float, phase: str) -> float:
+    """
+    Full-load current (A) for a motor, per NEC Table 430.248/430.250.
+
+    Voltage is mapped to the nearest standard motor column (single-phase:
+    115/230; three-phase: 208/230/460).
+
+    ---Parameters---
+    hp : float
+        Motor horsepower (must be a standard table rating).
+    voltage_v : float
+        Nominal system voltage.
+    phase : str
+        "single" or "three".
+
+    ---Returns---
+    flc : float
+        Full-load current in amperes from the NEC table.
+
+    ---References---
+    NFPA 70 (NEC), 430.6(A)(1), Table 430.248, Table 430.250.
+    """
+    phase = phase.lower()
+    if phase.startswith("s") or phase == "1":
+        cols = MOTOR_FLC_1PH
+    elif phase.startswith("t") or phase == "3":
+        cols = MOTOR_FLC_3PH
+    else:
+        raise ValueError("phase must be 'single' or 'three'")
+    col_v = min(cols.keys(), key=lambda v: abs(v - voltage_v))
+    table = cols[col_v]
+    if hp not in table:
+        raise ValueError(
+            f"HP {hp} not in NEC motor table for {phase}-phase; "
+            f"available: {sorted(table)}")
+    return table[hp]
+
+
+def _select_conductor_for_ampacity(
+    required_ampacity: float, material: str, insulation_temp_rating: int,
+    ambient_temp_c: float, num_conductors: int, termination_rating: int,
+) -> Tuple[Optional[str], float]:
+    """Smallest conductor whose 110.14(C) usable ampacity >= required_ampacity.
+
+    Returns (size, usable_ampacity). size is the largest available if none fits.
+    """
+    temp_factor = get_temp_correction_factor(ambient_temp_c, insulation_temp_rating)
+    bundling = get_bundling_factor(num_conductors)
+    derate = temp_factor * bundling
+    wire_col = get_ampacity_table(material, insulation_temp_rating)
+    term_col = get_ampacity_table(material, termination_rating)
+    sizes = get_wire_sizes_for_material(material)
+    last = sizes[-1]
+    for size in sizes:
+        usable = min(wire_col[size] * derate, term_col[size])
+        if usable >= required_ampacity - 1e-9:
+            return size, usable
+    usable = min(wire_col[last] * derate, term_col[last])
+    return last, usable
+
+
+def evaluate_motor_circuit(
+    hp: float,
+    voltage_v: float,
+    phase: str = "three",
+    length_m: float = 0.0,
+    material: str = "copper",
+    insulation_temp_rating: int = 90,
+    ambient_temp_c: float = 30.0,
+    num_conductors: int = 3,
+    max_voltage_drop_percent: float = 3.0,
+    termination_rating: int = 75,
+) -> dict:
+    """
+    Size a motor branch circuit per NEC Article 430.
+
+    Conductor = 125% of the table FLC (430.22). Branch-circuit short-circuit /
+    ground-fault OCPD = 250% of FLC for an inverse-time breaker, taken up to the
+    next standard rating (430.52(C)(1) Ex. 1). That breaker does NOT protect the
+    conductor from overload — a separate overload device (115-125% of nameplate,
+    430.32) is required. Voltage drop is advisory.
+
+    ---Parameters---
+    hp : float
+        Motor horsepower (standard NEC table rating).
+    voltage_v : float
+        Nominal system voltage.
+    phase : str
+        "single" or "three". Default: "three".
+    length_m : float
+        One-way run length (m) for the advisory voltage drop. Default: 0.
+    material, insulation_temp_rating, ambient_temp_c, num_conductors,
+    max_voltage_drop_percent, termination_rating : see evaluate_circuit.
+
+    ---Returns---
+    result : dict
+        flc_a, conductor sizing current (1.25*FLC), recommended_size, usable
+        ampacity, breaker (250% -> standard), an overload note, voltage-drop
+        advisory, and a verdict.
+
+    ---References---
+    NFPA 70 (NEC), 430.6, 430.22, 430.52, 430.32; Tables 430.248/430.250.
+    """
+    flc = get_motor_flc(hp, voltage_v, phase)
+    conductor_current = 1.25 * flc                       # 430.22
+
+    size, usable = _select_conductor_for_ampacity(
+        conductor_current, material, insulation_temp_rating, ambient_temp_c,
+        num_conductors, termination_rating)
+    ampacity_ok = usable >= conductor_current - 1e-9
+
+    ocpd_rating = next_standard_ocpd(2.5 * flc)          # 430.52 inverse-time
+
+    # Advisory voltage drop at FLC.
+    voltage_drop_percent = 0.0
+    voltage_drop_v = 0.0
+    vd_within_target = True
+    if length_m > 0:
+        r_per_m = get_resistance_per_meter(size, material, insulation_temp_rating)
+        factor = math.sqrt(3) if phase.lower().startswith("t") else 2.0
+        voltage_drop_v = flc * r_per_m * factor * length_m
+        voltage_drop_percent = voltage_drop_v / voltage_v * 100.0
+        vd_within_target = voltage_drop_percent <= max_voltage_drop_percent
+
+    checks = {"ampacity": bool(ampacity_ok)}
+    reasons: List[str] = []
+    if not ampacity_ok:
+        reasons.append(
+            f"No standard conductor provides the required {conductor_current:.0f} A "
+            f"(125% of {flc:.1f} A FLC).")
+    status = "fail" if not ampacity_ok else "pass"
+    if status == "pass":
+        headline = (f"Pass — {size} {material}, {ocpd_rating} A breaker "
+                    f"(NEC 430; {flc:.1f} A FLC).")
+        binding = "ampacity"
+    else:
+        headline = f"FAIL — {reasons[0]}"
+        binding = "ampacity"
+
+    overload_min = round(1.15 * flc, 1)
+    overload_max = round(1.25 * flc, 1)
+
+    return {
+        "hp": hp, "voltage_v": voltage_v, "phase": phase,
+        "material": material, "length_m": length_m,
+        "flc_a": flc,
+        "conductor_current_a": conductor_current,
+        "recommended_size": size,
+        "corrected_ampacity_a": usable,
+        "ampacity_ok": ampacity_ok,
+        "breaker": {"breaker_rating_a": ocpd_rating,
+                    "required_ocpd_a": 2.5 * flc, "basis": "250% FLC (430.52)"},
+        "overload": {"min_a": overload_min, "max_a": overload_max,
+                     "note": "Separate overload device required at 115-125% of "
+                             "the nameplate FLA (NEC 430.32)."},
+        "voltage_drop_v": voltage_drop_v,
+        "voltage_drop_percent": voltage_drop_percent,
+        "voltage_drop_ok": vd_within_target,
+        "max_voltage_drop_percent": max_voltage_drop_percent,
+        "verdict": {"status": status, "headline": headline,
+                    "binding_constraint": binding, "reasons": reasons,
+                    "checks": checks},
+    }
+
+
+def evaluate_hvac_circuit(
+    mca: float,
+    mocp: float,
+    voltage_v: float,
+    length_m: float = 0.0,
+    material: str = "copper",
+    insulation_temp_rating: int = 90,
+    ambient_temp_c: float = 30.0,
+    num_conductors: int = 3,
+    max_voltage_drop_percent: float = 3.0,
+    termination_rating: int = 75,
+    phase: str = "single",
+) -> dict:
+    """
+    Size an air-conditioning / refrigeration circuit per NEC Article 440.
+
+    Uses the nameplate values: the conductor ampacity must be at least the
+    Minimum Circuit Ampacity (MCA), and the overcurrent device must not exceed
+    the Maximum Overcurrent Protection (MOCP). The tool sizes the conductor to
+    the MCA and reports the largest standard OCPD at or below the MOCP.
+
+    ---Parameters---
+    mca : float
+        Minimum Circuit Ampacity from the equipment nameplate (A).
+    mocp : float
+        Maximum Overcurrent Protection from the nameplate (A).
+    voltage_v, length_m, material, insulation_temp_rating, ambient_temp_c,
+    num_conductors, max_voltage_drop_percent, termination_rating, phase :
+        as elsewhere.
+
+    ---References---
+    NFPA 70 (NEC), 440.4, 440.6, 440.22, 440.32; 110.14(C).
+    """
+    if mca <= 0 or mocp <= 0:
+        raise ValueError("MCA and MOCP must be positive")
+
+    size, usable = _select_conductor_for_ampacity(
+        mca, material, insulation_temp_rating, ambient_temp_c,
+        num_conductors, termination_rating)
+    ampacity_ok = usable >= mca - 1e-9
+
+    # OCPD: largest standard rating <= MOCP (a smaller device is permitted).
+    ocpd_rating = None
+    for r in reversed(NEC_STANDARD_OCPD_RATINGS):
+        if r <= mocp + 1e-9:
+            ocpd_rating = r
+            break
+
+    voltage_drop_percent = 0.0
+    voltage_drop_v = 0.0
+    vd_within_target = True
+    if length_m > 0:
+        r_per_m = get_resistance_per_meter(size, material, insulation_temp_rating)
+        factor = math.sqrt(3) if phase.lower().startswith("t") else 2.0
+        voltage_drop_v = mca * r_per_m * factor * length_m
+        voltage_drop_percent = voltage_drop_v / voltage_v * 100.0
+        vd_within_target = voltage_drop_percent <= max_voltage_drop_percent
+
+    checks = {"ampacity": bool(ampacity_ok)}
+    reasons: List[str] = []
+    if not ampacity_ok:
+        reasons.append(f"No standard conductor provides the {mca:.0f} A MCA.")
+    status = "fail" if not ampacity_ok else "pass"
+    headline = (f"Pass — {size} {material}, up to {ocpd_rating} A breaker "
+                f"(NEC 440; {mca:.0f} A MCA / {mocp:.0f} A MOCP)."
+                if status == "pass" else f"FAIL — {reasons[0]}")
+
+    return {
+        "mca_a": mca, "mocp_a": mocp, "voltage_v": voltage_v,
+        "material": material, "length_m": length_m,
+        "recommended_size": size,
+        "corrected_ampacity_a": usable,
+        "ampacity_ok": ampacity_ok,
+        "breaker": {"breaker_rating_a": ocpd_rating, "max_a": mocp,
+                    "basis": "<= MOCP (440.22)"},
+        "voltage_drop_v": voltage_drop_v,
+        "voltage_drop_percent": voltage_drop_percent,
+        "voltage_drop_ok": vd_within_target,
+        "max_voltage_drop_percent": max_voltage_drop_percent,
+        "verdict": {"status": status, "headline": headline,
+                    "binding_constraint": "ampacity", "reasons": reasons,
+                    "checks": checks},
     }

@@ -1007,5 +1007,66 @@ class TestTerminationTemperature:
         assert r["corrected_ampacity_a"] == 115  # min
 
 
+class TestMotorCircuit:
+    """NEC Article 430 motor circuits."""
+
+    def test_flc_from_table_not_nameplate(self):
+        assert wire_sizing.get_motor_flc(10, 230, "three") == 28
+        assert wire_sizing.get_motor_flc(5, 230, "single") == 28
+        assert wire_sizing.get_motor_flc(10, 460, "three") == 14
+
+    def test_voltage_maps_to_nearest_column(self):
+        # 240 V maps to the 230 V column; 480 V to 460 V.
+        assert wire_sizing.get_motor_flc(10, 240, "three") == 28
+        assert wire_sizing.get_motor_flc(10, 480, "three") == 14
+
+    def test_conductor_125pct_and_breaker_250pct(self):
+        m = wire_sizing.evaluate_motor_circuit(10, 230, "three")
+        assert m["conductor_current_a"] == pytest.approx(1.25 * 28)   # 430.22
+        assert m["breaker"]["breaker_rating_a"] == 70                  # 250%*28 = 70
+        assert m["verdict"]["status"] == "pass"
+
+    def test_overload_is_separate(self):
+        m = wire_sizing.evaluate_motor_circuit(10, 230, "three")
+        assert m["overload"]["min_a"] == pytest.approx(1.15 * 28, abs=0.2)
+        assert m["overload"]["max_a"] == pytest.approx(1.25 * 28, abs=0.2)
+
+    def test_unknown_hp_raises(self):
+        with pytest.raises(ValueError):
+            wire_sizing.get_motor_flc(8, 230, "three")
+
+
+class TestHvacCircuit:
+    """NEC Article 440 A/C & refrigeration (MCA / MOCP)."""
+
+    def test_conductor_meets_mca_ocpd_below_mocp(self):
+        h = wire_sizing.evaluate_hvac_circuit(25, 40, 240)
+        assert h["corrected_ampacity_a"] >= 25
+        assert h["breaker"]["breaker_rating_a"] <= 40
+        assert h["verdict"]["status"] == "pass"
+
+    def test_invalid_inputs_raise(self):
+        with pytest.raises(ValueError):
+            wire_sizing.evaluate_hvac_circuit(0, 40, 240)
+
+
+class TestDwelling310_12:
+    """NEC 310.12 dwelling 83% allowance."""
+
+    def test_100a_dwelling_service_is_4awg(self):
+        d = wire_sizing.evaluate_circuit(
+            100, 240, 5, "copper", 90, 30, 3, 3.0, "AC", False, 75,
+            dwelling_service=True)
+        assert d["recommended_size"] == "4 AWG"   # 0.83*100 = 83 A -> 4 AWG (85 A)
+
+    def test_dwelling_smaller_than_regular(self):
+        reg = wire_sizing.evaluate_circuit(100, 240, 5, "copper", 90, 30, 3, 3.0, "AC")
+        dwl = wire_sizing.evaluate_circuit(
+            100, 240, 5, "copper", 90, 30, 3, 3.0, "AC", False, 75, dwelling_service=True)
+        reg_i = wire_sizing.get_ampacity_table("copper", 75)[reg["recommended_size"]]
+        dwl_i = wire_sizing.get_ampacity_table("copper", 75)[dwl["recommended_size"]]
+        assert dwl_i <= reg_i  # dwelling allows a smaller conductor
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
