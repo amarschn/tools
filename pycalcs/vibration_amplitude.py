@@ -44,39 +44,53 @@ def calculate_vibration_amplitude(
     amplitudes are locked together by the angular frequency omega = 2*pi*f:
     velocity peak = omega * displacement peak, and acceleration peak =
     omega**2 * displacement peak. This tool normalizes whatever you enter to a
-    zero-to-peak SI amplitude, then re-expresses all three quantities in the
-    common field units and amplitude conventions. The conversion is only valid
+    zero-to-peak SI amplitude, then re-expresses all three quantities in every
+    common field unit and amplitude convention. The conversion is only valid
     for a single frequency; a broadband (random) signal has no single omega and
-    cannot be converted without its spectrum.
+    cannot be converted without its spectrum. Within a single quantity the
+    conventions are fixed ratios: RMS = peak / sqrt(2), peak-to-peak = 2 * peak.
 
     ---Parameters---
     input_quantity : str
         Which quantity you are entering: "displacement", "velocity", or
-        "acceleration".
+        "acceleration". The tool returns all three regardless.
     input_value : float
-        The measured amplitude magnitude, in the chosen unit and convention.
+        The measured amplitude magnitude, expressed in the chosen unit and
+        amplitude convention.
     input_unit : str
         Unit of the entered value. Displacement: um, mm, m, mil, in.
         Velocity: mm/s, um/s, m/s, in/s. Acceleration: m/s2, mm/s2, g, in/s2.
     input_amplitude : str
-        Amplitude convention of the entered value: "peak" (zero-to-peak),
-        "rms", or "pkpk" (peak-to-peak).
+        The amplitude convention of the number you typed: "peak" (zero-to-peak
+        amplitude), "rms", or "pkpk" (peak-to-peak, the full swing = 2x peak).
     frequency : float
         Vibration frequency in hertz (Hz). Must be greater than zero.
 
     ---Returns---
+    disp_peak_um : float
+        Displacement amplitude, micrometres, zero-to-peak.
+    disp_rms_um : float
+        Displacement amplitude, micrometres, RMS.
     disp_pkpk_um : float
         Displacement amplitude, micrometres, peak-to-peak.
     disp_pkpk_mil : float
         Displacement amplitude, mils (0.001 in), peak-to-peak.
+    vel_peak_mms : float
+        Velocity amplitude, millimetres per second, zero-to-peak.
     vel_rms_mms : float
         Velocity amplitude, millimetres per second, RMS.
+    vel_pkpk_mms : float
+        Velocity amplitude, millimetres per second, peak-to-peak.
     vel_peak_ips : float
-        Velocity amplitude, inches per second, peak (zero-to-peak).
+        Velocity amplitude, inches per second, zero-to-peak.
     accel_peak_g : float
-        Acceleration amplitude, multiples of g, peak (zero-to-peak).
-    accel_rms_ms2 : float
-        Acceleration amplitude, metres per second squared, RMS.
+        Acceleration amplitude, multiples of g, zero-to-peak.
+    accel_rms_g : float
+        Acceleration amplitude, multiples of g, RMS.
+    accel_pkpk_g : float
+        Acceleration amplitude, multiples of g, peak-to-peak.
+    accel_peak_ms2 : float
+        Acceleration amplitude, metres per second squared, zero-to-peak.
     omega : float
         Angular frequency used for the conversion, radians per second.
 
@@ -132,21 +146,20 @@ def calculate_vibration_amplitude(
     sqrt2 = math.sqrt(2.0)
 
     return {
+        # Displacement (primary unit: micrometres; imperial: mils pk-pk)
+        "disp_peak_um": disp_pk / _DISP_TO_M["um"],
+        "disp_rms_um": (disp_pk / sqrt2) / _DISP_TO_M["um"],
         "disp_pkpk_um": (disp_pk * 2.0) / _DISP_TO_M["um"],
         "disp_pkpk_mil": (disp_pk * 2.0) / _DISP_TO_M["mil"],
+        # Velocity (primary unit: mm/s; imperial: in/s peak)
+        "vel_peak_mms": vel_pk / _VEL_TO_MS["mm/s"],
         "vel_rms_mms": (vel_pk / sqrt2) / _VEL_TO_MS["mm/s"],
+        "vel_pkpk_mms": (vel_pk * 2.0) / _VEL_TO_MS["mm/s"],
         "vel_peak_ips": vel_pk / _VEL_TO_MS["in/s"],
+        # Acceleration (primary unit: g; SI: m/s^2 peak)
         "accel_peak_g": accel_pk / _ACCEL_TO_MS2["g"],
-        "accel_rms_ms2": accel_pk / sqrt2,
+        "accel_rms_g": (accel_pk / sqrt2) / _ACCEL_TO_MS2["g"],
+        "accel_pkpk_g": (accel_pk * 2.0) / _ACCEL_TO_MS2["g"],
+        "accel_peak_ms2": accel_pk,
         "omega": omega,
-        "subst_disp_pkpk_um": (
-            f"d_{{pk\\text{{-}}pk}} = {disp_pk * 2.0 / _DISP_TO_M['um']:.4g}\\ \\mu m"
-        ),
-        "subst_vel_rms_mms": (
-            f"v_{{rms}} = {vel_pk / sqrt2 / _VEL_TO_MS['mm/s']:.4g}\\ mm/s"
-        ),
-        "subst_accel_peak_g": (
-            f"a_{{pk}} = {accel_pk / _ACCEL_TO_MS2['g']:.4g}\\ g"
-        ),
-        "subst_omega": f"\\omega = 2\\pi \\times {freq:.4g} = {omega:.4g}\\ rad/s",
     }
