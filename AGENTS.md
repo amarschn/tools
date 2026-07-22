@@ -353,6 +353,15 @@ def calculate_tool(input_a: float, input_b: float) -> dict[str, float]:
     * Ensuring all functionality is usable with a keyboard.
 * **CSS:** The example template currently ships with an inline `<style>` block; start from it, keep component-specific tweaks inside that block, and only introduce shared rules in the forthcoming global stylesheet (see Roadmap). Use descriptive class names and avoid one-off inline `style=""` attributes so future extraction stays easy.
 
+### Writing standards for user-facing copy
+
+Tool descriptions, "How it works" / background sections, READMEs, and `catalog.json` entries should read like a person wrote them. Before shipping copy, run the `avoid-ai-writing` skill at [`.claude/skills/avoid-ai-writing/SKILL.md`](.claude/skills/avoid-ai-writing/SKILL.md) in `edit` mode against the tool's page and README (Claude Code auto-discovers it, so `avoid-ai-writing` also works as a slash command). What it catches most on this repo's technical copy:
+
+* **No em dashes in prose.** Use commas, periods, parentheses, or a colon for a list label (`**Peak-to-peak:** the full swing`). A single `Title — Subtitle` separator in a page title is fine.
+* **Cut filler and inflated verbs:** drop "handy for", "it's worth noting", "leverage", "robust", "seamless", "comprehensive"; prefer "is"/"has" over "serves as"/"features"/"boasts".
+* **Define your variables and terms** the first time they appear (every symbol in an equation gets a definition).
+* Don't over-sand: keep deliberate rhythm, fragments, and a real voice. The skill's `technical-blog`/`docs` profiles give technical terms a pass.
+
 ---
 
 ## Python Module Patterns

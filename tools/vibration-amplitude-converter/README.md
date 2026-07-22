@@ -30,9 +30,9 @@ metric and imperial units.
 
 ## Outputs
 
-- Displacement — µm pk-pk (and mil pk-pk)
-- Velocity — mm/s RMS (and in/s peak)
-- Acceleration — g peak (and m/s² RMS)
+- Displacement: µm pk-pk (and mil pk-pk)
+- Velocity: mm/s RMS (and in/s peak)
+- Acceleration: g peak (and m/s² RMS)
 - ω = 2πf, the conversion basis
 
 ## Math
@@ -43,10 +43,10 @@ re-expresses each in its common field convention.
 
 ## Related tools
 
-- [Vibration Severity & Fault Triage](../vibration-severity-triage/) — ISO 20816
+- [Vibration Severity & Fault Triage](../vibration-severity-triage/): ISO 20816
   zone classification once you have velocity in mm/s.
 - [Vibration Isolation Designer](../vibration-isolation-designer/)
 
 ## Status
 
-Experimental — pending human verification of the conversion outputs.
+Experimental. Pending human verification of the conversion outputs.

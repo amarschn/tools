@@ -17,6 +17,10 @@ For comprehensive guidance on:
 
 Repository-level plan documents in `/plans/` must use `YYYY-MM-DD_short_slug.md` filenames and include a matching `Date: YYYY-MM-DD` line immediately below the H1 title. Use ISO dates so plans sort chronologically.
 
+## Writing & Copy Standards
+
+User-facing copy (tool descriptions, "How it works" / background sections, READMEs, catalog entries, commit-adjacent docs) must read like a person wrote it, not a chatbot. Run the `avoid-ai-writing` skill in `.claude/skills/avoid-ai-writing/SKILL.md` when writing or editing this copy. The rules that bite most on this repo's technical copy: no em dashes in prose (use commas, periods, parentheses, or a colon for list labels), no filler ("handy for", "it's worth noting", "leverage", "robust", "seamless"), define variables and terms, and prefer "is"/"has" over "serves as"/"features". Titles may keep a single "Title — Subtitle" separator dash. Invoke it via the Skill tool (`avoid-ai-writing`) or read the SKILL.md directly.
+
 ## Branch Workflow
 
 - Keep `main` stable and deployable.
