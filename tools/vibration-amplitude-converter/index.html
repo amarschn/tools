@@ -162,11 +162,11 @@
         /* Result cards */
         .result-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
         .result-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; background: var(--bg-color); }
-        .result-card h4 { font-size: 0.85rem; margin-bottom: 2px; }
-        .result-card .card-unit { font-size: 0.75rem; color: var(--text-light); font-weight: 500; margin-bottom: 10px; }
+        .result-card h4 { font-size: 0.85rem; margin-bottom: 10px; }
         .conv-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 8px; border-radius: 5px; margin: 0 -8px; }
         .conv-row .cname { font-size: 0.8rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.03em; }
         .conv-row .cval { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 600; color: var(--text-color); }
+        .conv-row .cval .u { font-family: var(--font-sans); font-size: 0.78rem; font-weight: 500; color: var(--text-light); margin-left: 3px; }
         .conv-row.is-input { background: var(--highlight-bg); }
         .conv-row.is-input .cname { color: var(--accent-color); font-weight: 700; }
         .conv-row .badge { font-size: 0.6rem; background: var(--accent-color); color: var(--bg-card); border-radius: 3px; padding: 1px 4px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.03em; }
@@ -196,6 +196,9 @@
         .conv-defs b { color: var(--text-color); }
         .worked { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); border-radius: 6px; padding: 12px 16px; font-size: 0.9rem; margin: 12px 0; }
         .worked code { font-family: var(--font-mono); }
+        .var-defs { list-style: none; padding: 0; margin: 10px 0 1rem; display: grid; gap: 6px; font-size: 0.9rem; }
+        .var-defs li { color: var(--text-light); }
+        .var-defs .sym { color: var(--text-color); font-weight: 600; margin-right: 4px; }
 
         /* Settings panel */
         .settings-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); opacity: 0; visibility: hidden; transition: opacity 0.2s; z-index: 1500; }
@@ -394,6 +397,14 @@
                     <h3>How the three quantities relate</h3>
                     <p>Once the amplitude is pinned down, displacement, velocity, and acceleration are locked together by the frequency. With angular frequency ω = 2π<em>f</em>:</p>
                     <div class="eq-block">$$\omega = 2\pi f \qquad v_{pk} = \omega\, d_{pk} \qquad a_{pk} = \omega^2 d_{pk}$$</div>
+                    <p style="margin-bottom:0.35rem;">where:</p>
+                    <ul class="var-defs">
+                        <li><span class="sym">\(f\)</span>— vibration frequency (Hz), the number of cycles per second</li>
+                        <li><span class="sym">\(\omega\)</span>— angular frequency (rad/s), equal to \(2\pi f\)</li>
+                        <li><span class="sym">\(d_{pk}\)</span>— displacement amplitude, zero-to-peak (m)</li>
+                        <li><span class="sym">\(v_{pk}\)</span>— velocity amplitude, zero-to-peak (m/s)</li>
+                        <li><span class="sym">\(a_{pk}\)</span>— acceleration amplitude, zero-to-peak (m/s²)</li>
+                    </ul>
                     <p>Because acceleration scales with ω², the same displacement produces far higher acceleration at high frequency — which is why accelerometers dominate high-frequency work and proximity probes dominate low-frequency shaft measurement.</p>
                     <p id="background-description" style="margin-top:1rem; font-size:0.88rem;"></p>
                 </div>
@@ -545,18 +556,17 @@
         main();
 
         // ---- Render one quantity card with all three conventions ----
-        function convCard(title, unitLabel, rows, inputConv, altText) {
+        function convCard(title, unit, rows, inputConv, altText) {
             const order = [['peak', '0-to-peak'], ['rms', 'RMS'], ['pkpk', 'peak-to-peak']];
             const body = order.map(([k, name]) => {
                 const isInput = k === inputConv;
                 return `<div class="conv-row ${isInput ? 'is-input' : ''}">
                     <span class="cname">${name}${isInput ? '<span class="badge">YOUR INPUT</span>' : ''}</span>
-                    <span class="cval">${fmt(rows[k])}</span>
+                    <span class="cval">${fmt(rows[k])}<span class="u">${unit}</span></span>
                 </div>`;
             }).join('');
             return `<div class="result-card">
                 <h4>${title}</h4>
-                <div class="card-unit">${unitLabel}</div>
                 ${body}
                 <div class="result-alt">${altText}</div>
             </div>`;
@@ -591,10 +601,10 @@
                 const accConv = quantity === 'acceleration' ? amplitude : null;
 
                 groups.innerHTML =
-                    convCard('Displacement', 'micrometres (µm)',
+                    convCard('Displacement', 'µm',
                         { peak: r.disp_peak_um, rms: r.disp_rms_um, pkpk: r.disp_pkpk_um },
                         dispConv, `${fmt(r.disp_pkpk_mil)} mil pk-pk`) +
-                    convCard('Velocity', 'millimetres/second (mm/s)',
+                    convCard('Velocity', 'mm/s',
                         { peak: r.vel_peak_mms, rms: r.vel_rms_mms, pkpk: r.vel_pkpk_mms },
                         velConv, `${fmt(r.vel_peak_ips)} in/s peak`) +
                     convCard('Acceleration', 'g',
