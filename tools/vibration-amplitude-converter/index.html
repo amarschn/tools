@@ -183,6 +183,19 @@
 
         .eq-block { background: var(--primary-light); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
         .related a { display: inline-block; margin-right: 16px; }
+        .hint { font-size: 0.8rem; color: var(--text-light); margin-top: 6px; }
+        .hint a { cursor: pointer; }
+
+        /* Amplitude explainer */
+        .sine-figure { width: 100%; max-width: 620px; margin: 8px 0 4px; }
+        .sine-figure svg { width: 100%; height: auto; display: block; }
+        .sine-caption { font-size: 0.82rem; color: var(--text-light); margin: 0 0 1.2rem; }
+        .conv-defs { list-style: none; padding: 0; margin: 0 0 1.2rem; display: grid; gap: 10px; }
+        .conv-defs li { padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-color); font-size: 0.92rem; }
+        .conv-defs .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 7px; vertical-align: baseline; }
+        .conv-defs b { color: var(--text-color); }
+        .worked { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); border-radius: 6px; padding: 12px 16px; font-size: 0.9rem; margin: 12px 0; }
+        .worked code { font-family: var(--font-mono); }
 
         /* Settings panel */
         .settings-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); opacity: 0; visibility: hidden; transition: opacity 0.2s; z-index: 1500; }
@@ -290,6 +303,7 @@
                             <option value="rms">RMS</option>
                             <option value="pkpk">Peak-to-peak</option>
                         </select>
+                        <div class="hint">Three ways to measure the same wave — <a id="explain-link">what's the difference, and why does it change every result?</a></div>
                     </div>
                     <div class="input-group">
                         <label for="frequency">Frequency (Hz)<span class="tooltip-trigger" data-key="frequency" data-tooltip="…">?</span></label>
@@ -329,13 +343,59 @@
                 </div>
 
                 <div id="background" class="tab-content">
-                    <h3>The relationships</h3>
-                    <p>For sinusoidal motion at frequency <em>f</em>, with angular frequency ω = 2π<em>f</em>, the three amplitudes are locked together:</p>
+                    <h3>Peak, RMS, and peak-to-peak: three ways to measure one wave</h3>
+                    <p>A vibrating point traces a wave over time. There is only <em>one</em> wave — but three common ways to put a single number on its size. They are all just distances measured on the same picture:</p>
+
+                    <div class="sine-figure">
+                        <svg viewBox="0 0 620 240" role="img" aria-label="Sine wave showing peak, peak-to-peak, and RMS amplitude">
+                            <defs>
+                                <marker id="arr" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1,1 L7,4 L1,7" fill="none" stroke="currentColor" stroke-width="1.4"/></marker>
+                            </defs>
+                            <!-- reference levels -->
+                            <line x1="40" y1="40" x2="580" y2="40" stroke="var(--border-color)" stroke-dasharray="3 4"/>
+                            <line x1="40" y1="200" x2="580" y2="200" stroke="var(--border-color)" stroke-dasharray="3 4"/>
+                            <line x1="40" y1="120" x2="580" y2="120" stroke="var(--text-light)" stroke-dasharray="2 4"/>
+                            <text x="46" y="134" fill="var(--text-light)" font-size="11">rest / zero</text>
+                            <!-- RMS level -->
+                            <line x1="40" y1="63.4" x2="580" y2="63.4" stroke="var(--success-color)" stroke-dasharray="6 4" stroke-width="1.5"/>
+                            <!-- the wave -->
+                            <polyline id="sine-curve" fill="none" stroke="var(--accent-color)" stroke-width="2.5" points=""/>
+                            <!-- peak (0-to-peak) bracket at first crest x=100 -->
+                            <g color="var(--accent-color)">
+                                <line x1="100" y1="119" x2="100" y2="41" stroke="currentColor" stroke-width="1.6" marker-start="url(#arr)" marker-end="url(#arr)"/>
+                            </g>
+                            <text x="110" y="86" fill="var(--text-color)" font-size="12.5" font-weight="600">peak (0-to-peak) = A</text>
+                            <!-- peak-to-peak bracket at second crest x=340 -->
+                            <g color="var(--warning-color)">
+                                <line x1="340" y1="41" x2="340" y2="199" stroke="currentColor" stroke-width="1.6" marker-start="url(#arr)" marker-end="url(#arr)"/>
+                            </g>
+                            <text x="350" y="124" fill="var(--text-color)" font-size="12.5" font-weight="600">peak-to-peak = 2A</text>
+                            <!-- RMS label -->
+                            <text x="470" y="58" fill="var(--success-color)" font-size="12" font-weight="600">RMS ≈ 0.707 A</text>
+                        </svg>
+                    </div>
+                    <p class="sine-caption">One wave, three measurements. Peak is rest-to-crest; peak-to-peak is the full swing (crest to trough) and is always exactly twice the peak; RMS is the "energy-equivalent" average, which for a sine is 0.707 × peak.</p>
+
+                    <ul class="conv-defs">
+                        <li><span class="swatch" style="background:var(--accent-color)"></span><b>Peak (0-to-peak)</b> — the amplitude, from rest to the crest. This is the "true" size the physics uses.</li>
+                        <li><span class="swatch" style="background:var(--warning-color)"></span><b>Peak-to-peak</b> — the full top-to-bottom swing. Always <code>2 × peak</code>. Common for displacement (e.g. shaft µm pk-pk).</li>
+                        <li><span class="swatch" style="background:var(--success-color)"></span><b>RMS</b> — root-mean-square, the energy-equivalent average. For a sine, <code>peak / √2 ≈ 0.707 × peak</code>. Common for velocity (ISO 20816 mm/s RMS).</li>
+                    </ul>
+
+                    <h3>Why picking a different convention changes <em>every</em> number</h3>
+                    <p>The convention selector doesn't just relabel your value — it changes <em>how big the actual vibration is</em>. Consider entering "10 mm/s" three ways:</p>
+                    <div class="worked">
+                        <code>10 mm/s peak</code> → the wave's amplitude is 10.<br>
+                        <code>10 mm/s peak-to-peak</code> → the full swing is 10, so the amplitude is only <b>5</b> (half as big a vibration).<br>
+                        <code>10 mm/s RMS</code> → the amplitude is 10 × √2 ≈ <b>14.1</b> (a bigger vibration).
+                    </div>
+                    <p>Those are three <em>different-sized</em> vibrations. A bigger vibration means bigger displacement <em>and</em> bigger velocity <em>and</em> bigger acceleration — so all of the outputs scale up or down together by the same factor. That's why changing one dropdown moves every result. The results panel shows all three conventions for each quantity and highlights the one you entered, so you can always see the <code>×2</code> and <code>÷√2</code> relationships directly.</p>
+
+                    <h3>How the three quantities relate</h3>
+                    <p>Once the amplitude is pinned down, displacement, velocity, and acceleration are locked together by the frequency. With angular frequency ω = 2π<em>f</em>:</p>
                     <div class="eq-block">$$\omega = 2\pi f \qquad v_{pk} = \omega\, d_{pk} \qquad a_{pk} = \omega^2 d_{pk}$$</div>
-                    <p>Because acceleration scales with ω², the same displacement produces far higher acceleration at high frequency — which is why accelerometers dominate high-frequency measurement and proximity probes dominate low-frequency shaft work.</p>
-                    <h3>Peak, RMS, and peak-to-peak</h3>
-                    <p>For a sinusoid the conventions are fixed ratios of the zero-to-peak amplitude: <code>RMS = peak / √2 ≈ 0.707 × peak</code> and <code>peak-to-peak = 2 × peak</code> (the full swing, top to bottom). So a value entered as "10 peak-to-peak" describes a <em>smaller</em> signal than "10 peak" — half the amplitude. The results panel shows all three conventions for every quantity so the 2× and √2 relationships are explicit; the convention you entered is highlighted.</p>
-                    <p id="background-description" style="margin-top:1rem;"></p>
+                    <p>Because acceleration scales with ω², the same displacement produces far higher acceleration at high frequency — which is why accelerometers dominate high-frequency work and proximity probes dominate low-frequency shaft measurement.</p>
+                    <p id="background-description" style="margin-top:1rem; font-size:0.88rem;"></p>
                 </div>
             </section>
         </div>
@@ -401,6 +461,30 @@
             });
         });
         function typesetMath() { if (window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise(); }
+
+        function openTab(name) {
+            document.querySelectorAll('.tab-link').forEach(l => l.classList.toggle('active', l.dataset.tab === name));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === name));
+        }
+        // "What's the difference?" hint jumps to the explainer.
+        document.getElementById('explain-link').addEventListener('click', () => {
+            openTab('background');
+            document.getElementById('background').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+
+        // Draw the sine wave in the explainer (amp 80 about a zero line at y=120,
+        // two cycles across x=40..580; crest y=40, trough y=200, RMS y=63.4).
+        (function drawSine() {
+            const el = document.getElementById('sine-curve');
+            if (!el) return;
+            const x0 = 40, x1 = 580, y0 = 120, amp = 80, period = 240;
+            const pts = [];
+            for (let x = x0; x <= x1; x++) {
+                const y = y0 - amp * Math.sin(2 * Math.PI * (x - x0) / period);
+                pts.push(x + ',' + y.toFixed(1));
+            }
+            el.setAttribute('points', pts.join(' '));
+        })();
 
         // ---- Unit dropdown wiring ----
         const quantitySel = document.getElementById('input_quantity');
