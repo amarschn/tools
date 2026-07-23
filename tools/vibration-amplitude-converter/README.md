@@ -49,4 +49,5 @@ re-expresses each in its common field convention.
 
 ## Status
 
-Experimental. Pending human verification of the conversion outputs.
+Human-verified. Conversion outputs checked end-to-end against textbook values
+(e.g. 1 g peak at 60 Hz → 138 µm pk-pk, 18.4 mm/s RMS, 69 µm peak).
