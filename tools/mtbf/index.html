@@ -483,6 +483,16 @@
                             count in the mission outcome.</div>
                     </div>
 
+                    <div class="input-group">
+                        <label for="repair_time_hours">Mean time to repair, MTTR<span class="tooltip-trigger" data-key="repair_time_hours" data-tooltip="…">?</span></label>
+                        <div class="input-unit">
+                            <input type="number" id="repair_time_hours" step="any" min="0" placeholder="optional">
+                            <span class="unit-suffix">hours</span>
+                        </div>
+                        <div class="hint">Optional, and only for repairable items. Adds availability and
+                            downtime per year.</div>
+                    </div>
+
                     <button type="submit" class="btn btn-primary" id="calc-btn">Calculate</button>
                 </form>
 
@@ -643,6 +653,68 @@
                     <p>Roughly a quarter of units fail inside a mission a fifth as long as the MTBF. That is
                     normal, and it is why a customer conversation should turn on reliability at the mission
                     time rather than on the MTBF.</p>
+
+                    <h3>MTBF, MTTR, availability, and AFR</h3>
+                    <p>Four numbers that get used interchangeably and are not the same thing. MTBF and MTTF
+                    are covered above; the other two follow from them:</p>
+                    <div class="eq-block">$$AFR = 1 - R(8760) \qquad A = \frac{MTBF}{MTBF + MTTR}$$</div>
+                    <ul class="var-defs">
+                        <li><span class="sym">\(AFR\)</span> is the annualized failure rate, the share of units that fail within a year of 8760 operating hours</li>
+                        <li><span class="sym">\(MTTR\)</span> is the mean time to repair, how long a unit stays down once it fails (hours)</li>
+                        <li><span class="sym">\(A\)</span> is steady-state availability, the fraction of calendar time the unit is working</li>
+                    </ul>
+                    <p>AFR has two definitions in circulation and they part company for short-lived items, so
+                    the tool reports both. The share of units failing within a year is \(1 - R(8760)\). The
+                    failures per unit-year is \(8760/MTBF\), which is what you get from dividing a fleet's
+                    failure count by its operating years, and it is the one drive vendors and Backblaze-style
+                    field studies publish. At a 1,000,000-hour MTBF they agree: 0.87% against 0.88%. At a
+                    2920-hour MTBF they do not: 95% of units fail within the year, while a repaired unit
+                    averages 3 failures over the same span. The gap is not an error, it is the difference
+                    between counting units and counting failures.</p>
+                    <p>Availability needs the repair time, and it is where a long MTBF stops being the whole
+                    story. Steady-state availability holds for any life distribution, not just the exponential,
+                    because the long-run behaviour of an alternating up-down renewal process depends only on the
+                    two means. A 2920-hour MTBF with a 4-hour repair gives 99.86% availability, about 12 hours
+                    down per year. Halve the repair time and you buy the same availability improvement as
+                    doubling the MTBF, usually for far less money.</p>
+
+                    <h3>Which standards this follows</h3>
+                    <p>The methods here are the ones written down in the reliability testing standards, not
+                    house rules:</p>
+                    <div class="table-wrap">
+                        <table class="guide-table">
+                            <thead><tr><th>Standard</th><th>What it covers</th></tr></thead>
+                            <tbody>
+                                <tr><td>IEC 60605-4:2001</td><td>Statistical procedures for the exponential distribution: point estimates, confidence intervals, prediction and tolerance intervals. This is the chi-squared bound arithmetic the tool performs.</td></tr>
+                                <tr><td>IEC 61649:2008</td><td>Weibull analysis: fitting, plotting positions, and interpretation of the shape parameter.</td></tr>
+                                <tr><td>IEC 61124:2023</td><td>Compliance tests for constant failure rate and constant failure intensity. Defines the fixed time/failure terminated test plans behind the Type I and Type II distinction.</td></tr>
+                                <tr><td>IEC 60300-3-5:2001</td><td>Reliability test conditions and statistical test principles, including the split between repaired and non-repaired items that decides whether you have an MTBF or an MTTF.</td></tr>
+                                <tr><td>MIL-HDBK-781A (1996)</td><td>Reliability test methods, plans, and environments. The source of most demonstration-test practice, and of the convention that a requirement is stated as a one-sided lower bound.</td></tr>
+                                <tr><td>ISO 14224:2016</td><td>Collection and exchange of reliability and maintenance data. Its taxonomy of what counts as a failure and as operating time is what keeps your T honest before any of the above matters.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3>What this tool is not: prediction handbooks</h3>
+                    <p>If you arrived looking for MIL-HDBK-217, you want a different calculation. Prediction
+                    handbooks work forwards from a bill of materials: count the parts, apply per-part failure
+                    rates adjusted for temperature, stress, and environment, and sum them into a system failure
+                    rate before anything has been built or tested. This tool works backwards from observed
+                    failures. The two meet in the middle, since handbook output is exactly the kind of component
+                    MTBF that feeds the <a href="../system-reliability/">System Reliability Calculator</a>.</p>
+                    <div class="table-wrap">
+                        <table class="guide-table">
+                            <thead><tr><th>Handbook</th><th>Notes</th></tr></thead>
+                            <tbody>
+                                <tr><td>MIL-HDBK-217F Notice 2 (1995)</td><td>The original, and still the most cited. Its part models have not been updated since the mid-1990s, and the handbook itself states it is guidance and should not be cited as a requirement. Predictions from it tend to be pessimistic for modern electronics.</td></tr>
+                                <tr><td>Telcordia SR-332 Issue 4 (2016)</td><td>The telecom alternative, kept current longer than 217F. Supports blending laboratory and field data into the prediction rather than relying on part models alone.</td></tr>
+                                <tr><td>IEC 61709, FIDES</td><td>Component failure rates with stress and mission-profile models. FIDES is the usual choice in European aerospace and defence work.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p>A predicted MTBF and a demonstrated MTBF are different claims. If you have test or field
+                    data, the estimate on this page beats any handbook number, and the confidence interval tells
+                    you how much to trust it.</p>
 
                     <h3>Assumptions and limits</h3>
                     <ul class="var-defs">
@@ -845,7 +917,7 @@
         [
             'total_operating_hours', 'unit_count', 'hours_per_unit', 'failure_count',
             'failure_times', 'suspension_times', 'test_termination', 'confidence_level',
-            'mission_time_hours', 'mission_unit_count',
+            'mission_time_hours', 'mission_unit_count', 'repair_time_hours',
         ].forEach(id => {
             const el = document.getElementById(id);
             el.addEventListener('input', autoCalculate);
@@ -870,6 +942,14 @@
             if (x >= 100) return x.toFixed(0);
             if (x >= 1) return x.toFixed(1);
             return x.toFixed(3);
+        }
+        // Downtime spans minutes to weeks depending on the MTBF, so pick a unit
+        // rather than printing "0.0002 hours" or "43800 minutes".
+        function fmtDowntime(hours) {
+            if (hours === null || hours === undefined || !isFinite(hours)) return '—';
+            if (hours < 1) return `${(hours * 60).toFixed(1)}<span class="u">min</span>`;
+            if (hours < 48) return `${hours.toFixed(1)}<span class="u">h</span>`;
+            return `${(hours / 24).toFixed(1)}<span class="u">days</span>`;
         }
         function pct(x) {
             if (x === null || x === undefined || !isFinite(x)) return '—';
@@ -961,6 +1041,8 @@
                 }
                 const missionUnits = parseInt(document.getElementById('mission_unit_count').value, 10);
                 kwargs.mission_unit_count = (Number.isFinite(missionUnits) && missionUnits >= 1) ? missionUnits : 1;
+                const mttr = parseFloat(document.getElementById('repair_time_hours').value);
+                kwargs.repair_time_hours = (Number.isFinite(mttr) && mttr >= 0) ? mttr : null;
 
                 if (mode === 'failure_times') {
                     const failures = parseTimes(document.getElementById('failure_times').value);
@@ -1089,6 +1171,18 @@
                     </div>`}
                 </div>` : '';
 
+            const availabilityCards = r.availability !== null ? `
+                    <div class="result-card">
+                        <div class="rname">Availability</div>
+                        <div class="rval">${(100 * r.availability).toFixed(r.availability > 0.999 ? 4 : 2)}<span class="u">%</span></div>
+                        <div class="rnote">at MTTR ${fmt(r.repair_time_hours)} h</div>
+                    </div>
+                    <div class="result-card">
+                        <div class="rname">Downtime</div>
+                        <div class="rval">${fmtDowntime(r.downtime_hours_per_year)}</div>
+                        <div class="rnote">per 8760-hour year</div>
+                    </div>` : '';
+
             const cards = `
                 <div class="result-grid">
                     <div class="result-card">
@@ -1096,6 +1190,14 @@
                         <div class="rval">${fmt(r.failure_rate_per_hour)}<span class="u">/h</span></div>
                         <div class="rnote">${fmt(r.failure_rate_per_hour * 1e9)} FIT</div>
                     </div>
+                    <div class="result-card">
+                        <div class="rname">Annualized failure rate</div>
+                        <div class="rval">${pct(r.annualized_failure_rate)}</div>
+                        <div class="rnote">${r.expected_failures_per_unit_year !== null
+                            ? `fail within a year; ${fmt(r.expected_failures_per_unit_year)} failures per unit-year`
+                            : 'of units fail within a year'}</div>
+                    </div>
+                    ${availabilityCards}
                     <div class="result-card">
                         <div class="rname">B10 life</div>
                         <div class="rval">${fmt(r.b10_life_hours)}<span class="u">h</span></div>
@@ -1397,7 +1499,14 @@
                 `${confidence}% one-sided lower bound: ${fmt(r.mtbf_lower_one_sided_hours)} hours`,
                 `Failure rate: ${fmt(r.failure_rate_per_hour)} /hour (${fmt(r.failure_rate_per_hour * 1e9)} FIT)`,
                 `B10 life: ${fmt(r.b10_life_hours)} hours | median life: ${fmt(r.median_life_hours)} hours`,
+                `Annualized failure rate: ${pct(r.annualized_failure_rate)} of units fail within 8760 hours`
+                    + (r.expected_failures_per_unit_year !== null
+                        ? ` (${fmt(r.expected_failures_per_unit_year)} failures per unit-year)` : ''),
             ];
+            if (r.availability !== null) {
+                lines.push(`Availability: ${(100 * r.availability).toFixed(4)}% at MTTR ${fmt(r.repair_time_hours)} h`
+                    + ` (${fmt(r.downtime_hours_per_year)} h downtime per year)`);
+            }
             if (r.mission_time_hours) {
                 lines.push(`Reliability at ${fmt(r.mission_time_hours)} h: ${pct(r.reliability_at_mission)}`);
             }

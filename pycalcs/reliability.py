@@ -524,6 +524,7 @@ def estimate_mtbf(
     confidence_level: float = 0.9,
     mission_time_hours: float | None = None,
     mission_unit_count: int | None = None,
+    repair_time_hours: float | None = None,
 ) -> dict[str, Any]:
     """
     Estimate MTBF from observed operating time and failures.
@@ -573,6 +574,10 @@ def estimate_mtbf(
     mission_unit_count : int | None
         Number of units to project the mission onto. Turns the reliability at
         the mission time into expected survivors and failures. Defaults to 1.
+    repair_time_hours : float | None
+        Mean time to repair, MTTR (hours). Supplying it adds steady-state
+        availability and downtime per year. Leave it out for non-repairable
+        items, where availability has no meaning.
 
     ---Returns---
     distribution : str
@@ -602,6 +607,21 @@ def estimate_mtbf(
         Time by which half the population has failed (hours).
     b10_life_hours : float
         Time by which 10% of the population has failed (hours).
+    annualized_failure_rate : float
+        Share of units that fail within one year of 8760 operating hours,
+        equal to 1 - R(8760). This is the AFR quoted for disk drives and
+        consumer hardware.
+    expected_failures_per_unit_year : float | None
+        Expected number of failures per unit per operating year, 8760/MTBF.
+        Exponential fit only, since it assumes each repair restores the unit.
+        Equal to the AFR when the MTBF is long relative to a year, and larger
+        than it when the MTBF is short, because one unit can fail repeatedly.
+    repair_time_hours : float | None
+        Mean time to repair that was supplied (hours).
+    availability : float | None
+        Steady-state availability, MTBF / (MTBF + MTTR).
+    downtime_hours_per_year : float | None
+        Expected downtime in a year of 8760 hours.
     reliability_at_mission : float | None
         Reliability at the mission time, when one is supplied.
     mission_unit_count : int | None
@@ -636,12 +656,17 @@ def estimate_mtbf(
     Equation_8 = MTTF = \\exp\\!\\left(\\mu + \\frac{\\sigma^2}{2}\\right)
     Equation_9 = F_i = \\frac{AR_i - 0.3}{n + 0.4}
     Equation_10 = t_{B10} = \\eta\\,(-\\ln 0.9)^{1/\\beta}
+    Equation_11 = AFR = 1 - R(8760)
+    Equation_12 = A = \\frac{MTBF}{MTBF + MTTR}
 
     ---References---
     Ebeling, C.E. An Introduction to Reliability and Maintainability
     Engineering, 3rd ed., Chapters 12 and 15.
     O'Connor, P.D.T. and Kleyner, A. Practical Reliability Engineering,
     5th ed., Chapters 3 and 13.
+    IEC 60605-4:2001, Equipment reliability testing - Part 4: Statistical
+    procedures for exponential distribution.
+    IEC 61649:2008, Weibull analysis.
     """
     distribution = str(distribution).strip().lower()
     data_mode = str(data_mode).strip().lower()
@@ -896,6 +921,27 @@ def estimate_mtbf(
         else 0.0
     )
 
+    # Annualized failure rate. Two definitions circulate and they diverge for
+    # short-lived items, so both are returned rather than silently picking one:
+    # the share of units failing in a year, and the failures per unit-year.
+    hours_per_year = 8760.0
+    annualized_failure_rate = 1.0 - reliability(hours_per_year)
+    expected_failures_per_unit_year = None
+    if distribution == "exponential" and math.isfinite(point_estimate) and point_estimate > 0:
+        expected_failures_per_unit_year = hours_per_year / point_estimate
+
+    # Steady-state availability. For an alternating renewal process the long-run
+    # availability depends only on the means, so this holds for any life
+    # distribution, not just the exponential.
+    availability = None
+    downtime_hours_per_year = None
+    if repair_time_hours is not None:
+        if not math.isfinite(repair_time_hours) or repair_time_hours < 0:
+            raise ValueError("Repair time must be zero or greater.")
+        if math.isfinite(point_estimate):
+            availability = point_estimate / (point_estimate + repair_time_hours)
+            downtime_hours_per_year = (1.0 - availability) * hours_per_year
+
     reliability_at_mission = (
         reliability(mission_time_hours) if mission_time_hours is not None else None
     )
@@ -1093,6 +1139,11 @@ def estimate_mtbf(
         "parameters": parameters,
         "median_life_hours": median_life,
         "b10_life_hours": b10_life,
+        "annualized_failure_rate": annualized_failure_rate,
+        "expected_failures_per_unit_year": expected_failures_per_unit_year,
+        "repair_time_hours": repair_time_hours,
+        "availability": availability,
+        "downtime_hours_per_year": downtime_hours_per_year,
         "mission_time_hours": mission_time_hours,
         "reliability_at_mission": reliability_at_mission,
         "mission_unit_count": mission_units,

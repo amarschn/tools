@@ -573,3 +573,107 @@ def test_omitting_suspensions_understates_the_estimate():
     assert complete["total_operating_hours"] == pytest.approx(17719.0, rel=1e-12)
     assert forgotten["total_operating_hours"] == pytest.approx(719.0, rel=1e-12)
     assert complete["mtbf_hours"] > 20 * forgotten["mtbf_hours"]
+
+
+# ---------------------------------------------------------------------
+# Annualized failure rate and availability
+# ---------------------------------------------------------------------
+
+
+def test_annualized_failure_rate_is_share_of_units_failing_in_a_year():
+    results = estimate_mtbf(
+        data_mode="aggregate", total_operating_hours=8760.0, failure_count=3
+    )
+    assert results["mtbf_hours"] == pytest.approx(2920.0, rel=1e-12)
+    assert results["annualized_failure_rate"] == pytest.approx(
+        1.0 - math.exp(-8760.0 / 2920.0), rel=1e-12
+    )
+    # Two definitions, deliberately both reported: 95% of units fail within a
+    # year, but a repaired unit averages 3 failures over that year.
+    assert results["annualized_failure_rate"] == pytest.approx(0.950213, rel=1e-5)
+    assert results["expected_failures_per_unit_year"] == pytest.approx(3.0, rel=1e-12)
+
+
+def test_afr_definitions_converge_for_long_lived_items():
+    """At a million-hour MTBF the two AFR readings agree to within a rounding."""
+    results = estimate_mtbf(
+        data_mode="aggregate", total_operating_hours=1e6, failure_count=1
+    )
+    assert results["annualized_failure_rate"] == pytest.approx(
+        results["expected_failures_per_unit_year"], rel=0.005
+    )
+
+
+def test_afr_uses_the_fitted_distribution_not_just_the_mean():
+    """For a wear-out fit the AFR must come from R(8760), not from 8760/MTTF."""
+    results = estimate_mtbf(
+        distribution="weibull",
+        data_mode="failure_times",
+        failure_times_hours=[9000.0, 11000.0, 12000.0, 13000.0, 15000.0],
+    )
+    eta = results["parameters"]["eta_hours"]
+    beta = results["parameters"]["beta"]
+    assert results["annualized_failure_rate"] == pytest.approx(
+        1.0 - math.exp(-((8760.0 / eta) ** beta)), rel=1e-12
+    )
+    # Repair counts need a constant hazard, so this stays unavailable.
+    assert results["expected_failures_per_unit_year"] is None
+
+
+def test_availability_and_downtime():
+    results = estimate_mtbf(
+        data_mode="aggregate",
+        total_operating_hours=8760.0,
+        failure_count=3,
+        repair_time_hours=4.0,
+    )
+    assert results["availability"] == pytest.approx(2920.0 / 2924.0, rel=1e-12)
+    assert results["downtime_hours_per_year"] == pytest.approx(
+        (1 - 2920.0 / 2924.0) * 8760.0, rel=1e-12
+    )
+    # Roughly 12 hours a year down.
+    assert results["downtime_hours_per_year"] == pytest.approx(11.98, rel=1e-2)
+
+
+def test_availability_absent_without_a_repair_time():
+    results = estimate_mtbf(
+        data_mode="aggregate", total_operating_hours=8760.0, failure_count=3
+    )
+    assert results["availability"] is None
+    assert results["downtime_hours_per_year"] is None
+    assert results["repair_time_hours"] is None
+
+
+def test_availability_holds_for_wear_out_distributions():
+    """Long-run availability of an alternating renewal process depends only on
+    the means, so it is valid for any life distribution."""
+    results = estimate_mtbf(
+        distribution="weibull",
+        data_mode="failure_times",
+        failure_times_hours=[142.0, 267.0, 310.0, 420.0, 586.0],
+        suspension_times_hours=[700.0, 700.0],
+        repair_time_hours=8.0,
+    )
+    mttf = results["mtbf_hours"]
+    assert results["availability"] == pytest.approx(mttf / (mttf + 8.0), rel=1e-12)
+
+
+def test_zero_repair_time_gives_full_availability():
+    results = estimate_mtbf(
+        data_mode="aggregate",
+        total_operating_hours=8760.0,
+        failure_count=3,
+        repair_time_hours=0.0,
+    )
+    assert results["availability"] == pytest.approx(1.0, rel=1e-12)
+    assert results["downtime_hours_per_year"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_negative_repair_time_raises():
+    with pytest.raises(ValueError):
+        estimate_mtbf(
+            data_mode="aggregate",
+            total_operating_hours=100.0,
+            failure_count=1,
+            repair_time_hours=-1.0,
+        )

@@ -28,12 +28,16 @@ reliability, use the [System Reliability Calculator](../system-reliability/).
 - Failure times and suspension times in hours (failure-times mode).
 - Distribution: exponential, Weibull, or lognormal.
 - Test termination: time-terminated or failure-terminated. Changes the exponential lower bound.
-- Confidence level (60% to 99%) and mission time in hours.
+- Confidence level (60% to 99%), mission time in hours, and fleet size.
+- Mean time to repair (MTTR), optional. Adds availability and downtime.
 
 ## Outputs
 
 - MTBF (exponential) or MTTF (Weibull, lognormal) with two-sided and one-sided confidence bounds.
 - Failure rate in failures per hour and in FIT (failures per 10^9 hours).
+- Annualized failure rate, reported both ways: the share of units failing within 8760 hours, and the
+  failures per unit-year. These diverge for short-lived items.
+- Availability and downtime per year when an MTTR is supplied.
 - Reliability at the mission time, B10 life, and median life.
 - Fitted distribution parameters with bounds: theta, or beta and eta, or mu and sigma.
 - Reliability and hazard-rate curves, plus a probability plot with median-rank plotting positions.
@@ -63,10 +67,28 @@ reliability, use the [System Reliability Calculator](../system-reliability/).
 - One failure mode at a time. A probability plot with a knee or two slopes means mixed modes that should be
   fitted separately.
 
+## Standards
+
+Implemented here:
+
+- IEC 60605-4:2001, Equipment reliability testing, Part 4: Statistical procedures for the exponential
+  distribution (point estimates, confidence intervals).
+- IEC 61649:2008, Weibull analysis.
+- IEC 61124:2023, Reliability testing: compliance tests for constant failure rate and constant failure
+  intensity (fixed time and failure terminated test plans).
+- IEC 60300-3-5:2001, Reliability test conditions and statistical test principles.
+- MIL-HDBK-781A (1996), Reliability test methods, plans, and environments.
+- ISO 14224:2016, Collection and exchange of reliability and maintenance data (taxonomy of what counts as
+  a failure and as operating time).
+
+Deliberately not implemented, since they predict forwards from a parts list rather than estimating from
+observed failures: MIL-HDBK-217F Notice 2, Telcordia SR-332 Issue 4, IEC 61709, FIDES. Their output is the
+component MTBF that feeds the [System Reliability Calculator](../system-reliability/).
+
 ## References
 
 - Ebeling, C.E. An Introduction to Reliability and Maintainability Engineering, 3rd ed., Chapters 12 and 15.
 - O'Connor, P.D.T. and Kleyner, A. Practical Reliability Engineering, 5th ed., Chapters 3 and 13.
 - Abernethy, R.B. The New Weibull Handbook, 5th ed. (median ranks, suspended-item ranking).
-- IEC 60300-3-5: Dependability management - Reliability test conditions and statistical test principles.
-- MIL-HDBK-781A: Reliability Test Methods, Plans, and Environments (test termination conventions).
+
+Standards are listed in the section above rather than repeated here.
