@@ -222,11 +222,13 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
         ```bash
         python3 scripts/generate_sitemap.py   # rebuilds sitemap.xml from catalog.json
-        python3 scripts/inject_seo_meta.py     # backfills <head> SEO tags into tool pages
+        python3 scripts/inject_seo_meta.py     # backfills <head> SEO tags into tool pages + homepage tool links
         ```
 
     * **`scripts/generate_sitemap.py`** regenerates `sitemap.xml` from `catalog.json` (excludes `example_tool*`/prototypes; `human-verified` tools get higher priority). Netlify also runs this on every deploy via `netlify.toml`, but commit the regenerated file so the GitHub Pages legacy host stays current too.
     * **`scripts/inject_seo_meta.py`** injects `<meta name="description">`, `<link rel="canonical">`, OpenGraph/Twitter cards (pulled from the catalog `title`/`description`), and the `/shared/analytics-autotrack.js` include into each tool's `index.html`. It is **idempotent** — it only adds tags that are missing, so re-running is a safe no-op. Use `--check` for a dry run.
+
+        The same pass rewrites a marker-delimited list of plain `<a class="static-tool-link">` tags inside the homepage's `#tool-grid`. The homepage builds its cards client-side from `catalog.json`, so without those links the served HTML contains no link to any tool and crawlers have nothing to follow. `renderTools()` clears the grid before rendering, so the static links only ever appear while `catalog.json` is loading. Do not hand-edit the block between the `BEGIN/END static tool links` comments; add the tool to `catalog.json` and re-run the script.
     * `shared/analytics-autotrack.js` fires a GA4 `export_action` event when a user clicks an export/download/copy control, giving us a per-tool demand signal. Add `data-track="export"` to opt a control in explicitly, or `data-track="off"` to exclude one.
     * Rationale and the SEO-tool backlog live in `plans/2026-07-12_seo_distribution_wins.md`. transparent.tools' current bottleneck is distribution, not more tools — prioritize discoverability accordingly.
 
