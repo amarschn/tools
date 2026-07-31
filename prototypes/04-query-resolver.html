@@ -1,0 +1,1154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Materials lookup — query resolver prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2328;
+      --muted: #656d76;
+      --line: #d0d7de;
+      --soft-line: #e7ebef;
+      --surface: #ffffff;
+      --subtle: #f6f8fa;
+      --blue: #0969da;
+      --blue-dark: #0550ae;
+      --blue-soft: #ddf4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--surface);
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--surface);
+      font: 14px/1.42 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      color: inherit;
+    }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+
+    .topbar {
+      display: flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 7px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--subtle);
+    }
+
+    .product {
+      display: flex;
+      align-items: baseline;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .product strong {
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
+    .prototype-label {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .build-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 3px 14px;
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .warning {
+      min-height: 29px;
+      padding: 5px 16px;
+      border-bottom: 1px solid #b6d7f2;
+      color: #0a3069;
+      background: var(--blue-soft);
+      font-size: 12px;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .searchbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 12px 16px 8px;
+    }
+
+    .searchbar label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    #query {
+      width: 100%;
+      height: 40px;
+      padding: 7px 10px;
+      border: 1px solid #8c959f;
+      border-radius: 3px;
+      color: var(--ink);
+      background: var(--surface);
+    }
+
+    #query:focus {
+      border-color: var(--blue);
+    }
+
+    .button {
+      min-height: 32px;
+      padding: 5px 10px;
+      border: 1px solid #8c959f;
+      border-radius: 3px;
+      background: var(--subtle);
+      cursor: pointer;
+    }
+
+    .button:hover {
+      border-color: #6e7781;
+      background: #eef1f4;
+    }
+
+    .button-primary {
+      height: 40px;
+      border-color: var(--blue);
+      color: #ffffff;
+      background: var(--blue);
+      font-weight: 600;
+    }
+
+    .button-primary:hover {
+      border-color: var(--blue-dark);
+      background: var(--blue-dark);
+    }
+
+    .button-link {
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      color: var(--blue);
+      background: transparent;
+      text-align: left;
+    }
+
+    .button-link:hover {
+      color: var(--blue-dark);
+      text-decoration: underline;
+      background: transparent;
+    }
+
+    .examples {
+      display: flex;
+      min-height: 26px;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 3px 12px;
+      padding: 0 16px 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .examples button {
+      color: var(--blue);
+    }
+
+    .resolver {
+      display: flex;
+      min-height: 35px;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px 14px;
+      padding: 5px 16px;
+      border-top: 1px solid var(--soft-line);
+      border-bottom: 1px solid var(--line);
+      background: var(--subtle);
+      font-size: 12px;
+    }
+
+    .resolver-label {
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .constraint {
+      display: inline-flex;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .constraint b {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .constraint span {
+      overflow: hidden;
+      max-width: 280px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .timing {
+      margin-left: auto;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #output {
+      padding: 0 16px 24px;
+    }
+
+    .status {
+      display: flex;
+      min-height: 48px;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 0 9px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .status h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.3;
+    }
+
+    .status p {
+      margin: 2px 0 0;
+      color: var(--muted);
+    }
+
+    .status-actions {
+      display: flex;
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .notice {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .notice strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .notice p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .notice-blue {
+      border-left: 3px solid var(--blue);
+      padding-left: 10px;
+    }
+
+    .section {
+      padding-top: 11px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 6px;
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .section-header span,
+    .muted {
+      color: var(--muted);
+    }
+
+    .choice-list {
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--line);
+      list-style: none;
+    }
+
+    .choice-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      min-height: 45px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--soft-line);
+    }
+
+    .choice-main {
+      min-width: 0;
+    }
+
+    .choice-main .button-link {
+      display: block;
+      overflow: hidden;
+      width: 100%;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .choice-detail {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .choice-count {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-top: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 7px 9px 7px 0;
+      border-bottom: 1px solid var(--soft-line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    td:first-child {
+      width: 16%;
+      min-width: 120px;
+      font-size: 15px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    td:nth-child(2) {
+      width: 13%;
+      min-width: 105px;
+    }
+
+    td:nth-child(3) {
+      width: 29%;
+      min-width: 210px;
+    }
+
+    td:last-child {
+      min-width: 230px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .empty {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .footer-note {
+      margin-top: 15px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    @media (max-width: 700px) {
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .product {
+        display: block;
+      }
+
+      .prototype-label {
+        display: block;
+      }
+
+      .build-meta {
+        display: block;
+      }
+
+      .build-meta span {
+        display: block;
+      }
+
+      .choice-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 3px 10px;
+      }
+
+      .choice-detail {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      .timing {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .status {
+        display: block;
+      }
+
+      .status-actions {
+        margin-top: 8px;
+      }
+    }
+
+    @media (max-width: 440px) {
+      .topbar,
+      .warning,
+      .searchbar,
+      .examples,
+      .resolver,
+      #output {
+        padding-right: 10px;
+        padding-left: 10px;
+      }
+
+      .searchbar {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .button-primary {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="product">
+      <strong>Materials lookup</strong>
+      <span class="prototype-label">Query resolver prototype 04</span>
+    </div>
+    <div class="build-meta" aria-label="Dataset and build information">
+      <span id="record-meta">Loading records…</span>
+      <span id="version-meta">Loading version…</span>
+    </div>
+  </header>
+
+  <div class="warning" id="synthetic-warning" role="note">
+    Synthetic prototype data only.
+  </div>
+
+  <main>
+    <form class="searchbar" id="search-form" role="search">
+      <label for="query">Material and property</label>
+      <input
+        id="query"
+        name="q"
+        type="search"
+        autocomplete="off"
+        autofocus
+        placeholder="Material + property, for example: AX60 T6 yield strength"
+        spellcheck="false"
+      >
+      <button class="button button-primary" type="submit">Resolve</button>
+    </form>
+
+    <div class="examples" aria-label="Example searches">
+      <span>Try:</span>
+      <button class="button-link" type="button" data-query="AX60 T6 yield strength">AX60 T6 yield strength</button>
+      <button class="button-link" type="button" data-query="plastic strength">plastic strength</button>
+      <button class="button-link" type="button" data-query="glass strength">glass strength</button>
+      <button class="button-link" type="button" data-query="strongest plastic">strongest plastic</button>
+    </div>
+
+    <div class="resolver" id="resolver" aria-label="Parsed query"></div>
+    <section id="output" aria-live="polite"></section>
+  </main>
+
+  <script src="assets/synthetic-corpus.js"></script>
+  <script src="assets/search-core.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      var Search = window.MaterialsPrototypeSearch;
+      var corpus = Search.corpus;
+      var queryInput = document.getElementById("query");
+      var resolverNode = document.getElementById("resolver");
+      var outputNode = document.getElementById("output");
+      var selectedPropertyId = null;
+      var selectedScopeId = null;
+      var selectedEntityId = null;
+      var lastAnalysis = null;
+      var renderFrame = null;
+
+      function text(tag, value, className) {
+        var node = document.createElement(tag);
+        node.textContent = value;
+        if (className) node.className = className;
+        return node;
+      }
+
+      function button(label, action, className) {
+        var node = text("button", label, className || "button-link");
+        node.type = "button";
+        node.addEventListener("click", action);
+        return node;
+      }
+
+      function clear(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+      }
+
+      function plural(count, singular, pluralValue) {
+        return count + " " + (count === 1 ? singular : (pluralValue || singular + "s"));
+      }
+
+      function setQuery(value) {
+        queryInput.value = value;
+        selectedPropertyId = null;
+        selectedScopeId = null;
+        selectedEntityId = null;
+        render();
+        queryInput.focus();
+      }
+
+      function scheduleRender() {
+        if (renderFrame) cancelAnimationFrame(renderFrame);
+        renderFrame = requestAnimationFrame(function () {
+          renderFrame = null;
+          render();
+        });
+      }
+
+      function appendConstraint(label, value) {
+        var item = document.createElement("span");
+        item.className = "constraint";
+        item.appendChild(text("b", label + ":"));
+        item.appendChild(text("span", value || "—"));
+        resolverNode.appendChild(item);
+      }
+
+      function renderResolver(analysis, entity) {
+        clear(resolverNode);
+        resolverNode.appendChild(text("span", "Parsed", "resolver-label"));
+
+        var scopeValue = "—";
+        if (analysis.scope_options.length > 1) {
+          scopeValue =
+            plural(analysis.scope_options.length, "possible category", "possible categories");
+        } else if (analysis.scope) {
+          scopeValue = analysis.scope.name;
+        }
+
+        var materialValue = "—";
+        if (entity) {
+          materialValue = entity.name;
+        } else if (analysis.material_terms) {
+          materialValue = analysis.material_terms + " (unresolved)";
+        }
+
+        var propertyValue = analysis.property_intent
+          ? analysis.property_intent.label +
+            (analysis.property_intent.kind === "group" ? " (needs type)" : "")
+          : "—";
+
+        appendConstraint("Category", scopeValue);
+        appendConstraint("Material", materialValue);
+        appendConstraint("Property", propertyValue);
+        resolverNode.appendChild(
+          text("span", analysis.duration_ms.toFixed(2) + " ms", "timing")
+        );
+      }
+
+      function status(title, detail, actions) {
+        var wrapper = document.createElement("div");
+        wrapper.className = "status";
+        var copy = document.createElement("div");
+        copy.appendChild(text("h1", title));
+        if (detail) copy.appendChild(text("p", detail));
+        wrapper.appendChild(copy);
+
+        if (actions && actions.length) {
+          var controls = document.createElement("div");
+          controls.className = "status-actions";
+          actions.forEach(function (action) { controls.appendChild(action); });
+          wrapper.appendChild(controls);
+        }
+        outputNode.appendChild(wrapper);
+      }
+
+      function notice(title, detail, blue) {
+        var wrapper = document.createElement("div");
+        wrapper.className = "notice" + (blue ? " notice-blue" : "");
+        wrapper.appendChild(text("strong", title));
+        wrapper.appendChild(text("p", detail));
+        outputNode.appendChild(wrapper);
+      }
+
+      function sectionHeader(title, meta) {
+        var wrapper = document.createElement("div");
+        wrapper.className = "section-header";
+        wrapper.appendChild(text("h2", title));
+        if (meta) wrapper.appendChild(text("span", meta));
+        return wrapper;
+      }
+
+      function propertyCounts(entity) {
+        var counts = Object.create(null);
+        var observations = entity
+          ? Search.getDescendantObservations(entity)
+          : [];
+        observations.forEach(function (observation) {
+          counts[observation.property_id] =
+            (counts[observation.property_id] || 0) + 1;
+        });
+        return counts;
+      }
+
+      function renderPropertyChoices(entity, propertyIds, title) {
+        var counts = propertyCounts(entity);
+        var ids = propertyIds && propertyIds.length
+          ? propertyIds
+          : corpus.properties.map(function (property) { return property.id; });
+        if (entity) {
+          ids = ids.filter(function (id) { return counts[id] > 0; });
+        }
+
+        var section = document.createElement("div");
+        section.className = "section";
+        section.appendChild(
+          sectionHeader(
+            title || "Choose one property",
+            entity ? plural(ids.length, "available property") : plural(ids.length, "property type")
+          )
+        );
+
+        var list = document.createElement("ul");
+        list.className = "choice-list";
+        ids.forEach(function (id) {
+          var property = Search.getProperty(id);
+          if (!property) return;
+          var row = document.createElement("li");
+          row.className = "choice-row";
+
+          var main = document.createElement("div");
+          main.className = "choice-main";
+          main.appendChild(button(property.name, function () {
+            selectedPropertyId = id;
+            render();
+          }));
+          row.appendChild(main);
+
+          row.appendChild(
+            text(
+              "div",
+              property.aliases.slice(0, 3).join(" · ") || property.canonical_unit,
+              "choice-detail"
+            )
+          );
+          row.appendChild(
+            text(
+              "div",
+              entity ? plural(counts[id] || 0, "observation") : property.display_unit,
+              "choice-count"
+            )
+          );
+          list.appendChild(row);
+        });
+        section.appendChild(list);
+        outputNode.appendChild(section);
+      }
+
+      function observationCount(entity, propertyId) {
+        return Search.getDescendantObservations(entity).filter(function (item) {
+          return !propertyId || item.property_id === propertyId;
+        }).length;
+      }
+
+      function chooseEntity(entity) {
+        selectedEntityId = entity.id;
+        render();
+      }
+
+      function renderEntityChoices(analysis, entities, title) {
+        var section = document.createElement("div");
+        section.className = "section";
+        section.appendChild(
+          sectionHeader(title || "Choose a concrete material", plural(analysis.total, "match", "matches"))
+        );
+
+        if (!entities.length) {
+          section.appendChild(
+            text("div", "No concrete material matched these terms.", "empty")
+          );
+          outputNode.appendChild(section);
+          return;
+        }
+
+        var propertyId =
+          analysis.property_intent && analysis.property_intent.kind === "property"
+            ? analysis.property_intent.id
+            : null;
+        var list = document.createElement("ul");
+        list.className = "choice-list";
+
+        entities.forEach(function (entity) {
+          var row = document.createElement("li");
+          row.className = "choice-row";
+          var main = document.createElement("div");
+          main.className = "choice-main";
+          main.appendChild(button(entity.name, function () { chooseEntity(entity); }));
+          row.appendChild(main);
+          row.appendChild(text("div", Search.entityContext(entity), "choice-detail"));
+
+          var countLabel;
+          if (entity.kind === "material" && entity.state_count && !entity.has_direct_data) {
+            countLabel = plural(entity.state_count, "named state");
+          } else {
+            var count = observationCount(entity, propertyId);
+            countLabel = propertyId
+              ? plural(count, "matching observation")
+              : plural(count, "observation");
+          }
+          row.appendChild(text("div", countLabel, "choice-count"));
+          list.appendChild(row);
+        });
+        section.appendChild(list);
+        outputNode.appendChild(section);
+      }
+
+      function renderStateChoices(entity, analysis) {
+        var states = Search.getStateChildren(entity);
+        var propertyId =
+          analysis.property_intent && analysis.property_intent.kind === "property"
+            ? analysis.property_intent.id
+            : null;
+        var section = document.createElement("div");
+        section.className = "section";
+        section.appendChild(
+          sectionHeader(
+            "Choose a named state",
+            plural(states.length, "state") + " under " + entity.name
+          )
+        );
+        var list = document.createElement("ul");
+        list.className = "choice-list";
+
+        states.forEach(function (state) {
+          var row = document.createElement("li");
+          row.className = "choice-row";
+          var main = document.createElement("div");
+          main.className = "choice-main";
+          main.appendChild(button(state.label, function () { chooseEntity(state); }));
+          row.appendChild(main);
+          row.appendChild(
+            text(
+              "div",
+              Object.keys(state.fixed_conditions || {}).map(function (key) {
+                return String(state.fixed_conditions[key]).replace(/_/g, " ");
+              }).join(" · ") || "named state",
+              "choice-detail"
+            )
+          );
+          row.appendChild(
+            text(
+              "div",
+              plural(observationCount(state, propertyId), propertyId ? "matching observation" : "observation"),
+              "choice-count"
+            )
+          );
+          list.appendChild(row);
+        });
+        section.appendChild(list);
+        outputNode.appendChild(section);
+      }
+
+      function renderCategoryChoices(analysis) {
+        status(
+          "Choose a material category",
+          "The same word names more than one material category. No material data is shown until the category is explicit."
+        );
+
+        var section = document.createElement("div");
+        section.className = "section";
+        section.appendChild(
+          sectionHeader("Possible categories", plural(analysis.scope_options.length, "meaning"))
+        );
+        var list = document.createElement("ul");
+        list.className = "choice-list";
+        analysis.scope_options.forEach(function (scope) {
+          var row = document.createElement("li");
+          row.className = "choice-row";
+          var main = document.createElement("div");
+          main.className = "choice-main";
+          main.appendChild(button(scope.name, function () {
+            selectedScopeId = scope.id;
+            selectedEntityId = null;
+            render();
+          }));
+          row.appendChild(main);
+          row.appendChild(text("div", "Category, not a material", "choice-detail"));
+          row.appendChild(
+            text(
+              "div",
+              plural(Search.getTaxonRecordCount(scope.id), "lookup record"),
+              "choice-count"
+            )
+          );
+          list.appendChild(row);
+        });
+        section.appendChild(list);
+        outputNode.appendChild(section);
+      }
+
+      function exactEntity(analysis) {
+        if (!analysis.material_terms) return null;
+        var normalized = Search.normalize(analysis.material_terms);
+        var exact = analysis.results.filter(function (entity) {
+          return entity._identity_strings.indexOf(normalized) !== -1 ||
+            entity._identity_compacts.indexOf(Search.compact(normalized)) !== -1;
+        });
+        return exact.length === 1 ? exact[0] : null;
+      }
+
+      function renderObservations(entity, propertyId) {
+        var property = Search.getProperty(propertyId);
+        var observations = Search.getObservations(entity).filter(function (item) {
+          return item.property_id === propertyId;
+        });
+
+        status(
+          entity.name,
+          Search.entityContext(entity) + " · " + property.name,
+          [
+            button("Change material", function () {
+              selectedEntityId = null;
+              render();
+            }, "button"),
+            button("Change property", function () {
+              selectedPropertyId = null;
+              render();
+            }, "button")
+          ]
+        );
+
+        if (!observations.length) {
+          notice(
+            "No " + property.name.toLowerCase() + " observation",
+            "This is a known material/state, but the synthetic corpus does not contain the requested property. No substitute or family value is inferred.",
+            true
+          );
+          return;
+        }
+
+        var section = document.createElement("div");
+        section.className = "section";
+        section.appendChild(
+          sectionHeader(property.name, plural(observations.length, "conditioned observation"))
+        );
+        var wrap = document.createElement("div");
+        wrap.className = "table-wrap";
+        var table = document.createElement("table");
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        ["Value", "Basis", "Conditions", "Synthetic source locator"].forEach(function (label) {
+          headRow.appendChild(text("th", label));
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        var tbody = document.createElement("tbody");
+
+        observations.forEach(function (observation) {
+          var row = document.createElement("tr");
+          row.appendChild(text("td", Search.formatObservation(observation)));
+          row.appendChild(
+            text("td", String(observation.basis || "—").replace(/_/g, " "))
+          );
+          row.appendChild(text("td", Search.conditionSummary(observation)));
+          row.appendChild(text("td", observation.source_locator));
+          tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        section.appendChild(wrap);
+        outputNode.appendChild(section);
+
+        outputNode.appendChild(
+          text(
+            "p",
+            "Only the selected property is shown. Values are fabricated and intentionally unsuitable for engineering use.",
+            "footer-note"
+          )
+        );
+      }
+
+      function renderIdle(analysis) {
+        status(
+          "Enter a material and a property",
+          "This prototype resolves meaning before it displays a number."
+        );
+        notice(
+          "Lookup, not comparison",
+          "Categories help narrow a search. They never receive representative values, and results are never ranked by a property.",
+          true
+        );
+        var section = document.createElement("div");
+        section.className = "section";
+        section.appendChild(sectionHeader("Resolver rules"));
+        var list = document.createElement("ul");
+        list.className = "choice-list";
+        [
+          ["Category terms", "Narrow candidates but do not identify a material."],
+          ["Broad properties", "Strength and stiffness require a specific property type."],
+          ["Concrete lookup", "A material or named state plus one property unlocks observations."]
+        ].forEach(function (rule) {
+          var row = document.createElement("li");
+          row.className = "choice-row";
+          row.appendChild(text("strong", rule[0]));
+          row.appendChild(text("div", rule[1], "choice-detail"));
+          row.appendChild(text("div", "", "choice-count"));
+          list.appendChild(row);
+        });
+        section.appendChild(list);
+        outputNode.appendChild(section);
+        renderResolver(analysis, null);
+      }
+
+      function render() {
+        var analysis = Search.search(queryInput.value, {
+          propertyId: selectedPropertyId,
+          scopeId: selectedScopeId
+        });
+        lastAnalysis = analysis;
+        clear(outputNode);
+
+        if (analysis.state === "idle") {
+          renderIdle(analysis);
+          return;
+        }
+
+        var entity = selectedEntityId
+          ? Search.getEntity(selectedEntityId)
+          : exactEntity(analysis);
+        renderResolver(analysis, entity);
+
+        if (analysis.comparison_intent) {
+          status("Comparison intent is outside this tool", "No values or rankings are shown.");
+          notice(
+            "Search for one material instead",
+            "This lookup answers a specific material/property question. Terms such as strongest, lightest, best, compare, versus, and vs require a selection tool with explicit constraints.",
+            true
+          );
+          return;
+        }
+
+        if (analysis.scope_options.length > 1) {
+          renderCategoryChoices(analysis);
+          return;
+        }
+
+        if (
+          analysis.property_intent &&
+          analysis.property_intent.kind === "group" &&
+          !selectedPropertyId
+        ) {
+          status(
+            "Choose a specific kind of " + analysis.property_intent.label.toLowerCase(),
+            "The broad term can refer to several incompatible tests. No generic value is shown."
+          );
+          renderPropertyChoices(
+            entity,
+            analysis.property_intent.ids,
+            analysis.property_intent.label + " can mean"
+          );
+          return;
+        }
+
+        var uniquePropertyId =
+          analysis.property_intent && analysis.property_intent.kind === "property"
+            ? analysis.property_intent.id
+            : null;
+
+        if (entity && entity.kind === "material" && entity.state_count && !entity.has_direct_data) {
+          status(
+            entity.name,
+            "This material has no condition-free value. Choose the named state that was actually tested."
+          );
+          renderStateChoices(entity, analysis);
+          return;
+        }
+
+        if (entity && !uniquePropertyId) {
+          status(
+            entity.name,
+            "Material resolved. Choose exactly one property before data is displayed."
+          );
+          renderPropertyChoices(entity, null, "Available properties");
+          return;
+        }
+
+        if (entity && uniquePropertyId) {
+          renderObservations(entity, uniquePropertyId);
+          return;
+        }
+
+        if (analysis.scope && !analysis.material_terms) {
+          var categoryCount = Search.getTaxonRecordCount(analysis.scope.id);
+          status(
+            analysis.scope.name,
+            "Category · " + plural(categoryCount, "lookup record") + ". Choose a concrete material; the category itself has no values."
+          );
+          if (uniquePropertyId) {
+            notice(
+              "Material still required",
+              analysis.property_intent.label + " is specific, but “" +
+                analysis.scope.name +
+                "” describes a category. Values remain hidden until one material or named state is selected.",
+              true
+            );
+          }
+          renderEntityChoices(analysis, analysis.results, "Concrete materials in this category");
+          return;
+        }
+
+        if (analysis.state === "needs-material") {
+          status(
+            "Material required",
+            analysis.property_intent.label + " is understood, but no material was identified."
+          );
+          notice(
+            "Add a material name or designation",
+            "For example, search “AX60 T6 " +
+              analysis.property_intent.label.toLowerCase() +
+              "”.",
+            true
+          );
+          return;
+        }
+
+        if (analysis.state === "no-match" || !analysis.results.length) {
+          status("No concrete material matched", "Check the designation or try a less specific material name.");
+          notice(
+            "Nothing inferred",
+            "The resolver does not replace an unknown material with a category average or a loosely related result.",
+            true
+          );
+          return;
+        }
+
+        status(
+          "Choose a concrete material",
+          uniquePropertyId
+            ? analysis.property_intent.label + " is resolved; the material is not."
+            : "The query matches more than one identity. Values remain hidden."
+        );
+        renderEntityChoices(analysis, analysis.results);
+      }
+
+      document.getElementById("record-meta").textContent =
+        plural(Search.stats.lookup_record_count, "lookup record") +
+        " · " +
+        plural(Search.stats.observation_count, "observation") +
+        " · " +
+        plural(Search.stats.category_count, "category", "categories");
+      document.getElementById("version-meta").textContent =
+        corpus.corpus_version + " · " + corpus.build_version;
+      document.getElementById("synthetic-warning").textContent =
+        "Synthetic prototype data only — " + corpus.warning;
+
+      document.getElementById("search-form").addEventListener("submit", function (event) {
+        event.preventDefault();
+        render();
+      });
+
+      queryInput.addEventListener("input", function () {
+        selectedPropertyId = null;
+        selectedScopeId = null;
+        selectedEntityId = null;
+        scheduleRender();
+      });
+
+      document.querySelectorAll("[data-query]").forEach(function (node) {
+        node.addEventListener("click", function () {
+          setQuery(node.getAttribute("data-query"));
+        });
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          setQuery("");
+        } else if (event.key === "/" && document.activeElement !== queryInput) {
+          event.preventDefault();
+          queryInput.focus();
+        }
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
