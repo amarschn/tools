@@ -6,6 +6,9 @@ becoming an archive.
 
 ## Now — M1 domain-contract prototype
 
+Proposed execution plan, pending approval:
+[`plans/2026-07-31_synthetic-schema-lab.md`](plans/2026-07-31_synthetic-schema-lab.md).
+
 - [ ] Define versioned contracts for taxonomy nodes, material identities, named
   states, observations, properties, conditions, and sources.
 - [ ] Add stable IDs and distinguish primary browsing taxonomy from
