@@ -6,8 +6,11 @@ becoming an archive.
 
 ## Now — M1 domain-contract prototype
 
-Proposed execution plan, pending approval:
+Approved execution plan:
 [`plans/2026-07-31_synthetic-schema-lab.md`](plans/2026-07-31_synthetic-schema-lab.md).
+
+Current review gate:
+[`docs/schema-lab-review-checkpoint-1.md`](docs/schema-lab-review-checkpoint-1.md).
 
 - [ ] Define versioned contracts for taxonomy nodes, material identities, named
   states, observations, properties, conditions, and sources.

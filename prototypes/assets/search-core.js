@@ -406,6 +406,7 @@
         query: rawQuery,
         normalized_query: normalized,
         state: "idle",
+        route: "idle",
         scope: null,
         scope_options: [],
         property_intent: null,
@@ -510,11 +511,31 @@
     else if (scope && !materialTerms && !propertyIntent) state = "browse-scope";
     else if (!resultEntities.length) state = "no-match";
 
+    /*
+     * `state` remains compatible with the four earlier prototype directions,
+     * where a property alone still asks for a material. `route` freezes the
+     * selected dual-mode behavior: a property group with no material terms
+     * asks for one precise property, while a precise property opens the
+     * category-grouped overview, with or without a scope.
+     */
+    var route = state;
+    if (
+      !comparisonIntent &&
+      (selectedScopeId || scopeMatch.targets.length <= 1) &&
+      propertyIntent &&
+      !materialTerms
+    ) {
+      route = propertyIntent.kind === "property"
+        ? "property-overview"
+        : "choose-property";
+    }
+
     var intentPropertyIds = propertyIntent ? propertyIntent.ids : [];
     return finish({
       query: rawQuery,
       normalized_query: normalized,
       state: state,
+      route: route,
       scope: scope,
       scope_options: selectedScopeId ? [scope] : scopeMatch.targets,
       property_intent: propertyIntent,

@@ -6,13 +6,35 @@ in the linked plans and decision documents.
 
 ## Current status
 
-- Phase: M0 synthetic experience spike complete; entering the M1 data-contract
-  phase.
+- Phase: M1 synthetic data-contract lab active; review checkpoint 1 is ready.
 - Selected interaction candidate: Prototype 05, dual-mode lookup.
 - Current UI evidence: synthetic fixture only, with no network requests or
   engineering claims.
-- Next gate: validate a versioned domain contract with adversarial synthetic
-  cases before a small two-source reality check.
+- Next gate: approve the domain vocabulary, state/condition boundary, and
+  representative record before formal validation and full-corpus migration.
+
+## 2026-08-02 — Schema lab baseline and first review checkpoint
+
+- Froze the two existing data models, serving paths, entity counts, artifact
+  sizes, legacy mappings, and selected Prototype 05 behavior.
+- Added a 21-case executable query baseline covering exact and ambiguous
+  identities, property and category routes, typo recall, empty categories, and
+  rejected comparison intent.
+- Made the selected dual-mode route explicit while preserving the earlier
+  prototypes' legacy resolver states.
+- Proposed the bounded v1 vocabulary and state-versus-observation condition
+  matrix, including retirement of the catch-all `material_state` key.
+- Added one complete proposed dataset example and five focused invalid examples
+  for review before validator implementation.
+- No schema contract has been adopted yet; work pauses at checkpoint 1 for the
+  recorded semantic decisions.
+
+Related:
+
+- [`docs/schema-lab-review-checkpoint-1.md`](docs/schema-lab-review-checkpoint-1.md)
+- [`docs/schema-lab-m0-baseline.md`](docs/schema-lab-m0-baseline.md)
+- [`docs/materials-domain-glossary.md`](docs/materials-domain-glossary.md)
+- [`docs/state-condition-matrix.md`](docs/state-condition-matrix.md)
 
 ## 2026-07-30 — Project history and work queue established
 

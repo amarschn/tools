@@ -46,6 +46,18 @@ network requests. See
 [`docs/prototype-schema-findings.md`](docs/prototype-schema-findings.md) for the
 schema problems it exposes.
 
+## Synthetic schema lab
+
+M1 is turning that working model into a versioned, frontend-loadable synthetic
+database. The first review checkpoint freezes current behavior and proposes the
+material/state/observation boundary before formal schemas or serving artifacts
+are built.
+
+Start with the short
+[`schema-lab review checkpoint`](docs/schema-lab-review-checkpoint-1.md); the
+full approved execution plan is
+[`plans/2026-07-31_synthetic-schema-lab.md`](plans/2026-07-31_synthetic-schema-lab.md).
+
 ## Validate and test
 
 ```sh
