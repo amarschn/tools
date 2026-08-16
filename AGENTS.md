@@ -155,10 +155,11 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
 ### Branching Strategy
 
-* The `main` branch is for the live, deployed version of the tools.
+* The `main` branch is the intended production revision of the tools.
 * All non-trivial development should be done in a separate task branch named `task/<short-name>`.
 * Use one branch per task, not per computer or per AI agent. Continue the same task branch across machines until the work is done.
 * Keep `main` clean and deployable. Merge a task branch back only after the work has been verified.
+* Each completed task reaches production through one pull request merge to `main`. Do not push directly to `main`; all changes require a pull request. Wait for that Netlify deployment to be verified before merging another task. Follow `docs/RELEASE.md`.
 * Once the task is complete and tested, submit a pull request to merge it into the `main` branch.
 
 ### Creating a New Tool
@@ -1094,6 +1095,11 @@ The project is deployed to two hosts simultaneously:
 
 Both deployments are automatic on push to `main`.
 
+Netlify production releases follow a one-task, one-deploy policy. Keep all
+iteration on `task/<short-name>`, merge the verified pull request once, and
+confirm that Netlify published the resulting `main` SHA before merging another
+task. The full procedure and recovery rules are in `docs/RELEASE.md`.
+
 ### Netlify CLI Commands
 
 ```bash
@@ -1108,9 +1114,6 @@ netlify link
 
 # Open admin dashboard
 netlify open:admin
-
-# Manual production deploy
-netlify deploy --prod
 
 # Preview deploy (generates preview URL for testing)
 netlify deploy
