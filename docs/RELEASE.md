@@ -13,8 +13,9 @@ The `main` branch is the intended production revision for both hosts.
 ## Netlify production release policy
 
 Under normal operation, one completed task produces one automatic Netlify
-production deploy. A completed task is one verified `task/<short-name>` pull
-request merged once into `main`.
+production deploy. A completed task is one verified `task/<short-name>` branch
+merged once into local `main`, followed by one push of `main` to GitHub. A
+GitHub pull request may be used for review, but it is not required for release.
 
 Keep every development commit, generated-file refresh, and review correction on
 the task branch. Do not use `main` for iteration. Do not merge another task until
@@ -23,21 +24,12 @@ the current production deployment is published and verified.
 Retries, rollbacks, and hotfixes are exceptions. Record the reason when a task
 needs more than one production attempt.
 
-### One-time repository and Netlify configuration
-
-Protect `main` with a GitHub branch ruleset before using this workflow:
-
-- Require a pull request before changes can reach `main`.
-- Block force pushes.
-- Leave the bypass list empty. If an administrator needs bypass rights, grant
-  **For pull requests only**, never **Always allow**.
-
-See GitHub's [ruleset setup instructions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository).
+### One-time Netlify configuration
 
 Set these values in the Netlify project:
 
 - Production branch: `main`.
-- Deploy Previews: enabled for pull requests.
+- Deploy Previews: enabled when pull requests are used for review.
 - Auto publishing: enabled for the production branch.
 - Enforce deployment methods: allow production publishing only through the Git
   provider. The setting is under **Project configuration > Build & deploy >
@@ -56,19 +48,59 @@ on a credit-based plan. Check the current charge before each release.
 
 1. Work on `task/<short-name>` and push that branch as often as needed. These
    pushes must not update `main`.
-2. Open a pull request to `main`. Use its Deploy Preview for browser testing.
-3. Complete the pull request checks and the Tool Release Checklist below. Run
-   the SEO scripts when the task changes a tool or `catalog.json`.
+2. Review the task locally or through an optional pull request and Deploy
+   Preview.
+3. Complete the required checks and the Tool Release Checklist below. Run the
+   SEO scripts when the task changes a tool or `catalog.json`.
 4. Before merging, confirm:
-   - the Deploy Preview represents the final task branch;
+   - the final task branch is pushed and verified;
    - the Netlify project is not paused;
    - the available credit balance covers Netlify's current production-deploy
      charge;
    - no other production deployment is running;
    - no cleanup or generated-file follow-up is still expected.
-5. Merge the pull request once. The merge method does not affect Netlify. The
-   required boundary is one merge action and one push to `main`.
-6. Record the new `main` SHA from GitHub. Do not merge the next task yet.
+5. Release from the command line. If a pull request was used for review, do not
+   click its GitHub merge button. Start from a worktree with no staged or
+   modified tracked files. Review any untracked files and keep unrelated ones
+   out of the merge. Fetch, then compare the four SHAs:
+
+     ```bash
+     git fetch origin
+     git rev-parse main
+     git rev-parse origin/main
+     git rev-parse task/<short-name>
+     git rev-parse origin/task/<short-name>
+     ```
+
+   The two `main` SHAs must match, and the two task-branch SHAs must match. If
+   either pair differs, stop and reconcile it before releasing. If the pull
+   request was already merged through GitHub, that action has already pushed
+   `main` and triggered production: do not merge or push locally. Record the new
+   remote `main` SHA and continue at step 7.
+
+   Once both pairs match, merge locally without pushing:
+
+     ```bash
+     git switch main
+     git merge --no-ff task/<short-name> -m "Merge task/<short-name>: <summary>"
+     ```
+
+   Inspect the integrated result and rerun the checks that apply to the task:
+
+     ```bash
+     git status --short
+     git log --oneline --decorate -3
+     git diff --check origin/main..HEAD
+     ```
+
+   Push only after the integrated result passes review and testing:
+
+     ```bash
+     git push origin main
+     ```
+
+   That final command is the task's one production-triggering push.
+6. Record the pushed `main` SHA. Do not release the next task yet.
 7. Open the [Netlify project](https://app.netlify.com/projects/elaborate-faloodeh-8b0224)
    **Deploys** page and confirm that one production deployment:
    - uses branch `main`;
@@ -80,8 +112,8 @@ on a credit-based plan. Check the current charge before each release.
    - run a calculation on each changed tool;
    - check browser console errors and required generated files such as
      `sitemap.xml`.
-9. Record the deployed SHA and live verification result in the pull request.
-   The task is not released until this step is complete.
+9. Record the deployed SHA and live verification result in the task notes or
+   pull request. The task is not released until this step is complete.
 
 The public site metadata can confirm the published SHA without a local Netlify
 login:
@@ -93,8 +125,8 @@ curl -sS https://api.netlify.com/api/v1/sites/transparent.tools \
 
 ### Rules that protect the release boundary
 
-- Do not push directly to `main`. Every change, including a hotfix or
-  documentation-only change, must reach `main` through a pull request.
+- Do not push work-in-progress commits to `main`. The only normal direct push to
+  `main` is the single push made after merging a completed task branch locally.
 - Do not run `netlify deploy --prod` during the normal release flow.
 - Do not create an empty commit to retrigger Netlify. Use **Trigger deploy** in
   the Netlify dashboard after confirming that the project can deploy.
@@ -115,7 +147,8 @@ SHA from the dashboard.
 
 If a build starts and fails, read the build log before retrying. Fix repository
 code through a reviewed `task/<short-name>` hotfix branch. A provider failure may
-be retried with the same commit, but record the retry in the pull request.
+be retried with the same commit, but record the retry in the task notes or pull
+request.
 
 ### Rollback and hotfixes
 
@@ -128,8 +161,8 @@ After the rollback:
 
 1. Create a `task/<short-name>` hotfix branch from `main`.
 2. Revert or fix the problem and run the required checks.
-3. Open and review a pull request to `main`.
-4. Merge it once and verify the resulting production deployment by SHA.
+3. Follow the normal release procedure above from step 4, including the SHA
+   checks and integrated-main verification before the single push.
 
 Manual CLI production deploys are outside this release policy. Keep Git-only
 deployment enforcement enabled. If Git-based deployment is unavailable, publish

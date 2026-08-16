@@ -25,8 +25,8 @@ Use the same ISO 8601 date in both places so plan files sort chronologically in 
 - Reuse the same `task/<short-name>` branch across all computers until the task is complete.
 - Push task branches frequently so another machine can resume from the same remote branch.
 - Merge back to `main` only after the task is verified.
-- Each completed task reaches production through one pull request merge to
-  `main`. Do not push directly to `main`; all changes require a pull request.
+- Each completed task reaches production through one merge into `main` and one
+  push of `main`. Do not push intermediate work to `main`.
 - Delete the task branch after merge to keep the branch list clean.
 
 ## Day-to-Day Workflow
@@ -49,11 +49,9 @@ Use the same ISO 8601 date in both places so plan files sort chronologically in 
    - `git fetch`
    - `git switch task/<short-name>`
    - `git pull`
-7. Open a PR to `main`:
-   - Mark as Draft if the task is still in progress.
-   - Merge only after review and verification.
-   - After merge, wait for the Netlify deployment and verify its Git SHA before
-     merging another task.
+7. Optionally open a PR to `main` for review and a Netlify Deploy Preview.
+8. After verification, merge the task branch into `main` once and push `main`
+   once. Wait for Netlify and verify its Git SHA before releasing another task.
 
 ## Visibility Rules
 
@@ -76,4 +74,5 @@ CI should run on every PR and on `main` pushes:
 - Unit tests (`pytest`)
 - `catalog.json` validation (paths exist, JSON is valid)
 
-See `docs/RELEASE.md` for the one-task, one-production-deploy procedure.
+See `docs/RELEASE.md` for the command-line one-task, one-production-deploy
+procedure.
