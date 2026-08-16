@@ -155,11 +155,12 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
 ### Branching Strategy
 
-* The `main` branch is for the live, deployed version of the tools.
+* The `main` branch is the intended production revision of the tools.
 * All non-trivial development should be done in a separate task branch named `task/<short-name>`.
 * Use one branch per task, not per computer or per AI agent. Continue the same task branch across machines until the work is done.
 * Keep `main` clean and deployable. Merge a task branch back only after the work has been verified.
-* Once the task is complete and tested, submit a pull request to merge it into the `main` branch.
+* Each completed task reaches production through one merge into `main` and one push of `main`. Do not push intermediate work to `main`. Wait for that Netlify deployment to be verified before releasing another task. Follow `docs/RELEASE.md`.
+* Once the task is complete and tested, merge it from the command line. A pull request may be used first when review or a Deploy Preview is useful.
 
 ### Creating a New Tool
 
@@ -232,7 +233,9 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
 9.  **Run the Tool Release Checklist** in `docs/RELEASE.md` ("Tool Release Checklist") before merging — theme (light + dark), settings panel, input tooltips, legible copy-link, browser smoke test, etc. This is REQUIRED for any new or modified tool; documentation of the standards alone has proven insufficient.
 
-10. **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
+10. **Release the completed task:** Once the tool is ready, merge its task branch
+    into `main` once and push `main` once. A pull request is optional when review
+    or a Netlify Deploy Preview is useful. Follow `docs/RELEASE.md`.
 
 ## Git Workflow
 
@@ -270,8 +273,11 @@ Here is a simple, step-by-step guide for contributing code using Git. These comm
     git push -u origin task/your-task-name
     ```
 
-6.  **Open a Pull Request:**
-    Go to the repository on GitHub. Open a pull request from `task/your-task-name` into `main` once the task is ready for review or merge.
+6.  **Review and Release:**
+    Optionally open a pull request from `task/your-task-name` into `main` for
+    review or a Netlify Deploy Preview. Once the task is verified, use one of
+    the release procedure in `docs/RELEASE.md` so it produces one push to
+    `main` and one Netlify production deployment.
 
 ## Coding Practices and Standards
 
@@ -1094,6 +1100,12 @@ The project is deployed to two hosts simultaneously:
 
 Both deployments are automatic on push to `main`.
 
+Netlify production releases follow a one-task, one-deploy policy. Keep all
+iteration on `task/<short-name>`, merge the verified task branch into local
+`main`, push `main` once, and confirm that Netlify published the resulting SHA
+before releasing another task. Pull requests are optional. The full procedure
+and recovery rules are in `docs/RELEASE.md`.
+
 ### Netlify CLI Commands
 
 ```bash
@@ -1108,12 +1120,6 @@ netlify link
 
 # Open admin dashboard
 netlify open:admin
-
-# Manual production deploy
-netlify deploy --prod
-
-# Preview deploy (generates preview URL for testing)
-netlify deploy
 ```
 
 ### Build Configuration
