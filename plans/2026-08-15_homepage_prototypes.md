@@ -1,6 +1,7 @@
 # Homepage Prototype Options
 
 Date: 2026-08-15
+Status: Prototypes complete; production hybrid selected
 
 ## Goal
 
@@ -90,11 +91,27 @@ Treat the homepage like a reference desk rather than a catalog. A large centered
 - `prototypes/homepage/README.md` summarizes each option in a paragraph with its tradeoff.
 - No edits to `index.html`, `catalog.json`, or the SEO scripts.
 
+## Prototype review and selected hybrid
+
+Review completed on 2026-08-17 against the real catalog at desktop and 375px mobile widths. All four options preserve search, discipline and review-status filtering, collapsed experimental listings, the verification queue, and the static-link marker contract. Search and the experimental-only filter reveal matching experimental tools without leaving an ineffective disclosure control on screen. The catalog resolves to 57 public tools after the 9 developer templates are excluded: 8 verified and 49 experimental.
+
+The production direction is **Option D's search-first entry over Option A's technical index**:
+
+- Keep D's large keyboard-accessible search and compact result list as the primary route for visitors who know what they need.
+- Use A's numbered, two-column discipline index as the complete catalog below search. It shows the site's breadth without returning to a card wall.
+- Retain the per-discipline experimental disclosure and the shared eight-group display taxonomy from `shared.js`.
+- Use one verified-tools shelf only if it improves the transition between search and the index. Do not publish a "Most used" shelf until analytics can support the claim.
+- Treat C's line symbols as an optional later enhancement for verified tools, not a dependency of the first production pass.
+
+Option B remains a useful reference for discipline counts and mobile filter controls, but its repeated cards consume too much vertical space. Option C establishes a credible visual identity, though its symbol library adds maintenance work before it improves finding a tool. The selected hybrid gives search the fastest path and keeps the full catalog readable, static-link compatible, and inexpensive to maintain.
+
+Production promotion is a separate task. It should adapt the selected pieces to `index.html`, preserve the SEO injector contract, add browser tests for the shared behaviors, and verify analytics before introducing usage-based labels.
+
 ## Evaluation criteria for picking a winner
 
 1. Can a first-time visitor find a specific tool (say, bolt torque) in under 5 seconds?
 2. Does it look like a tool an engineer trusts? (DESIGN.md alignment)
-3. Does the 66-tool catalog read as organized rather than overwhelming?
+3. Does the 57-tool public catalog read as organized rather than overwhelming?
 4. How much work to productionize, including keeping `inject_seo_meta.py` compatible?
 
-A likely outcome is a hybrid: B's structure with C's glyphs, or D's search treatment on top of A's index. The prototypes should stay modular enough (shared.js, shared tokens) that recombining is cheap.
+The review selected D's search treatment on top of A's index. The shared catalog model and design tokens keep that recombination contained to the production-promotion task.

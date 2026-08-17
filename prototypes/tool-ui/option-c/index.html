@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option C: instrument panel | Bolt preload prototype</title>
+  <style>
+    :root {
+      --primary-color: #0b0d12;
+      --primary-light: #f4f5f7;
+      --secondary-color: #4b5563;
+      --accent-color: #111827;
+      --success-color: #0f766e;
+      --warning-color: #b45309;
+      --danger-color: #b91c1c;
+      --text-color: #111827;
+      --text-light: #6b7280;
+      --border-color: #e5e7eb;
+      --bg-color: #f8f9fb;
+      --bg-card: #ffffff;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+      --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+      --border-radius: 8px;
+      --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
+      --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      --display-bg: #101319;
+      --display-border: #2b313d;
+      --display-text: #f8fafc;
+      --display-muted: #a5afbd;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; color: var(--text-color); background: var(--bg-color); font-family: var(--font-sans); line-height: 1.5; }
+    button, input, select { font: inherit; }
+    a { color: inherit; text-underline-offset: 3px; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid rgba(17, 24, 39, 0.24); outline-offset: 3px; }
+    .skip-link { position: fixed; top: -60px; left: 16px; z-index: 10; padding: 10px 14px; color: white; background: var(--accent-color); }
+    .skip-link:focus { top: 16px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    .container { width: 92%; max-width: 1320px; margin: 0 auto; padding: 24px 0 60px; }
+    .prototype-nav { margin-bottom: 24px; color: var(--text-light); font-size: 0.8rem; }
+    .prototype-nav a { margin-right: 14px; }
+    .tool-header { max-width: 780px; margin: 22px auto 34px; text-align: center; }
+    .eyebrow { margin: 0 0 9px; color: var(--text-light); font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(2.1rem, 4vw, 3.35rem); font-weight: 600; letter-spacing: -0.035em; line-height: 1.04; }
+    .subtitle { margin: 13px auto 0; color: var(--secondary-color); }
+    .instrument { display: grid; grid-template-columns: minmax(320px, 0.82fr) minmax(500px, 1.18fr); gap: 24px; align-items: start; }
+    .control-panel, .result-console, .method-card { border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-card); box-shadow: var(--shadow); }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+    .panel-header h2 { margin: 0; font-size: 1rem; font-weight: 650; }
+    .live-chip { display: inline-flex; align-items: center; gap: 7px; color: var(--text-light); font-family: var(--font-mono); font-size: 0.7rem; }
+    .live-chip::before { width: 7px; height: 7px; border-radius: 50%; background: var(--success-color); content: ''; }
+    .live-chip[data-state="stale"]::before, .live-chip[data-state="calculating"]::before { background: var(--warning-color); }
+    .live-chip[data-state="invalid"]::before { background: var(--danger-color); }
+    .control-body { padding: 20px; }
+    .input-group { margin-bottom: 22px; }
+    .input-group:last-child { margin-bottom: 0; }
+    label, .group-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; font-size: 0.82rem; font-weight: 650; }
+    .field-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .field-label > label, .field-label > .group-label { flex: 1; margin-bottom: 0; }
+    .tooltip-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+    .tooltip-trigger { width: 22px; height: 22px; padding: 0; border: 1px solid var(--border-color); border-radius: 50%; color: var(--secondary-color); background: var(--bg-card); cursor: help; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700; }
+    .tooltip-bubble { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 30; width: min(280px, 72vw); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 5px; opacity: 0; color: var(--text-color); background: var(--bg-card); box-shadow: var(--shadow-lg); pointer-events: none; font-family: var(--font-sans); font-size: 0.74rem; font-weight: 400; line-height: 1.45; transform: translateY(4px); transition: opacity 150ms ease, transform 150ms ease; }
+    .tooltip-trigger:hover + .tooltip-bubble, .tooltip-trigger:focus-visible + .tooltip-bubble { opacity: 1; transform: translateY(0); }
+    .group-label span:last-child, label span:last-child { color: var(--text-light); font-family: var(--font-mono); font-weight: 400; }
+    select, input[type="number"] { width: 100%; min-height: 43px; padding: 9px 11px; border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-color); background: var(--bg-card); }
+    input[aria-invalid="true"] { border-color: var(--danger-color); background: #fef2f2; }
+    .slider-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 12px; align-items: center; }
+    input[type="range"] { width: 100%; height: 6px; border-radius: 3px; outline: none; appearance: none; background: var(--border-color); }
+    input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; border: 2px solid white; border-radius: 50%; appearance: none; background: var(--accent-color); box-shadow: 0 0 0 1px var(--accent-color); cursor: grab; }
+    input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; background: var(--accent-color); box-shadow: 0 0 0 1px var(--accent-color); cursor: grab; }
+    .range-labels { display: flex; justify-content: space-between; margin-top: 5px; color: var(--text-light); font-family: var(--font-mono); font-size: 0.65rem; }
+    .field-note { display: block; margin-top: 6px; color: var(--text-light); font-size: 0.72rem; }
+    .validation { min-height: 3.2em; margin: 18px 0 0; padding: 10px 12px; border-left: 3px solid var(--success-color); background: #ecfdf5; color: #115e59; font-size: 0.77rem; }
+    .validation.stale { border-color: var(--warning-color); background: #fffbeb; color: #78350f; }
+    .validation.error { border-color: var(--danger-color); background: #fef2f2; color: #7f1d1d; }
+    .console-body { padding: 18px; background: #f1f3f5; }
+    .readout-bank { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .readout {
+      position: relative;
+      min-height: 132px;
+      padding: 17px;
+      overflow: hidden;
+      border: 1px solid var(--display-border);
+      border-radius: 6px;
+      color: var(--display-text);
+      background: var(--display-bg);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+    }
+    .readout.primary { grid-column: 1 / -1; min-height: 186px; }
+    .readout-label { display: flex; justify-content: space-between; gap: 10px; color: var(--display-muted); font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; }
+    .output-status { display: inline-flex; align-items: center; gap: 5px; font-size: 0.62rem; }
+    .output-status::before { width: 7px; height: 7px; border-radius: 50%; background: var(--success-color); content: ''; }
+    .readout[data-status="warning"] .output-status::before { background: #f59e0b; }
+    .readout[data-status="neutral"] .output-status::before { background: #64748b; }
+    .readout-value { display: flex; align-items: baseline; justify-content: flex-end; gap: 9px; margin-top: 24px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; transition: opacity 150ms ease, filter 150ms ease; }
+    .digits { font-size: clamp(1.65rem, 4vw, 2.55rem); font-weight: 550; letter-spacing: -0.04em; }
+    .primary .digits { font-size: clamp(3rem, 8vw, 5.7rem); line-height: 0.95; }
+    .readout-unit { color: var(--display-muted); font-size: 0.85rem; }
+    .readout-bank[data-state="stale"] .readout-value { opacity: 0.43; }
+    .readout-bank[data-state="calculating"] .readout-value { opacity: 0.32; filter: blur(1px); }
+    .readout-bank[data-state="calculating"] .output-status::before { background: #f59e0b; animation: pulse 600ms ease-in-out infinite alternate; }
+    .readout-bank[data-state="invalid"] .readout { border-color: rgba(248, 113, 113, 0.7); }
+    .readout-bank[data-state="invalid"] .output-status::before { background: #ef4444; }
+    .readout-bank[data-state="invalid"] .readout-value { opacity: 0.78; }
+    @keyframes pulse { to { opacity: 0.25; transform: scale(0.75); } }
+    .console-status { display: flex; justify-content: space-between; gap: 16px; padding: 12px 18px; border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.72rem; }
+    .console-status span { font-family: var(--font-mono); }
+    .meta-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 18px; padding: 11px 18px; border-top: 1px solid var(--border-color); background: white; color: var(--text-light); font-size: 0.7rem; }
+    .meta-strip strong { color: var(--text-color); }
+    .meta-strip .review { color: var(--warning-color); }
+    .meta-strip details { position: relative; }
+    .meta-strip summary { cursor: pointer; color: var(--text-color); font-weight: 650; }
+    .revision-popover { position: absolute; right: 0; z-index: 3; width: min(420px, 80vw); margin: 8px 0 0; padding: 12px 14px 12px 30px; border: 1px solid var(--border-color); border-radius: 5px; background: white; box-shadow: var(--shadow-lg); }
+    .revision-popover li { margin: 6px 0; }
+    .assumption { margin: 16px 18px 18px; padding: 12px 14px; border: 1px solid var(--warning-color); border-radius: 5px; background: #fffbeb; color: #78350f; font-size: 0.76rem; }
+    .below-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-top: 24px; }
+    .method-card { padding: 22px; }
+    .method-card h2 { margin: 0 0 14px; font-size: 1.05rem; }
+    .method-card details summary { cursor: pointer; font-weight: 650; }
+    .equation { overflow-x: auto; margin: 12px 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--primary-light); font-family: var(--font-mono); font-size: 0.78rem; }
+    .legend, .method-card p, .method-card li { color: var(--secondary-color); font-size: 0.8rem; }
+    .metadata-error { color: var(--danger-color); }
+
+    @media (max-width: 940px) { .instrument, .below-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) {
+      .container { width: min(100% - 20px, 1320px); padding-top: 14px; }
+      .tool-header { text-align: left; margin: 18px 0 26px; }
+      .readout-bank { grid-template-columns: 1fr; }
+      .readout.primary { grid-column: auto; }
+      .primary .digits { font-size: clamp(3rem, 17vw, 4.8rem); }
+      .console-status { flex-direction: column; gap: 4px; }
+      .meta-strip { align-items: flex-start; flex-direction: column; }
+      .revision-popover { right: auto; left: 0; width: calc(100vw - 58px); }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#controls">Skip to controls</a>
+  <main class="container" data-calculation="bolt-torque-v1">
+    <nav class="prototype-nav" aria-label="Prototype options"><a href="../option-a/">A: title block</a><a href="../option-b/">B: datasheet</a><a href="../option-c/" aria-current="page">C: instrument</a><a href="../option-d/">D: product UI</a></nav>
+    <header class="tool-header">
+      <p class="eyebrow">Prototype C / live instrument</p>
+      <h1>Bolt preload and tightening torque</h1>
+      <p class="subtitle">Adjust the assembly inputs and read the new target after a 150 ms debounce. Stale, updating, and invalid states stay visible so an old number cannot pass for a current result.</p>
+    </header>
+
+    <div class="instrument">
+      <section class="control-panel" id="controls" aria-labelledby="controls-heading">
+        <header class="panel-header"><h2 id="controls-heading">Assembly controls</h2><span class="live-chip" data-action="live-recompute">Live / 150 ms</span></header>
+        <form class="control-body" id="bolt-form" novalidate>
+          <div class="input-group">
+            <div class="field-label"><label for="thread"><span>ISO coarse thread</span><span>d × p</span></label><span class="tooltip-wrap"><button class="tooltip-trigger" type="button" data-tooltip="thread" aria-label="About ISO coarse thread" aria-describedby="thread-tooltip">?</button><span class="tooltip-bubble" id="thread-tooltip" role="tooltip" data-help="thread">Loading input documentation...</span></span></div>
+            <select id="thread" name="thread" aria-describedby="thread-tooltip"><option value="M4x0.7">M4 × 0.7</option><option value="M6x1.0">M6 × 1.0</option><option value="M8x1.25">M8 × 1.25</option><option value="M10x1.5" selected>M10 × 1.5</option><option value="M12x1.75">M12 × 1.75</option><option value="M16x2.0">M16 × 2.0</option><option value="M20x2.5">M20 × 2.5</option><option value="M24x3.0">M24 × 3.0</option></select>
+          </div>
+          <div class="input-group">
+            <div class="field-label"><label for="grade"><span>Property class</span><span>S<sub>p</sub></span></label><span class="tooltip-wrap"><button class="tooltip-trigger" type="button" data-tooltip="grade" aria-label="About property class" aria-describedby="grade-tooltip">?</button><span class="tooltip-bubble" id="grade-tooltip" role="tooltip" data-help="grade">Loading input documentation...</span></span></div>
+            <select id="grade" name="grade" aria-describedby="grade-tooltip"><option value="4.6">4.6 / 225 MPa</option><option value="5.6">5.6 / 280 MPa</option><option value="8.8" selected>8.8 / 640 MPa</option><option value="10.9">10.9 / 830 MPa</option><option value="12.9">12.9 / 970 MPa</option></select>
+          </div>
+          <div class="input-group">
+            <div class="field-label"><div class="group-label"><span>Proof-load target</span><span>α / %</span></div><span class="tooltip-wrap"><button class="tooltip-trigger" type="button" data-tooltip="preload" aria-label="About proof-load target" aria-describedby="preload-tooltip">?</button><span class="tooltip-bubble" id="preload-tooltip" role="tooltip" data-help="preload">Loading input documentation...</span></span></div>
+            <div class="slider-row">
+              <div><label class="sr-only" for="preload-slider">Proof-load target slider</label><input id="preload-slider" type="range" min="40" max="95" step="1" value="75" tabindex="0"><div class="range-labels"><span>40</span><span>95</span></div></div>
+              <div><label class="sr-only" for="preload">Proof-load target percentage</label><input id="preload" name="preload" type="number" min="40" max="95" step="1" value="75" inputmode="decimal" aria-describedby="preload-tooltip live-validation"></div>
+            </div>
+          </div>
+          <div class="input-group">
+            <div class="field-label"><div class="group-label"><span>Nut factor</span><span>K / 1</span></div><span class="tooltip-wrap"><button class="tooltip-trigger" type="button" data-tooltip="k-factor" aria-label="About nut factor" aria-describedby="k-factor-tooltip">?</button><span class="tooltip-bubble" id="k-factor-tooltip" role="tooltip" data-help="k-factor">Loading input documentation...</span></span></div>
+            <div class="slider-row">
+              <div><label class="sr-only" for="k-factor-slider">Nut factor slider</label><input id="k-factor-slider" type="range" min="0.06" max="0.35" step="0.01" value="0.15" tabindex="0"><div class="range-labels"><span>0.06</span><span>0.35</span></div></div>
+              <div><label class="sr-only" for="k-factor">Nut factor value</label><input id="k-factor" name="kFactor" type="number" min="0.06" max="0.35" step="0.01" value="0.15" inputmode="decimal" aria-describedby="k-factor-tooltip live-validation"></div>
+            </div>
+            <small class="field-note">K must come from the actual finish, lubricant, and bearing condition for critical work.</small>
+          </div>
+          <p class="validation" id="live-validation" data-validation role="status" aria-live="polite">Current. Default inputs calculated.</p>
+        </form>
+      </section>
+
+      <section class="result-console" aria-labelledby="readout-heading">
+        <header class="panel-header"><h2 id="readout-heading">Calculated readout</h2><span class="live-chip" data-live-label>Current</span></header>
+        <div class="console-body">
+          <div class="readout-bank" data-live-state="complete" data-state="complete" aria-live="polite" aria-busy="false">
+            <article class="readout primary" data-status="good"><div class="readout-label"><span>Tightening torque / T</span><span class="output-status">IN RANGE</span></div><div class="readout-value"><span class="digits" data-output="torque">41.8</span><span class="readout-unit">N·m</span></div></article>
+            <article class="readout" data-readout="preload" data-status="good"><div class="readout-label"><span>Target preload / F<sub>i</sub></span><span class="output-status">IN RANGE</span></div><div class="readout-value"><span class="digits" data-output="target-preload">27.83</span><span class="readout-unit">kN</span></div></article>
+            <article class="readout" data-status="neutral"><div class="readout-label"><span>Proof load / F<sub>p</sub></span><span class="output-status">REFERENCE</span></div><div class="readout-value"><span class="digits" data-output="proof-load">37.11</span><span class="readout-unit">kN</span></div></article>
+            <article class="readout" data-status="neutral"><div class="readout-label"><span>Stress area / A<sub>s</sub></span><span class="output-status">GEOMETRY</span></div><div class="readout-value"><span class="digits" data-output="stress-area">57.99</span><span class="readout-unit">mm²</span></div></article>
+          </div>
+        </div>
+        <div class="console-status"><strong data-assessment>Within prototype input range</strong><span data-sample-id>M10x1.5 / 8.8 / 75% / K 0.15</span></div>
+        <aside class="assumption" data-assumptions><strong>Torque is an indirect preload control.</strong> Friction consumes most tightening torque, so uncertainty in K becomes uncertainty in clamp load.</aside>
+        <footer class="meta-strip" data-meta="block">
+          <span><strong>v<span data-meta="version">...</span></strong></span><span>Published <span data-meta="published">...</span></span><span class="review"><span data-meta="status">...</span> / <span data-meta="checked-by">...</span></span>
+          <a data-meta="source" href="#">View source</a>
+          <details data-revisions><summary>Revisions</summary><ol class="revision-popover" data-revision-rows><li>Loading metadata...</li></ol></details>
+        </footer>
+      </section>
+    </div>
+
+    <div class="below-grid">
+      <section class="method-card" aria-labelledby="equations-heading"><h2 id="equations-heading">Equations and substituted values</h2><details open><summary>Calculation chain</summary>
+        <div class="equation" data-equation>Equation (1): A<sub>s</sub> = π/4 (d − 0.9382p)² <span data-substitution="area">= 57.99 mm²</span></div>
+        <p class="legend">A<sub>s</sub>: tensile stress area; d: nominal diameter; p: thread pitch.</p>
+        <div class="equation" data-equation>Equation (2): F<sub>p</sub> = S<sub>p</sub>A<sub>s</sub> <span data-substitution="proof">= 37.11 kN</span></div>
+        <p class="legend">F<sub>p</sub>: proof load; S<sub>p</sub>: proof strength.</p>
+        <div class="equation" data-equation>Equation (3): F<sub>i</sub> = αF<sub>p</sub> <span data-substitution="preload">= 27.83 kN</span></div>
+        <p class="legend">F<sub>i</sub>: target preload; α: proof-load fraction.</p>
+        <div class="equation" data-equation>Equation (4): T = KdF<sub>i</sub> <span data-substitution="torque">= 41.8 N·m</span></div>
+        <p class="legend">T: tightening torque; K: nut factor.</p>
+        <details><summary>Show intermediate steps</summary><ol><li>Resolve d and p from the selected thread.</li><li>Calculate stress area and proof load.</li><li>Apply α to set preload.</li><li>Apply K to estimate torque.</li></ol></details>
+      </details></section>
+      <section class="method-card" data-background aria-labelledby="background-heading"><h2 id="background-heading">Background and limits</h2><details><summary>Open engineering context</summary><p>This is an early sizing model, not a joint verification. It does not calculate stiffness, service-load sharing, embedding, fatigue, thread stripping, or tightening scatter.</p><p data-meta="validity">Loading the stated validity range...</p><p>References: VDI 2230 Part 1:2015; ISO 898-1:2013; ISO 262; Budynas and Nisbett, <cite>Shigley's Mechanical Engineering Design</cite>, 11th ed., Chapter 8.</p></details></section>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+      const THREADS = Object.freeze({ 'M4x0.7': { d: 4, p: 0.7 }, 'M6x1.0': { d: 6, p: 1.0 }, 'M8x1.25': { d: 8, p: 1.25 }, 'M10x1.5': { d: 10, p: 1.5 }, 'M12x1.75': { d: 12, p: 1.75 }, 'M16x2.0': { d: 16, p: 2.0 }, 'M20x2.5': { d: 20, p: 2.5 }, 'M24x3.0': { d: 24, p: 3.0 } });
+      const GRADES = Object.freeze({ '4.6': { proof: 225 }, '5.6': { proof: 280 }, '8.8': { proof: 640 }, '10.9': { proof: 830 }, '12.9': { proof: 970 } });
+      function calculateBolt({ thread, grade, preload, kFactor }) {
+        const geometry = THREADS[thread]; const material = GRADES[grade];
+        const stressArea = Math.PI / 4 * Math.pow(geometry.d - 0.9382 * geometry.p, 2);
+        const proofLoad = material.proof * stressArea / 1000;
+        const targetPreload = preload / 100 * proofLoad;
+        const torque = kFactor * geometry.d * targetPreload;
+        return { ...geometry, proofStrength: material.proof, preload, kFactor, stressArea, proofLoad, targetPreload, torque };
+      }
+      window.prototypeCalculator = { calculateBolt, THREADS, GRADES };
+      const bank = document.querySelector('[data-live-state]'); const validation = document.querySelector('[data-validation]');
+      const assessment = document.querySelector('[data-assessment]'); const liveLabel = document.querySelector('[data-live-label]');
+      let debounceTimer; let calculationTimer;
+      const format = (value, digits) => value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+      function readInputs() { return { thread: document.querySelector('#thread').value, grade: document.querySelector('#grade').value, preload: Number(document.querySelector('#preload').value), kFactor: Number(document.querySelector('#k-factor').value) }; }
+      function validateInputs(values) {
+        const errors = []; const badPreload = !Number.isFinite(values.preload) || values.preload < 40 || values.preload > 95; const badK = !Number.isFinite(values.kFactor) || values.kFactor < 0.06 || values.kFactor > 0.35;
+        if (!THREADS[values.thread]) errors.push('Choose a listed ISO thread.'); if (!GRADES[values.grade]) errors.push('Choose a listed property class.'); if (badPreload) errors.push('Proof-load target must be from 40% to 95%.'); if (badK) errors.push('Nut factor must be from 0.06 to 0.35.');
+        document.querySelector('#preload').setAttribute('aria-invalid', String(badPreload)); document.querySelector('#k-factor').setAttribute('aria-invalid', String(badK)); return errors;
+      }
+      function setBankState(state) { bank.dataset.state = state; bank.dataset.liveState = state; bank.setAttribute('aria-busy', String(state === 'stale' || state === 'calculating')); liveLabel.dataset.state = state; }
+      function setOutput(name, value) { document.querySelector(`[data-output="${name}"]`).textContent = value; }
+      function renderInvalid(errors) {
+        setBankState('invalid'); ['torque', 'target-preload', 'proof-load', 'stress-area'].forEach((name) => setOutput(name, '—'));
+        liveLabel.textContent = 'Invalid'; validation.textContent = errors.join(' '); validation.className = 'validation error'; assessment.textContent = 'No result. Correct the marked input.';
+        document.querySelectorAll('.readout').forEach((node) => node.dataset.status = 'warning'); document.querySelectorAll('.output-status').forEach((node) => { node.textContent = 'INVALID'; });
+      }
+      function render(value) {
+        setOutput('torque', format(value.torque, 1)); setOutput('target-preload', format(value.targetPreload, 2)); setOutput('proof-load', format(value.proofLoad, 2)); setOutput('stress-area', format(value.stressArea, 2));
+        document.querySelector('[data-substitution="area"]').innerHTML = `= π/4 (${format(value.d, 1)} − 0.9382 × ${format(value.p, 2)})² = ${format(value.stressArea, 2)} mm²`;
+        document.querySelector('[data-substitution="proof"]').innerHTML = `= ${format(value.proofStrength, 0)} MPa × ${format(value.stressArea, 2)} mm² = ${format(value.proofLoad, 2)} kN`;
+        document.querySelector('[data-substitution="preload"]').innerHTML = `= ${format(value.preload / 100, 2)} × ${format(value.proofLoad, 2)} kN = ${format(value.targetPreload, 2)} kN`;
+        document.querySelector('[data-substitution="torque"]').innerHTML = `= ${format(value.kFactor, 2)} × ${format(value.d, 1)} mm × ${format(value.targetPreload, 2)} kN = ${format(value.torque, 1)} N·m`;
+        const warning = value.preload > 85 || value.kFactor < 0.10 || value.kFactor > 0.25;
+        document.querySelector('.readout.primary').dataset.status = value.kFactor < 0.10 || value.kFactor > 0.25 ? 'warning' : 'good'; document.querySelector('[data-readout="preload"]').dataset.status = value.preload > 85 ? 'warning' : 'good';
+        document.querySelectorAll('.readout')[2].dataset.status = 'neutral'; document.querySelectorAll('.readout')[3].dataset.status = 'neutral';
+        const labels = document.querySelectorAll('.output-status'); labels[0].textContent = value.kFactor < 0.10 || value.kFactor > 0.25 ? 'CHECK K' : 'IN RANGE'; labels[1].textContent = value.preload > 85 ? 'HIGH TARGET' : 'IN RANGE'; labels[2].textContent = 'REFERENCE'; labels[3].textContent = 'GEOMETRY';
+        assessment.textContent = warning ? 'Review the highlighted input before using this estimate.' : 'Within prototype input range';
+        document.querySelector('[data-sample-id]').textContent = `${document.querySelector('#thread').value} / ${document.querySelector('#grade').value} / ${format(value.preload, 0)}% / K ${format(value.kFactor, 2)}`;
+        setBankState('complete'); liveLabel.textContent = 'Current'; validation.textContent = warning ? 'Updated. One or more inputs need engineering review.' : 'Current. Inputs calculated.'; validation.className = warning ? 'validation stale' : 'validation';
+      }
+      function scheduleCalculation() {
+        window.clearTimeout(debounceTimer); window.clearTimeout(calculationTimer); const input = readInputs(); const errors = validateInputs(input);
+        if (errors.length) { renderInvalid(errors); return; }
+        setBankState('stale'); liveLabel.textContent = 'Stale'; validation.textContent = 'Inputs changed. Displayed values are stale.'; validation.className = 'validation stale';
+        debounceTimer = window.setTimeout(() => { setBankState('calculating'); liveLabel.textContent = 'Updating'; validation.textContent = 'Updating all readouts.'; calculationTimer = window.setTimeout(() => render(calculateBolt(input)), 110); }, 150);
+      }
+      function linkRange(rangeSelector, numberSelector) {
+        const range = document.querySelector(rangeSelector); const number = document.querySelector(numberSelector);
+        range.addEventListener('input', () => { number.value = range.value; scheduleCalculation(); });
+        number.addEventListener('input', () => { const value = Number(number.value); if (Number.isFinite(value) && value >= Number(range.min) && value <= Number(range.max)) range.value = number.value; scheduleCalculation(); });
+      }
+      linkRange('#preload-slider', '#preload'); linkRange('#k-factor-slider', '#k-factor');
+      document.querySelector('#bolt-form').addEventListener('submit', (event) => event.preventDefault());
+      document.querySelector('#thread').addEventListener('change', scheduleCalculation); document.querySelector('#grade').addEventListener('change', scheduleCalculation);
+      function renderInputHelp(inputHelp) { document.querySelectorAll('[data-help]').forEach((node) => { node.textContent = inputHelp?.[node.dataset.help] || 'Input documentation is unavailable.'; }); }
+      async function loadMetadata() {
+        try {
+          const response = await fetch('../meta-sample.json', { cache: 'no-store' }); if (!response.ok) throw new Error(`HTTP ${response.status}`); const meta = await response.json();
+          document.querySelector('[data-meta="version"]').textContent = meta.version; document.querySelector('[data-meta="published"]').textContent = meta.last_published; document.querySelector('[data-meta="status"]').textContent = meta.verification_status; document.querySelector('[data-meta="checked-by"]').textContent = meta.checked_by || 'not independently checked'; document.querySelector('[data-meta="validity"]').textContent = meta.validity;
+          const source = document.querySelector('[data-meta="source"]'); source.href = meta.source_url; source.textContent = `Source: ${meta.source_label}`;
+          const list = document.querySelector('[data-revision-rows]'); list.replaceChildren(); meta.revisions.forEach((revision) => { const item = document.createElement('li'); item.textContent = `v${revision.version}, ${revision.date}: ${revision.note}`; list.appendChild(item); });
+          renderInputHelp(meta.input_help);
+        } catch (error) { document.querySelector('[data-meta="block"]').classList.add('metadata-error'); document.querySelector('[data-meta="status"]').textContent = 'Metadata unavailable'; document.querySelector('[data-revision-rows]').innerHTML = '<li>Serve from the repository root to load revision data.</li>'; renderInputHelp(); }
+      }
+      loadMetadata(); render(calculateBolt(readInputs()));
+    })();
+  </script>
+</body>
+</html>

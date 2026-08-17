@@ -1,6 +1,7 @@
 # Tool UI Prototype Options
 
 Date: 2026-08-15
+Status: Prototypes complete; production hybrid selected
 
 ## Goal
 
@@ -108,6 +109,18 @@ Today's two-column structure executed at Linear/Stripe quality. No metaphor; con
 3. Does it stay clean at real-tool complexity (bolt-torque has ~15 inputs across tabs, not the prototype's 5)?
 4. Migration cost: how much per-tool work to move the 60+ existing tools onto it?
 
-## Expected iteration
+## Prototype review and selected hybrid
 
-After review, revise this plan with the chosen hybrid (a likely shape: B's structure and references, A's title block as the metadata treatment, C's readout styling for the results panel, D's interaction states as baseline). The promotion-phase plan then covers: wiring to Pyodide and the docstring pipeline, the `update_tool_dates.py` script, `catalog.json` field additions, updating DESIGN.md and AGENTS.md, and a migration order for existing tools (verified tools first).
+Review completed on 2026-08-17 using the same bolt-torque inputs and calculation in all four options. Each option produced 57.99 mm² stress area, 37.11 kN proof load, 27.83 kN target preload, and 41.8 N·m tightening torque for the default case. Desktop and 375px layouts, invalid inputs, stale results, metadata loading, docstring-style input help, revision access, equation disclosure, and source provenance were checked across the set. Button-mode prototypes also reject a pending result if an input changes before the calculation completes.
+
+The production direction combines the strongest functional layer from each option:
+
+- **Option D is the interaction shell.** Its initialization state, inline validation, keyboard behavior, copy controls, sticky results, focus treatment, and on-page section rail become the baseline.
+- **Option A supplies provenance.** Use a compact title block for version, publication date, author, reviewer, status, source, and revision history. Keep empty review fields visibly honest for experimental tools.
+- **Option B supplies method structure.** Number the scope, inputs, results, method, assumptions, validity range, and references. Use tables only where symbol, value, and unit comparison benefits from them.
+- **Option C supplies result hierarchy.** Use its dark mono readout treatment inside the primary results component, with one headline answer and quieter secondary outputs. Do not extend the instrument styling to the whole page.
+- Preserve both recalculation modes. Button mode remains the default for Pyodide and coupled-input tools; 150ms debounced live mode is available for fast deterministic calculations. Both modes use the prototype's stale, pending, complete, and invalid semantics.
+
+No single option should be promoted unchanged. D alone lacks an engineering-specific trust layer, A alone is too formal, B alone is too dense, and C alone gives presentation more weight than method. The hybrid makes the calculation quick to operate while keeping its provenance, assumptions, equations, substituted values, intermediate steps, and references reachable.
+
+The promotion phase is a separate task. It covers wiring this hybrid to Pyodide and the docstring pipeline, adding `update_tool_dates.py` and the optional catalog fields, updating `DESIGN.md` and `AGENTS.md`, creating template-level browser tests, and migrating verified tools first.
