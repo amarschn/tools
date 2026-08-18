@@ -1,7 +1,7 @@
 # Homepage Prototype Options
 
 Date: 2026-08-15
-Status: Second homepage prototype batch complete; awaiting selection
+Status: Third homepage prototype batch complete; awaiting selection
 
 ## Goal
 
@@ -35,6 +35,10 @@ prototypes/homepage/
   option-f/index.html
   option-g/index.html
   option-h/index.html
+  option-i/index.html
+  option-j/index.html
+  option-k/index.html
+  option-l/index.html
   README.md          # one paragraph per option, how to view
 ```
 
@@ -90,9 +94,9 @@ Treat the homepage like a reference desk rather than a catalog. A large centered
 
 ## What "done" looks like for the prototype phase
 
-- Options A through H render correctly against the live `catalog.json` from a local server, desktop and ~375px mobile widths.
+- Options A through L render correctly against the live `catalog.json` from a local server, desktop and ~375px mobile widths.
 - Search and status filtering work in each (shared.js).
-- Desktop screenshots are saved for Options A through H. Mobile screenshots are also saved for the second batch, where full-card navigation and preview behavior are part of the comparison.
+- Desktop screenshots are saved for Options A through L. Mobile screenshots are also saved for the second and third batches, where navigation density and preview behavior are part of the comparison.
 - `prototypes/homepage/README.md` summarizes each option in a paragraph with its tradeoff.
 - No edits to `index.html`, `catalog.json`, or the SEO scripts.
 
@@ -129,6 +133,29 @@ Feedback on 2026-08-17 kept the large search field and the complete index, then 
 Options E through H compare full-card grids, a pinned inspector, inline thumbnails with enlarged previews, and a lazy live-page preview. The shared metadata file is derived from Git history and is prototype data only. Production promotion still needs a maintained metadata source that accounts for shared Python and frontend dependencies.
 
 Implementation and desktop/mobile browser review completed on 2026-08-18.
+
+## Third review and revised requirements
+
+Feedback on 2026-08-18 selected Option F as the best starting point. Its dense list and immediate filtering stay. The next batch compares quieter page identities and removes the parts that did not help:
+
+- Page titles stay within the standard heading scale. The title must not dominate the search and index.
+- The separate `transparent.tools` masthead is removed from the prototypes. The comparison tests `Tool Index`, `Engineering Calculators`, and `Tools` as direct page names.
+- Automatic hover and focus previews are removed. They are visually distracting.
+- Repeating list content in a sticky inspector is removed.
+- Tags, update dates, repository change counts, versions, discipline filters, and review-status filters remain visible.
+- A sparse gray dot field tests an engineering-paper background. It uses a repeating SVG image rather than a CSS gradient.
+- The full row remains the primary tool link. Option L adds a separate 44px preview control as a deliberate exception, with a large live-page view that opens only after activation.
+
+The third batch separates those choices:
+
+- **Option I:** quiet `Tool Index`, full-page dot field, dense list, no preview.
+- **Option J:** restrained `Engineering Calculators` heading, dots limited to the search zone, clean list, no preview.
+- **Option K:** compact `Tools` heading, discipline rail, ledger-style list, no preview.
+- **Option L:** quiet `Tool Index`, dense list, and an explicit large live-page preview drawer. Nothing opens on hover or focus.
+
+Production promotion remains a separate task after one direction is selected.
+
+Implementation and desktop/mobile browser review completed on 2026-08-18. Option L's click-only preview was also checked for lazy loading, Escape dismissal, focus restoration, and a 44px mobile control.
 
 ## Evaluation criteria for picking a winner
 

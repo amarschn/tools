@@ -2,7 +2,7 @@
 
 Date: 2026-08-16
 
-These static prototypes read the repository's `/catalog.json` at runtime. They exclude the developer templates, map the remaining tools into eight display groups, and share search, discipline, and review-status logic from `shared.js`. Options A through D are the first batch. Options E through H are the current search-and-index batch.
+These static prototypes read the repository's `/catalog.json` at runtime. They exclude the developer templates, map the remaining tools into eight display groups, and share search, discipline, and review-status logic from `shared.js`. Options A through D are the first batch, E through H are the second, and I through L are the current list-focused batch.
 
 ## View the options
 
@@ -22,8 +22,32 @@ Then open one of these pages:
 - `http://localhost:8000/prototypes/homepage/option-f/`
 - `http://localhost:8000/prototypes/homepage/option-g/`
 - `http://localhost:8000/prototypes/homepage/option-h/`
+- `http://localhost:8000/prototypes/homepage/option-i/`
+- `http://localhost:8000/prototypes/homepage/option-j/`
+- `http://localhost:8000/prototypes/homepage/option-k/`
+- `http://localhost:8000/prototypes/homepage/option-l/`
 
 Opening an HTML file directly will not work because the browser blocks its request for `/catalog.json`.
+
+## Third batch: quiet list treatments
+
+Every third-batch option keeps Option F's immediate list filtering and removes its duplicate inspector. Titles use the standard heading scale, the separate site masthead is gone, and no preview appears on hover. Each background tests a sparse SVG dot field without using a gradient.
+
+### Option I: Quiet index
+
+Option I uses `Tool Index` as the only page title. A faint dot field covers the canvas behind the search controls and dense grouped list. There is no preview interface.
+
+### Option J: Search-led calculators
+
+Option J labels the page `Engineering Calculators` and limits the dot field to the search zone. The list sits on a plain surface below it. This tests a little more context without returning to a large hero.
+
+### Option K: Discipline ledger
+
+Option K uses the compact title `Tools` and adds a desktop discipline rail beside the list. The rail becomes a normal filter on small screens. This is the densest browsing treatment in the batch and has no preview.
+
+### Option L: Explicit live preview
+
+Option L keeps a quiet `Tool Index` heading and adds a separate Preview button to each row. The button opens a large live tool page only after activation. The row itself still opens the tool, and hover never starts a preview.
 
 ## Second batch: search and tool index
 

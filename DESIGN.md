@@ -75,6 +75,13 @@ h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
 - Use the `h1` to state the page or tool name directly.
 - Never write a title header as a question, command, or conversational prompt.
 - Put search guidance and task instructions in form labels or supporting text, not in the page title.
+- Directory and search pages use the standard heading scale. Do not turn the page name into display-sized hero text.
+
+### Catalog Previews
+
+- Do not open a tool preview automatically on hover or focus. Hover should only confirm that a listing is interactive.
+- If a catalog includes previews, open them from an explicit control with a target at least 44px high and wide.
+- A preview should show additional material, such as the working tool page. Do not repeat the listing title, description, tags, and metadata in a second panel.
 
 ---
 
