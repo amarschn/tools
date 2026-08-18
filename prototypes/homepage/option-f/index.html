@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Directory inspector | Transparent Tools homepage prototype</title>
+    <style>
+      :root {
+        --primary-color: #0b0d12;
+        --primary-light: #f4f5f7;
+        --secondary-color: #4b5563;
+        --accent-color: #111827;
+        --success-color: #0f766e;
+        --warning-color: #b45309;
+        --danger-color: #b91c1c;
+        --text-color: #111827;
+        --text-light: #6b7280;
+        --border-color: #e5e7eb;
+        --bg-color: #f8f9fb;
+        --bg-card: #ffffff;
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+        --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+        --border-radius: 8px;
+        --font-sans: "Helvetica Neue", "Avenir Next", "Univers", "Helvetica", system-ui, sans-serif;
+        --font-mono: "SF Mono", "Menlo", "Monaco", monospace;
+      }
+
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body {
+        margin: 0;
+        color: var(--text-color);
+        background: var(--bg-color);
+        font-family: var(--font-sans);
+        line-height: 1.5;
+      }
+      a { color: inherit; }
+      button, input, select { font: inherit; }
+      .skip-link {
+        position: fixed;
+        z-index: 30;
+        top: 8px;
+        left: 8px;
+        padding: 8px 12px;
+        color: #fff;
+        background: var(--accent-color);
+        transform: translateY(-160%);
+      }
+      .skip-link:focus { transform: translateY(0); }
+      .site-header {
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-card);
+      }
+      .masthead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: min(94%, 1380px);
+        margin: 0 auto;
+        padding: 15px 0;
+      }
+      .wordmark { text-decoration: none; font-weight: 650; letter-spacing: -0.02em; }
+      .prototype-label {
+        color: var(--text-light);
+        font: 0.66rem/1.3 var(--font-mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      main {
+        width: min(94%, 1380px);
+        margin: 0 auto;
+        padding: clamp(42px, 7vw, 78px) 0 82px;
+      }
+      h1 {
+        margin: 0 0 30px;
+        font-size: clamp(2.45rem, 6vw, 5rem);
+        font-weight: 550;
+        letter-spacing: -0.05em;
+        line-height: 1;
+      }
+      .search-panel { max-width: 940px; }
+      .search-label, .filter-control label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--text-light);
+        font: 0.66rem/1.2 var(--font-mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .search-field { position: relative; }
+      .search-input {
+        width: 100%;
+        min-height: 64px;
+        border: 1px solid var(--primary-color);
+        border-radius: var(--border-radius);
+        padding: 14px 54px 14px 18px;
+        color: var(--text-color);
+        background: var(--bg-card);
+        font-size: clamp(1.02rem, 2vw, 1.22rem);
+        box-shadow: var(--shadow-lg);
+      }
+      .search-icon {
+        position: absolute;
+        top: 50%;
+        right: 19px;
+        width: 22px;
+        height: 22px;
+        pointer-events: none;
+        transform: translateY(-50%);
+      }
+      input:focus, select:focus, a:focus-visible {
+        outline: 2px solid var(--accent-color);
+        outline-offset: 2px;
+      }
+      .filter-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .filter-control select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 8px 10px;
+        color: var(--text-color);
+        background: var(--bg-card);
+      }
+      .catalog-stats {
+        min-height: 20px;
+        margin: 14px 0 0;
+        color: var(--text-light);
+        font: 0.68rem/1.4 var(--font-mono);
+      }
+      .tool-index { margin-top: 46px; }
+      .index-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: baseline;
+        margin-bottom: 22px;
+        border-bottom: 1px solid var(--primary-color);
+      }
+      h2 {
+        margin: 0;
+        border: 0;
+        padding: 0 0 12px;
+        font-size: 1.375rem;
+        font-weight: 600;
+      }
+      .result-line {
+        margin: 0;
+        padding-bottom: 12px;
+        color: var(--text-light);
+        font: 0.68rem/1.3 var(--font-mono);
+      }
+      .directory-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(290px, 0.38fr);
+        gap: 32px;
+        align-items: start;
+      }
+      .directory-groups {
+        display: grid;
+        min-width: 0;
+        gap: 32px;
+      }
+      .directory-group { min-width: 0; }
+      .group-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin: 0;
+        border-bottom: 1px solid var(--border-color);
+        padding: 0 3px 8px;
+        color: var(--text-color);
+        font-size: 0.9rem;
+      }
+      .group-count { color: var(--text-light); font: 0.63rem/1.4 var(--font-mono); }
+      .directory-list { margin: 0; padding: 0; list-style: none; }
+      .directory-row {
+        display: grid;
+        grid-template-columns: 10px minmax(180px, 0.74fr) minmax(220px, 1.26fr) minmax(180px, auto);
+        gap: 12px;
+        align-items: start;
+        min-height: 72px;
+        border-bottom: 1px solid var(--border-color);
+        padding: 11px 4px;
+        text-decoration: none;
+      }
+      .directory-row:hover,
+      .directory-row:focus-visible {
+        background: var(--bg-card);
+      }
+      .status-mark {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin-top: 5px;
+        border: 1px solid var(--primary-color);
+      }
+      .status-mark.is-verified { background: var(--primary-color); }
+      .status-mark.is-experimental { background: transparent; }
+      .row-title {
+        display: block;
+        font-size: 0.83rem;
+        font-weight: 650;
+        line-height: 1.35;
+      }
+      .row-description {
+        display: -webkit-box;
+        overflow: hidden;
+        color: var(--secondary-color);
+        font-size: 0.74rem;
+        line-height: 1.42;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      .row-side { text-align: right; }
+      .row-tags {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+        margin-bottom: 5px;
+      }
+      .tool-tag {
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        padding: 1px 6px;
+        color: var(--secondary-color);
+        background: var(--primary-light);
+        font: 0.55rem/1.35 var(--font-mono);
+      }
+      .row-meta {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 3px 10px;
+        color: var(--text-light);
+        font: 0.56rem/1.35 var(--font-mono);
+      }
+      .row-meta span { white-space: nowrap; }
+      .inspector {
+        position: sticky;
+        top: 20px;
+        border: 1px solid var(--primary-color);
+        border-radius: var(--border-radius);
+        padding: 14px;
+        background: var(--bg-card);
+        box-shadow: var(--shadow-lg);
+      }
+      .inspector-label {
+        margin: 0 0 10px;
+        color: var(--text-light);
+        font: 0.62rem/1.3 var(--font-mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .inspector-image {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--primary-light);
+      }
+      .inspector-title {
+        margin: 14px 0 6px;
+        color: var(--text-color);
+        font-size: 1rem;
+        font-weight: 650;
+        line-height: 1.35;
+      }
+      .inspector-description {
+        margin: 0 0 14px;
+        color: var(--secondary-color);
+        font-size: 0.78rem;
+      }
+      .inspector-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 14px;
+      }
+      .inspector-meta {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px 12px;
+        margin: 0;
+        border-top: 1px solid var(--border-color);
+        padding-top: 12px;
+        font: 0.62rem/1.4 var(--font-mono);
+      }
+      .inspector-meta dt { color: var(--text-light); }
+      .inspector-meta dd { margin: 0; text-align: right; }
+      .empty-state, .load-error { padding: 42px 0; color: var(--text-light); }
+      footer { border-top: 1px solid var(--border-color); background: var(--bg-card); }
+      .footer-inner {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        width: min(94%, 1380px);
+        margin: 0 auto;
+        padding: 24px 0 36px;
+        color: var(--text-light);
+        font-size: 0.78rem;
+      }
+      .footer-links { display: flex; gap: 18px; }
+
+      @media (max-width: 1080px) {
+        .directory-row { grid-template-columns: 10px minmax(170px, 0.8fr) minmax(190px, 1.2fr); }
+        .row-side { grid-column: 2 / -1; text-align: left; }
+        .row-tags, .row-meta { justify-content: flex-start; }
+      }
+      @media (max-width: 860px) {
+        .directory-layout { grid-template-columns: 1fr; }
+        .inspector { display: none; }
+      }
+      @media (max-width: 560px) {
+        .prototype-label { max-width: 155px; text-align: right; }
+        .filter-row { grid-template-columns: 1fr; }
+        .index-heading { align-items: flex-start; flex-direction: column; gap: 0; }
+        .directory-row {
+          grid-template-columns: 10px minmax(0, 1fr);
+          min-height: 96px;
+          padding: 12px 3px;
+        }
+        .row-description, .row-side { grid-column: 2; }
+        .footer-inner { flex-direction: column; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * { scroll-behavior: auto !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#tool-index">Skip to tool index</a>
+    <header class="site-header">
+      <div class="masthead">
+        <a class="wordmark" href="/">transparent.tools</a>
+        <span class="prototype-label">Option F · Directory inspector</span>
+      </div>
+    </header>
+
+    <main>
+      <h1 id="page-title">Engineering Tools</h1>
+
+      <section class="search-panel" aria-label="Find a tool">
+        <label class="search-label" for="search">Search tools</label>
+        <div class="search-field">
+          <input
+            class="search-input"
+            id="search"
+            data-testid="search-input"
+            type="search"
+            placeholder="Search by tool, component, or quantity"
+            autocomplete="off"
+          />
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+        </div>
+        <div class="filter-row">
+          <div class="filter-control">
+            <label for="category">Discipline</label>
+            <select id="category" data-testid="category-filter"></select>
+          </div>
+          <div class="filter-control">
+            <label for="status">Review status</label>
+            <select id="status" data-testid="status-filter">
+              <option value="all">All statuses</option>
+              <option value="verified">Verified only</option>
+              <option value="experimental">Experimental only</option>
+            </select>
+          </div>
+        </div>
+        <p class="catalog-stats" id="catalog-stats">Loading catalog...</p>
+      </section>
+
+      <section class="tool-index" id="tool-index" aria-labelledby="index-heading">
+        <div class="index-heading">
+          <h2 id="index-heading">Tool Index</h2>
+          <p class="result-line" id="result-line" data-testid="result-line" aria-live="polite"></p>
+        </div>
+        <div class="directory-layout">
+          <div class="directory-groups" id="tool-grid" data-testid="tool-grid">
+            <!-- BEGIN static tool links -->
+            <!-- END static tool links -->
+          </div>
+          <aside class="inspector" id="visual-inspector" data-testid="visual-inspector" aria-live="polite">
+            <p class="inspector-label">Tool preview</p>
+            <img class="inspector-image" id="inspector-image" alt="" />
+            <h3 class="inspector-title" id="inspector-title">Tool details</h3>
+            <p class="inspector-description" id="inspector-description">Tool details appear here.</p>
+            <div class="inspector-tags" id="inspector-tags"></div>
+            <dl class="inspector-meta" id="inspector-meta"></dl>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-inner">
+        <span>&copy; <span id="year"></span> Transparent Tools</span>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="/about.html">About</a>
+          <a href="/legal.html">Terms &amp; Privacy</a>
+          <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="../shared.js"></script>
+    <script>
+      (function () {
+        "use strict";
+        const HP = window.HomepagePrototype;
+        const controls = {
+          searchInput: document.getElementById("search"),
+          categorySelect: document.getElementById("category"),
+          statusSelect: document.getElementById("status"),
+        };
+        const grid = document.getElementById("tool-grid");
+        const resultLine = document.getElementById("result-line");
+        const statsLine = document.getElementById("catalog-stats");
+        const inspectorImage = document.getElementById("inspector-image");
+        const inspectorTitle = document.getElementById("inspector-title");
+        const inspectorDescription = document.getElementById("inspector-description");
+        const inspectorTags = document.getElementById("inspector-tags");
+        const inspectorMeta = document.getElementById("inspector-meta");
+        let tools = [];
+
+        HP.setCurrentYear(document.getElementById("year"));
+
+        function repositoryChangeText(tool) {
+          if (!Number.isInteger(tool.revisionCount)) return "Unavailable";
+          return `${tool.revisionCount} repository ${tool.revisionCount === 1 ? "change" : "changes"}`;
+        }
+
+        function rowTags(tool) {
+          return HP.createElement("div", { className: "row-tags" },
+            HP.visibleTags(tool, 3).map((tag) => HP.createElement("span", {
+              className: "tool-tag",
+              text: tag,
+              dataset: { testid: "tool-tag" },
+            })),
+          );
+        }
+
+        function rowMetadata(tool) {
+          const items = [
+            HP.createElement("span", {
+              text: `Updated ${HP.formatToolDate(tool.lastUpdated)}`,
+              dataset: { testid: "tool-last-updated" },
+            }),
+            HP.createElement("span", {
+              text: repositoryChangeText(tool),
+              dataset: { testid: "tool-revision-count" },
+            }),
+          ];
+          if (tool.version !== null) {
+            items.push(HP.createElement("span", {
+              text: `v${tool.version}`,
+              dataset: { testid: "tool-version" },
+            }));
+          }
+          return HP.createElement("div", { className: "row-meta" }, items);
+        }
+
+        function setInspector(tool) {
+          inspectorImage.src = HP.previewDataUrl(tool);
+          inspectorTitle.textContent = tool.title;
+          inspectorDescription.textContent = tool.description;
+          inspectorTags.replaceChildren(...HP.visibleTags(tool, 6).map((tag) =>
+            HP.createElement("span", { className: "tool-tag", text: tag }),
+          ));
+
+          const fields = [
+            ["Status", tool.statusLabel],
+            ["Updated", HP.formatToolDate(tool.lastUpdated)],
+            ["Repository", repositoryChangeText(tool)],
+          ];
+          if (tool.version !== null) fields.push(["Version", `v${tool.version}`]);
+          inspectorMeta.replaceChildren();
+          fields.forEach(([label, value]) => {
+            inspectorMeta.appendChild(HP.createElement("dt", { text: label }));
+            inspectorMeta.appendChild(HP.createElement("dd", { text: value }));
+          });
+        }
+
+        function toolRow(tool) {
+          const link = HP.createElement("a", {
+            className: "directory-row",
+            href: HP.toolUrl(tool.path),
+            dataset: { testid: "tool-link", title: tool.title },
+            attributes: { "aria-label": `${tool.title}, ${tool.statusLabel}` },
+          }, [
+            HP.createStatusMark(tool),
+            HP.createElement("span", { className: "row-title", text: tool.title }),
+            HP.createElement("span", { className: "row-description", text: tool.description }),
+            HP.createElement("span", { className: "row-side" }, [
+              rowTags(tool),
+              rowMetadata(tool),
+            ]),
+          ]);
+          link.addEventListener("pointerenter", () => setInspector(tool));
+          link.addEventListener("focus", () => setInspector(tool));
+          return link;
+        }
+
+        function renderIndex(filtered, filters) {
+          const grouped = HP.groupTools(filtered, filters.category);
+          grid.replaceChildren();
+          resultLine.textContent = `${filtered.length} ${filtered.length === 1 ? "tool" : "tools"}`;
+
+          if (!filtered.length) {
+            grid.appendChild(HP.createElement("div", {
+              className: "empty-state",
+              text: "No tools match these filters.",
+            }));
+            inspectorImage.removeAttribute("src");
+            inspectorTitle.textContent = "No matching tools";
+            inspectorDescription.textContent = "Change the search or filters.";
+            inspectorTags.replaceChildren();
+            inspectorMeta.replaceChildren();
+            return;
+          }
+
+          grouped.forEach((group) => {
+            const headingId = `group-${group.id}`;
+            const section = HP.createElement("section", {
+              className: "directory-group",
+              attributes: { "aria-labelledby": headingId },
+            });
+            section.appendChild(HP.createElement("h3", {
+              className: "group-heading",
+              id: headingId,
+            }, [
+              HP.createElement("span", { text: group.label }),
+              HP.createElement("span", { className: "group-count", text: String(group.tools.length) }),
+            ]));
+            const list = HP.createElement("ul", { className: "directory-list" });
+            group.tools.forEach((tool) => {
+              list.appendChild(HP.createElement("li", {
+                dataset: { testid: "tool-item", title: tool.title },
+              }, toolRow(tool)));
+            });
+            section.appendChild(list);
+            grid.appendChild(section);
+          });
+          setInspector(grouped[0].tools[0]);
+        }
+
+        function renderPage() {
+          const filters = HP.getFilters(controls);
+          const filtered = HP.filterTools(tools, filters);
+          renderIndex(filtered, filters);
+        }
+
+        controls.searchInput.addEventListener("input", renderPage);
+        controls.categorySelect.addEventListener("change", renderPage);
+        controls.statusSelect.addEventListener("change", renderPage);
+
+        HP.loadCatalogWithMetadata()
+          .then((catalogTools) => {
+            tools = catalogTools;
+            HP.populateCategorySelect(controls.categorySelect, tools);
+            const catalogStats = HP.stats(tools);
+            statsLine.textContent = `${catalogStats.total} tools · ${catalogStats.groups} disciplines · ${catalogStats.verified} verified`;
+            renderPage();
+          })
+          .catch((error) => {
+            console.error(error);
+            statsLine.textContent = "Catalog unavailable";
+            grid.replaceChildren(HP.createElement("div", {
+              className: "load-error",
+              text: "The tool catalog could not be loaded.",
+            }));
+          });
+      })();
+    </script>
+  </body>
+</html>

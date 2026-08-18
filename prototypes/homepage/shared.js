@@ -101,6 +101,48 @@
   const VERIFIED_LABEL = "Verified";
   const EXPERIMENTAL_LABEL = "Experimental";
 
+  const PREVIEW_ART = Object.freeze({
+    mechanical: `
+      <path d="M360 96v138M540 96v138M344 234h212"/>
+      <path d="M380 166c44 50 96 50 140 0"/>
+      <path d="M405 102v54m0 0-10-16m10 16 10-16M450 102v72m0 0-10-16m10 16 10-16M495 102v54m0 0-10-16m10 16 10-16"/>
+    `,
+    thermal: `
+      <rect x="360" y="108" width="176" height="112" rx="8"/>
+      <path d="M382 136h132M382 164h132M382 192h132"/>
+      <path d="M392 82v18m0-18-9 12m9-12 9 12M448 82v18m0-18-9 12m9-12 9 12M504 82v18m0-18-9 12m9-12 9 12"/>
+    `,
+    electrical: `
+      <path d="M354 166h42l17-34 32 68 26-52 18 36h56"/>
+      <circle cx="354" cy="166" r="8"/><circle cx="545" cy="166" r="8"/>
+      <path d="M374 104h150M374 228h150M389 96v16M509 96v16M389 220v16M509 220v16"/>
+    `,
+    materials: `
+      <path d="m378 118 48-28 48 28v56l-48 28-48-28zM426 90v56m-48-28 48 28 48-28M426 146v56"/>
+      <path d="m474 118 48-28 48 28v56l-48 28-48-28M474 174l48-28 48 28M522 90v56m0 0v56"/>
+    `,
+    reliability: `
+      <rect x="350" y="136" width="62" height="54" rx="6"/>
+      <rect x="438" y="136" width="62" height="54" rx="6"/>
+      <rect x="526" y="136" width="62" height="54" rx="6"/>
+      <path d="M330 163h20m62 0h26m62 0h26m62 0h20"/>
+      <path d="m370 163 12 12 22-30M458 163l12 12 22-30M546 163l12 12 22-30"/>
+    `,
+    acoustics: `
+      <path d="M338 164c22-72 44 72 66 0s44-72 66 0 44 72 66 0 44-72 66 0"/>
+      <path d="M338 220h264M360 210v20M414 210v20M468 210v20M522 210v20M576 210v20"/>
+    `,
+    reference: `
+      <rect x="350" y="94" width="220" height="142" rx="7"/>
+      <path d="M374 120h172M374 148h172M374 176h172M374 204h172M414 108v112M458 108v112M502 108v112"/>
+      <path d="M350 250h220M350 242v16M394 242v10M438 242v16M482 242v10M526 242v16M570 242v10"/>
+    `,
+    aerospace: `
+      <path d="M340 172c62-44 144-62 246-28-78 7-142 30-198 68l-48-40z"/>
+      <path d="M430 151l42-68 28 3-18 63M448 186l58 62 30-3-40-80"/>
+    `,
+  });
+
   function normalizedText(value) {
     return String(value || "").trim().toLowerCase();
   }
@@ -166,6 +208,51 @@
     return data
       .filter((tool) => !isTemplate(tool))
       .map((tool, catalogIndex) => normalizeTool(tool, catalogIndex));
+  }
+
+  async function loadToolMetadata(
+    url = "/prototypes/homepage/tool-meta.json",
+  ) {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(
+        `Tool metadata request failed with status ${response.status}.`,
+      );
+    }
+
+    const data = await response.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new TypeError("Tool metadata response must be an object.");
+    }
+    return data;
+  }
+
+  async function loadCatalogWithMetadata(
+    catalogUrl = "/catalog.json",
+    metadataUrl = "/prototypes/homepage/tool-meta.json",
+  ) {
+    const [tools, metadata] = await Promise.all([
+      loadCatalog(catalogUrl),
+      loadToolMetadata(metadataUrl),
+    ]);
+
+    return tools.map((tool) => {
+      const entry = metadata[toolUrl(tool.path)] || {};
+      const revisionCount = Number(entry.revision_count);
+      return {
+        ...tool,
+        version:
+          typeof entry.version === "string" && entry.version.trim()
+            ? entry.version.trim()
+            : null,
+        lastUpdated:
+          typeof entry.last_updated === "string" ? entry.last_updated : null,
+        revisionCount:
+          Number.isInteger(revisionCount) && revisionCount > 0
+            ? revisionCount
+            : null,
+      };
+    });
   }
 
   function getFilters(controls) {
@@ -287,6 +374,73 @@
     return `/${path.replace(/^\.\//, "")}`;
   }
 
+  function formatToolDate(value) {
+    if (!value) return "Date unavailable";
+    const date = new Date(`${value}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return "Date unavailable";
+    return new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(date);
+  }
+
+  function visibleTags(tool, maximum = 4) {
+    const limit = Number.isInteger(maximum) && maximum > 0 ? maximum : 4;
+    return (tool.tags || [])
+      .filter((tag) => !HUMAN_VERIFIED_TAGS.has(normalizedText(tag)))
+      .slice(0, limit);
+  }
+
+  function escapeXml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+  }
+
+  function previewTitleLines(title, maximumLength = 27) {
+    const words = String(title || "Engineering tool").split(/\s+/);
+    const lines = [""];
+    words.forEach((word) => {
+      const current = lines.at(-1);
+      if (!current || `${current} ${word}`.length <= maximumLength) {
+        lines[lines.length - 1] = current ? `${current} ${word}` : word;
+      } else if (lines.length < 2) {
+        lines.push(word);
+      }
+    });
+    if (words.join(" ").length > lines.join(" ").length) {
+      lines[lines.length - 1] = `${lines.at(-1).replace(/[.,;:]$/, "")}...`;
+    }
+    return lines;
+  }
+
+  function previewDataUrl(tool) {
+    const group = GROUP_BY_ID.get(tool.primaryGroupId) || GROUP_BY_ID.get("reference");
+    const titleLines = previewTitleLines(tool.title);
+    const titleMarkup = titleLines
+      .map(
+        (line, index) =>
+          `<tspan x="42" dy="${index === 0 ? 0 : 34}">${escapeXml(line)}</tspan>`,
+      )
+      .join("");
+    const artwork = PREVIEW_ART[tool.primaryGroupId] || PREVIEW_ART.reference;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+      <rect width="640" height="360" fill="#f8f9fb"/>
+      <path d="M0 48h640M0 312h640" stroke="#e5e7eb" stroke-width="1"/>
+      <text x="42" y="82" fill="#6b7280" font-family="SFMono-Regular,Menlo,monospace" font-size="13" letter-spacing="1.4">${escapeXml(group.label.toUpperCase())}</text>
+      <text x="42" y="136" fill="#111827" font-family="Helvetica Neue,Arial,sans-serif" font-size="27" font-weight="600">${titleMarkup}</text>
+      <g fill="none" stroke="#111827" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${artwork}</g>
+      <rect x="42" y="284" width="62" height="4" fill="#0f766e"/>
+      <text x="118" y="291" fill="#4b5563" font-family="SFMono-Regular,Menlo,monospace" font-size="12">TRANSPARENT.TOOLS</text>
+    </svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  }
+
   function createElement(tagName, options = {}, children = []) {
     const element = document.createElement(tagName);
     Object.entries(options).forEach(([key, value]) => {
@@ -344,11 +498,16 @@
     getFilters,
     groupTools,
     loadCatalog,
+    loadCatalogWithMetadata,
+    loadToolMetadata,
     populateCategorySelect,
+    previewDataUrl,
+    formatToolDate,
     setCurrentYear,
     shouldRevealExperimental,
     sortTools,
     stats,
     toolUrl,
+    visibleTags,
   });
 })();

@@ -1,7 +1,7 @@
 # Homepage Prototype Options
 
 Date: 2026-08-15
-Status: Prototypes complete; production hybrid selected
+Status: Second homepage prototype batch complete; awaiting selection
 
 ## Goal
 
@@ -26,10 +26,15 @@ This plan is prototypes only. No changes to the production `index.html` in this 
 ```
 prototypes/homepage/
   shared.js          # catalog loading, category mapping, search/filter logic
+  tool-meta.json     # prototype-only Git dates, repository change counts, sourced versions
   option-a/index.html
   option-b/index.html
   option-c/index.html
   option-d/index.html
+  option-e/index.html
+  option-f/index.html
+  option-g/index.html
+  option-h/index.html
   README.md          # one paragraph per option, how to view
 ```
 
@@ -85,17 +90,17 @@ Treat the homepage like a reference desk rather than a catalog. A large centered
 
 ## What "done" looks like for the prototype phase
 
-- The four HTML files render correctly against the live `catalog.json` from a local server, desktop and ~375px mobile widths.
+- Options A through H render correctly against the live `catalog.json` from a local server, desktop and ~375px mobile widths.
 - Search and status filtering work in each (shared.js).
-- A screenshot of each option at desktop width saved to `prototypes/homepage/screenshots/` for side-by-side comparison.
+- Desktop screenshots are saved for Options A through H. Mobile screenshots are also saved for the second batch, where full-card navigation and preview behavior are part of the comparison.
 - `prototypes/homepage/README.md` summarizes each option in a paragraph with its tradeoff.
 - No edits to `index.html`, `catalog.json`, or the SEO scripts.
 
-## Prototype review and selected hybrid
+## First prototype review
 
 Review completed on 2026-08-17 against the real catalog at desktop and 375px mobile widths. All four options preserve search, discipline and review-status filtering, collapsed experimental listings, the verification queue, and the static-link marker contract. Search and the experimental-only filter reveal matching experimental tools without leaving an ineffective disclosure control on screen. The catalog resolves to 57 public tools after the 9 developer templates are excluded: 8 verified and 49 experimental.
 
-The production direction is **Option D's search-first entry over Option A's technical index**:
+The first review selected **Option D's search-first entry over Option A's technical index**:
 
 - Keep D's large keyboard-accessible search and compact result list as the primary route for visitors who know what they need.
 - Use A's numbered, two-column discipline index as the complete catalog below search. It shows the site's breadth without returning to a card wall.
@@ -105,7 +110,25 @@ The production direction is **Option D's search-first entry over Option A's tech
 
 Option B remains a useful reference for discipline counts and mobile filter controls, but its repeated cards consume too much vertical space. Option C establishes a credible visual identity, though its symbol library adds maintenance work before it improves finding a tool. The selected hybrid gives search the fastest path and keeps the full catalog readable, static-link compatible, and inexpensive to maintain.
 
-Production promotion is a separate task. It should adapt the selected pieces to `index.html`, preserve the SEO injector contract, add browser tests for the shared behaviors, and verify analytics before introducing usage-based labels.
+The next review rejected enough of Option D that this first selection is no longer the production recommendation.
+
+## Second review and revised requirements
+
+Feedback on 2026-08-17 kept the large search field and the complete index, then removed the rest of Option D's browsing structure. The next batch follows these rules:
+
+- The page title is `Engineering Tools`. Title headers never use questions, commands, or conversational prompts.
+- Search is followed directly by a section titled `Tool Index`.
+- There are no Verified, Most used, New, Up next, or other horizontal shelves.
+- The index never uses A-to-Z wording.
+- Each tool card or row is one large link. A small `Open` link is not a separate click target.
+- Tags remain visible on each listing.
+- Each listing shows its actual last repository change date and directory commit count. That count is labeled `repository changes`, not version or revision.
+- Semantic versions appear only where the tool documents one. The prototype metadata must not infer or invent versions.
+- Visual preview treatments must work with keyboard focus as well as hover and must not block mobile navigation.
+
+Options E through H compare full-card grids, a pinned inspector, inline thumbnails with enlarged previews, and a lazy live-page preview. The shared metadata file is derived from Git history and is prototype data only. Production promotion still needs a maintained metadata source that accounts for shared Python and frontend dependencies.
+
+Implementation and desktop/mobile browser review completed on 2026-08-18.
 
 ## Evaluation criteria for picking a winner
 
@@ -114,4 +137,4 @@ Production promotion is a separate task. It should adapt the selected pieces to 
 3. Does the 57-tool public catalog read as organized rather than overwhelming?
 4. How much work to productionize, including keeping `inject_seo_meta.py` compatible?
 
-The review selected D's search treatment on top of A's index. The shared catalog model and design tokens keep that recombination contained to the production-promotion task.
+The first review selected D's search treatment on top of A's index. The second batch retains search and replaces the rest of that proposal with the requirements above.

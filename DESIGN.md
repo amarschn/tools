@@ -70,6 +70,12 @@ h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
 h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
 ```
 
+### Heading Copy
+
+- Use the `h1` to state the page or tool name directly.
+- Never write a title header as a question, command, or conversational prompt.
+- Put search guidance and task instructions in form labels or supporting text, not in the page title.
+
 ---
 
 ## Layout & Structure
