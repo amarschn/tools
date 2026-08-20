@@ -419,10 +419,48 @@
     function attachListeners() {
         for (var i = 0; i < inputElements.length; i++) {
             (function (el) {
+                // Guard so a re-discovery pass cannot double-bind an element.
+                if (el.dataset.urlStateBound === '1') return;
+                el.dataset.urlStateBound = '1';
                 el.addEventListener('input', scheduleUrlUpdate);
                 el.addEventListener('change', scheduleUrlUpdate);
             })(inputElements[i]);
         }
+    }
+
+    /**
+     * Re-discover inputs and filter out redundant paired ranges.
+     */
+    function rediscoverInputs() {
+        var allInputs = discoverInputs();
+        inputElements = [];
+        for (var i = 0; i < allInputs.length; i++) {
+            if (!isRedundantRange(allInputs[i], allInputs)) {
+                inputElements.push(allInputs[i]);
+            }
+        }
+        return inputElements.length > 0;
+    }
+
+    /**
+     * Re-apply the URL parameters to the form.
+     *
+     * Tools that build their inputs asynchronously (populating a select from
+     * Pyodide, for example) have no options to select at DOMContentLoaded, so
+     * the first pass silently drops those values. Call this once the inputs
+     * are fully built to replay the shared link over them.
+     *
+     * @returns {boolean} true if any value was applied.
+     */
+    function applyFromUrl() {
+        if (!rediscoverInputs()) return false;
+        var didLoad = loadFromUrl();
+        if (didLoad) {
+            syncPairedRanges();
+            fireEventsOnAll();
+        }
+        attachListeners();
+        return didLoad;
     }
 
     /**
@@ -433,21 +471,8 @@
         if (initialized) return;
         initialized = true;
 
-        // Discover all inputs
-        var allInputs = discoverInputs();
-
-        // No inputs found - graceful no-op
-        if (allInputs.length === 0) return;
-
-        // Filter out redundant range inputs that are paired with number inputs
-        inputElements = [];
-        for (var i = 0; i < allInputs.length; i++) {
-            if (!isRedundantRange(allInputs[i], allInputs)) {
-                inputElements.push(allInputs[i]);
-            }
-        }
-
-        if (inputElements.length === 0) return;
+        // Discover all inputs; graceful no-op when the page has none
+        if (!rediscoverInputs()) return;
 
         // Load state from URL params (if any)
         var didLoad = loadFromUrl();
@@ -480,6 +505,7 @@
     // --- Public API ---
     window.UrlState = {
         getShareUrl: getShareUrl,
+        applyFromUrl: applyFromUrl,
         /** Force re-initialization (e.g. after dynamic inputs are added). */
         refresh: function () {
             initialized = false;
