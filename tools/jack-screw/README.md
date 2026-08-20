@@ -4,17 +4,38 @@ Design and check a sliding-contact power screw: a screw jack, a machine lead scr
 spindle. The tool answers the four questions that decide whether the design works, then the
 four that decide whether it survives.
 
+## Three levels of detail
+
+The tool opens on a load and a screw size, which is enough for a real answer, and adds inputs
+only as you ask for more certainty. Each step buys a different class of answer rather than just
+more fields to fill in.
+
+| Step | You enter | You get |
+| --- | --- | --- |
+| Quick | Load, screw size | Torque, efficiency, whether it holds the load |
+| Design | Friction pair, thrust collar, drive, nut length, column length and end fixity | Nut wear, screw body stress, column buckling |
+| Detailed | Screw and nut material, running speed, design factor | Whirl margin, nut PV, ball screw comparison |
+
+Under the results is a panel listing what the current answer rests on: which values are standing
+in for real ones, and which checks have not run at all. Each row has a button that climbs to the
+step holding that input and takes you to it. A field you can see is yours to set. A field you
+cannot see is either declared in that panel or its check is skipped, because reporting a buckling
+load from an invented column length would be worse than reporting nothing.
+
+The step travels with a shared link, so a link always reproduces the answer its sender saw.
+
 ## What it calculates
 
-### Always shown
+### Quick
 
 - Torque to raise the load, split between the thread and the thrust collar.
 - Mechanical efficiency, with and without the collar.
 - Whether the screw is self-locking, and the brake torque needed if it is not.
-- Torque to lower the load, and the force at a hand lever of a given radius.
+- Torque to lower the load, or the brake torque needed to hold it.
 
-### Expert mode, once a nut length and a column length are entered
+### Design and Detailed
 
+- Force at a hand lever of a given radius, against what a person can actually push.
 - Thread flank bearing pressure against the nut material's wear limit, plus the load the
   first engaged thread actually carries.
 - Screw thread shear, root bending, and body von Mises stress at the minor diameter under

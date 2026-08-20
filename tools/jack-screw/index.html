@@ -313,6 +313,58 @@
         .screw-svg .centerline { stroke: var(--text-light); stroke-width: 1; stroke-dasharray: 8 3 2 3; }
 
         .compare-table td.win { color: var(--success-color); font-weight: 700; }
+
+        /* Detail ladder. Same container as the repo's expert-mode-bar, but with
+           three stops instead of a toggle, because each step buys a different
+           kind of answer rather than just "more fields". */
+        .detail-bar { padding: 10px 12px; background: var(--primary-light); border: 1px solid var(--border-color);
+            border-radius: var(--border-radius); margin-bottom: 16px; }
+        .detail-bar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+            margin-bottom: 8px; }
+        .detail-bar-label { font-size: 0.9rem; font-weight: 600; color: var(--text-color); }
+        .detail-bar-step { font-size: 0.75rem; color: var(--text-light); font-weight: 600; }
+        .detail-steps { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-color);
+            border-radius: 6px; overflow: hidden; background: var(--bg-card); }
+        .detail-steps button { border: 0; background: transparent; color: var(--text-light); cursor: pointer;
+            padding: 7px 4px; font-size: 0.82rem; font-weight: 600; font-family: inherit;
+            border-right: 1px solid var(--border-color); transition: background-color 0.15s ease; }
+        .detail-steps button:last-child { border-right: 0; }
+        .detail-steps button:hover { background: var(--highlight-bg); color: var(--text-color); }
+        .detail-steps button.active { background: var(--primary-color); color: var(--bg-card); }
+        body[data-theme="dark"] .detail-steps button.active { color: #0b0d12; }
+        @media (prefers-color-scheme: dark) { body[data-theme="system"] .detail-steps button.active { color: #0b0d12; } }
+        .detail-note { font-size: 0.79rem; color: var(--text-light); margin-top: 8px; line-height: 1.45; }
+
+        /* Inputs appear as the ladder is climbed. */
+        [data-level="2"], [data-level="3"] { display: none; }
+        body[data-detail="2"] [data-level="2"] { display: block; }
+        body[data-detail="3"] [data-level="2"], body[data-detail="3"] [data-level="3"] { display: block; }
+        /* Thread numbers are redundant at Quick while a standard size is picked. */
+        body[data-detail="1"] .thread-detail { display: none; }
+        body[data-detail="1"].custom-thread .thread-detail { display: block; }
+
+        .field-flash { animation: field-flash 1.6s ease-out; }
+        @keyframes field-flash {
+            0%, 40% { background-color: var(--callout-warning-bg); }
+            100% { background-color: transparent; }
+        }
+
+        /* What the current answer rests on. */
+        .assume { border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-color);
+            padding: 12px 14px; margin-top: 18px; }
+        .assume h4 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-light); margin: 0 0 8px; }
+        .assume ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; }
+        .assume li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+            font-size: 0.84rem; color: var(--text-color); }
+        .assume .a-what { color: var(--text-light); }
+        .assume .a-what b { color: var(--text-color); font-weight: 600; }
+        .assume button { border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-color);
+            border-radius: 5px; padding: 3px 9px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+            font-family: inherit; white-space: nowrap; }
+        .assume button:hover { background: var(--highlight-bg); }
+        .assume .a-none { font-size: 0.84rem; color: var(--text-light); }
+        .coverage { font-size: 0.84rem; color: var(--text-light); margin: 10px 0 0; }
     </style>
 </head>
 <body data-theme="system">
@@ -373,16 +425,6 @@
                         <button type="button" data-autocalc="off">Off</button>
                     </div>
                 </div>
-                <div class="setting-row">
-                    <div>
-                        <div class="setting-label">Detail level</div>
-                        <div class="setting-help">Expert adds stress, buckling and speed inputs</div>
-                    </div>
-                    <div class="segmented" role="group" aria-label="Detail level">
-                        <button type="button" data-expert="off">Basic</button>
-                        <button type="button" data-expert="on">Expert</button>
-                    </div>
-                </div>
             </div>
         </div>
         <div class="settings-footer">
@@ -396,8 +438,9 @@
             Work out what a screw jack needs to lift a load: the torque to raise it, how much of that torque
             is lost to friction, and whether the screw holds the load when you let go of the handle. Works with
             Acme and trapezoidal power screws and with plain threaded rod, so you can size a jack built from
-            hardware. Expert mode adds the checks that decide whether the design survives: nut bearing pressure,
-            screw body stress, column buckling, and whirl speed.
+            hardware. Start with a load and a size for a rough answer in two fields, then climb the detail
+            ladder as far as the job warrants: the design step adds nut wear, screw body stress and column
+            buckling, and the detailed step adds materials, speed limits and a ball screw comparison.
         </p>
 
         <details class="purpose-section">
@@ -408,7 +451,27 @@
         <div class="tool-layout">
             <section class="tool-inputs card">
                 <h2>Screw</h2>
+
+                <div class="detail-bar">
+                    <div class="detail-bar-head">
+                        <span class="detail-bar-label">Level of detail</span>
+                        <span class="detail-bar-step" id="detail-step-label">Step 1 of 3</span>
+                    </div>
+                    <div class="detail-steps" role="group" aria-label="Level of detail">
+                        <button type="button" data-detail="1">Quick</button>
+                        <button type="button" data-detail="2">Design</button>
+                        <button type="button" data-detail="3">Detailed</button>
+                    </div>
+                    <p class="detail-note" id="detail-note"></p>
+                </div>
+
                 <form id="calc-form" onsubmit="return false;">
+                    <select id="detail_level" hidden>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                    </select>
+
                     <div class="input-group">
                         <label for="load_n">Axial load<span class="tooltip-trigger" data-key="load_n" data-tooltip="Axial load the screw raises or holds.">?</span></label>
                         <div class="input-unit">
@@ -424,13 +487,13 @@
                         <div class="hint" id="preset-hint"></div>
                     </div>
 
-                    <div class="input-group">
+                    <div class="input-group thread-detail">
                         <label for="thread_form">Thread form<span class="tooltip-trigger" data-key="thread_form" data-tooltip="Thread profile.">?</span></label>
                         <select id="thread_form"></select>
                         <div class="hint" id="form-hint"></div>
                     </div>
 
-                    <div class="result-grid" style="gap:12px;">
+                    <div class="result-grid thread-detail" style="gap:12px;">
                         <div class="input-group">
                             <label for="nominal_diameter_mm">Nominal diameter<span class="tooltip-trigger" data-key="nominal_diameter_mm" data-tooltip="Major (outside) diameter of the thread.">?</span></label>
                             <div class="input-unit">
@@ -447,21 +510,22 @@
                         </div>
                     </div>
 
-                    <div class="input-group">
+                    <div class="input-group thread-detail">
                         <label for="starts">Thread starts<span class="tooltip-trigger" data-key="starts" data-tooltip="Number of thread starts. More starts means faster travel and lower torque per unit lift, but the screw stops being self-locking.">?</span></label>
                         <input type="number" id="starts" value="1" min="1" step="1">
                         <div class="hint" id="lead-hint"></div>
                     </div>
 
-                    <div class="input-divider"></div>
+                    <div class="input-divider" data-level="2"></div>
+                    <div class="section-title" data-level="2">Friction and drive</div>
 
-                    <div class="input-group">
+                    <div class="input-group" data-level="2">
                         <label for="friction_preset">Friction pair<span class="tooltip-trigger" data-tooltip="Starting friction coefficients for the screw and nut material pair. Sliding friction is the largest uncertainty in a power screw, so treat these as a band to sweep rather than a single answer.">?</span></label>
                         <select id="friction_preset"></select>
                         <div class="hint" id="friction-hint"></div>
                     </div>
 
-                    <div class="result-grid" style="gap:12px;">
+                    <div class="result-grid" data-level="2" style="gap:12px;">
                         <div class="input-group">
                             <label for="thread_friction">Thread friction<span class="tooltip-trigger" data-key="thread_friction" data-tooltip="Sliding friction coefficient on the thread flank.">?</span></label>
                             <input type="number" id="thread_friction" value="0.14" min="0" step="0.01">
@@ -472,7 +536,7 @@
                         </div>
                     </div>
 
-                    <div class="input-group">
+                    <div class="input-group" data-level="2">
                         <label for="collar_diameter_mm">Thrust collar diameter<span class="tooltip-trigger" data-key="collar_diameter_mm" data-tooltip="Mean rubbing diameter of the thrust collar.">?</span></label>
                         <div class="input-unit">
                             <input type="number" id="collar_diameter_mm" value="45" min="0" step="any">
@@ -481,7 +545,7 @@
                         <div class="hint">Set collar friction to 0 if the thrust load is carried on a rolling bearing.</div>
                     </div>
 
-                    <div class="input-group">
+                    <div class="input-group" data-level="2">
                         <label for="lever_arm_mm">Hand lever radius<span class="tooltip-trigger" data-key="lever_arm_mm" data-tooltip="Radius at which the operator pushes on a bar or handwheel. Zero skips the operator force output.">?</span></label>
                         <div class="input-unit">
                             <input type="number" id="lever_arm_mm" value="0" min="0" step="any">
@@ -490,69 +554,68 @@
                         <div class="hint">Zero if the screw is motor driven.</div>
                     </div>
 
-                    <div class="expert-only">
-                        <div class="input-divider"></div>
-                        <div class="section-title">Nut and materials</div>
+                    <div class="input-divider" data-level="2"></div>
+                    <div class="section-title" data-level="2">Nut and column</div>
 
-                        <div class="input-group">
-                            <label for="nut_engagement_length_mm">Nut engagement length<span class="tooltip-trigger" data-key="nut_engagement_length_mm" data-tooltip="Length of nut in thread contact. Zero skips the thread checks.">?</span></label>
-                            <div class="input-unit">
-                                <input type="number" id="nut_engagement_length_mm" value="48" min="0" step="any">
-                                <span class="unit-suffix">mm</span>
-                            </div>
-                            <div class="hint" id="engagement-hint"></div>
+                    <div class="input-group" data-level="2">
+                        <label for="nut_engagement_length_mm">Nut engagement length<span class="tooltip-trigger" data-key="nut_engagement_length_mm" data-tooltip="Length of nut in thread contact. Zero skips the thread checks.">?</span></label>
+                        <div class="input-unit">
+                            <input type="number" id="nut_engagement_length_mm" value="48" min="0" step="any">
+                            <span class="unit-suffix">mm</span>
                         </div>
+                        <div class="hint" id="engagement-hint"></div>
+                    </div>
 
-                        <div class="input-group">
-                            <label for="nut_material">Nut material<span class="tooltip-trigger" data-key="nut_material" data-tooltip="Sets the allowable bearing pressure and the PV limit.">?</span></label>
-                            <select id="nut_material"></select>
-                            <div class="hint" id="nut-hint"></div>
+                    <div class="input-group" data-level="2">
+                        <label for="unsupported_length_mm">Unsupported length<span class="tooltip-trigger" data-key="unsupported_length_mm" data-tooltip="Free column length of the screw. Zero skips buckling and whirl.">?</span></label>
+                        <div class="input-unit">
+                            <input type="number" id="unsupported_length_mm" value="400" min="0" step="any">
+                            <span class="unit-suffix">mm</span>
                         </div>
+                        <div class="hint">Measure at full extension, which is the worst case.</div>
+                    </div>
 
-                        <div class="input-group">
-                            <label for="screw_material">Screw material<span class="tooltip-trigger" data-key="screw_material" data-tooltip="Sets modulus, yield strength and density.">?</span></label>
-                            <select id="screw_material"></select>
+                    <div class="input-group" data-level="2">
+                        <label for="end_fixity">End fixity<span class="tooltip-trigger" data-key="end_fixity" data-tooltip="How the screw ends are held.">?</span></label>
+                        <select id="end_fixity"></select>
+                        <div class="hint" id="fixity-hint"></div>
+                    </div>
+
+                    <div class="input-divider" data-level="3"></div>
+                    <div class="section-title" data-level="3">Materials</div>
+
+                    <div class="input-group" data-level="3">
+                        <label for="nut_material">Nut material<span class="tooltip-trigger" data-key="nut_material" data-tooltip="Sets the allowable bearing pressure and the PV limit.">?</span></label>
+                        <select id="nut_material"></select>
+                        <div class="hint" id="nut-hint"></div>
+                    </div>
+
+                    <div class="input-group" data-level="3">
+                        <label for="screw_material">Screw material<span class="tooltip-trigger" data-key="screw_material" data-tooltip="Sets modulus, yield strength and density.">?</span></label>
+                        <select id="screw_material"></select>
+                        <div class="hint" id="screw-hint"></div>
+                    </div>
+
+                    <div class="input-divider" data-level="3"></div>
+                    <div class="section-title" data-level="3">Speed and comparison</div>
+
+                    <div class="input-group" data-level="3">
+                        <label for="rotational_speed_rpm">Screw speed<span class="tooltip-trigger" data-key="rotational_speed_rpm" data-tooltip="Screw speed in service. Zero skips speed, power and PV output.">?</span></label>
+                        <div class="input-unit">
+                            <input type="number" id="rotational_speed_rpm" value="0" min="0" step="any">
+                            <span class="unit-suffix">rpm</span>
                         </div>
+                        <div class="hint">Zero for a hand-cranked jack. Any speed adds the whirl and PV checks.</div>
+                    </div>
 
-                        <div class="input-divider"></div>
-                        <div class="section-title">Column and speed</div>
-
+                    <div class="result-grid" data-level="3" style="gap:12px;">
                         <div class="input-group">
-                            <label for="unsupported_length_mm">Unsupported length<span class="tooltip-trigger" data-key="unsupported_length_mm" data-tooltip="Free column length of the screw. Zero skips buckling and whirl.">?</span></label>
-                            <div class="input-unit">
-                                <input type="number" id="unsupported_length_mm" value="400" min="0" step="any">
-                                <span class="unit-suffix">mm</span>
-                            </div>
-                            <div class="hint">Measure at full extension, which is the worst case.</div>
+                            <label for="ball_screw_efficiency">Ball screw efficiency<span class="tooltip-trigger" data-key="ball_screw_efficiency" data-tooltip="Direct efficiency assumed for the ball screw comparison, typically 0.85 to 0.95.">?</span></label>
+                            <input type="number" id="ball_screw_efficiency" value="0.90" min="0.01" max="0.99" step="0.01">
                         </div>
-
                         <div class="input-group">
-                            <label for="end_fixity">End fixity<span class="tooltip-trigger" data-key="end_fixity" data-tooltip="How the screw ends are held.">?</span></label>
-                            <select id="end_fixity"></select>
-                            <div class="hint" id="fixity-hint"></div>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="rotational_speed_rpm">Screw speed<span class="tooltip-trigger" data-key="rotational_speed_rpm" data-tooltip="Screw speed in service. Zero skips speed, power and PV output.">?</span></label>
-                            <div class="input-unit">
-                                <input type="number" id="rotational_speed_rpm" value="0" min="0" step="any">
-                                <span class="unit-suffix">rpm</span>
-                            </div>
-                            <div class="hint">Zero for a hand-cranked jack.</div>
-                        </div>
-
-                        <div class="input-divider"></div>
-                        <div class="section-title">Comparison and margins</div>
-
-                        <div class="result-grid" style="gap:12px;">
-                            <div class="input-group">
-                                <label for="ball_screw_efficiency">Ball screw efficiency<span class="tooltip-trigger" data-key="ball_screw_efficiency" data-tooltip="Direct efficiency assumed for the ball screw comparison, typically 0.85 to 0.95.">?</span></label>
-                                <input type="number" id="ball_screw_efficiency" value="0.90" min="0.01" max="0.99" step="0.01">
-                            </div>
-                            <div class="input-group">
-                                <label for="design_factor">Design factor<span class="tooltip-trigger" data-key="design_factor" data-tooltip="Target safety factor used to grade the returned margins.">?</span></label>
-                                <input type="number" id="design_factor" value="2" min="1" step="0.1">
-                            </div>
+                            <label for="design_factor">Design factor<span class="tooltip-trigger" data-key="design_factor" data-tooltip="Target safety factor used to grade the returned margins.">?</span></label>
+                            <input type="number" id="design_factor" value="2" min="1" step="0.1">
                         </div>
                     </div>
 
@@ -806,11 +869,11 @@
         let pyodide, pyUtils, pyToolModule, toolDocumentation = {};
         let lastResults = null;
         let tables = null;   // Data tables mirrored out of the Python module.
-        const DEFAULT_SETTINGS = { theme: 'system', sigfigs: 4, autoCalc: false, expert: false };
+        const DEFAULT_SETTINGS = { theme: 'system', sigfigs: 4, autoCalc: false, detail: 1 };
         let settings = { ...DEFAULT_SETTINGS };
 
         // ---- Settings persistence ----
-        const STORE = 'jack-screw-settings-v1';
+        const STORE = 'jack-screw-settings-v2';
         function loadSettings() {
             try { Object.assign(settings, JSON.parse(localStorage.getItem(STORE)) || {}); } catch (e) {}
         }
@@ -823,15 +886,72 @@
                 b.classList.toggle('active', parseInt(b.dataset.sigfigs, 10) === settings.sigfigs));
             document.querySelectorAll('.settings-panel [data-autocalc]').forEach(b =>
                 b.classList.toggle('active', (b.dataset.autocalc === 'on') === settings.autoCalc));
-            document.querySelectorAll('.settings-panel [data-expert]').forEach(b =>
-                b.classList.toggle('active', (b.dataset.expert === 'on') === settings.expert));
             const button = document.getElementById('calc-btn');
             if (button) button.textContent = settings.autoCalc ? 'Recalculate now' : 'Calculate';
         }
-        function applyExpert() {
-            document.querySelectorAll('.expert-only').forEach(el => {
-                el.style.display = settings.expert ? '' : 'none';
-            });
+        // What each step of the ladder buys. The point is not "more fields" but
+        // that each step adds a different class of answer, so the note says what
+        // is covered and what is still unchecked.
+        const DETAIL_LEVELS = {
+            1: {
+                name: 'Quick',
+                note: 'Load and screw size only. Gives torque, efficiency and whether it holds the '
+                    + 'load. Friction and the thrust collar are assumed, and nothing has been checked '
+                    + 'for strength, wear or buckling.',
+                coverage: 'Torque and holding only. No strength, wear or buckling check has been run.',
+            },
+            2: {
+                name: 'Design',
+                note: 'Adds the real installation: friction pair, thrust collar, drive, nut length and '
+                    + 'column length. Brings in nut wear, screw body stress and buckling, which is the '
+                    + 'set that decides whether the jack survives.',
+                coverage: 'Nut wear, screw body stress and column buckling checked. Speed limits not checked.',
+            },
+            3: {
+                name: 'Detailed',
+                note: 'Adds materials, running speed and the design factor, plus the ball screw '
+                    + 'comparison. Everything the tool models is now under your control.',
+                coverage: 'Every check the tool has is running against values you set.',
+            },
+        };
+
+        function detailLevel() { return settings.detail; }
+
+        function applyDetail() {
+            const level = detailLevel();
+            document.body.setAttribute('data-detail', String(level));
+            document.querySelectorAll('.detail-steps [data-detail]').forEach(b =>
+                b.classList.toggle('active', parseInt(b.dataset.detail, 10) === level));
+            const label = document.getElementById('detail-step-label');
+            if (label) label.textContent = `Step ${level} of 3`;
+            const note = document.getElementById('detail-note');
+            if (note) note.textContent = DETAIL_LEVELS[level].note;
+            syncCustomThreadVisibility();
+        }
+
+        // At Quick a standard size already fixes the thread numbers, so showing
+        // them is noise. A custom thread has nothing else to go on.
+        function syncCustomThreadVisibility() {
+            const custom = document.getElementById('screw_preset').value === 'custom';
+            document.body.classList.toggle('custom-thread', custom);
+        }
+
+        function setDetail(level, recalc) {
+            settings.detail = Math.min(3, Math.max(1, level));
+            const carrier = document.getElementById('detail_level');
+            if (carrier) carrier.value = String(settings.detail);
+            applyDetail();
+            saveSettings();
+            if (recalc !== false) calculate();
+        }
+
+        // A shared link must reproduce what the sharer saw, so on any link that
+        // carries state the level comes from the URL and not from whatever this
+        // browser happened to be using last.
+        function adoptLevelFromUrl() {
+            if (!window.location.search) return;
+            const fromUrl = parseInt(new URLSearchParams(window.location.search).get('detail_level'), 10);
+            setDetail(Number.isFinite(fromUrl) ? fromUrl : 1, false);
         }
         function applyTheme(theme) {
             settings.theme = theme;
@@ -841,7 +961,11 @@
         }
         loadSettings();
         applyTheme(settings.theme);
-        applyExpert();
+        applyDetail();
+        {
+            const carrier = document.getElementById('detail_level');
+            if (carrier) carrier.value = String(settings.detail);
+        }
         syncSettingButtons();
 
         const panel = document.getElementById('settings-panel');
@@ -857,11 +981,10 @@
             if (t.dataset.theme) { applyTheme(t.dataset.theme); render(); drawPlots(); }
             else if (t.dataset.sigfigs) { settings.sigfigs = parseInt(t.dataset.sigfigs, 10); syncSettingButtons(); saveSettings(); render(); }
             else if (t.dataset.autocalc) { settings.autoCalc = t.dataset.autocalc === 'on'; syncSettingButtons(); saveSettings(); if (settings.autoCalc) calculate(); }
-            else if (t.dataset.expert) { settings.expert = t.dataset.expert === 'on'; applyExpert(); syncSettingButtons(); saveSettings(); calculate(); }
         });
         document.getElementById('settings-reset').addEventListener('click', () => {
             settings = { ...DEFAULT_SETTINGS };
-            applyTheme(settings.theme); applyExpert(); syncSettingButtons(); saveSettings(); render();
+            applyTheme(settings.theme); applyDetail(); syncSettingButtons(); saveSettings(); render();
         });
 
         // ---- Tabs ----
@@ -958,7 +1081,7 @@
             fillSelect('screw_material', Object.entries(tables.SCREW_MATERIALS).map(([k, v]) => [k, v.label]), 'steel_1045');
             fillSelect('end_fixity', Object.entries(tables.END_FIXITIES).map(([k, v]) => [k, v.label]), 'fixed_free');
             fillGroupedSelect('screw_preset', [['custom', 'Custom thread']],
-                tables.SCREW_PRESETS, 'custom');
+                tables.SCREW_PRESETS, 'tr30x6');
         }
 
         function currentPreset() {
@@ -989,6 +1112,10 @@
             if (!preset) {
                 hint.textContent = 'Minor diameter is derived from the thread form, which runs about 0.1 mm '
                     + 'optimistic on fine pitches. Pick a standard size for a table value.';
+                // A custom thread has no size to fall back on, so the thread
+                // numbers have to be reachable even at Quick.
+                syncCustomThreadVisibility();
+                syncHints();
                 return;
             }
             document.getElementById('nominal_diameter_mm').value = preset.nominal_diameter_mm;
@@ -1016,6 +1143,7 @@
                     + ' flank pressure comes out high.';
             }
             hint.textContent = text;
+            syncCustomThreadVisibility();
             syncHints();
         }
 
@@ -1063,6 +1191,13 @@
                 fixityHint.textContent = `${fixity.note} Buckling factor K = ${fixity.k_buckling}.`;
             }
 
+            const screwMat = tables && tables.SCREW_MATERIALS[document.getElementById('screw_material').value];
+            const screwHint = document.getElementById('screw-hint');
+            if (screwHint && screwMat) {
+                screwHint.textContent = `${screwMat.yield_mpa} MPa yield, ${screwMat.modulus_gpa} GPa modulus. `
+                    + 'Sets both the buckling load and the body stress margin.';
+            }
+
             const nut = tables && tables.NUT_MATERIALS[document.getElementById('nut_material').value];
             const nutHint = document.getElementById('nut-hint');
             if (nutHint && nut) {
@@ -1102,9 +1237,17 @@
                 unsupported_length_mm: num('unsupported_length_mm'),
                 rotational_speed_rpm: num('rotational_speed_rpm'),
             };
-            if (!settings.expert) {
+            // A visible field is the user's responsibility. A hidden one is either
+            // declared as an assumption or its check is skipped: reporting a
+            // buckling load from an invented column length would be worse than
+            // reporting nothing.
+            const level = detailLevel();
+            if (level < 2) {
                 kwargs.nut_engagement_length_mm = 0;
                 kwargs.unsupported_length_mm = 0;
+                kwargs.lever_arm_mm = 0;
+            }
+            if (level < 3) {
                 kwargs.rotational_speed_rpm = 0;
             }
             // A standard size carries its published minor diameter, which the
@@ -1165,7 +1308,9 @@
                 el.addEventListener('input', () => { syncHints(); autoCalculate(); });
                 el.addEventListener('change', () => { syncHints(); autoCalculate(); });
             });
-            document.getElementById('calc-btn').addEventListener('click', calculate);
+            document.querySelectorAll('.detail-steps [data-detail]').forEach(btn =>
+            btn.addEventListener('click', () => setDetail(parseInt(btn.dataset.detail, 10))));
+        document.getElementById('calc-btn').addEventListener('click', calculate);
             document.getElementById('copy-btn').addEventListener('click', copyResults);
             document.getElementById('csv-btn').addEventListener('click', downloadCsv);
         }
@@ -1215,7 +1360,7 @@
                 document.getElementById('readme-content').innerHTML = `${descHtml}
                     <ul>
                         <li>Start with the load, a screw size and a friction pair. That gives torque, efficiency and self-locking.</li>
-                        <li>Turn on Expert in Tool Settings for nut bearing pressure, screw body stress, buckling and whirl.</li>
+                        <li>Three levels of detail. Quick answers torque and holding from a load and a size. Design adds the nut and column, which is what decides whether it survives. Detailed adds materials, speed and the ball screw comparison.</li>
                         <li>Self-locking is judged on the thread alone. Collar friction is not credited, because it can be engineered away.</li>
                         <li>Standard sizes carry published minor diameters; custom threads derive an approximate one.</li>
                         <li>Threaded rod works as a jack screw. Pick a metric coarse or UNC size and the tool fills in the standard hex nut and warns where a fastener thread differs from a power thread.</li>
@@ -1228,6 +1373,7 @@
             wireInputs();
             // Inputs exist only now, so replay any shared link over them.
             if (window.UrlState && window.UrlState.refresh) window.UrlState.refresh();
+            adoptLevelFromUrl();
             syncHints();
             document.getElementById('loading-overlay').classList.add('hidden');
             calculate();
@@ -1310,12 +1456,7 @@
 
             html += derivationTorque(r);
 
-            if (!settings.expert) {
-                html += `<p class="notes">Torque, efficiency and holding are settled. Whether the screw
-                    <em>survives</em> is not: nut bearing pressure, screw body stress, column buckling and
-                    whirl speed all still have to be checked. Turn on Expert in Tool Settings to enter the
-                    nut length and column length those need.</p>`;
-            }
+
 
             // --- Thread and body
             if (th.evaluated) {
@@ -1384,8 +1525,107 @@
                 back-drives at ${pct(bs.back_drive_efficiency)}. That trade is the whole decision: a jack that
                 holds itself, or a jack that moves cheaply and is held by a brake.</p>`;
 
+            html += assumptionsPanel();
+
             document.getElementById('results-body').innerHTML = html;
+            document.querySelectorAll('#results-body [data-refine]').forEach(btn =>
+                btn.addEventListener('click', () => revealInput(btn.dataset.refine)));
             typesetMath();
+        }
+
+        // --- What the answer currently rests on ---------------------------------
+        //
+        // The ladder only earns its keep if the user can see what each step would
+        // buy. This lists the values standing in for real ones at the current
+        // level, and what has not been checked at all, each with a way straight
+        // to the field that fixes it.
+        function assumptionRows() {
+            const level = detailLevel();
+            const rows = [];
+            const label = (id) => {
+                const el = document.getElementById(id);
+                const opt = el.options ? el.options[el.selectedIndex] : null;
+                return opt ? opt.text : el.value;
+            };
+
+            if (level < 2) {
+                rows.push({
+                    what: `Friction: <b>${esc(label('friction_preset'))}</b>, `
+                        + `&mu; = ${fmt(num('thread_friction'), 2)} thread / `
+                        + `${fmt(num('collar_friction'), 2)} collar`,
+                    field: 'friction_preset',
+                });
+                rows.push({
+                    what: `Thrust: <b>plain collar</b>, ${fmt(num('collar_diameter_mm'), 0)} mm mean diameter`,
+                    field: 'collar_diameter_mm',
+                });
+                rows.push({
+                    what: 'Not checked: <b>nut wear, screw body stress, buckling, speed limits</b>',
+                    field: 'nut_engagement_length_mm',
+                });
+                return rows;
+            } else {
+                rows.push({
+                    what: `Screw: <b>${esc(label('screw_material'))}</b>, `
+                        + `${fmt(lastResults.materials.screw_yield_mpa, 0)} MPa yield`,
+                    field: 'screw_material',
+                });
+                rows.push({
+                    what: `Nut: <b>${esc(label('nut_material'))}</b>, `
+                        + `${fmt(lastResults.materials.nut_allowable_bearing_mpa, 0)} MPa allowable`,
+                    field: 'nut_material',
+                });
+            }
+            if (level < 3) {
+                // The whirl speed itself is already reported at this level. What
+                // is missing is a running speed to check it against.
+                rows.push({
+                    what: 'No <b>running speed</b> set, so the whirl margin and nut PV go unchecked',
+                    field: 'rotational_speed_rpm',
+                });
+            }
+            return level < 3 ? rows : [];
+        }
+
+        function assumptionsPanel() {
+            const level = detailLevel();
+            const rows = assumptionRows();
+            const coverage = `<p class="coverage">${esc(DETAIL_LEVELS[level].coverage)}</p>`;
+            if (!rows.length) {
+                return `<div class="assume"><h4>Assumptions in play</h4>
+                    <p class="a-none">Nothing is being assumed. Every value the model uses is one you set.</p>
+                    ${coverage}</div>`;
+            }
+            return `<div class="assume">
+                <h4>Assumptions in play</h4>
+                <ul>${rows.map(row => `<li>
+                        <span class="a-what">${row.what}</span>
+                        <button type="button" data-refine="${esc(row.field)}">Set it</button>
+                    </li>`).join('')}</ul>
+                ${coverage}
+            </div>`;
+        }
+
+        // Raise the ladder far enough for the field to exist, then take the user
+        // to it. Jumping the level without showing why would be disorienting.
+        function levelOf(id) {
+            const el = document.getElementById(id);
+            const section = el && el.closest('[data-level]');
+            return section ? parseInt(section.dataset.level, 10) : 1;
+        }
+
+        function revealInput(id) {
+            const needed = levelOf(id);
+            if (detailLevel() < needed) setDetail(needed, false);
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.focus({ preventScroll: true });
+            const group = el.closest('.input-group') || el;
+            group.classList.remove('field-flash');
+            void group.offsetWidth;   // restart the animation
+            group.classList.add('field-flash');
+            calculate();
         }
 
         // ---- Derivations ----
