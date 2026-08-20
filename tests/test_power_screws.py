@@ -6,6 +6,7 @@ import pytest
 
 from pycalcs.power_screws import (
     END_FIXITIES,
+    SCREW_MATERIALS,
     SCREW_PRESETS,
     THREAD_FORMS,
     analyze_jack_screw,
@@ -423,16 +424,220 @@ def test_preset_minor_diameters_sit_below_the_no_clearance_basic():
 
 
 def test_preset_minor_diameters_match_their_standard_formula():
-    """Tr uses d - p - 2*ac; Acme uses d - p - 0.020 inch."""
+    """Each family has its own published minor diameter rule.
+
+    ISO 2904 trapezoidal: d - p - 2*ac.
+    ASME B1.5 Acme: d - p - 0.020 inch.
+    ISO/Unified 60 degree: d - 1.226869*p.
+    """
     for preset in SCREW_PRESETS:
         d, p = preset["nominal_diameter_mm"], preset["pitch_mm"]
-        if preset["form"] == "trapezoidal":
+        form = preset["form"]
+        if form == "trapezoidal":
             clearance = 0.25 if p <= 2.0 else (0.5 if p <= 12.0 else 1.0)
             expected = d - p - 2.0 * clearance
+        elif form in ("metric_coarse", "unified"):
+            expected = d - 1.226869 * p
         else:
             expected = d - p - 0.508
         assert preset["minor_diameter_mm"] == pytest.approx(expected, abs=0.01), preset["key"]
 
+
+def test_sixty_degree_preset_pitch_diameters_match_iso_724():
+    """d2 = d - 0.649519*p for both the metric and Unified 60 degree profiles."""
+    checked = 0
+    for preset in SCREW_PRESETS:
+        if preset["form"] not in ("metric_coarse", "unified"):
+            continue
+        expected = preset["nominal_diameter_mm"] - 0.649519 * preset["pitch_mm"]
+        assert preset["mean_diameter_mm"] == pytest.approx(expected, abs=0.01), preset["key"]
+        checked += 1
+    assert checked >= 14
+
+
+def test_published_metric_coarse_table_values():
+    """Spot-check against the ISO 724 table rather than against my own formula."""
+    published = {          # key: (d2, d3)
+        "m10": (9.026, 8.160),
+        "m12": (10.863, 9.853),
+        "m16": (14.701, 13.546),
+        "m20": (18.376, 16.933),
+        "m24": (22.051, 20.319),
+    }
+    by_key = {p["key"]: p for p in SCREW_PRESETS}
+    for key, (d2, d3) in published.items():
+        preset = by_key[key]
+        assert preset["mean_diameter_mm"] == pytest.approx(d2, abs=0.005), key
+        assert preset["minor_diameter_mm"] == pytest.approx(d3, abs=0.005), key
+
+
+def test_published_unc_table_values():
+    """ASME B1.1 basic pitch and minor diameters, converted from inches."""
+    by_key = {p["key"]: p for p in SCREW_PRESETS}
+    # 1/2-13 UNC: pitch dia 0.4500 in, external minor 0.4056 in.
+    half = by_key["unc_12_13"]
+    assert half["mean_diameter_mm"] == pytest.approx(0.4500 * 25.4, abs=0.02)
+    assert half["minor_diameter_mm"] == pytest.approx(0.4056 * 25.4, abs=0.02)
+    # 3/4-10 UNC: pitch dia 0.6850 in, external minor 0.6273 in.
+    threequarter = by_key["unc_34_10"]
+    assert threequarter["mean_diameter_mm"] == pytest.approx(0.6850 * 25.4, abs=0.02)
+    assert threequarter["minor_diameter_mm"] == pytest.approx(0.6273 * 25.4, abs=0.02)
+
+
+def test_every_preset_declares_a_group():
+    for preset in SCREW_PRESETS:
+        assert preset.get("group"), preset["key"]
+
+
+def test_threaded_rod_presets_carry_a_standard_nut_height():
+    for preset in SCREW_PRESETS:
+        if preset["form"] in ("metric_coarse", "unified"):
+            assert preset.get("nut_height_mm", 0) > 0, preset["key"]
+
+
+# --- Fastener threads used as jack screws -----------------------------------
+
+
+def _preset(key):
+    return {p["key"]: p for p in SCREW_PRESETS}[key]
+
+
+def _geometry_from_preset(key, starts=1):
+    preset = _preset(key)
+    return thread_geometry(
+        preset["nominal_diameter_mm"], preset["pitch_mm"], starts, preset["form"],
+        preset["minor_diameter_mm"], preset.get("mean_diameter_mm", 0.0),
+    )
+
+
+def test_sixty_degree_geometry_separates_pitch_offset_from_thread_depth():
+    """The V thread pitch line is 0.6495p down while the flanks overlap 0.5413p.
+
+    Deriving one from the other, as the power-screw forms allow, would put the
+    pitch diameter about 0.27 mm high on an M20 and overstate the torque.
+    """
+    geometry = thread_geometry(20.0, 2.5, 1, "metric_coarse")
+    assert geometry["mean_diameter_mm"] == pytest.approx(18.376, abs=0.005)
+    assert geometry["minor_diameter_mm"] == pytest.approx(16.933, abs=0.005)
+    assert geometry["thread_depth_mm"] == pytest.approx(0.541266 * 2.5, abs=1e-6)
+    # The two factors must not be equal, or this test proves nothing.
+    assert geometry["thread_depth_mm"] != pytest.approx(20.0 - geometry["mean_diameter_mm"])
+
+
+def test_geometry_reports_the_major_diameter():
+    geometry = thread_geometry(20.0, 2.5, 1, "metric_coarse")
+    assert geometry["major_diameter_mm"] == pytest.approx(20.0)
+
+
+def test_nut_shear_uses_the_true_major_diameter():
+    """Nut thread shear acts at the major diameter, not at mean plus depth."""
+    geometry = thread_geometry(20.0, 2.5, 1, "metric_coarse")
+    result = thread_stresses(10000.0, geometry, 18.0, 0.0, "metric_coarse")
+    engaged = 18.0 / 2.5
+    expected = 10000.0 / (math.pi * 20.0 * 0.875 * 2.5 * engaged)
+    assert result["nut_thread_shear_mpa"] == pytest.approx(expected)
+
+
+def test_v_thread_self_locks_more_readily_than_acme():
+    """sec(30) is 1.155 against sec(14.5) at 1.033, so the V flank grips harder."""
+    common = dict(load_n=10000.0, mean_diameter_mm=18.376, lead_mm=2.5, thread_friction=0.10)
+    v_thread = screw_torques(thread_half_angle_deg=30.0, **common)
+    acme = screw_torques(thread_half_angle_deg=14.5, **common)
+    assert v_thread["self_locking_margin"] > acme["self_locking_margin"]
+
+
+def test_v_thread_costs_efficiency_for_that_grip():
+    common = dict(load_n=10000.0, mean_diameter_mm=18.376, lead_mm=2.5, thread_friction=0.10)
+    v_thread = screw_torques(thread_half_angle_deg=30.0, **common)
+    acme = screw_torques(thread_half_angle_deg=14.5, **common)
+    assert v_thread["efficiency"] < acme["efficiency"]
+    assert v_thread["raise_torque_total_nm"] > acme["raise_torque_total_nm"]
+
+
+def test_threaded_rod_jack_is_flagged_as_a_fastener_thread():
+    preset = _preset("m20")
+    result = analyze_jack_screw(
+        load_n=5000.0,
+        nominal_diameter_mm=preset["nominal_diameter_mm"],
+        pitch_mm=preset["pitch_mm"],
+        thread_form=preset["form"],
+        minor_diameter_mm=preset["minor_diameter_mm"],
+        mean_diameter_mm=preset["mean_diameter_mm"],
+        nut_engagement_length_mm=preset["nut_height_mm"],
+        nut_material="steel_hex_nut",
+        screw_material="rod_class_4_6",
+        unsupported_length_mm=300.0,
+    )
+    assert any("fastener thread" in w["message"] for w in result["warnings"])
+    assert result["torque"]["self_locking_thread_only"] is True
+
+
+def test_power_screw_forms_are_not_flagged_as_fasteners():
+    result = analyze_jack_screw(thread_form="acme")
+    assert not any("fastener thread" in w["message"] for w in result["warnings"])
+
+
+def test_standard_hex_nut_is_short_enough_to_warn():
+    """A stock hex nut is about 0.8d, under the 1.0 to 1.5 diameters wanted.
+
+    This is the real weakness of a jack built from hardware, and the tool has
+    to say so rather than passing it silently.
+    """
+    preset = _preset("m20")
+    result = analyze_jack_screw(
+        load_n=5000.0,
+        nominal_diameter_mm=preset["nominal_diameter_mm"],
+        pitch_mm=preset["pitch_mm"],
+        thread_form=preset["form"],
+        minor_diameter_mm=preset["minor_diameter_mm"],
+        mean_diameter_mm=preset["mean_diameter_mm"],
+        nut_engagement_length_mm=preset["nut_height_mm"],
+        nut_material="steel_hex_nut",
+    )
+    assert result["thread"]["engagement_ratio"] < 1.0
+    assert any("engagement is shorter" in w["message"] for w in result["warnings"])
+
+
+def test_coupling_nut_clears_the_engagement_warning():
+    preset = _preset("m20")
+    kwargs = dict(
+        load_n=5000.0,
+        nominal_diameter_mm=preset["nominal_diameter_mm"],
+        pitch_mm=preset["pitch_mm"],
+        thread_form=preset["form"],
+        minor_diameter_mm=preset["minor_diameter_mm"],
+        mean_diameter_mm=preset["mean_diameter_mm"],
+        nut_material="steel_hex_nut",
+    )
+    coupling = analyze_jack_screw(nut_engagement_length_mm=60.0, **kwargs)
+    assert coupling["thread"]["engagement_ratio"] > 1.0
+    assert not any("engagement is shorter" in w["message"] for w in coupling["warnings"])
+    # And it drops the flank pressure, which is the reason to fit one.
+    hex_nut = analyze_jack_screw(nut_engagement_length_mm=preset["nut_height_mm"], **kwargs)
+    assert coupling["thread"]["bearing_pressure_mpa"] < hex_nut["thread"]["bearing_pressure_mpa"]
+
+
+def test_every_preset_still_builds_valid_geometry_including_rod():
+    for preset in SCREW_PRESETS:
+        geometry = _geometry_from_preset(preset["key"])
+        assert 0.0 < geometry["minor_diameter_mm"] < preset["nominal_diameter_mm"]
+        assert geometry["mean_diameter_mm"] < preset["nominal_diameter_mm"]
+        assert geometry["lead_angle_deg"] < 20.0
+
+
+def test_rod_grades_span_the_range_that_matters():
+    """Class 4.6 rod against 10.9 is a factor of four in yield."""
+    soft = SCREW_MATERIALS["rod_class_4_6"]["yield_mpa"]
+    hard = SCREW_MATERIALS["rod_class_10_9"]["yield_mpa"]
+    assert hard / soft > 3.5
+
+
+def test_soft_rod_reports_a_lower_body_factor_than_alloy_screw():
+    kwargs = dict(load_n=30000.0, nominal_diameter_mm=20.0, pitch_mm=2.5,
+                  thread_form="metric_coarse", nut_engagement_length_mm=18.0)
+    soft = analyze_jack_screw(screw_material="rod_class_4_6", **kwargs)
+    hard = analyze_jack_screw(screw_material="rod_class_10_9", **kwargs)
+    assert soft["thread"]["body_safety_factor"] < hard["thread"]["body_safety_factor"]
 
 # --- Tool test-case fixtures ------------------------------------------------
 #

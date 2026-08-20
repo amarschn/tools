@@ -34,6 +34,23 @@ Static self-locking is also not the same as holding under vibration, which lower
 effective friction coefficient. Anything that has to hold a load unattended gets a mechanical
 brake or pawl regardless of what the calculation says.
 
+## Building a jack from threaded rod
+
+The size dropdown carries metric coarse and UNC threaded rod next to the Acme and trapezoidal
+power screws. Rod jacks self-lock easily: the 30 degree flank multiplies friction by
+`sec 30 = 1.155`, and a coarse fastener pitch is a short lead, so both terms of the self-locking
+inequality move the same way. An M20 at a friction coefficient of 0.15 clears it four times over.
+
+The costs are efficiency, around 10 percent, and wear. A sharp V concentrates contact on a narrow
+band and cannot be adjusted as it wears, where a split Acme nut can. The tool flags the thread as
+a fastener thread so this is stated rather than assumed.
+
+Two things worth setting correctly. Ordinary rod is class 4.6 or A307 Grade A, near 240 MPa yield
+and a third of a purpose-made 1045 screw, so the screw material list carries the fastener grades.
+And a standard hex nut is about 0.8 diameters thick, below the 1.0 to 1.5 that stops a nut cocking
+on the screw. Choosing a rod size fills in the standard hex nut thickness and names the coupling
+nut length, which is the usual fix when flank pressure comes out high.
+
 ## Inputs
 
 Load, screw size, thread form and a friction pair are enough for a first answer. Standard

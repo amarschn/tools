@@ -285,6 +285,9 @@
      * Create and inject the share/copy-link button into the page.
      */
     function createShareButton() {
+        // refresh() re-runs init(), so this can be called more than once.
+        if (document.querySelector('.url-state-share-btn')) return;
+
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'url-state-share-btn';
@@ -419,6 +422,9 @@
     function attachListeners() {
         for (var i = 0; i < inputElements.length; i++) {
             (function (el) {
+                // Guard so a re-discovery pass cannot double-bind an element.
+                if (el.dataset.urlStateBound === '1') return;
+                el.dataset.urlStateBound = '1';
                 el.addEventListener('input', scheduleUrlUpdate);
                 el.addEventListener('change', scheduleUrlUpdate);
             })(inputElements[i]);

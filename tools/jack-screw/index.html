@@ -394,9 +394,10 @@
         <h1>Jack Screw Designer</h1>
         <p class="tool-description">
             Work out what a screw jack needs to lift a load: the torque to raise it, how much of that torque
-            is lost to friction, and whether the screw holds the load when you let go of the handle. Expert
-            mode adds the checks that decide whether the design survives: nut bearing pressure, screw body
-            stress, column buckling, and whirl speed.
+            is lost to friction, and whether the screw holds the load when you let go of the handle. Works with
+            Acme and trapezoidal power screws and with plain threaded rod, so you can size a jack built from
+            hardware. Expert mode adds the checks that decide whether the design survives: nut bearing pressure,
+            screw body stress, column buckling, and whirl speed.
         </p>
 
         <details class="purpose-section">
@@ -710,6 +711,36 @@
                         balanced shaft, and yours is none of those.
                     </p>
 
+                    <h3>Building a jack from threaded rod</h3>
+                    <p>
+                        Plenty of working jacks are a length of all-thread and a nut. The size dropdown carries
+                        metric coarse and UNC rod alongside the power-screw threads, with the published pitch and
+                        minor diameters for each.
+                    </p>
+                    <p>
+                        A fastener thread behaves differently from an Acme in three ways that matter here. The
+                        flank half angle is 30&deg; instead of 14.5&deg;, so <span class="sym">sec&thinsp;&alpha;</span>
+                        is 1.155 against 1.033: friction bites about 12 percent harder. The lead is short, because
+                        a coarse pitch on a fastener is a fine pitch by power-screw standards. Both of those push
+                        the same way on equation (5), which is why rod jacks self-lock with room to spare. An M20
+                        at &mu; = 0.15 has a lead angle of 2.5&deg; against a friction angle near 9.8&deg;, a
+                        margin of four.
+                    </p>
+                    <p>
+                        You pay for that grip twice. Efficiency lands near 10 percent, so the crank spends most of
+                        its work heating the nut. And the sharp V concentrates contact on a narrow band with no way
+                        to take up slack as it wears, where a split Acme nut can be adjusted. That is fine for a
+                        hand jack or an occasional adjustment, and poor for anything cycling continuously.
+                    </p>
+                    <p>
+                        Two practical points the tool raises on its own. Ordinary rod is class 4.6 or A307 Grade A,
+                        roughly 240 MPa yield, which is a third of a purpose-made 1045 screw, so pick the grade
+                        honestly rather than assuming the rod is strong. And a standard hex nut is about 0.8
+                        diameters thick, under the 1.0 to 1.5 that keeps a nut from cocking on the screw. A
+                        coupling nut is around three diameters and cuts the flank pressure by the same ratio,
+                        which is usually the cheapest improvement available.
+                    </p>
+
                     <h3>When to reach for a ball screw</h3>
                     <p>
                         A ball screw swaps sliding contact for rolling, which takes efficiency from roughly 20
@@ -900,6 +931,24 @@
                 `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`).join('');
         }
 
+        // Sizes are grouped by standard: 28 flat options is a scroll, four
+        // labelled families is a choice.
+        function fillGroupedSelect(id, leading, presets, selected) {
+            const groups = [];
+            presets.forEach(preset => {
+                let group = groups.find(g => g.name === preset.group);
+                if (!group) { group = { name: preset.group, items: [] }; groups.push(group); }
+                group.items.push(preset);
+            });
+            const option = (value, label) =>
+                `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`;
+            document.getElementById(id).innerHTML =
+                leading.map(([v, l]) => option(v, l)).join('')
+                + groups.map(g => `<optgroup label="${esc(g.name)}">`
+                    + g.items.map(pre => option(pre.key, pre.label)).join('')
+                    + '</optgroup>').join('');
+        }
+
         function populateFromTables() {
             fillSelect('thread_form', Object.entries(tables.THREAD_FORMS).map(([k, v]) => [k, v.label]), 'acme');
             fillSelect('friction_preset',
@@ -908,9 +957,8 @@
             fillSelect('nut_material', Object.entries(tables.NUT_MATERIALS).map(([k, v]) => [k, v.label]), 'bronze');
             fillSelect('screw_material', Object.entries(tables.SCREW_MATERIALS).map(([k, v]) => [k, v.label]), 'steel_1045');
             fillSelect('end_fixity', Object.entries(tables.END_FIXITIES).map(([k, v]) => [k, v.label]), 'fixed_free');
-            fillSelect('screw_preset',
-                [['custom', 'Custom thread']].concat(tables.SCREW_PRESETS.map(p => [p.key, p.label])),
-                'custom');
+            fillGroupedSelect('screw_preset', [['custom', 'Custom thread']],
+                tables.SCREW_PRESETS, 'custom');
         }
 
         function currentPreset() {
@@ -921,9 +969,23 @@
         // A preset owns the four numbers that define the thread. Applying it
         // writes them into the fields so they stay visible and editable, and
         // editing any of them drops back to Custom.
+        // Default materials per family. Picking a threaded rod size and leaving
+        // a bronze nut and alloy screw selected would flatter the design, so
+        // switching family resets these; switching within a family does not.
+        const FAMILY_DEFAULTS = {
+            fastener: { screw: 'rod_class_4_6', nut: 'steel_hex_nut' },
+            power: { screw: 'steel_1045', nut: 'bronze' },
+        };
+
+        function motionClassOf(formKey) {
+            const form = tables && tables.THREAD_FORMS[formKey];
+            return form ? form.motion_class : 'power';
+        }
+
         function applyScrewPreset() {
             const preset = currentPreset();
             const hint = document.getElementById('preset-hint');
+            const previousClass = motionClassOf(document.getElementById('thread_form').value);
             if (!preset) {
                 hint.textContent = 'Minor diameter is derived from the thread form, which runs about 0.1 mm '
                     + 'optimistic on fine pitches. Pick a standard size for a table value.';
@@ -932,7 +994,28 @@
             document.getElementById('nominal_diameter_mm').value = preset.nominal_diameter_mm;
             document.getElementById('pitch_mm').value = preset.pitch_mm;
             document.getElementById('thread_form').value = preset.form;
-            hint.textContent = `Minor diameter ${preset.minor_diameter_mm} mm, from the published table.`;
+
+            const nextClass = motionClassOf(preset.form);
+            if (nextClass !== previousClass) {
+                const defaults = FAMILY_DEFAULTS[nextClass];
+                document.getElementById('screw_material').value = defaults.screw;
+                document.getElementById('nut_material').value = defaults.nut;
+            }
+
+            let text = `Minor diameter ${preset.minor_diameter_mm} mm`;
+            if (preset.mean_diameter_mm) text += `, pitch diameter ${preset.mean_diameter_mm} mm`;
+            text += ', from the published table.';
+
+            // A stock hex nut is the engagement you get if you build this from
+            // hardware, so it is the honest default to start from.
+            if (preset.nut_height_mm) {
+                document.getElementById('nut_engagement_length_mm').value = preset.nut_height_mm;
+                const coupling = Math.round(preset.nominal_diameter_mm * 3);
+                text += ` Nut length set to the ${preset.nut_height_mm} mm standard hex nut. `
+                    + `A coupling nut is roughly ${coupling} mm and is the usual fix if the`
+                    + ' flank pressure comes out high.';
+            }
+            hint.textContent = text;
             syncHints();
         }
 
@@ -1031,6 +1114,7 @@
                 && Math.abs(kwargs.nominal_diameter_mm - preset.nominal_diameter_mm) < 1e-6
                 && Math.abs(kwargs.pitch_mm - preset.pitch_mm) < 1e-6) {
                 kwargs.minor_diameter_mm = preset.minor_diameter_mm;
+                if (preset.mean_diameter_mm) kwargs.mean_diameter_mm = preset.mean_diameter_mm;
             }
             for (const [key, value] of Object.entries(kwargs)) {
                 if (typeof value === 'number' && !Number.isFinite(value)) {
@@ -1134,6 +1218,7 @@
                         <li>Turn on Expert in Tool Settings for nut bearing pressure, screw body stress, buckling and whirl.</li>
                         <li>Self-locking is judged on the thread alone. Collar friction is not credited, because it can be engineered away.</li>
                         <li>Standard sizes carry published minor diameters; custom threads derive an approximate one.</li>
+                        <li>Threaded rod works as a jack screw. Pick a metric coarse or UNC size and the tool fills in the standard hex nut and warns where a fastener thread differs from a power thread.</li>
                     </ul>`;
             }
 
@@ -1418,7 +1503,7 @@
             const engagement = lastResults.thread.evaluated
                 ? num('nut_engagement_length_mm')
                 : Math.max(3 * pitch, g.mean_diameter_mm);
-            const major = g.mean_diameter_mm + g.thread_depth_mm;
+            const major = g.major_diameter_mm;
 
             const width = 680, height = 300, cy = height / 2 - 8;
             const x0 = 96, nutThickness = 22;
@@ -1436,8 +1521,11 @@
             // Thread teeth, drawn as flank trapezoids standing on the root.
             let teeth = '';
             const count = Math.min(Math.ceil(spanMm / pitch), 48);
-            const crestHalf = pitch * scale * 0.22;
-            const rootHalf = pitch * scale * 0.38;
+            const tanAlpha = Math.tan(g.thread_half_angle_deg * Math.PI / 180);
+            const crestWidth = Math.max(0.5 * pitch - (major - g.mean_diameter_mm) * tanAlpha, 0.04 * pitch);
+            const rootWidth = 0.5 * pitch + (g.mean_diameter_mm - g.minor_diameter_mm) * tanAlpha;
+            const crestHalf = crestWidth * scale / 2;
+            const rootHalf = rootWidth * scale / 2;
             for (let i = 0; i < count; i++) {
                 const x = x0 + (i + 0.5) * pitch * scale;
                 for (const side of [-1, 1]) {
@@ -1489,7 +1577,7 @@
                     <line class="dim" x1="${pitchX1}" y1="${pitchY}" x2="${pitchX2}" y2="${pitchY}"
                           marker-start="url(#arrow)" marker-end="url(#arrow)" />
                     <text x="${(pitchX1 + pitchX2) / 2}" y="${pitchY + 16}" text-anchor="middle">p = ${fmt(pitch, 2)}</text>
-                    <text x="${x0 + spanPx}" y="${pitchY + 16}" text-anchor="end">
+                    <text x="${width - 8}" y="16" text-anchor="end">
                         lead ${fmt(g.lead_mm, 2)} mm, \u03bb = ${fmt(g.lead_angle_deg, 2)}\u00b0</text>
                 </svg>`;
         }

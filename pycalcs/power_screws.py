@@ -36,7 +36,14 @@ import math
 # flank exceeds the axial load.
 #
 # depth_factor multiplies the pitch to give the engaged flank height used for
-# bearing pressure.
+# bearing pressure. pitch_offset_factor multiplies the pitch to give how far
+# the pitch diameter sits below the major diameter. The two are equal for the
+# power-screw forms, where the pitch line falls halfway down a 0.5p thread, but
+# they part company on 60 degree V threads: the flanks overlap by 0.5413p while
+# the pitch diameter sits 0.6495p down.
+#
+# motion_class separates threads cut for moving loads from fastener threads
+# pressed into service as jack screws, which works but carries warnings.
 #
 # clearance_factor multiplies the pitch to give the radial clearance cut below
 # the basic minor diameter. Real standards specify this as a fixed length, not
@@ -55,6 +62,8 @@ THREAD_FORMS = {
         "label": "Square",
         "half_angle_deg": 0.0,
         "depth_factor": 0.5,
+        "pitch_offset_factor": 0.5,
+        "motion_class": "power",
         "clearance_factor": 0.0,
         "shear_width_screw": 0.50,
         "shear_width_nut": 0.50,
@@ -68,6 +77,8 @@ THREAD_FORMS = {
         "label": "Acme (29 deg included)",
         "half_angle_deg": 14.5,
         "depth_factor": 0.5,
+        "pitch_offset_factor": 0.5,
+        "motion_class": "power",
         "clearance_factor": 0.05,
         "shear_width_screw": 0.77,
         "shear_width_nut": 0.63,
@@ -81,6 +92,8 @@ THREAD_FORMS = {
         "label": "Stub Acme (29 deg, shallow)",
         "half_angle_deg": 14.5,
         "depth_factor": 0.3,
+        "pitch_offset_factor": 0.3,
+        "motion_class": "power",
         "clearance_factor": 0.05,
         "shear_width_screw": 0.77,
         "shear_width_nut": 0.63,
@@ -94,6 +107,8 @@ THREAD_FORMS = {
         "label": "Metric trapezoidal Tr (30 deg included)",
         "half_angle_deg": 15.0,
         "depth_factor": 0.5,
+        "pitch_offset_factor": 0.5,
+        "motion_class": "power",
         "clearance_factor": 0.05,
         "shear_width_screw": 0.77,
         "shear_width_nut": 0.63,
@@ -106,6 +121,8 @@ THREAD_FORMS = {
         "label": "Buttress (7 deg load flank)",
         "half_angle_deg": 7.0,
         "depth_factor": 0.5,
+        "pitch_offset_factor": 0.5,
+        "motion_class": "power",
         "clearance_factor": 0.05,
         "shear_width_screw": 0.60,
         "shear_width_nut": 0.60,
@@ -114,6 +131,50 @@ THREAD_FORMS = {
             "approaches square-thread efficiency with a strong root. Only "
             "valid in one load direction: the 45 degree back flank is for "
             "return loads, not the working load."
+        ),
+    },
+    # --- Fastener threads pressed into service as jack screws ---------------
+    #
+    # Both are the ISO 60 degree fundamental triangle, so they share every
+    # proportion. From H = 0.866025p:
+    #   pitch diameter  d2 = d - 0.649519p
+    #   minor diameter  d3 = d - 1.226869p   (external thread)
+    #   flank overlap   H1 = 0.541266p       (5H/8)
+    # The clearance factor below is what is left over once the flank overlap is
+    # taken off the minor diameter: (1.226869 - 2 x 0.541266) / 2 = 0.072169.
+    #
+    # Thread base widths come from the ASME B1.1 shear area formulas, which
+    # reduce to 0.75p at the screw root and 0.875p at the nut root for the
+    # basic profile.
+    "metric_coarse": {
+        "label": "Metric coarse M (60 deg, threaded rod)",
+        "half_angle_deg": 30.0,
+        "depth_factor": 0.541266,
+        "pitch_offset_factor": 0.649519,
+        "motion_class": "fastener",
+        "clearance_factor": 0.072169,
+        "shear_width_screw": 0.75,
+        "shear_width_nut": 0.875,
+        "note": (
+            "Ordinary threaded rod and bolts. Cheap, available everywhere, and "
+            "strongly self-locking because the lead is short and the 30 degree "
+            "flank multiplies friction. That same flank angle is why it is "
+            "inefficient and wears faster than Acme under repeated motion."
+        ),
+    },
+    "unified": {
+        "label": "Unified inch UNC/UNF (60 deg, threaded rod)",
+        "half_angle_deg": 30.0,
+        "depth_factor": 0.541266,
+        "pitch_offset_factor": 0.649519,
+        "motion_class": "fastener",
+        "clearance_factor": 0.072169,
+        "shear_width_screw": 0.75,
+        "shear_width_nut": 0.875,
+        "note": (
+            "The inch equivalent of metric coarse, and dimensionally identical "
+            "once the pitch is converted. Same trade: available and self-locking, "
+            "but not a motion thread."
         ),
     },
 }
@@ -247,6 +308,12 @@ NUT_MATERIALS = {
         "pv_limit_mpa_m_s": 0.14,
         "speed_note": "Continuous running; creeps under sustained load.",
     },
+    "steel_hex_nut": {
+        "label": "Standard steel hex nut (class 8)",
+        "allowable_bearing_mpa": 17.0,
+        "pv_limit_mpa_m_s": 1.05,
+        "speed_note": "Low speed, intermittent duty. Steel on steel galls without grease.",
+    },
 }
 
 # --- Screw materials --------------------------------------------------------
@@ -282,6 +349,34 @@ SCREW_MATERIALS = {
         "yield_mpa": 205.0,
         "density_kg_m3": 8000.0,
     },
+    # Fastener grades, for jacks built from threaded rod. Property class n.m
+    # means tensile 100n MPa and yield m/10 of that, so 4.6 is 400/240 and
+    # 8.8 is 800/640. Plain rod from a hardware shelf is usually 4.6 or the
+    # equivalent A307 Grade A, which is far softer than a purpose-made screw.
+    "rod_class_4_6": {
+        "label": "Threaded rod, low carbon (class 4.6 / A307A)",
+        "modulus_gpa": 205.0,
+        "yield_mpa": 240.0,
+        "density_kg_m3": 7850.0,
+    },
+    "rod_class_8_8": {
+        "label": "Threaded rod or bolt, class 8.8 (SAE grade 5)",
+        "modulus_gpa": 205.0,
+        "yield_mpa": 640.0,
+        "density_kg_m3": 7850.0,
+    },
+    "rod_class_10_9": {
+        "label": "Threaded rod or bolt, class 10.9 (SAE grade 8)",
+        "modulus_gpa": 205.0,
+        "yield_mpa": 940.0,
+        "density_kg_m3": 7850.0,
+    },
+    "rod_stainless_a2_70": {
+        "label": "Stainless threaded rod, A2-70 (304)",
+        "modulus_gpa": 193.0,
+        "yield_mpa": 450.0,
+        "density_kg_m3": 8000.0,
+    },
 }
 
 # --- Preset screw sizes -----------------------------------------------------
@@ -292,34 +387,80 @@ SCREW_MATERIALS = {
 # the column and body stress.
 
 SCREW_PRESETS = [
-    {"key": "tr12x3", "label": "Tr12x3", "form": "trapezoidal",
+    {"key": "tr12x3", "group": "Trapezoidal (ISO 2904)", "label": "Tr12x3", "form": "trapezoidal",
      "nominal_diameter_mm": 12.0, "pitch_mm": 3.0, "minor_diameter_mm": 8.0},
-    {"key": "tr16x4", "label": "Tr16x4", "form": "trapezoidal",
+    {"key": "tr16x4", "group": "Trapezoidal (ISO 2904)", "label": "Tr16x4", "form": "trapezoidal",
      "nominal_diameter_mm": 16.0, "pitch_mm": 4.0, "minor_diameter_mm": 11.0},
-    {"key": "tr20x4", "label": "Tr20x4", "form": "trapezoidal",
+    {"key": "tr20x4", "group": "Trapezoidal (ISO 2904)", "label": "Tr20x4", "form": "trapezoidal",
      "nominal_diameter_mm": 20.0, "pitch_mm": 4.0, "minor_diameter_mm": 15.0},
-    {"key": "tr24x5", "label": "Tr24x5", "form": "trapezoidal",
+    {"key": "tr24x5", "group": "Trapezoidal (ISO 2904)", "label": "Tr24x5", "form": "trapezoidal",
      "nominal_diameter_mm": 24.0, "pitch_mm": 5.0, "minor_diameter_mm": 18.0},
-    {"key": "tr30x6", "label": "Tr30x6", "form": "trapezoidal",
+    {"key": "tr30x6", "group": "Trapezoidal (ISO 2904)", "label": "Tr30x6", "form": "trapezoidal",
      "nominal_diameter_mm": 30.0, "pitch_mm": 6.0, "minor_diameter_mm": 23.0},
-    {"key": "tr40x7", "label": "Tr40x7", "form": "trapezoidal",
+    {"key": "tr40x7", "group": "Trapezoidal (ISO 2904)", "label": "Tr40x7", "form": "trapezoidal",
      "nominal_diameter_mm": 40.0, "pitch_mm": 7.0, "minor_diameter_mm": 32.0},
-    {"key": "tr50x8", "label": "Tr50x8", "form": "trapezoidal",
+    {"key": "tr50x8", "group": "Trapezoidal (ISO 2904)", "label": "Tr50x8", "form": "trapezoidal",
      "nominal_diameter_mm": 50.0, "pitch_mm": 8.0, "minor_diameter_mm": 41.0},
-    {"key": "acme_0500_10", "label": '1/2-10 Acme', "form": "acme",
+    {"key": "acme_0500_10", "group": "Acme (ASME B1.5)", "label": '1/2-10 Acme', "form": "acme",
      "nominal_diameter_mm": 12.700, "pitch_mm": 2.540, "minor_diameter_mm": 9.652},
-    {"key": "acme_0625_8", "label": '5/8-8 Acme', "form": "acme",
+    {"key": "acme_0625_8", "group": "Acme (ASME B1.5)", "label": '5/8-8 Acme', "form": "acme",
      "nominal_diameter_mm": 15.875, "pitch_mm": 3.175, "minor_diameter_mm": 12.192},
-    {"key": "acme_0750_6", "label": '3/4-6 Acme', "form": "acme",
+    {"key": "acme_0750_6", "group": "Acme (ASME B1.5)", "label": '3/4-6 Acme', "form": "acme",
      "nominal_diameter_mm": 19.050, "pitch_mm": 4.233, "minor_diameter_mm": 14.309},
-    {"key": "acme_1000_5", "label": '1-5 Acme', "form": "acme",
+    {"key": "acme_1000_5", "group": "Acme (ASME B1.5)", "label": '1-5 Acme', "form": "acme",
      "nominal_diameter_mm": 25.400, "pitch_mm": 5.080, "minor_diameter_mm": 19.812},
-    {"key": "acme_1250_5", "label": '1 1/4-5 Acme', "form": "acme",
+    {"key": "acme_1250_5", "group": "Acme (ASME B1.5)", "label": '1 1/4-5 Acme', "form": "acme",
      "nominal_diameter_mm": 31.750, "pitch_mm": 5.080, "minor_diameter_mm": 26.162},
-    {"key": "acme_1500_4", "label": '1 1/2-4 Acme', "form": "acme",
+    {"key": "acme_1500_4", "group": "Acme (ASME B1.5)", "label": '1 1/2-4 Acme', "form": "acme",
      "nominal_diameter_mm": 38.100, "pitch_mm": 6.350, "minor_diameter_mm": 31.242},
-    {"key": "acme_2000_4", "label": '2-4 Acme', "form": "acme",
+    {"key": "acme_2000_4", "group": "Acme (ASME B1.5)", "label": '2-4 Acme', "form": "acme",
      "nominal_diameter_mm": 50.800, "pitch_mm": 6.350, "minor_diameter_mm": 43.942},
+
+    # Fastener threads, for jacks built from off-the-shelf rod and nuts.
+    # d2 and d3 are the ISO/Unified 60 degree basic dimensions; nut_height_mm
+    # is the standard hex nut thickness for that size.
+    {"key": "m8", "group": "Metric coarse threaded rod", "label": "M8 x 1.25", "form": "metric_coarse",
+     "nominal_diameter_mm": 8.0, "pitch_mm": 1.25, "minor_diameter_mm": 6.466,
+     "mean_diameter_mm": 7.188, "nut_height_mm": 6.8},
+    {"key": "m10", "group": "Metric coarse threaded rod", "label": "M10 x 1.5", "form": "metric_coarse",
+     "nominal_diameter_mm": 10.0, "pitch_mm": 1.5, "minor_diameter_mm": 8.160,
+     "mean_diameter_mm": 9.026, "nut_height_mm": 8.4},
+    {"key": "m12", "group": "Metric coarse threaded rod", "label": "M12 x 1.75", "form": "metric_coarse",
+     "nominal_diameter_mm": 12.0, "pitch_mm": 1.75, "minor_diameter_mm": 9.853,
+     "mean_diameter_mm": 10.863, "nut_height_mm": 10.8},
+    {"key": "m16", "group": "Metric coarse threaded rod", "label": "M16 x 2.0", "form": "metric_coarse",
+     "nominal_diameter_mm": 16.0, "pitch_mm": 2.0, "minor_diameter_mm": 13.546,
+     "mean_diameter_mm": 14.701, "nut_height_mm": 14.8},
+    {"key": "m20", "group": "Metric coarse threaded rod", "label": "M20 x 2.5", "form": "metric_coarse",
+     "nominal_diameter_mm": 20.0, "pitch_mm": 2.5, "minor_diameter_mm": 16.933,
+     "mean_diameter_mm": 18.376, "nut_height_mm": 18.0},
+    {"key": "m24", "group": "Metric coarse threaded rod", "label": "M24 x 3.0", "form": "metric_coarse",
+     "nominal_diameter_mm": 24.0, "pitch_mm": 3.0, "minor_diameter_mm": 20.319,
+     "mean_diameter_mm": 22.051, "nut_height_mm": 21.5},
+    {"key": "m30", "group": "Metric coarse threaded rod", "label": "M30 x 3.5", "form": "metric_coarse",
+     "nominal_diameter_mm": 30.0, "pitch_mm": 3.5, "minor_diameter_mm": 25.706,
+     "mean_diameter_mm": 27.727, "nut_height_mm": 25.6},
+    {"key": "m36", "group": "Metric coarse threaded rod", "label": "M36 x 4.0", "form": "metric_coarse",
+     "nominal_diameter_mm": 36.0, "pitch_mm": 4.0, "minor_diameter_mm": 31.093,
+     "mean_diameter_mm": 33.402, "nut_height_mm": 31.0},
+    {"key": "unc_38_16", "group": "UNC threaded rod", "label": "3/8-16 UNC", "form": "unified",
+     "nominal_diameter_mm": 9.525, "pitch_mm": 1.5875, "minor_diameter_mm": 7.577,
+     "mean_diameter_mm": 8.494, "nut_height_mm": 8.33},
+    {"key": "unc_12_13", "group": "UNC threaded rod", "label": "1/2-13 UNC", "form": "unified",
+     "nominal_diameter_mm": 12.700, "pitch_mm": 1.9538, "minor_diameter_mm": 10.303,
+     "mean_diameter_mm": 11.431, "nut_height_mm": 11.11},
+    {"key": "unc_58_11", "group": "UNC threaded rod", "label": "5/8-11 UNC", "form": "unified",
+     "nominal_diameter_mm": 15.875, "pitch_mm": 2.3091, "minor_diameter_mm": 13.042,
+     "mean_diameter_mm": 14.375, "nut_height_mm": 13.89},
+    {"key": "unc_34_10", "group": "UNC threaded rod", "label": "3/4-10 UNC", "form": "unified",
+     "nominal_diameter_mm": 19.050, "pitch_mm": 2.5400, "minor_diameter_mm": 15.934,
+     "mean_diameter_mm": 17.400, "nut_height_mm": 16.27},
+    {"key": "unc_78_9", "group": "UNC threaded rod", "label": "7/8-9 UNC", "form": "unified",
+     "nominal_diameter_mm": 22.225, "pitch_mm": 2.8222, "minor_diameter_mm": 18.763,
+     "mean_diameter_mm": 20.392, "nut_height_mm": 19.05},
+    {"key": "unc_1_8", "group": "UNC threaded rod", "label": "1-8 UNC", "form": "unified",
+     "nominal_diameter_mm": 25.400, "pitch_mm": 3.1750, "minor_diameter_mm": 21.505,
+     "mean_diameter_mm": 23.338, "nut_height_mm": 21.83},
 ]
 
 # Fraction of the axial load taken by the first engaged thread. Thread
@@ -413,6 +554,8 @@ def thread_geometry(
         Measured mean (pitch) diameter (mm). Zero computes it from the form.
 
     ---Returns---
+    major_diameter_mm : float
+        Nominal outside diameter of the thread (mm).
     mean_diameter_mm : float
         Diameter at which the flank friction force is taken to act (mm).
     minor_diameter_mm : float
@@ -443,6 +586,7 @@ def thread_geometry(
         raise ValueError("Number of starts must be at least 1.")
 
     depth = form["depth_factor"] * pitch
+    pitch_offset = form["pitch_offset_factor"] * pitch
     if depth * 2.0 >= diameter:
         raise ValueError(
             "Thread depth exceeds the screw radius. Check the pitch against "
@@ -451,7 +595,7 @@ def thread_geometry(
 
     mean_diameter = _nonnegative(mean_diameter_mm, "Mean diameter")
     if mean_diameter == 0.0:
-        mean_diameter = diameter - depth
+        mean_diameter = diameter - pitch_offset
 
     minor_diameter = _nonnegative(minor_diameter_mm, "Minor diameter")
     if minor_diameter == 0.0:
@@ -465,6 +609,7 @@ def thread_geometry(
     lead_angle = math.degrees(math.atan2(lead, math.pi * mean_diameter))
 
     return {
+        "major_diameter_mm": diameter,
         "mean_diameter_mm": mean_diameter,
         "minor_diameter_mm": minor_diameter,
         "lead_mm": lead,
@@ -712,7 +857,7 @@ def thread_stresses(
     pitch = geometry["thread_depth_mm"] / form["depth_factor"]
     mean_diameter = geometry["mean_diameter_mm"]
     minor_diameter = geometry["minor_diameter_mm"]
-    major_diameter = mean_diameter + geometry["thread_depth_mm"]
+    major_diameter = geometry["major_diameter_mm"]
 
     engaged = engagement / pitch
     if engaged < 1.0:
@@ -1140,6 +1285,19 @@ def analyze_jack_screw(
         nonlocal verdict_rank
         warnings.append({"level": level, "message": message})
         verdict_rank = max(verdict_rank, {"info": 0, "caution": 1, "critical": 2}[level])
+
+    # --- Fastener thread used as a motion screw
+    if THREAD_FORMS[thread_form]["motion_class"] == "fastener":
+        flag(
+            "info",
+            "This is a fastener thread, not a motion thread. It works as a jack "
+            "and it self-locks readily, because the short lead and the 30 degree "
+            "flank both push that way. The costs are efficiency, which the flank "
+            "angle lowers further, and wear: the sharp V concentrates contact on "
+            "a narrow band and has no way to take up slack as it wears, where a "
+            "split Acme nut does. Fine for a hand jack or occasional adjustment, "
+            "poor for anything cycling continuously.",
+        )
 
     # --- Self-locking commentary
     if not torque["self_locking_thread_only"]:
