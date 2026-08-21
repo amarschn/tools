@@ -164,8 +164,9 @@ Feedback on 2026-08-21 selected Option L's click-only preview and kept the dense
 
 - A 52px site header carries a small `transparent.tools` wordmark above the page content.
 - `Tool Index` remains the page heading and stays visually stronger than the wordmark.
-- The dot pattern appears only behind the title and search controls. The list uses a solid background.
+- The title and list use plain white backgrounds. A faint dot pattern is limited to the compact search toolbar.
 - Search, discipline, and review status use one compact toolbar on desktop and stack on mobile.
+- Default catalog counts are omitted. A result count appears only while a search or filter is active.
 - Preview remains a deliberate button action. Hover and focus do not open or load a preview.
 - The preview drawer uses the selected tool name as its heading and gives the live page most of the viewport.
 

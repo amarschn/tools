@@ -76,9 +76,7 @@
 
       .index-controls {
         border-bottom: 1px solid var(--line);
-        background-color: var(--paper);
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Ccircle cx='1.2' cy='1.2' r='1.15' fill='%23aeb6bf' fill-opacity='.72'/%3E%3C/svg%3E");
-        background-size: 18px 18px;
+        background: var(--card);
       }
       .controls-inner {
         width: min(calc(100% - 48px), 1280px);
@@ -86,11 +84,7 @@
         padding: 27px 0 30px;
       }
       .title-row {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 24px;
-        margin-bottom: 22px;
+        margin-bottom: 16px;
       }
       h1 {
         margin: 0;
@@ -99,17 +93,17 @@
         letter-spacing: -0.035em;
         line-height: 1.1;
       }
-      .catalog-stats {
-        min-height: 18px;
-        margin: 0;
-        color: var(--muted);
-        font: 0.66rem/1.35 var(--mono);
-      }
       .filter-toolbar {
         display: grid;
         grid-template-columns: minmax(280px, 1fr) minmax(190px, 250px) minmax(170px, 210px);
         gap: 10px;
         align-items: end;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 10px;
+        background-color: var(--card);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Ccircle cx='1.2' cy='1.2' r='1.05' fill='%23bfc5cc' fill-opacity='.55'/%3E%3C/svg%3E");
+        background-size: 18px 18px;
       }
       .toolbar-control { min-width: 0; }
       .toolbar-control label {
@@ -463,7 +457,6 @@
         <div class="controls-inner">
           <div class="title-row">
             <h1 id="page-title">Tool Index</h1>
-            <p class="catalog-stats" id="catalog-stats">Loading catalog...</p>
           </div>
           <div class="filter-toolbar" aria-label="Find a tool">
             <div class="toolbar-control">
@@ -546,7 +539,6 @@
         };
         const grid = document.getElementById("tool-grid");
         const resultLine = document.getElementById("result-line");
-        const statsLine = document.getElementById("catalog-stats");
         const pageShell = document.getElementById("page-shell");
         const backdrop = document.getElementById("preview-backdrop");
         const drawer = document.getElementById("preview-drawer");
@@ -680,7 +672,12 @@
         function renderIndex(filtered, filters) {
           const grouped = HP.groupTools(filtered, filters.category);
           grid.replaceChildren();
-          resultLine.textContent = `${filtered.length} ${filtered.length === 1 ? "tool" : "tools"}`;
+          const filtersAreActive = Boolean(filters.query)
+            || filters.category !== "all"
+            || filters.status !== "all";
+          resultLine.textContent = filtersAreActive
+            ? `${filtered.length} ${filtered.length === 1 ? "tool" : "tools"}`
+            : "";
 
           if (!filtered.length) {
             grid.appendChild(HP.createElement("div", {
@@ -754,16 +751,11 @@
           .then((catalogTools) => {
             tools = catalogTools;
             HP.populateCategorySelect(controls.categorySelect, tools);
-            const catalogStats = HP.stats(tools);
-            statsLine.textContent = `${catalogStats.total} tools · ${catalogStats.groups} disciplines · ${catalogStats.verified} verified`;
             renderPage();
           })
           .catch((error) => {
             console.error(error);
             const isLocalFile = window.location.protocol === "file:";
-            statsLine.textContent = isLocalFile
-              ? "Local server required"
-              : "Catalog unavailable";
             grid.replaceChildren(HP.createElement("div", {
               className: "load-error",
               text: isLocalFile
