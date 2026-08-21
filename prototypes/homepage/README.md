@@ -34,7 +34,7 @@ Opening an HTML file directly will not work because the browser blocks its reque
 
 ### Option M: Compact index with explicit preview
 
-Option M pairs a small `transparent.tools` site header with a `Tool Index` page heading. The title and tool list sit on plain white surfaces. A faint dot pattern is limited to the compact search toolbar. Search, discipline, and review status share one row on desktop and stack on mobile. The page omits default catalog counts, then reports the result count when a filter is active. Each tool row is still the main link. A separate Preview button opens the selected live tool in a large drawer only after a click.
+Option M pairs a small `transparent.tools` site header with a `Tool Index` page heading. The page and search toolbar use plain white surfaces with hairline borders. Search, discipline, and review status share one row on desktop and stack on mobile. The page omits default catalog counts, then reports the result count when a filter is active. Each tool row is still the main link. A separate Preview button opens the selected live tool in a large drawer only after a click.
 
 ## Third batch: quiet list treatments
 
