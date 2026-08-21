@@ -2,14 +2,17 @@
 // Cache-first for local assets, network-first for CDN resources.
 // Designed to be lightweight and safe: failures fall through to the network.
 
-const CACHE_VERSION = 'tt-cache-v1';
+const CACHE_VERSION = 'tt-cache-v2';
 const MAX_CACHE_ENTRIES = 100;
 
-// Assets to pre-cache on install (landing + about pages)
+// Assets to pre-cache on install.
 const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/about.html'
+  './',
+  './index.html',
+  './about.html',
+  './catalog.json',
+  './data/homepage-tool-meta.json',
+  './shared/homepage-index.js'
 ];
 
 // Patterns that should NEVER be cached
@@ -55,7 +58,9 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_VERSION)
+            .filter(
+              (key) => key.startsWith('tt-cache-') && key !== CACHE_VERSION
+            )
             .map((key) => caches.delete(key))
         )
       )
@@ -77,6 +82,13 @@ function isCdnRequest(url) {
 
 function isStaticAsset(url) {
   return /\.(html|css|js|json|png|jpg|svg|woff2?|ico)(\?.*)?$/.test(url);
+}
+
+function isHomepageData(url) {
+  const pathname = new URL(url).pathname;
+  return pathname.endsWith('/catalog.json') ||
+    pathname.endsWith('/data/homepage-tool-meta.json') ||
+    pathname.endsWith('/shared/homepage-index.js');
 }
 
 /**
@@ -153,8 +165,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Local static assets and tool pages: cache-first for speed and offline use
-  if (isStaticAsset(url) || request.mode === 'navigate') {
+  // Navigations and homepage data should update after each release.
+  if (request.mode === 'navigate' || isHomepageData(url)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // Other local static assets remain cache-first for speed and offline use.
+  if (isStaticAsset(url)) {
     event.respondWith(cacheFirst(request));
     return;
   }

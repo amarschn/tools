@@ -213,7 +213,8 @@ invisible copy-link button). Run through every item below for any tool you creat
 - [ ] Registered in `catalog.json` with an intent-first title and a unique
       description.
 - [ ] Ran `python3 scripts/generate_sitemap.py` and
-      `python3 scripts/inject_seo_meta.py` and committed the output.
+      `python3 scripts/inject_seo_meta.py`, refreshed homepage metadata with
+      `python3 scripts/generate_homepage_metadata.py`, and committed the output.
 
 ### Verification (both required)
 - [ ] `python -m pytest` is green.
