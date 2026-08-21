@@ -155,11 +155,12 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
 ### Branching Strategy
 
-* The `main` branch is for the live, deployed version of the tools.
+* The `main` branch is the intended production revision of the tools.
 * All non-trivial development should be done in a separate task branch named `task/<short-name>`.
 * Use one branch per task, not per computer or per AI agent. Continue the same task branch across machines until the work is done.
 * Keep `main` clean and deployable. Merge a task branch back only after the work has been verified.
-* Once the task is complete and tested, submit a pull request to merge it into the `main` branch.
+* Each completed task reaches production through one merge into `main` and one push of `main`. Do not push intermediate work to `main`. Wait for that Netlify deployment to be verified before releasing another task. Follow `docs/RELEASE.md`.
+* Once the task is complete and tested, merge it from the command line. A pull request may be used first when review or a Deploy Preview is useful.
 
 ### Creating a New Tool
 
@@ -222,17 +223,21 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
         ```bash
         python3 scripts/generate_sitemap.py   # rebuilds sitemap.xml from catalog.json
-        python3 scripts/inject_seo_meta.py     # backfills <head> SEO tags into tool pages
+        python3 scripts/inject_seo_meta.py     # refreshes tool SEO tags + homepage fallback links
+        python3 scripts/generate_homepage_metadata.py  # refreshes homepage dates and versions
         ```
 
     * **`scripts/generate_sitemap.py`** regenerates `sitemap.xml` from `catalog.json` (excludes `example_tool*`/prototypes; `human-verified` tools get higher priority). Netlify also runs this on every deploy via `netlify.toml`, but commit the regenerated file so the GitHub Pages legacy host stays current too.
-    * **`scripts/inject_seo_meta.py`** injects `<meta name="description">`, `<link rel="canonical">`, OpenGraph/Twitter cards (pulled from the catalog `title`/`description`), and the `/shared/analytics-autotrack.js` include into each tool's `index.html`. It is **idempotent** — it only adds tags that are missing, so re-running is a safe no-op. Use `--check` for a dry run.
+    * **`scripts/inject_seo_meta.py`** injects `<meta name="description">`, `<link rel="canonical">`, OpenGraph/Twitter cards (pulled from the catalog `title`/`description`), and the `/shared/analytics-autotrack.js` include into each tool's `index.html`. It also refreshes the marker-delimited static tool links in the homepage. It is **idempotent**, so re-running is a safe no-op. Use `--check` for a dry run.
+    * **`scripts/generate_homepage_metadata.py`** records each public tool directory's last Git change and commit count in `data/homepage-tool-meta.json`. It also carries an optional catalog `version` into the homepage. Run it after committing tool changes, amend the task commit with the generated file, and commit the result for GitHub Pages.
     * `shared/analytics-autotrack.js` fires a GA4 `export_action` event when a user clicks an export/download/copy control, giving us a per-tool demand signal. Add `data-track="export"` to opt a control in explicitly, or `data-track="off"` to exclude one.
     * Rationale and the SEO-tool backlog live in `plans/2026-07-12_seo_distribution_wins.md`. transparent.tools' current bottleneck is distribution, not more tools — prioritize discoverability accordingly.
 
 9.  **Run the Tool Release Checklist** in `docs/RELEASE.md` ("Tool Release Checklist") before merging — theme (light + dark), settings panel, input tooltips, legible copy-link, browser smoke test, etc. This is REQUIRED for any new or modified tool; documentation of the standards alone has proven insufficient.
 
-10. **Submit a Pull Request:** Once your tool is ready, submit a pull request to the `main` branch.
+10. **Release the completed task:** Once the tool is ready, merge its task branch
+    into `main` once and push `main` once. A pull request is optional when review
+    or a Netlify Deploy Preview is useful. Follow `docs/RELEASE.md`.
 
 ## Git Workflow
 
@@ -270,8 +275,11 @@ Here is a simple, step-by-step guide for contributing code using Git. These comm
     git push -u origin task/your-task-name
     ```
 
-6.  **Open a Pull Request:**
-    Go to the repository on GitHub. Open a pull request from `task/your-task-name` into `main` once the task is ready for review or merge.
+6.  **Review and Release:**
+    Optionally open a pull request from `task/your-task-name` into `main` for
+    review or a Netlify Deploy Preview. Once the task is verified, use one of
+    the release procedure in `docs/RELEASE.md` so it produces one push to
+    `main` and one Netlify production deployment.
 
 ## Coding Practices and Standards
 
@@ -1094,6 +1102,12 @@ The project is deployed to two hosts simultaneously:
 
 Both deployments are automatic on push to `main`.
 
+Netlify production releases follow a one-task, one-deploy policy. Keep all
+iteration on `task/<short-name>`, merge the verified task branch into local
+`main`, push `main` once, and confirm that Netlify published the resulting SHA
+before releasing another task. Pull requests are optional. The full procedure
+and recovery rules are in `docs/RELEASE.md`.
+
 ### Netlify CLI Commands
 
 ```bash
@@ -1108,17 +1122,11 @@ netlify link
 
 # Open admin dashboard
 netlify open:admin
-
-# Manual production deploy
-netlify deploy --prod
-
-# Preview deploy (generates preview URL for testing)
-netlify deploy
 ```
 
 ### Build Configuration
 
-- **Build step:** `python3 scripts/generate_sitemap.py` (regenerates `sitemap.xml` from `catalog.json` on every deploy). No bundling/compilation — the site is otherwise pure static HTML/JS.
+- **Build step:** `python3 scripts/build_site.py` (regenerates `sitemap.xml`, refreshes static homepage links, and checks homepage metadata against Git history). No bundling or compilation is required; the site is otherwise static HTML and JavaScript.
 - **Publish directory:** `.` (root)
 - **Config:** `netlify.toml` in repo root
 - **Note:** The GitHub Pages legacy host does **not** run this build step, so always run the SEO scripts locally and commit their output (see step 8 of "Creating a New Tool") to keep both hosts in sync.
