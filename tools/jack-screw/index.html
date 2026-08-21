@@ -945,11 +945,26 @@
             if (recalc !== false) calculate();
         }
 
-        // A shared link must reproduce what the sharer saw, so on any link that
-        // carries state the level comes from the URL and not from whatever this
+        // Only a link that actually carries tool state should override the
+        // level. Other things append their own params: the homepage preview
+        // adds homepage_preview=1, and treating that as a shared link would
+        // silently reset the reader's chosen level.
+        function urlCarriesToolState() {
+            const params = new URLSearchParams(window.location.search);
+            const ids = new Set(Array.from(
+                document.querySelectorAll('#calc-form input, #calc-form select'),
+                el => el.id).filter(Boolean));
+            for (const key of params.keys()) {
+                if (ids.has(key)) return true;
+            }
+            return false;
+        }
+
+        // A shared link must reproduce what the sharer saw, so where one carries
+        // state the level comes from the URL rather than from whatever this
         // browser happened to be using last.
         function adoptLevelFromUrl() {
-            if (!window.location.search) return;
+            if (!urlCarriesToolState()) return;
             const fromUrl = parseInt(new URLSearchParams(window.location.search).get('detail_level'), 10);
             setDetail(Number.isFinite(fromUrl) ? fromUrl : 1, false);
         }
