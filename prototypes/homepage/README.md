@@ -2,7 +2,7 @@
 
 Date: 2026-08-16
 
-These static prototypes read the repository's `/catalog.json` at runtime. They exclude the developer templates, map the remaining tools into eight display groups, and share search, discipline, and review-status logic from `shared.js`. Options A through D are the first batch, E through H are the second, and I through L are the current list-focused batch.
+These static prototypes read the repository's `/catalog.json` at runtime. They exclude the developer templates, map the remaining tools into eight display groups, and share search, discipline, and review-status logic from `shared.js`. Options A through L record the earlier comparison batches. Option M is the current convergence prototype.
 
 ## View the options
 
@@ -26,8 +26,15 @@ Then open one of these pages:
 - `http://localhost:8000/prototypes/homepage/option-j/`
 - `http://localhost:8000/prototypes/homepage/option-k/`
 - `http://localhost:8000/prototypes/homepage/option-l/`
+- `http://localhost:8000/prototypes/homepage/option-m/`
 
 Opening an HTML file directly will not work because the browser blocks its request for `/catalog.json`.
+
+## Convergence prototype
+
+### Option M: Compact index with explicit preview
+
+Option M pairs a small `transparent.tools` site header with a `Tool Index` page heading. The dot pattern is confined to the title and search zone, while the tool list sits on a solid background. Search, discipline, and review status share one compact row on desktop and stack on mobile. Each tool row is still the main link. A separate Preview button opens the selected live tool in a large drawer only after a click.
 
 ## Third batch: quiet list treatments
 

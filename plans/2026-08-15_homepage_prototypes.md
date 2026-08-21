@@ -1,7 +1,7 @@
 # Homepage Prototype Options
 
 Date: 2026-08-15
-Status: Third homepage prototype batch complete; awaiting selection
+Status: Convergence prototype complete; awaiting review
 
 ## Goal
 
@@ -39,6 +39,7 @@ prototypes/homepage/
   option-j/index.html
   option-k/index.html
   option-l/index.html
+  option-m/index.html
   README.md          # one paragraph per option, how to view
 ```
 
@@ -94,9 +95,9 @@ Treat the homepage like a reference desk rather than a catalog. A large centered
 
 ## What "done" looks like for the prototype phase
 
-- Options A through L render correctly against the live `catalog.json` from a local server, desktop and ~375px mobile widths.
+- Options A through M render correctly against the live `catalog.json` from a local server, desktop and ~375px mobile widths.
 - Search and status filtering work in each (shared.js).
-- Desktop screenshots are saved for Options A through L. Mobile screenshots are also saved for the second and third batches, where navigation density and preview behavior are part of the comparison.
+- Desktop screenshots are saved for Options A through M. Mobile screenshots are also saved for the second, third, and convergence batches, where navigation density and preview behavior are part of the comparison.
 - `prototypes/homepage/README.md` summarizes each option in a paragraph with its tradeoff.
 - No edits to `index.html`, `catalog.json`, or the SEO scripts.
 
@@ -156,6 +157,19 @@ The third batch separates those choices:
 Production promotion remains a separate task after one direction is selected.
 
 Implementation and desktop/mobile browser review completed on 2026-08-18. Option L's click-only preview was also checked for lazy loading, Escape dismissal, focus restoration, and a 44px mobile control.
+
+## Fourth review and convergence prototype
+
+Feedback on 2026-08-21 selected Option L's click-only preview and kept the dense, immediate filtering from the prior list prototypes. Option M combines those behaviors with a quieter page hierarchy:
+
+- A 52px site header carries a small `transparent.tools` wordmark above the page content.
+- `Tool Index` remains the page heading and stays visually stronger than the wordmark.
+- The dot pattern appears only behind the title and search controls. The list uses a solid background.
+- Search, discipline, and review status use one compact toolbar on desktop and stack on mobile.
+- Preview remains a deliberate button action. Hover and focus do not open or load a preview.
+- The preview drawer uses the selected tool name as its heading and gives the live page most of the viewport.
+
+Option M is a prototype. Selecting it for production, extending the site header to every tool, and defining production metadata are separate tasks.
 
 ## Evaluation criteria for picking a winner
 
