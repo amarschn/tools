@@ -163,6 +163,7 @@ Implementation and desktop/mobile browser review completed on 2026-08-18. Option
 Feedback on 2026-08-21 selected Option L's click-only preview and kept the dense, immediate filtering from the prior list prototypes. Option M combines those behaviors with a quieter page hierarchy:
 
 - A 52px site header carries a small `transparent.tools` wordmark above the page content.
+- A 44px theme button at the right side of the header switches between light and dark. It follows the system theme until the visitor saves a choice.
 - `Tool Index` remains the page heading and stays visually stronger than the wordmark.
 - The page and compact search toolbar use plain white backgrounds with hairline borders.
 - Search, discipline, and review status use one compact toolbar on desktop and stack on mobile.
