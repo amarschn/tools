@@ -223,11 +223,13 @@ When retroactively normalizing an older plan, preserve an existing stated date w
 
         ```bash
         python3 scripts/generate_sitemap.py   # rebuilds sitemap.xml from catalog.json
-        python3 scripts/inject_seo_meta.py     # backfills <head> SEO tags into tool pages
+        python3 scripts/inject_seo_meta.py     # refreshes tool SEO tags + homepage fallback links
+        python3 scripts/generate_homepage_metadata.py  # refreshes homepage dates and versions
         ```
 
     * **`scripts/generate_sitemap.py`** regenerates `sitemap.xml` from `catalog.json` (excludes `example_tool*`/prototypes; `human-verified` tools get higher priority). Netlify also runs this on every deploy via `netlify.toml`, but commit the regenerated file so the GitHub Pages legacy host stays current too.
-    * **`scripts/inject_seo_meta.py`** injects `<meta name="description">`, `<link rel="canonical">`, OpenGraph/Twitter cards (pulled from the catalog `title`/`description`), and the `/shared/analytics-autotrack.js` include into each tool's `index.html`. It is **idempotent** — it only adds tags that are missing, so re-running is a safe no-op. Use `--check` for a dry run.
+    * **`scripts/inject_seo_meta.py`** injects `<meta name="description">`, `<link rel="canonical">`, OpenGraph/Twitter cards (pulled from the catalog `title`/`description`), and the `/shared/analytics-autotrack.js` include into each tool's `index.html`. It also refreshes the marker-delimited static tool links in the homepage. It is **idempotent**, so re-running is a safe no-op. Use `--check` for a dry run.
+    * **`scripts/generate_homepage_metadata.py`** records each public tool directory's last Git change and commit count in `data/homepage-tool-meta.json`. It also carries an optional catalog `version` into the homepage. Run it after committing tool changes, amend the task commit with the generated file, and commit the result for GitHub Pages.
     * `shared/analytics-autotrack.js` fires a GA4 `export_action` event when a user clicks an export/download/copy control, giving us a per-tool demand signal. Add `data-track="export"` to opt a control in explicitly, or `data-track="off"` to exclude one.
     * Rationale and the SEO-tool backlog live in `plans/2026-07-12_seo_distribution_wins.md`. transparent.tools' current bottleneck is distribution, not more tools — prioritize discoverability accordingly.
 
@@ -1124,7 +1126,7 @@ netlify open:admin
 
 ### Build Configuration
 
-- **Build step:** `python3 scripts/generate_sitemap.py` (regenerates `sitemap.xml` from `catalog.json` on every deploy). No bundling/compilation — the site is otherwise pure static HTML/JS.
+- **Build step:** `python3 scripts/build_site.py` (regenerates `sitemap.xml`, refreshes static homepage links, and checks homepage metadata against Git history). No bundling or compilation is required; the site is otherwise static HTML and JavaScript.
 - **Publish directory:** `.` (root)
 - **Config:** `netlify.toml` in repo root
 - **Note:** The GitHub Pages legacy host does **not** run this build step, so always run the SEO scripts locally and commit their output (see step 8 of "Creating a New Tool") to keep both hosts in sync.
