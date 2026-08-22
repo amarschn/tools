@@ -76,24 +76,58 @@ def test_homepage_has_production_head_and_relative_assets() -> None:
 
 def test_service_worker_refreshes_homepage_resources() -> None:
     source = (REPO / "service-worker.js").read_text()
-    assert "tt-cache-v2" in source
+    assert "tt-cache-v3" in source
     assert "key.startsWith('tt-cache-')" in source
-    assert "request.mode === 'navigate' || isHomepageData(url)" in source
-    assert "./data/homepage-tool-meta.json" in source
-    assert "./shared/homepage-index.js" in source
+    assert "request.mode === 'navigate'" in source
+    assert "if (isHomepageData(url))" in source
+    assert "/data/homepage-tool-meta.json" in source
+    assert "/shared/homepage-index.js" in source
+    assert "NETWORK_FALLBACK_DELAY_MS = 1000" in source
+    assert "NAVIGATION_FALLBACK_DELAY_MS = 750" in source
+    assert "HOMEPAGE_DATA_FALLBACK_DELAY_MS = 250" in source
+    assert "boundedNetworkFirst" in source
+    assert "const networkPromise = fetch(event.request);" in source
+    assert "const copy = response.clone();" in source
+    assert source.count("  './',") == 1
+    assert "'./index.html'" not in source
 
 
 def test_metadata_failure_is_nonfatal() -> None:
-    source = (REPO / "shared" / "homepage-index.js").read_text()
-    assert "const tools = await loadCatalog(catalogUrl);" in source
-    assert "metadata = await loadToolMetadata(metadataUrl);" in source
-    assert "loading the catalog without it" in source
+    helper = (REPO / "shared" / "homepage-index.js").read_text()
+    source = INDEX.read_text()
+    assert "loadCatalog," in helper
+    assert "loadToolMetadata," in helper
+    assert "mergeToolMetadata," in helper
+    assert 'const catalogPromise = HP.loadCatalog("./catalog.json");' in source
+    assert "const metadataPromise = HP.loadToolMetadata(" in source
+    assert "Tool metadata is unavailable; the catalog is still usable." in source
+
+    catalog_start = source.index("const catalogPromise =")
+    metadata_start = source.index("const metadataPromise =")
+    catalog_handler = source.index("catalogPromise\n          .then")
+    metadata_handler = source.index("metadataPromise.then")
+    first_render = source.index("renderPage();", catalog_handler)
+    assert catalog_start < metadata_start < catalog_handler
+    assert first_render < metadata_handler
+    assert "function refreshRenderedMetadata()" in source
+    assert "refreshRenderedMetadata();" in source[metadata_handler:]
 
 
 def test_catalog_failure_preserves_static_links() -> None:
     source = INDEX.read_text()
-    success_block = source.split(".then((catalogTools) => {", 1)[1].split(
-        ".catch((error) => {", 1
-    )[0]
-    assert 'addEventListener("input", renderPage)' in success_block
-    assert 'addEventListener("change", renderPage)' in success_block
+    assert "if (!catalogReady) return;" in source
+    assert 'controls.searchInput.addEventListener("input", renderPage)' in source
+    assert source.count('addEventListener("change", renderPage)') == 2
+
+
+def test_nonessential_startup_work_is_deferred() -> None:
+    source = INDEX.read_text()
+    assert 'rel="preload" href="./shared/homepage-index.js" as="script"' in source
+    assert 'rel="preload" href="./catalog.json" as="fetch"' in source
+    assert '<script async src="https://www.googletagmanager.com/' not in source
+    assert 'window.dispatchEvent(new Event("homepage:catalog-ready"))' in source
+    assert 'window.addEventListener("homepage:catalog-ready", () => {' in source
+    assert 'window.requestIdleCallback(loadAnalytics, { timeout: 2000 })' in source
+    assert "window.setTimeout(scheduleAnalytics, 3000)" in source
+    assert "window.requestIdleCallback(registerServiceWorker" in source
+    assert "window.setTimeout(deferServiceWorker, 3000)" in source
