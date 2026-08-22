@@ -2,13 +2,15 @@
 // Cache-first for local assets, network-first for CDN resources.
 // Designed to be lightweight and safe: failures fall through to the network.
 
-const CACHE_VERSION = 'tt-cache-v2';
+const CACHE_VERSION = 'tt-cache-v3';
 const MAX_CACHE_ENTRIES = 100;
+const NETWORK_FALLBACK_DELAY_MS = 1000;
+const NAVIGATION_FALLBACK_DELAY_MS = 750;
+const HOMEPAGE_DATA_FALLBACK_DELAY_MS = 250;
 
 // Assets to pre-cache on install.
 const PRECACHE_URLS = [
   './',
-  './index.html',
   './about.html',
   './catalog.json',
   './data/homepage-tool-meta.json',
@@ -112,38 +114,72 @@ async function trimCache(cacheName, maxEntries) {
  * Cache-first: return cached response if available, else fetch from network
  * and cache the result for future offline use.
  */
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
+async function cacheFirstOutcome(request) {
+  const cache = await caches.open(CACHE_VERSION);
+  const cached = await cache.match(request);
+  if (cached) return { response: cached, shouldCache: false };
 
   const response = await fetch(request);
-  if (response.ok) {
-    const cache = await caches.open(CACHE_VERSION);
-    cache.put(request, response.clone());
-    trimCache(CACHE_VERSION, MAX_CACHE_ENTRIES);
-  }
-  return response;
+  return { response, shouldCache: true };
 }
 
 /**
- * Network-first: try the network, fall back to cache.
- * Successful network responses are cached for offline use.
+ * Store a response without delaying delivery to the page.
  */
-async function networkFirst(request) {
+async function storeResponse(request, response) {
+  if (!response.ok) return;
+  const copy = response.clone();
+  const cache = await caches.open(CACHE_VERSION);
+  await cache.put(request, copy);
+  await trimCache(CACHE_VERSION, MAX_CACHE_ENTRIES);
+}
+
+/**
+ * Prefer a fresh response, but stop making returning visitors wait after a
+ * short delay when a cached response is available. The network request keeps
+ * running so the next navigation receives the newest response.
+ */
+async function boundedNetworkFirst(request, networkPromise, delayMs) {
+  const cache = await caches.open(CACHE_VERSION);
+  const cached = await cache.match(request);
+  if (!cached) return networkPromise;
+
+  let timerId;
+  const cachedFallback = new Promise((resolve) => {
+    timerId = setTimeout(() => resolve(cached), delayMs);
+  });
+  const preferredNetwork = networkPromise
+    .then((response) => response.ok ? response : cached)
+    .catch(() => cached);
+
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_VERSION);
-      cache.put(request, response.clone());
-      trimCache(CACHE_VERSION, MAX_CACHE_ENTRIES);
-    }
-    return response;
-  } catch (_err) {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    // Nothing in cache either – let the browser handle the error.
-    throw _err;
+    return await Promise.race([preferredNetwork, cachedFallback]);
+  } finally {
+    clearTimeout(timerId);
   }
+}
+
+function respondNetworkFirst(event, delayMs = NETWORK_FALLBACK_DELAY_MS) {
+  const networkPromise = fetch(event.request);
+  const cacheUpdate = networkPromise
+    .then((response) => storeResponse(event.request, response))
+    .catch(() => undefined);
+  event.waitUntil(cacheUpdate);
+  event.respondWith(
+    boundedNetworkFirst(event.request, networkPromise, delayMs)
+  );
+}
+
+function respondCacheFirst(event) {
+  const outcomePromise = cacheFirstOutcome(event.request);
+  const cacheUpdate = outcomePromise
+    .then((outcome) => outcome.shouldCache
+      ? storeResponse(event.request, outcome.response)
+      : undefined)
+    .catch(() => undefined);
+  const responsePromise = outcomePromise.then((outcome) => outcome.response);
+  event.waitUntil(cacheUpdate);
+  event.respondWith(responsePromise);
 }
 
 // ---------------------------------------------------------------------------
@@ -161,22 +197,28 @@ self.addEventListener('fetch', (event) => {
 
   // CDN resources: network-first so we pick up updates, but still usable offline
   if (isCdnRequest(url)) {
-    event.respondWith(networkFirst(request));
+    respondNetworkFirst(event);
     return;
   }
 
-  // Navigations and homepage data should update after each release.
-  if (request.mode === 'navigate' || isHomepageData(url)) {
-    event.respondWith(networkFirst(request));
+  // Prefer fresh navigations, with a bounded wait on weak connections.
+  if (request.mode === 'navigate') {
+    respondNetworkFirst(event, NAVIGATION_FALLBACK_DELAY_MS);
+    return;
+  }
+
+  // Cached homepage data should never hold up the interactive index.
+  if (isHomepageData(url)) {
+    respondNetworkFirst(event, HOMEPAGE_DATA_FALLBACK_DELAY_MS);
     return;
   }
 
   // Other local static assets remain cache-first for speed and offline use.
   if (isStaticAsset(url)) {
-    event.respondWith(cacheFirst(request));
+    respondCacheFirst(event);
     return;
   }
 
   // Everything else: try network, fall back to cache
-  event.respondWith(networkFirst(request));
+  respondNetworkFirst(event);
 });

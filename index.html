@@ -4,16 +4,54 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <!-- Google Analytics: queued now, downloaded after the initial page load. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-YG3SBRRZFZ');
+      (function () {
+        let pageLoaded = document.readyState === "complete";
+        let catalogReady = false;
+        let scheduled = false;
+        const loadAnalytics = () => {
+          const script = document.createElement("script");
+          script.async = true;
+          script.src = "https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ";
+          document.head.appendChild(script);
+        };
+        const scheduleAnalytics = () => {
+          if (scheduled) return;
+          scheduled = true;
+          window.setTimeout(() => {
+            if ("requestIdleCallback" in window) {
+              window.requestIdleCallback(loadAnalytics, { timeout: 2000 });
+            } else {
+              loadAnalytics();
+            }
+          }, 1000);
+        };
+        const scheduleWhenReady = () => {
+          if (pageLoaded && catalogReady) scheduleAnalytics();
+        };
+        window.addEventListener("homepage:catalog-ready", () => {
+          catalogReady = true;
+          scheduleWhenReady();
+        }, { once: true });
+        const handleLoad = () => {
+          pageLoaded = true;
+          catalogReady ||= Boolean(window.__homepageCatalogReady);
+          scheduleWhenReady();
+          window.setTimeout(scheduleAnalytics, 3000);
+        };
+        if (pageLoaded) handleLoad();
+        else window.addEventListener("load", handleLoad, { once: true });
+      })();
     </script>
 
     <link rel="manifest" href="./manifest.json" />
+    <link rel="preload" href="./shared/homepage-index.js" as="script" />
+    <link rel="preload" href="./catalog.json" as="fetch" crossorigin />
     <meta name="theme-color" content="#ffffff" id="theme-color" />
     <title>Transparent Tools - Free Engineering Calculators</title>
     <meta name="description" content="Free browser-based engineering calculators and tools. Beam bending, bolt torque, vibration analysis, and more. No signup required, runs entirely in your browser." />
@@ -754,6 +792,7 @@
         const openToolLink = document.getElementById("open-tool");
         const closeButton = document.getElementById("close-preview");
         let tools = [];
+        let catalogReady = false;
         let activeTool = null;
         let previewTrigger = null;
         const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
@@ -966,7 +1005,22 @@
           });
         }
 
+        function refreshRenderedMetadata() {
+          const toolsByTitle = new Map(tools.map((tool) => [tool.title, tool]));
+          grid.querySelectorAll("[data-testid='tool-item']").forEach((item) => {
+            const tool = toolsByTitle.get(item.dataset.title);
+            const rowSide = item.querySelector(".row-side");
+            if (!tool || !rowSide) return;
+            const current = rowSide.querySelector(".row-meta");
+            const replacement = toolMetadata(tool);
+            if (current && replacement) current.replaceWith(replacement);
+            else if (current) current.remove();
+            else if (replacement) rowSide.appendChild(replacement);
+          });
+        }
+
         function renderPage() {
+          if (!catalogReady) return;
           if (activeTool) closePreview(false);
           const filters = HP.getFilters(controls);
           renderIndex(HP.filterTools(tools, filters), filters);
@@ -979,6 +1033,9 @@
         }
 
         closeButton.addEventListener("click", () => closePreview(true));
+        controls.searchInput.addEventListener("input", renderPage);
+        controls.categorySelect.addEventListener("change", renderPage);
+        controls.statusSelect.addEventListener("change", renderPage);
         backdrop.addEventListener("pointerdown", (event) => {
           if (event.target === backdrop) closePreview(true);
         });
@@ -1003,14 +1060,31 @@
           }
         });
 
-        HP.loadCatalogWithMetadata("./catalog.json", "./data/homepage-tool-meta.json")
+        const catalogPromise = HP.loadCatalog("./catalog.json");
+        const metadataPromise = HP.loadToolMetadata(
+          "./data/homepage-tool-meta.json",
+        ).catch((error) => {
+          console.warn(
+            "Tool metadata is unavailable; the catalog is still usable.",
+            error,
+          );
+          return null;
+        });
+
+        catalogPromise
           .then((catalogTools) => {
             tools = catalogTools;
+            catalogReady = true;
             HP.populateCategorySelect(controls.categorySelect, tools);
-            controls.searchInput.addEventListener("input", renderPage);
-            controls.categorySelect.addEventListener("change", renderPage);
-            controls.statusSelect.addEventListener("change", renderPage);
             renderPage();
+            window.__homepageCatalogReady = true;
+            window.dispatchEvent(new Event("homepage:catalog-ready"));
+
+            metadataPromise.then((metadata) => {
+              if (!metadata) return;
+              tools = HP.mergeToolMetadata(tools, metadata);
+              refreshRenderedMetadata();
+            });
           })
           .catch((error) => {
             console.error(error);
@@ -1020,9 +1094,42 @@
       })();
     </script>
     <script>
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./service-worker.js").catch(() => {});
-      }
+      let serviceWorkerPageLoaded = document.readyState === "complete";
+      let serviceWorkerCatalogReady = Boolean(window.__homepageCatalogReady);
+      let serviceWorkerScheduled = false;
+      const scheduleServiceWorker = () => {
+        if (serviceWorkerScheduled) return;
+        serviceWorkerScheduled = true;
+        if (!("serviceWorker" in navigator)) return;
+        const registerServiceWorker = () => {
+          navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+        };
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(registerServiceWorker, { timeout: 3000 });
+        } else {
+          window.setTimeout(registerServiceWorker, 0);
+        }
+      };
+      const deferServiceWorker = () => {
+        window.setTimeout(scheduleServiceWorker, 1000);
+      };
+      const scheduleServiceWorkerWhenReady = () => {
+        if (serviceWorkerPageLoaded && serviceWorkerCatalogReady) {
+          deferServiceWorker();
+        }
+      };
+      window.addEventListener("homepage:catalog-ready", () => {
+        serviceWorkerCatalogReady = true;
+        scheduleServiceWorkerWhenReady();
+      }, { once: true });
+      const handleServiceWorkerLoad = () => {
+        serviceWorkerPageLoaded = true;
+        serviceWorkerCatalogReady ||= Boolean(window.__homepageCatalogReady);
+        scheduleServiceWorkerWhenReady();
+        window.setTimeout(deferServiceWorker, 3000);
+      };
+      if (serviceWorkerPageLoaded) handleServiceWorkerLoad();
+      else window.addEventListener("load", handleServiceWorkerLoad, { once: true });
     </script>
   </body>
 </html>
