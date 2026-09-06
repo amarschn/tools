@@ -1,8 +1,10 @@
 """Thread geometry, identification, and direct-axial size screening.
 
-The standard designation lists are shared with :mod:`pycalcs.fasteners`. This
-module parses those designations and uses the canonical geometry equations in
-:mod:`pycalcs.fasteners`, so both tools report the same dimensions and areas.
+The catalog starts with the hardware designations in :mod:`pycalcs.fasteners`
+and adds fine-thread counterparts across the same nominal diameter range.
+Geometry uses the canonical equations in :mod:`pycalcs.fasteners`, so both
+tools report the same dimensions and areas without inventing hardware head
+dimensions for the additional threads.
 
 References:
     - ISO 68-1:2023, ISO general purpose screw threads, basic and design
@@ -13,6 +15,12 @@ References:
     - NIST Handbook 28, Screw-Thread Standards for Federal Services.
     - NASA fastener training material, cross-sectional areas for stress
       calculations, NASA NTRS 20110016427.
+    - Gühring, Common Metric & Fractional Tap Sizes and Pitches:
+      https://www.guhring.com.mx/herramientas-de-corte-para-maquinado/machuelos
+    - Boneham, Metric Fine Threads, catalogue (including M2x0.25):
+      https://www.technitoolinc.com/wp-content/uploads/2021/06/Jig_Fixture/Boneham_Catalogue_2019.pdf
+    - Gühring technical section (including M2.5x0.35):
+      https://e-catalogue.guehring.com/frontend/catalogs/1197343/1/pdf/complete.pdf
 """
 
 from __future__ import annotations
@@ -43,6 +51,22 @@ METERS_TO_MM = 1000.0
 VALID_THREAD_SYSTEMS = ("iso_metric", "unified")
 VALID_THREAD_SERIES = ("coarse", "fine", "all")
 
+# Nominal pairs only, from the manufacturer tables cited above. These fill
+# fine-series gaps at diameters already present in the hardware catalog; they
+# are not complete ISO 261 / ASME B1.1 catalogs or proof-strength tables.
+_ADDITIONAL_FINE_DESIGNATIONS = {
+    "iso_metric": (
+        "M2x0.25", "M2.5x0.35", "M3x0.35", "M4x0.5", "M5x0.5",
+        "M6x0.75", "M14x1.5", "M18x2.0", "M18x1.5", "M22x2.0",
+        "M22x1.5", "M24x2.0", "M24x1.5",
+    ),
+    "unified": (
+        "#2-64 UNF", "#4-48 UNF", "#6-40 UNF", "#8-36 UNF",
+        "7/16-20 UNF", "9/16-18 UNF", "7/8-14 UNF",
+    ),
+}
+
+
 def _validate_thread_system(thread_system: str) -> None:
     """Validate a thread-system identifier.
 
@@ -59,8 +83,10 @@ def _validate_thread_system(thread_system: str) -> None:
         raise ValueError(
             "thread_system must be 'iso_metric' or 'unified'."
         )
+
+
 def _catalog_records(thread_system: str) -> list[dict[str, Any]]:
-    """Build exact catalog records from the shared designation list.
+    """Build exact records from hardware names and supplemental fine threads.
 
     ISO coarse pitch is the largest included pitch at a given nominal diameter.
     Unified series comes from the UNC or UNF suffix.
@@ -79,7 +105,10 @@ def _catalog_records(thread_system: str) -> list[dict[str, Any]]:
 
     if thread_system == "unified":
         records = []
-        for designation in UTS_FASTENER_GEOMETRY:
+        designations = dict.fromkeys(
+            (*UTS_FASTENER_GEOMETRY, *_ADDITIONAL_FINE_DESIGNATIONS["unified"])
+        )
+        for designation in designations:
             diameter_m, pitch_m, tpi, series = parse_unified_thread_designation(
                 designation
             )
@@ -103,7 +132,10 @@ def _catalog_records(thread_system: str) -> list[dict[str, Any]]:
         )
 
     parsed = []
-    for designation in ISO_FASTENER_GEOMETRY:
+    designations = dict.fromkeys(
+        (*ISO_FASTENER_GEOMETRY, *_ADDITIONAL_FINE_DESIGNATIONS["iso_metric"])
+    )
+    for designation in designations:
         diameter_m, pitch_m = parse_metric_thread_designation(designation)
         parsed.append((designation, diameter_m, pitch_m))
 
@@ -149,9 +181,11 @@ def get_thread_catalog() -> dict[str, list[dict[str, Any]]]:
     r"""
     Return the supported ISO metric and Unified thread catalogs.
 
-    Records are generated from the shared fastener designation lists and use
-    exact parsed dimensions. This function is intended for dropdown population
-    and does not calculate tolerance limits or gage dimensions.
+    Records combine the shared hardware designations with supplemental fine
+    threads at the same nominal diameters, using exact parsed dimensions.
+    This function is intended for dropdown population and does not calculate
+    tolerance limits or gage dimensions. It remains a working subset of the
+    standards, not an exhaustive catalog.
 
     ---Parameters---
 
@@ -370,7 +404,8 @@ def screen_thread_size(
     candidates : list
         Candidate records sorted by tensile-stress area.
     limitations : str
-        Scope statement for the preliminary direct-tension screen.
+        Searched candidate count and range, catalog-boundary warnings, and
+        scope statement for the preliminary direct-tension screen.
     subst_design_load : str
         LaTeX substitution for the factored demand.
     subst_required_stress_area : str
@@ -439,7 +474,18 @@ def screen_thread_size(
         (index for index, item in enumerate(candidates) if item["passes"]),
         None,
     )
-    limitations = (
+    series_label = "coarse and fine" if thread_series == "all" else thread_series
+    catalog_scope = (
+        f"Searched {len(candidates)} {series_label} candidates, from "
+        f"{candidates[0]['designation']} to {candidates[-1]['designation']}. "
+        "This is a working subset, not a complete standards catalog. "
+    )
+    if passing_index == 0:
+        catalog_scope += (
+            "The smallest catalog entry already passes; smaller threads "
+            "outside this catalog were not evaluated. "
+        )
+    limitations = catalog_scope + (
         "Smallest passing size in the included catalog, based on a preliminary "
         "direct-axial proof-load screen. The entered proof strength must be "
         "valid across the searched diameter range. The screen omits preload, "

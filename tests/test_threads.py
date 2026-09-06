@@ -111,6 +111,44 @@ class TestThreadCatalog:
         assert half_inch["nominal_diameter"] == pytest.approx(0.0127)
         assert half_inch["series"] == "coarse"
 
+    @pytest.mark.parametrize("system", ["iso_metric", "unified"])
+    def test_every_included_coarse_diameter_has_a_fine_counterpart(self, system):
+        """Missing fine diameters must not force an artificial size jump."""
+        records = get_thread_catalog()[system]
+        assert len({r["designation"] for r in records}) == len(records)
+        for coarse in (r for r in records if r["series"] == "coarse"):
+            fine = [
+                r for r in records
+                if r["series"] == "fine"
+                and r["nominal_diameter"] == coarse["nominal_diameter"]
+            ]
+            assert fine, coarse["designation"]
+            assert all(r["pitch"] < coarse["pitch"] for r in fine)
+
+    @pytest.mark.parametrize(
+        "system,designation,diameter,pitch",
+        [
+            ("iso_metric", "M2x0.25", 0.002, 0.00025),
+            ("iso_metric", "M2.5x0.35", 0.0025, 0.00035),
+            ("iso_metric", "M4x0.5", 0.004, 0.0005),
+            ("iso_metric", "M6x0.75", 0.006, 0.00075),
+            ("iso_metric", "M24x2.0", 0.024, 0.002),
+            ("unified", "#2-64 UNF", 0.086 * 0.0254, 0.0254 / 64),
+            ("unified", "7/16-20 UNF", 7 / 16 * 0.0254, 0.0254 / 20),
+        ],
+    )
+    def test_supplemental_fine_dimensions(
+        self, system, designation, diameter, pitch,
+    ):
+        """Check nominal pairs against Gühring and Boneham thread tables."""
+        record = next(
+            r for r in get_thread_catalog()[system]
+            if r["designation"] == designation
+        )
+        assert record["nominal_diameter"] == pytest.approx(diameter)
+        assert record["pitch"] == pytest.approx(pitch)
+        assert record["series"] == "fine"
+
 
 class TestThreadIdentification:
     """Verify nearest-nominal ranking and residual reporting."""
@@ -226,10 +264,64 @@ class TestThreadSizeScreening:
         assert result["previous_designation"] == "M24x3.0"
         assert math.isinf(result["utilization_percent"])
 
+    def test_fine_metric_does_not_double_m4_to_m8(self):
+        """Regression: a 3 kN load formerly skipped all fine sizes below M8."""
+        results = {
+            series: screen_thread_size("iso_metric", series, 3_000, 580e6, 1.5)
+            for series in ("coarse", "fine")
+        }
+        assert results["coarse"]["recommended_designation"] == "M4x0.7"
+        assert results["fine"]["recommended_designation"] == "M4x0.5"
+        assert results["fine"]["proof_capacity"] > results["coarse"]["proof_capacity"]
+        assert results["fine"]["previous_designation"] == "M3x0.35"
+        assert results["fine"]["previous_proof_capacity"] < 4_500
+
+    def test_small_unf_does_not_jump_to_number_ten(self):
+        """Regression: the fine catalog formerly started at #10-32 UNF."""
+        result = screen_thread_size("unified", "fine", 1_500, 580e6, 1.5)
+        assert result["recommended_designation"] == "#4-48 UNF"
+        assert result["previous_designation"] == "#2-64 UNF"
+
+    @pytest.mark.parametrize("system", ["iso_metric", "unified"])
+    def test_fine_diameter_never_exceeds_coarse_across_load_boundaries(self, system):
+        """Equal proof strength and complete counterpart coverage preserve this invariant."""
+        records = get_thread_catalog()[system]
+        by_name = {r["designation"]: r for r in records}
+        for record in (r for r in records if r["series"] == "coarse"):
+            area = calculate_basic_thread_geometry(
+                system, record["nominal_diameter"], record["pitch"],
+            )["tensile_stress_area"]
+            for factor in (0.5, 0.999999, 1.0, 1.000001):
+                load = area * 580e6 / 1.5 * factor
+                coarse = screen_thread_size(system, "coarse", load, 580e6, 1.5)
+                fine = screen_thread_size(system, "fine", load, 580e6, 1.5)
+                if coarse["status"] == "no_size":
+                    continue
+                assert fine["status"] == "sized"
+                assert (
+                    by_name[fine["recommended_designation"]]["nominal_diameter"]
+                    <= by_name[coarse["recommended_designation"]]["nominal_diameter"]
+                ), (system, load, coarse, fine)
+                assert fine["proof_capacity"] >= load * 1.5
+
+    def test_catalog_scope_exposes_smallest_candidate_boundary(self):
+        """A passing minimum catalog entry must not imply a global minimum."""
+        result = screen_thread_size("iso_metric", "fine", 100, 580e6, 1.5)
+        assert result["recommended_designation"] == "M2x0.25"
+        assert f"Searched {len(result['candidates'])} fine candidates" in result["limitations"]
+        assert "from M2x0.25 to M24x1.5" in result["limitations"]
+        assert "smaller threads outside this catalog were not evaluated" in result["limitations"]
+
+    def test_catalog_scope_does_not_claim_minimum_boundary_for_larger_choice(self):
+        """Only a result at the catalog minimum gets the smaller-sizes warning."""
+        result = screen_thread_size("iso_metric", "fine", 3_000, 580e6, 1.5)
+        assert "not a complete standards catalog" in result["limitations"]
+        assert "smallest catalog entry already passes" not in result["limitations"]
+
     @pytest.mark.parametrize(
         "system,series,expected_suffix",
         [
-            ("iso_metric", "fine", "x1.0"),
+            ("iso_metric", "fine", "x0.25"),
             ("unified", "fine", "UNF"),
             ("iso_metric", "all", "x"),
         ],
@@ -322,6 +414,18 @@ class TestThreadAnalysisWrapper:
         assert result["sizing_status"] == "sized"
         assert result["proof_margin"] > 1.5
         assert result["previous_designation"] == "M8x1.25"
+
+    def test_size_mode_returns_added_fine_thread_and_catalog_scope(self):
+        """The browser API must return the new fine thread, its profile, and scope."""
+        result = analyze_thread(
+            "size", "iso_metric", "M10x1.5", 0.01, 0.0015,
+            3_000, 580e6, 1.5, "fine",
+        )
+        assert result["designation"] == "M4x0.5"
+        assert result["nominal_diameter"] == pytest.approx(0.004)
+        assert result["pitch"] == pytest.approx(0.0005)
+        assert result["proof_margin"] >= 1.5
+        assert "Searched" in result["limitations"]
 
     def test_no_size_mode_keeps_largest_attempt_visible(self):
         """No-size results should still provide a profile and catalog evidence."""

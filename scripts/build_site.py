@@ -22,6 +22,7 @@ def run(script: str, *arguments: str) -> None:
 def main() -> None:
     run("generate_sitemap.py")
     run("inject_seo_meta.py")
+    run("version_thread_assets.py")
     run("generate_homepage_metadata.py", "--check")
 
 
