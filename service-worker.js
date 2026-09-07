@@ -1,5 +1,6 @@
 // Transparent Tools – Service Worker
-// Cache-first for local assets, network-first for CDN resources.
+// Cache-first for local assets and pinned calculation runtimes; other CDN
+// resources are network-first.
 // Designed to be lightweight and safe: failures fall through to the network.
 
 const CACHE_VERSION = 'tt-cache-v3';
@@ -80,6 +81,19 @@ function shouldNeverCache(url) {
 
 function isCdnRequest(url) {
   return CDN_ORIGINS.some((origin) => url.includes(origin));
+}
+
+function isVersionedCalculationAsset(url) {
+  const parsed = new URL(url);
+  // Exact Pyodide releases are immutable. Revalidating the loader, WASM and
+  // stdlib in successive startup phases makes a weak connection feel frozen.
+  if (parsed.origin === 'https://cdn.jsdelivr.net' &&
+      /^\/pyodide\/v\d+\.\d+\.\d+\/full\//.test(parsed.pathname)) return true;
+  // These Python modules share the thread page's content-derived asset key.
+  // Unversioned sources must keep revalidating so development edits stay fresh.
+  return parsed.origin === self.location.origin &&
+    /\/pycalcs\/(fasteners|threads|thread_specifications|thread_models)\.py$/.test(parsed.pathname) &&
+    /^thread-[a-f0-9]{16}$/.test(parsed.searchParams.get('v') || '');
 }
 
 function isStaticAsset(url) {
@@ -194,6 +208,11 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache analytics or localhost dev requests
   if (shouldNeverCache(url)) return;
+
+  if (isVersionedCalculationAsset(url)) {
+    respondCacheFirst(event);
+    return;
+  }
 
   // CDN resources: network-first so we pick up updates, but still usable offline
   if (isCdnRequest(url)) {
