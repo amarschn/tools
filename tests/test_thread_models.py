@@ -152,3 +152,85 @@ def test_step_units_defaults_and_explicit_blind_coupon():
 def test_invalid_step_requests_are_not_silently_substituted(changes):
     with pytest.raises(ValueError):
         step_model(json.dumps({"family": "metric", "size": "M10x1.5", **changes}))
+
+
+@pytest.mark.parametrize("internal", [False, True])
+def test_chamfer_integral_matches_known_conical_frustum(internal):
+    """A conical frustum has V = pi h (r1² + r1 r2 + r2²) / 3."""
+    from pycalcs.thread_models import _end_volume
+
+    radius = 1 if internal else 2
+    profile = [[0, radius], [1, radius]]
+    tip, base = (2, 1) if internal else (1, 2)
+    assert _end_volume(profile, 1, 3, tip, base, internal) == pytest.approx(7 * math.pi)
+
+
+@pytest.mark.parametrize("specimen", ["external", "internal"])
+def test_end_geometry_volume_spans_and_notes(specimen):
+    state = {"family": "metric", "size": "M10x1.5", "specimen": specimen, "length": 10}
+    square = step_model(json.dumps({**state, "end_style": "square"}))
+    both = step_model(json.dumps(state))
+    start = step_model(json.dumps({**state, "ends": "start"}))
+    end = step_model(json.dumps({**state, "ends": "end"}))
+    assert (
+        both["expected_volume_mm3"]
+        < start["expected_volume_mm3"]
+        < square["expected_volume_mm3"]
+    )
+    assert start["expected_volume_mm3"] == end["expected_volume_mm3"]
+    assert square["expected_volume_mm3"] - both["expected_volume_mm3"] == pytest.approx(
+        2 * (square["expected_volume_mm3"] - start["expected_volume_mm3"])
+    )
+    c = both["chamfer_depth_mm"]
+    assert both["full_profile_range_mm"] == pytest.approx([c, 10 - c])
+    assert start["full_profile_range_mm"] == pytest.approx([c, 10])
+    assert end["full_profile_range_mm"] == pytest.approx([0, 10 - c])
+    assert square["full_profile_range_mm"] == [0, 10]
+    assert both["chamfer_angle_deg"] == 45
+    assert "EXPORT ONLY" in both["cad_note"]
+    assert "not a guaranteed usable engagement length" in both["cad_note"]
+    assert "CHAMFER BOTH" in both["step_name"]
+    assert "no lead-in" in square["end_condition"]
+    assert "START FACE (z = 0)" in start["cad_note"]
+    assert "END FACE (z = overall length)" in end["cad_note"]
+    if specimen == "internal":
+        assert "tap's cutting lead" in both["cad_note"]
+        assert "rolling-blank instruction" not in both["cad_note"]
+    else:
+        assert "not a rolling-blank instruction" in both["cad_note"]
+        assert "No end-type compliance is claimed" in both["cad_note"]
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"end_style": "dog"},
+        {"ends": "left"},
+        {"chamfer_angle": 0},
+        {"chamfer_angle": 90},
+        {"chamfer_angle": "nan"},
+        {"chamfer_depth": "inf"},
+        {"chamfer_depth": -0.1},
+        {"chamfer_depth": 0.01},
+        {"chamfer_depth": 10},
+        {"length": 1.5},
+        {"specimen": "internal", "body_diameter": 10.1},
+    ],
+)
+def test_invalid_lead_ins_are_rejected(changes):
+    with pytest.raises(ValueError):
+        step_model(json.dumps({"family": "metric", "size": "M10x1.5", **changes}))
+
+
+def test_square_reference_can_still_be_one_pitch_long():
+    model = step_model(
+        json.dumps(
+            {
+                "family": "metric",
+                "size": "M10x1.5",
+                "length": 1.5,
+                "end_style": "square",
+            }
+        )
+    )
+    assert model["full_profile_range_mm"] == [0, 1.5]

@@ -216,10 +216,14 @@
         byId('machine-profile').hidden = !geometry;
         byId('schematic-profile').hidden = !!geometry || !spec;
         byId('profile-unavailable').hidden = !!spec;
-        byId('basic-dimensions').hidden = !geometry;
-        byId('calculation-details').hidden = !geometry && !analysis;
-        byId('calculation-details').querySelector('.ledger-content').hidden = !geometry;
-        ['dimension-details', 'note-details'].forEach((id) => { byId(id).hidden = !spec; });
+        byId('basic-dimensions').hidden = !geometry && !analysis;
+        document.querySelectorAll('[data-geometry-row]').forEach((row) => { row.hidden = !geometry; });
+        byId('mode-evidence').hidden = !analysis;
+        byId('dimension-details').hidden = !spec && !analysis;
+        byId('dimension-heading').textContent = analysis ? 'Dimensions & load check' : geometry ? 'Basic dimensions' : 'Specification details';
+        byId('dimension-help').hidden = !geometry && !analysis;
+        byId('note-details').hidden = !spec;
+        byId('spec-breakdown').hidden = !!geometry || !spec;
         byId('result-evidence').hidden = !analysis;
         byId('result-evidence').textContent = !analysis ? '' : section === 'load'
             ? (spec ? 'Proof margin ' + analysis.proof_margin.toFixed(2) + '× · required ' + byId('design_factor').value + '×. Axial tension only.' : 'No included size meets the factored axial demand.')
@@ -229,6 +233,7 @@
         byId('spec-status').textContent = !spec ? 'No passing size' : section === 'load' ? 'Preliminary' : spec.kind === 'product' ? 'Draft' : 'Review required';
         byId('spec-copy-status').textContent = '';
         if (!spec) {
+            byId('export-results').disabled = true;
             byId('drawing-callout').textContent = 'No passing thread in this catalog';
             byId('callout-sheet').classList.add('product-note');
             byId('callout-symbol').toggleAttribute('hidden', true);
@@ -238,7 +243,7 @@
             return;
         }
         byId('drawing-callout').textContent = spec.callout;
-        byId('spec-note').textContent = spec.note;
+        byId('spec-note').textContent = window.threadExports.detailNote(spec.note);
         byId('spec-breakdown').replaceChildren(...spec.breakdown.map(([label, value]) => {
             const row = document.createElement('div');
             const term = document.createElement('dt');
@@ -443,7 +448,7 @@
         if (result?.specification) copyText(result.specification.callout, 'Callout', byId('copy-drawing-callout'));
     });
     byId('copy-detailed-note').addEventListener('click', () => {
-        if (result?.specification) copyText(result.specification.note, 'Detailed note', byId('copy-detailed-note'));
+        if (result?.specification) copyText(byId('spec-note').textContent, 'Detailed note', byId('copy-detailed-note'));
     });
     byId('export-results').addEventListener('click', () => {
         if (!result?.geometry) return;
@@ -451,7 +456,7 @@
         const rows = [['Field', 'Value', 'Unit'], ['Task', section, ''],
             ['Thread family', catalog[result.resolved_family].label, ''],
             ['Designation', result.resolved_size, ''], ['Series', geometry.series, ''],
-            ['Callout', specification.callout, ''], ['Detailed note', specification.note, ''],
+            ['Callout', specification.callout, ''], ['Detailed note', byId('spec-note').textContent, ''],
             ['Major diameter', geometry.nominal_diameter * 1000, 'mm'],
             ['Pitch', geometry.pitch * 1000, 'mm'], ['Threads per inch', geometry.threads_per_inch, 'TPI'],
             ['Basic pitch diameter', geometry.pitch_diameter_basic * 1000, 'mm'],
@@ -491,8 +496,26 @@
         get section() { return section; },
         get autoUpdate() { return isAutoUpdate(); },
         get currentState() { return calculationState(); },
-        useCandidate(row, hand) {
-            if (specifyEdited && !window.confirm('Replace the edited specification with this nominal candidate? Your Find measurements will be kept.')) return;
+        useCandidate(row, hand, confirmed = false) {
+            if (specifyEdited && !confirmed) {
+                const item = document.querySelector('.candidate-select[aria-pressed="true"]').parentElement;
+                item.querySelector('.candidate-confirm')?.remove();
+                const prompt = document.createElement('div');
+                prompt.className = 'candidate-confirm';
+                const message = document.createElement('p');
+                message.textContent = 'Replace your edited specification with ' + row.designation + '? Find measurements will be kept.';
+                const replace = document.createElement('button'), keep = document.createElement('button');
+                replace.type = keep.type = 'button';
+                replace.className = keep.className = 'btn-secondary';
+                replace.dataset.confirmReplace = ''; keep.dataset.cancelReplace = '';
+                replace.textContent = 'Replace specification'; keep.textContent = 'Keep current';
+                replace.addEventListener('click', () => this.useCandidate(row, hand, true));
+                keep.addEventListener('click', () => {
+                    prompt.remove(); item.querySelector(':scope > .btn-secondary').focus();
+                });
+                prompt.append(message, replace, keep); item.append(prompt); keep.focus();
+                return;
+            }
             states.specify = { ...defaults, family: row.family, size: row.size,
                 feature: window.threadFinder.state().side === 'internal' ? 'through' : row.kind === 'pipe' ? 'pipe_external' : 'nominal',
                 view: window.threadFinder.state().side === 'internal' ? 'internal' : 'external',

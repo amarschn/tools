@@ -1,8 +1,8 @@
 """Reproduce pinned browser export dependencies without a runtime package manager.
 
 Run from any directory. --archives accepts an existing directory containing
-replicad.tgz, oc.tgz and pdf.tgz; every archive is integrity checked before use.
-Only the selected single-thread runtime and PDF bundle are installed.
+replicad.tgz, oc.tgz, pdf.tgz, pdfjs.tgz and three.tgz; every archive is checked.
+Only the selected single-thread runtime, viewers and PDF generator are installed.
 """
 
 import argparse
@@ -14,6 +14,11 @@ import urllib.request
 from pathlib import Path
 
 PACKAGES = {
+    "three": (
+        "three",
+        "0.180.0",
+        "o+qycAMZrh+TsE01GqWUxUIKR1AL0S8pq7zDkYOQw8GqfX8b8VoCKYUoHbhiX5j+7hr8XsuHDVU6+gkQJQKg9w==",
+    ),
     "replicad": (
         "replicad",
         "1.1.0",
@@ -28,6 +33,11 @@ PACKAGES = {
         "pdf-lib",
         "1.17.1",
         "V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw==",
+    ),
+    "pdfjs": (
+        "pdfjs-dist",
+        "6.3.289",
+        "ZHjSVpDa3D6izMq8/04lvkhkATUmL9px6ChPaXc1k6nU2Mrhlg1/7F0bdUqCwUjw3NsPTfPZsMDUU6ZIcRaeQw==",
     ),
 }
 
@@ -53,6 +63,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archives", type=Path)
     parser.add_argument(
+        "--package", choices=PACKAGES, help="Install one pinned package."
+    )
+    parser.add_argument(
         "--notices-only",
         action="store_true",
         help="Download the pinned upstream license texts and source manifest.",
@@ -71,6 +84,8 @@ def main():
             print(filename, len(data), "bytes")
         return
     for key, (name, version, integrity) in PACKAGES.items():
+        if args.package and key != args.package:
+            continue
         archive = (
             (args.archives / (key + ".tgz")).read_bytes()
             if args.archives
@@ -86,6 +101,8 @@ def main():
             for member in package.getmembers():
                 filename = Path(member.name).name
                 include = filename in ("LICENSE", "LICENSE.md")
+                if key in ("pdfjs", "three"):
+                    include = member.name == "package/LICENSE"
                 include |= (
                     key == "replicad"
                     and member.name.startswith("package/dist/")
@@ -96,8 +113,21 @@ def main():
                     "replicad_single.wasm",
                 )
                 include |= key == "pdf" and filename == "pdf-lib.esm.min.js"
+                include |= key == "pdfjs" and member.name in (
+                    "package/legacy/build/pdf.min.mjs",
+                    "package/legacy/build/pdf.worker.min.mjs",
+                )
+                include |= key == "three" and member.name in (
+                    "package/build/three.module.min.js",
+                    "package/build/three.core.min.js",
+                    "package/examples/jsm/controls/OrbitControls.js",
+                )
                 if include and member.isfile():
                     data = package.extractfile(member).read()
+                    if key == "three" and filename == "OrbitControls.js":
+                        data = data.replace(
+                            b"from 'three'", b"from './three.module.min.js'"
+                        )
                     (target / filename).write_bytes(data)
                     print(
                         f"{target.relative_to(root)} / {filename}: {len(data):,} bytes"

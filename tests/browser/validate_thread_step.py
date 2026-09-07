@@ -45,6 +45,7 @@ def validate(step_path: str, model: dict) -> dict:
     internal = model["specimen"] == "internal"
     sign = -1 if model["hand"] == "LH" else 1
     samples = 0
+    end_samples = 0
     for theta_degrees in [23, 113, 203, 293]:
         theta = math.radians(theta_degrees)
         for fraction in [0.12, 0.27, 0.43, 0.67, 0.88]:
@@ -73,11 +74,50 @@ def validate(step_path: str, model: dict) -> dict:
                     expected,
                 )
                 samples += 1
+    if model.get("end_style") == "chamfer":
+        depth = model["chamfer_depth_mm"]
+        ends = (
+            [0, model["length_mm"]]
+            if model["ends"] == "both"
+            else [0 if model["ends"] == "start" else model["length_mm"]]
+        )
+        for end in ends:
+            for t in [0.08, 0.3, 0.65, 0.92]:
+                z = t * depth if end == 0 else end - t * depth
+                envelope = model["end_radius_mm"] + t * (
+                    model["envelope_base_radius_mm"] - model["end_radius_mm"]
+                )
+                for theta_degrees in [23, 113, 203, 293]:
+                    theta = math.radians(theta_degrees)
+                    phase = (z - sign * (theta_degrees - 23) / 360 * pitch) % pitch
+                    for (x1, r1), (x2, r2) in pairwise(profile):
+                        if x1 <= phase <= x2:
+                            radius = r1 + (r2 - r1) * (phase - x1) / (x2 - x1)
+                            break
+                    radius = (
+                        max(radius, envelope) if internal else min(radius, envelope)
+                    )
+                    for delta in [-0.003, 0.003]:
+                        r = radius + delta
+                        classifier.Perform(
+                            gp_Pnt(r * math.cos(theta), r * math.sin(theta), z), 1e-6
+                        )
+                        expected = TopAbs_IN if (delta > 0) == internal else TopAbs_OUT
+                        assert classifier.State() == expected, (
+                            "Lead-in",
+                            end,
+                            t,
+                            theta_degrees,
+                            radius,
+                            delta,
+                        )
+                        end_samples += 1
     return {
         "kernel": __version__,
         "solid_count": len(solids),
         "volume_mm3": volume,
         "profile_and_hand_samples": samples,
+        "lead_in_samples": end_samples,
     }
 
 

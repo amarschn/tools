@@ -1,4 +1,4 @@
-# Thread Specification & Profile Visualizer
+# Thread Calculator & Identifier
 
 ## Purpose
 
@@ -9,13 +9,14 @@ run a preliminary axial-load check when needed:
 - Prepare product-based procurement notes for metal-forming, plastic-forming, and wood screws.
 - Inspect the basic 60° geometry of an ISO metric or Unified thread.
 - Find possible nominal threads from external or internal measurements, across metric and inch families.
-- Download an actual-size comparison PDF or a representative STEP solid, entirely in the browser.
+- Preview actual-size thread comparisons before downloading the PDF, or inspect and download a representative STEP solid, entirely in the browser.
 - Screen the smallest included thread whose tensile-stress area meets a direct axial proof-load requirement.
 
 The default **Specify a thread** tab opens on `M10 x 1.5-6H THRU`, with just
 family, nominal size, and feature visible. **Design thread for load** and
 **Find a thread** use the same result panel: callout or candidate, thread close-up, and the
-full detailed note. Dimensions and equations expand below them. The family
+full detailed note. Dimensions stay visible; each calculated row opens its
+equation and substituted values. The family
 guide and references sit below the workspace, available from every task.
 
 ## Requirements
@@ -23,7 +24,9 @@ guide and references sit below the workspace, available from every task.
 - Use the standard input-left/output-right layout, three task tabs, and references below them.
 - Match the homepage's palette, typography, flat surfaces, and compact controls. Give task tabs a bordered group and a filled active state.
 - Keep three controls in Specify and Load. Find starts with measurement type, diameter/units and optional pitch/units, without a family filter.
-- Collapse fit/hand, expert manufacturing/material choices, numerical results, and theory by default.
+- Collapse fit/hand, expert manufacturing/material choices, derivations, and theory by default.
+- Show dimensions once in compact rows. Use a right-side chevron for expandable rows and none for static labels.
+- Use compact inline sections for PDF/CAD settings and previews. Keep the rest of the tool usable while either is open; do not use modals.
 - Put a visible help button beside every input label, including expert and product details. Support hover, keyboard focus, and touch.
 - Keep fit classes compatible with the thread family and internal/external side.
 - Keep the short callout and detailed note derived from the same validated state.
@@ -55,6 +58,26 @@ inside that note rather than repeating in a separate panel. The end view is not
 a tolerance drawing. A close-up appears below it for every task. Machine-thread
 profiles use the shared geometry equations; pipe and product profiles are
 explicitly illustrative, not manufacturing geometry.
+
+The result sheet starts with the callout, with CSV in its header. On wide
+screens the profile sits beside the dimensions; narrower outputs stack them.
+Load screening evidence sits below the profile. The complete note remains
+visible. Calculated rows show their values even when closed; one
+click opens the equation, substitution, variable definitions and source. Only
+one derivation opens at a time. Static dimensions have no chevron. Load checks
+and their limitations appear with the relevant results, including a no-size result.
+
+**3D & STEP** and **Print comparison** are shaded inline headers below the
+results. Each has a right-side chevron; only one export section opens at a time.
+Related fields share rows, and settings sit beside a generated preview when
+space allows. Collapsing the section cancels pending work and releases preview
+resources. You can still change the thread, switch tasks or copy its note.
+Changes invalidate stale previews before download. Opening the section does not
+load the PDF or CAD runtime. Escape dismisses field help, not the section.
+
+Tool settings also expand in normal page flow, without an overlay or focus trap.
+Replacing an edited specification from Find uses inline confirmation with
+Replace specification and Keep current buttons. References stay below the workspace.
 
 Pipe diagrams pair an overall tapered/parallel view with a pitch-and-angle
 close-up. The annotations include TPI, pitch in inches and millimetres, and the
@@ -107,13 +130,29 @@ links open Find and nominal Explore links open Specify.
 
 ### Comparison PDFs
 
-Print comparison sheet produces a local vector PDF for Letter or A4. Current
-candidates share strips when their pitches agree. With no measurements, the
-common-pitch sheet draws from the supported catalog. Both include numbered
+The Print comparison section produces a local vector PDF for Letter or A4. **Selected
+sizes** starts with up to four current candidates, each on its own labeled row.
+Check or uncheck sizes and expand **Add other sizes** to search the catalog,
+up to 16 sizes per document. Sizes with the same pitch remain separate. Each
+machine-thread row includes its designation, pitch, diameter in mm and inches,
+and an actual-size diameter circle. External comparisons use nominal major
+diameter; internal comparisons use basic minor diameter, not tolerance limits.
+An unsure measurement basis requires an explicit choice for the sheet.
+
+**Common pitch strips** groups sizes by pitch instead, without diameter circles.
+Use it for a general reference sheet with no measurements. Both layouts include numbered
 pitch intervals, simplified actual-size axial profiles where supported, a
 worksheet, horizontal and vertical 100 mm checks and a 1 inch check on every
-page. Pipe sheets have pitch ticks only. No arbitrary schematic is printed as
+page. Pipe rows have pitch ticks only and explicitly omit diameter comparisons.
+No arbitrary schematic is printed as
 a physical thread form.
+
+**Preview comparison PDF** renders the generated PDF itself, with previous/next controls
+and a list of sizes on the current page. The preview fits the screen; it is not
+an on-screen size gage. Download and Open PDF to print reuse those exact bytes.
+Changing measurements, selections, paper or options discards the old preview
+and disables download until a new preview is ready. Closing it releases the
+renderer and document URL.
 
 Print at Actual size / 100%, with Fit and Shrink disabled. Measure both 100 mm
 checks before comparing. Fix print settings and reprint if either check is
@@ -123,38 +162,75 @@ thread gage; never force an unknown part into another thread.
 
 The optional readings and clickable return link are off by default. PDF points
 are computed directly from millimetres (`72 / 25.4`), not screen pixels. Separate
-page layouts paginate without resizing geometry. Print does not load CAD code.
+page layouts paginate without resizing geometry. Large diameters get taller
+rows. Print does not load CAD code. The pinned PDF.js 6.3.289 renderer, its worker
+and pdf-lib load only after Preview comparison PDF, never at tool startup. PDF.js renders
+to canvas for viewing; the downloaded and printed PDF retains vector geometry.
 
 ### Representative STEP geometry
 
-Download STEP supports metric/UNC/UNF/UNEF external stud sections and internal
+The 3D & STEP section supports metric/UNC/UNF/UNEF external stud sections and internal
 through-thread reference coupons, in either hand. Length and coupon body diameter
 are explicit export choices in mm. Blank length suggests 2d and blank coupon
 diameter 1.8d, where d is nominal thread diameter. A fine-thread default exceeding
 the 20-turn cap requires a shorter entered specimen. Length must be at least
-one pitch and no more than 250 mm. Blind specifications require an explicit
+one pitch and no more than 250 mm, with at least one pitch remaining between
+chamfers. Blind specifications require an explicit
 choice to export a separate through coupon; blind bottoms are not modeled.
 
-The solids have helical surfaces and square clipped ends with partial turns.
-They use the same simplified axial profile as the screen/PDF: no tolerance
-allowance, rounded root, coating, lead-in or runout. The fit class is a drawing
+The solids have helical surfaces and finished lead-in chamfers at both ends by
+default. **End geometry** offers start only, end only, a custom finished angle
+and axial chamfer length, or square ends for reference. External chamfers taper
+the stud; internal chamfers open the coupon's bore. The suggested 45° angle
+and end radius 0.05 pitch beyond the root are representative choices, not
+standard table dimensions. Angles are measured from the thread axis.
+
+Opening the CAD options appends a clearly labeled, export-only section to the
+visible detailed note. It records the specimen, overall length, end dimensions,
+and remaining full-profile envelope span. Copy and CSV include that same text.
+The full-profile span excludes the chamfers but is not a guaranteed usable
+engagement length: partial turns remain at its boundaries. These export choices
+do not change the part drawing's full-thread-length requirement.
+
+For rolled threads, the finished chamfer is not a rolling-blank instruction;
+material displacement and tooling affect the blank preparation. ISO 4753 is a
+reference for metric external fastener ends only. No end-type compliance is
+claimed. Internal notes distinguish the finished entry chamfer from a tap's
+cutting lead. Pilot/dog points and rolling-process simulation are not included.
+
+The underlying axial profile is shared with the screen/PDF, with no tolerance
+allowance, rounded root, coating or runout. The fit class is a drawing
 requirement, not modeled limits. The output is representative nominal geometry,
 not manufacturing geometry or a native parametric feature tree. Pipe and
 supplier-specific screw STEP exports remain unavailable pending validated data.
 
+**Preview 3D** generates the STEP, reimports it, and meshes the reimported solid
+for display. **Download STEP** saves those same checked bytes. Orbit, zoom, pan,
+optional edges and an axial section help inspect it; the section changes only
+the display, never the downloaded solid. A persistent label identifies nominal
+thread, hand, side, length and end treatment. That identification is also embedded
+as the STEP product/body name, not just in the download filename.
+
 Replicad 1.1.0 and its single-thread OCCT 8.0.1 WASM kernel run in a dedicated
-worker, loaded only on Download STEP. All assets are same-origin static files.
+worker, loaded only on Preview 3D. Three.js 0.180.0 also loads only then and
+renders on interaction, without an idle animation loop. The viewer needs WebGL 2;
+if graphics initialization fails or the context is lost, the checked STEP can
+still be downloaded. Keyboard controls and both themes are supported. Closing
+the preview disposes its graphics resources. All assets are same-origin static files.
 There is no STL, upload, CAD API, runtime Node process or cross-origin-isolation
 header requirement. Cancel terminates the worker. Changed inputs discard the
 job; a 90-second timeout allows retry. Each successful export checks kernel
-validity and the expected threaded volume. The worker is recycled after three
-exports to bound retained kernel memory.
+validity and the expected threaded volume, including analytical chamfer clipping,
+then checks STEP round-trip validity and volume before displaying it.
+The worker is recycled after three jobs to bound retained kernel memory.
 
 Dependencies, pinned source revisions, license texts and reproduction commands
 are documented in [vendor/NOTICE.md](vendor/NOTICE.md).
 The CAD runtime is 23,655,312 bytes before compression (7,354,364 bytes with
 gzip in the local asset check); the WASM file accounts for 22,980,267 bytes.
-Actual transfer size depends on the static host's compression and cache.
+The viewer adds 758,751 JavaScript bytes before compression. Actual transfer
+size depends on the static host's compression and cache. Neither runtime is
+requested during normal calculation, Find, or PDF use.
 
 ### Design thread for load
 
@@ -196,15 +272,18 @@ section tabs, and URL restoration. `thread-specification.css` uses the tool's
 existing theme tokens. Specification logic has no dependency on browser state.
 `thread-help.js` turns the fields' authored help and live guidance into visible,
 screen-reader-associated tooltips without maintaining a second explanation
-catalog. Tooltips stay inside the viewport and below the settings overlay.
+catalog. Tooltips stay inside the viewport and close when their section collapses.
 `thread-family-diagram.js` draws pipe/product schematics from the validated
 specification's `diagram` payload. Dimension lines and arrowheads share their
 endpoints. The overall and close-up views stack at narrow output widths.
 
 `pycalcs.thread_models` owns the millimetre axial-profile contract, side-aware
 Find comparisons and STEP validation. `thread-finder.js` owns measurement state;
-`thread-print.js` lays out physical PDF vectors; `thread-cad-worker.js` constructs
-solids and writes STEP. `thread-exports.js` handles lazy loading and job snapshots.
+`thread-print-ui.js` manages the shortlist, preview lifecycle and downloads;
+`thread-print.js` lays out physical PDF vectors; `thread-pdf-preview.js` renders
+those bytes with PDF.js. `thread-cad-worker.js` constructs solids, writes and
+reimports STEP, and meshes that solid. `thread-cad-viewer.js` displays this mesh.
+`thread-exports.js` provides export context, inline section lifecycle handling and CAD job snapshots.
 The SVG maps the physical profile into its explanatory layout without defining
 a second tooth shape.
 
@@ -276,8 +355,18 @@ The size screen compares factored direct axial demand with proof strength times 
 
 ## References
 
+The page's [standards and coverage table](index.html#standards-coverage) links
+ISO 68-1, 724, 261 and 965-1; ASME B1.1, B1.20.1 and B1.20.3; ISO 7-1 and
+228-1; and VDI 2230 Part 1. It distinguishes implemented basic dimensions and
+designation guidance from reference-only material. No standards-conformance
+claim, numeric tolerance limits, pipe gage-plane verification or VDI 2230 joint
+calculation is implied. Standards stay in the reference section, not appended
+to the tool name as a certification claim.
+
 - [ISO 68-1:2023](https://www.iso.org/standard/85107.html), ISO general purpose screw threads, basic and design profiles for metric threads.
 - [ISO 724:2023](https://www.iso.org/standard/85104.html), ISO metric thread basic dimensions.
+- [ISO 4753:2011](https://www.iso.org/standard/55928.html), ends of parts with external ISO metric screw threads. Reference only, not a claim that the suggested CAD chamfer matches a standardized end type.
+- [CJWinter cylindrical thread-rolling dies](https://www.cjwinter.com/thread-rolling/cylindrical-machine-dies/), blank chamfer preparation and how rolling changes the finished angle.
 - [ASME B1.1](https://www.asme.org/codes-standards/find-codes-standards/b1-1-unified-inch-screw-threads-un-unr-thread-form), Unified inch thread form and designation.
 - [Optimas UNC, UNF and UNEF table](https://optimas.com/en_gb/technical-resources/unc-and-unf-thread/), nominal size/pitch pairs only.
 - [Bossard metric tolerances](https://www.bossard.com/ch-en/-/media/bossard-group/website/documents/technical-resources/en/f-079-en.pdf), ISO 965 fit conventions.
@@ -335,21 +424,39 @@ attachment, unclipped labels, and 320px layouts in both themes.
 `tests/browser/thread-find-exports.cjs` checks Find/legacy state, unit round trips,
 PDF page boxes and exact scale-check vectors, lazy CAD loading, cancellation,
 stale jobs and mobile help. `tests/browser/thread-cad-artifacts.cjs` exports and
-reimports ten fixtures, then calls `validate_thread_step.py` using a separately
+reimports fourteen fixtures, then calls `validate_thread_step.py` using a separately
 installed OCP 7.9.3.1 kernel. These developer tests require Playwright and OCP;
 neither is a website runtime dependency.
 
-On the local macOS ARM desktop (2026-09-06), construction plus STEP preparation
-took about 1.0–4.1 s for ordinary fixtures after kernel initialization. The
-20-turn M4 x 0.5 fixture took 6.6 s. A 40-turn trial failed the threaded-volume
+`tests/browser/thread-cad-preview.cjs` checks the reimported mesh, embedded STEP
+name, chamfer detail-note copying, section and edge controls, keyboard input,
+stale/canceled jobs, and 320px light/dark views. The browser test uses software
+WebGL rendering; that is a test setup, not a site requirement.
+
+`tests/browser/thread-output-sheet.cjs` checks visible dimensions, direct
+derivation expansion, current substituted values, chevrons, keyboard operation,
+nonmodal settings, inline exports, lazy loading and mobile light/dark layouts.
+It also checks that the default desktop output is at least 20% shorter than
+the previous 1,021px result sheet, without hiding dimensions or truncating notes.
+
+`tests/browser/thread-pdf-preview.cjs` checks preview-before-download, same-pitch
+size separation, selection and pagination, exact PDF download bytes, diameter
+references, lazy loading, retry, stale previews and mobile light/dark layouts.
+
+On the local macOS ARM desktop (2026-09-07), chamfered construction plus STEP
+round-trip checks took about 1.2–9.5 s across the first ten fixtures after kernel
+initialization, with the 20-turn M4 x 0.5 fixture taking 9.5 s. A 40-turn trial failed the threaded-volume
 check, so the UI caps exports at 20 turns. These are local measurements, not a
 mobile-device or network-speed guarantee. Every fixture passed separate-kernel
-closed-solid, volume and 40 axial-profile/handedness sample checks.
+closed-solid, volume and 40 axial-profile/handedness sample checks. Chamfered
+fixtures also check 32 surface-neighbor points per treated end. One-ended,
+custom-angle and square-ended specimens are included.
 Repeated-export tests reused each worker for three jobs. Fresh kernel
 initialization from the local static host took 63–71 ms after JavaScript module
 loading; warm initialization was below the timer's resolution. This is not an
 internet cold-download measurement. WASM linear memory ranged from 100 MiB to
-about 163 MiB in this sequence, excluding other browser/JavaScript memory.
+about 163 MiB in the original square-ended sequence and reached 199 MiB in the
+chamfered sequence, excluding other browser/JavaScript memory.
 
 Release still requires a maintainer's physical Letter/A4 print calibration and
 known metric/inch part comparison, plus visual review in their normal CAD app.

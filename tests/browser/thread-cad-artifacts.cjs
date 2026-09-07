@@ -21,10 +21,14 @@ const assert = require('node:assert/strict');
             ['unc', '1/4-20 UNC', 'internal', 'RH', 6.35],
             ['unef', '1/4-32 UNEF', 'internal', 'LH', 4],
             ['unc', '2-4.5 UNC', 'external', 'RH', 25],
+            ['metric', 'M10x1.5', 'external', 'RH', 6, { ends: 'start', chamfer_angle: 30 }],
+            ['metric', 'M10x1.5', 'internal', 'LH', 6, { ends: 'end', chamfer_angle: 60, chamfer_depth: .7 }],
+            ['metric', 'M10x1.5', 'external', 'LH', 1.5, { end_style: 'square' }],
+            ['unc', '1/4-20 UNC', 'internal', 'RH', 6.35, { end_style: 'square' }],
         ];
-        for (const [family, size, specimen, hand, length] of cases) {
+        for (const [family, size, specimen, hand, length, ends = {}] of cases) {
             const model = JSON.parse(execFileSync('python3.13', ['-c',
-                `import json; from pycalcs.thread_models import step_model; print(json.dumps(step_model(json.dumps(${JSON.stringify({family, size, specimen, hand, length})}))))`
+                `import json; from pycalcs.thread_models import step_model; print(json.dumps(step_model(json.dumps(${JSON.stringify({family, size, specimen, hand, length, ...ends})}))))`
             ], { encoding: 'utf8' }));
             const result = await page.evaluate((model) => new Promise((resolve, reject) => {
                 const worker = window.cadTestWorker ||= new Worker('thread-cad-worker.js', { type: 'module' });
@@ -49,7 +53,8 @@ const assert = require('node:assert/strict');
             result.verification.bounds.forEach((point, end) => point.forEach((value, axis) => assert.ok(Math.abs(value - expectedBounds[end][axis]) < .005, 'Physical bounding dimensions')));
             assert.match(result.text, /MANIFOLD_SOLID_BREP/);
             assert.match(result.text, /SI_UNIT\(.MILLI.,.METRE.\)/);
-            const stem = '/private/tmp/thread-' + `${size}-${specimen}-${hand}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+            assert.ok(result.text.replace(/[\r\n]/g, '').includes(model.step_name), 'Embedded STEP product name (ignoring physical line wrapping)');
+            const stem = '/private/tmp/thread-' + `${size}-${specimen}-${hand}-${model.end_style}-${model.ends}`.replace(/[^a-zA-Z0-9._-]/g, '_');
             fs.writeFileSync(stem + '.step', result.text);
             fs.writeFileSync(stem + '.json', JSON.stringify(model));
             const independent = execFileSync('python3.13', ['tests/browser/validate_thread_step.py', stem + '.step', stem + '.json'], { encoding: 'utf8' });

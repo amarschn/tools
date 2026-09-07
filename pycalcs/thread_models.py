@@ -380,6 +380,70 @@ def comparison_records() -> list[dict[str, Any]]:
     return list(_records())
 
 
+def _profile_area(profile: list, pitch: float, radius: float, internal: bool) -> float:
+    r"""Integrate a helical section clipped by a circular end envelope.
+
+    Parameters are an axial/radial profile in mm, pitch in mm, envelope radius
+    in mm and internal/external side. Returns angular-average area in mm².
+    The internal result is bore area; the external result is solid area.
+    Each linear profile segment is split where it crosses the envelope.
+    Equation: \(A = \frac{\pi}{P}\int_0^P \min(r(x)^2,q^2)\,dx\)
+    for an external thread; use max for the internal bore. Here P is pitch,
+    x is axial position, r is profile radius and q is envelope radius.
+    This is geometry integration, not a standard
+    acceptance or strength formula.
+    """
+    integral = 0.0
+    for (x1, r1), (x2, r2) in pairwise(profile):
+        cuts = [0.0, 1.0]
+        if r2 != r1 and 0 < (radius - r1) / (r2 - r1) < 1:
+            cuts.insert(1, (radius - r1) / (r2 - r1))
+        for a, b in pairwise(cuts):
+            ra, rb = r1 + a * (r2 - r1), r1 + b * (r2 - r1)
+            clipped = ((ra + rb) / 2 < radius) if internal else ((ra + rb) / 2 > radius)
+            integral += (
+                (x2 - x1)
+                * (b - a)
+                * (radius * radius if clipped else (ra * ra + ra * rb + rb * rb) / 3)
+            )
+    return math.pi * integral / pitch
+
+
+def _end_volume(
+    profile: list, pitch: float, depth: float, tip: float, base: float, internal: bool
+) -> float:
+    r"""Return clipped solid/bore volume for one conical lead-in, in mm³.
+
+    profile and pitch use mm; depth is axial chamfer length; tip and base are
+    envelope radii at the end and the full-profile boundary. internal selects
+    bore rather than solid volume. \(V = \int_0^c A(q(z))\,dz\), where c is
+    axial depth, z is axial position, A is clipped area and q varies linearly
+    from tip to base radius.
+    Split at every profile radius. A is cubic on each interval, so Simpson's
+    rule is exact there apart from floating-point rounding. This independent
+    analytical reference checks the CAD boolean, without using a CAD kernel.
+    """
+    cuts = sorted(
+        {
+            0.0,
+            1.0,
+            *(
+                (r - tip) / (base - tip)
+                for _, r in profile
+                if 0 < (r - tip) / (base - tip) < 1
+            ),
+        }
+    )
+    result = 0.0
+    for a, b in pairwise(cuts):
+        areas = [
+            _profile_area(profile, pitch, tip + t * (base - tip), internal)
+            for t in (a, (a + b) / 2, b)
+        ]
+        result += depth * (b - a) * (areas[0] + 4 * areas[1] + areas[2]) / 6
+    return result
+
+
 def step_model(state_json: str) -> dict[str, Any]:
     r"""Validate a nominal straight-thread specimen for the browser CAD worker.
 
@@ -388,10 +452,16 @@ def step_model(state_json: str) -> dict[str, Any]:
         JSON with family, size, hand RH/LH, specimen external/internal, length
         and body_diameter in mm. Explicit blind_coupon acknowledgement required
         when feature is blind. Blank length uses the export-only default 2d.
+        end_style is chamfer (default) or square; ends is both, start or end.
+        chamfer_angle is the finished angle to the axis, in degrees (default
+        45). chamfer_depth is axial length in mm, blank for a suggested end
+        diameter that clears the root by 0.05 pitch radially. These choices
+        define a representative specimen, not ISO 4753 dimensional compliance.
 
     ---Returns---
     model : dict
-        Physical profile, bounded length, body diameter and representation note.
+        Physical profile, end envelope, bounded length, body diameter,
+        independent reference volume, embedded STEP name and CAD detail note.
 
     ---LaTeX---
     L_0 = 2d
@@ -399,8 +469,12 @@ def step_model(state_json: str) -> dict[str, Any]:
     V = \pi L \sum_i \Delta x_i (r_i^2 + r_i r_{i+1} + r_{i+1}^2) / (3P)
 
     L_0: suggested specimen length; d: major diameter; L: model length;
-    P: pitch; N: turns. Millimetres throughout. Ends clip partial threads;
-    L is not usable full-thread length. V: external solid volume (mm cubed);
+    P: pitch; N: turns. Millimetres throughout. L is overall specimen length,
+    not usable full-thread length. The equation above is the square-end volume.
+    Chamfers replace each end segment by integral A(q(z)) dz, where q is the
+    linear conical envelope and A clips the radial profile (see _end_volume).
+    The full-profile envelope span is L minus the sum of chamfer axial lengths.
+    V: external solid volume (mm cubed);
     x_i, r_i: axial/radial profile vertices. The internal coupon subtracts this
     swept bore volume from its surrounding cylinder. This identity integrates
     the piecewise linear axial profile over a full angular revolution at each
@@ -458,6 +532,87 @@ def step_model(state_json: str) -> dict[str, Any]:
         if specimen == "internal"
         else swept_volume
     )
+    internal = specimen == "internal"
+    style, ends = state.get("end_style", "chamfer"), state.get("ends", "both")
+    if style not in ("chamfer", "square") or ends not in ("both", "start", "end"):
+        raise ValueError(
+            "Choose chamfered or square ends, at the start, end or both ends."
+        )
+    angle = _number(state, "chamfer_angle", 45) if style == "chamfer" else 45.0
+    if not 15 <= angle <= 75:
+        raise ValueError(
+            "Use a finished chamfer angle from 15 to 75 degrees to the axis."
+        )
+    base = min(r for _, r in profile) if internal else max(r for _, r in profile)
+    root = max(r for _, r in profile) if internal else min(r for _, r in profile)
+    slope = math.tan(math.radians(angle))
+    depth = (
+        _number(state, "chamfer_depth", (abs(root - base) + 0.05 * pitch) / slope)
+        if style == "chamfer"
+        else 0.0
+    )
+    tip = base + depth * slope * (1 if internal else -1)
+    count = (2 if ends == "both" else 1) if style == "chamfer" else 0
+    if style == "chamfer":
+        if tip <= 0 or (tip < root if internal else tip > root):
+            raise ValueError(
+                "The chamfer must clear the thread root and leave a positive end diameter."
+            )
+        if internal and tip >= body / 2 - 0.1:
+            raise ValueError(
+                "The entry chamfer must leave more than 0.1 mm of coupon wall."
+            )
+        if length - count * depth < pitch - 1e-10:
+            raise ValueError(
+                "Leave at least one pitch of full-profile span between the chamfers. Increase length or reduce the lead-in."
+            )
+        chamfer_volume = _end_volume(profile, pitch, depth, tip, base, internal)
+        delta = count * (chamfer_volume - swept_volume / length * depth)
+        expected_volume += -delta if internal else delta
+    start = depth if style == "chamfer" and ends in ("both", "start") else 0.0
+    finish = length - (depth if style == "chamfer" and ends in ("both", "end") else 0.0)
+    location = {
+        "both": "BOTH FACES" if internal else "BOTH ENDS",
+        "start": "START FACE (z = 0)",
+        "end": "END FACE (z = overall length)",
+    }[ends]
+    end_note = (
+        f"FINISHED {'ENTRY' if internal else 'LEAD-IN'} CHAMFER: {location}; "
+        f"axial length {depth:.4f} mm each; "
+        f"{angle:g} deg to the thread axis; {'entry' if internal else 'tip'} diameter {2 * tip:.4f} mm."
+        if style == "chamfer"
+        else "SQUARE ENDS: partial threads meet the end faces; no lead-in is modeled."
+    )
+    cad_note = "\n".join(
+        [
+            "REPRESENTATIVE CAD SPECIMEN (EXPORT ONLY)",
+            f"{record['designation']} {hand}; {'internal through-thread coupon' if internal else 'external stud section'}.",
+            f"OVERALL MODEL LENGTH: {length:.4f} mm. "
+            + (f"COUPON OUTSIDE DIAMETER: {body:.4f} mm." if internal else ""),
+            end_note,
+            (
+                f"FULL-PROFILE ENVELOPE SPAN: {finish - start:.4f} mm (z = {start:.4f} to {finish:.4f} mm). "
+                "Excludes chamfers; not a guaranteed usable engagement length. End phase still produces partial turns."
+            ),
+            (
+                "These specimen choices do not replace drawing dimensions or full-thread-length requirements. "
+                "Confirm end dimensions and usable engagement on the released part drawing."
+            ),
+            (
+                "When selected, the entry chamfer describes the finished hole, not the tap's cutting lead. "
+                "No standardized entry dimensions or tapping process are specified."
+                if internal
+                else "ISO 4753 is a reference for metric external fastener ends only. No end-type compliance is claimed. "
+                "For rolled external threads, specify the FINISHED end shape. Blank chamfer and tooling are process-dependent; "
+                "the finished angle is not a rolling-blank instruction."
+            ),
+            (
+                "Nominal simplified geometry only. Fit classes are requirements, not modeled tolerance limits. "
+                "No root rounding, coating, runout, blind bottom, pilot/dog point or rolling-process simulation. "
+                "A viewer section removes material on screen only; the STEP remains a complete solid."
+            ),
+        ]
+    )
     return {
         **model,
         "designation": record["designation"],
@@ -468,6 +623,21 @@ def step_model(state_json: str) -> dict[str, Any]:
         "hand": hand,
         "specimen": specimen,
         "length_is_default": state.get("length") in (None, ""),
-        "end_condition": "Square clipped ends; partial turns, no runout or entry chamfer.",
+        "end_style": style,
+        "ends": ends,
+        "chamfer_depth_mm": depth,
+        "chamfer_angle_deg": angle,
+        "end_radius_mm": tip,
+        "envelope_base_radius_mm": base,
+        "full_profile_range_mm": [start, finish],
+        "end_condition": end_note,
+        "cad_note": cad_note,
+        "step_name": f"{record['designation']} {hand} {specimen} L{length:g}mm "
+        + (
+            f"CHAMFER {ends.upper()} C{depth:.4f}mm A{angle:g}deg"
+            if style == "chamfer"
+            else "SQUARE ENDS"
+        )
+        + " REPRESENTATIVE v2",
         "tolerance_requirement": state.get("fit", "Unspecified"),
     }

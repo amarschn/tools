@@ -101,18 +101,24 @@ def test_three_tasks_share_a_single_result_workspace() -> None:
 
 
 def test_complexity_is_collapsed_until_requested() -> None:
-    """Expert inputs and calculation evidence are opt-in; copyable notes are visible."""
+    """Inputs and derivations expand; the result sheet and notes stay visible."""
     source = INDEX.read_text(encoding="utf-8")
     for element_id in (
         "thread-details",
         "expert-options",
-        "dimension-details",
-        "calculation-details",
         "thread-guide",
     ):
         tag = re.search(rf'<details[^>]+id="{element_id}"[^>]*>', source)
         assert tag is not None
         assert " open" not in tag.group()
+    assert '<section id="dimension-details"' in source
+    assert 'id="calculation-details"' not in source
+    assert source.count('name="thread-equation"') == 11
+    for kind in ("step", "print"):
+        assert f'<details id="{kind}-options"' in source
+        assert f'<summary id="open-{kind}">' in source
+    assert '<dialog' not in source
+    assert 'aria-modal="true"' not in source
 
 
 def test_copy_icons_are_next_to_visible_callout_and_note() -> None:

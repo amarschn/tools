@@ -189,7 +189,6 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         assert.equal(await callout(), 'M10 x 1.5-6g');
         assert.equal(await page.locator('#thread-profile-svg').evaluate((node, original) => node === original, sharedProfile), true);
         assert.match(await page.locator('#result-evidence').innerText(), /Proof margin/);
-        await open('calculation-details');
         assert.match(await page.locator('#evidence-heading').innerText(), /Capacity boundary/i);
         await page.locator('#axial_load').fill('1000000');
         await page.locator('#spec-update').click();
@@ -212,7 +211,6 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         await page.locator('#proof_strength').fill('450');
         await page.locator('#spec-update').click();
         assert.match(await page.locator('#spec-note').textContent(), /450 MPa/);
-        await open('dimension-details');
         const loadDownloadEvent = page.waitForEvent('download');
         await page.locator('#export-results').click();
         const loadDownload = await loadDownloadEvent;
@@ -292,7 +290,6 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         await select('spec-size', '1 1/2-18 UNEF');
         assert.equal(await callout(), '1 1/2-18 UNEF-2B THRU');
         assert.equal(await page.locator('#machine-profile').isVisible(), true);
-        await open('dimension-details');
         const downloadEvent = page.waitForEvent('download');
         await page.locator('#export-results').click();
         assert.equal((await downloadEvent).suggestedFilename(), 'thread-results.csv');
@@ -337,7 +334,7 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         await page.locator('[data-setting-density="compact"]').click();
         await page.locator('[data-setting-precision="4"]').click();
         await page.keyboard.press('Escape');
-        assert.equal(await page.locator('#settings-panel').getAttribute('aria-hidden'), 'true');
+        assert.equal(await page.locator('#settings-panel').isVisible(), false);
         await page.setViewportSize({ width: 390, height: 844 });
         await noOverflow();
         await help('spec-finish').scrollIntoViewIfNeeded();

@@ -1,0 +1,111 @@
+/* Dense worksheet and nonmodal inline export regression. */
+const { chromium } = require('/opt/homebrew/lib/node_modules/@playwright/test');
+const assert = require('node:assert/strict');
+const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-visualizer-sizer/';
+(async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+        const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, serviceWorkers: 'block' });
+        const errors = [], requests = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+        page.on('request', (request) => requests.push(request.url()));
+        await page.goto(url);
+        await page.locator('#tool-main[data-boot-state="ready"]').waitFor({ timeout: 60000 });
+        assert.equal(await page.locator('#dimension-details').isVisible(), true);
+        assert.equal(await page.locator('#dimension-details details details').count(), 0);
+        assert.equal(await page.locator('#spec-output .ledger-row:visible').count(), 6);
+        assert.equal(await page.locator('#spec-output .dimension-static:visible').count(), 2);
+        const row = page.locator('[data-ledger="pitch-diameter"]');
+        assert.match(await row.innerText(), /9.026 mm/);
+        await row.locator('summary').focus();
+        await page.keyboard.press('Enter');
+        assert.equal(await row.getAttribute('open'), '');
+        assert.equal(await row.locator('.substitution-block').isVisible(), true);
+        await row.locator('mjx-container').first().waitFor();
+        await page.locator('#spec-size').selectOption('M8x1.25');
+        await page.waitForFunction(() => document.getElementById('ledger-pitch-diameter-result').textContent.includes('7.188'));
+        await page.locator('#subst-pitch-diameter mjx-container').waitFor();
+        assert.doesNotMatch(await page.locator('#subst-pitch-diameter').innerText(), /\$\$/);
+        await page.locator('#spec-size').selectOption('M10x1.5');
+        await page.waitForFunction(() => document.getElementById('ledger-pitch-diameter-result').textContent.includes('9.026'));
+        assert.notEqual(await row.locator('summary').evaluate((node) => getComputedStyle(node, '::after').display), 'none');
+        await page.locator('[data-ledger="internal-minor"] > summary').click();
+        assert.equal(await row.getAttribute('open'), null);
+        await page.locator('[data-ledger="internal-minor"] > summary').click();
+        assert.equal(await page.locator('#spec-note').evaluate((note) => note.scrollHeight <= note.clientHeight + 1), true);
+        const height = await page.locator('#spec-output').evaluate((node) => Math.round(node.getBoundingClientRect().height));
+        console.log('Output height:', height, '(previous sheet: 1021px)');
+        assert.ok(height < 800, 'Default output should be at least 20% shorter without hiding results or notes');
+        const profile = await page.locator('.profile-closeup').boundingBox(), table = await page.locator('#dimension-details').boundingBox();
+        assert.ok(profile.x + profile.width <= table.x, 'Wide output places drawing beside dimensions');
+        assert.equal(await page.locator('dialog, [aria-modal="true"]').count(), 0);
+        await page.screenshot({ path: '/private/tmp/thread-output-inline-desktop.png', fullPage: true });
+        await page.locator('#tab-load').click();
+        await page.waitForFunction(() => document.getElementById('spec-output').dataset.stale === 'false');
+        assert.equal(await page.locator('[data-ledger="proof-margin"]').isVisible(), true);
+        await page.screenshot({ path: '/private/tmp/thread-output-inline-load.png', fullPage: true });
+        await page.locator('#tab-specify').click();
+        for (const kind of ['step', 'print']) {
+            const summary = page.locator('#open-' + kind), panel = page.locator('#' + kind + '-options');
+            await summary.focus(); await page.keyboard.press('Enter');
+            assert.equal(await panel.getAttribute('open'), '');
+            assert.equal(await page.locator('#spec-size').isEnabled(), true);
+            if (kind === 'step') assert.equal(await page.locator('[data-help-for="step-blind"]').isVisible(), false);
+            const field = kind === 'step' ? 'step-length' : 'print-paper';
+            await page.locator('[data-help-for="' + field + '"]').click();
+            const tooltip = page.locator('#' + field + '-tooltip');
+            assert.equal(await tooltip.isVisible(), true);
+            await page.keyboard.press('Escape');
+            assert.equal(await tooltip.isVisible(), false);
+            assert.equal(await panel.getAttribute('open'), '', 'Escape closes help without hiding the inline workflow');
+            await page.locator('#spec-size').selectOption('M8x1.25');
+            await page.waitForFunction(() => document.getElementById('drawing-callout').textContent.includes('M8'));
+            assert.equal(await panel.getAttribute('open'), '', 'Editing the part remains possible with exports open');
+            await page.locator('#spec-size').selectOption('M10x1.5');
+            await page.waitForFunction(() => document.getElementById('drawing-callout').textContent.includes('M10'));
+            await panel.screenshot({ path: '/private/tmp/thread-' + kind + '-inline-settings.png' });
+            await summary.click();
+            assert.equal(await panel.getAttribute('open'), null);
+        }
+        await page.locator('#open-step').click();
+        await page.locator('#open-print').click();
+        assert.equal(await page.locator('#step-options').getAttribute('open'), null);
+        assert.equal(await page.locator('.export-panel[open]').count(), 1);
+        await page.locator('#open-print').click();
+        await page.locator('#settings-button').click();
+        assert.equal(await page.locator('#settings-panel').evaluate((node) => getComputedStyle(node).position), 'static');
+        await page.locator('#spec-size').focus();
+        assert.equal(await page.locator('#spec-size').evaluate((node) => node === document.activeElement), true);
+        await page.locator('#settings-close').click();
+        assert.equal(requests.some((path) => /replicad|three-0|thread-cad-worker|pdfjs-dist|pdf-lib/.test(path)), false, 'Opening settings cannot load heavy runtimes');
+        for (const theme of ['light', 'dark']) {
+            await page.setViewportSize({ width: 320, height: 800 });
+            await page.evaluate((theme) => document.body.dataset.theme = theme, theme);
+            await page.screenshot({ path: '/private/tmp/thread-output-inline-' + theme + '-mobile.png', fullPage: true });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+            await page.locator('#open-step').click();
+            await page.locator('#step-end-options > summary').click();
+            await page.locator('[data-help-for="step-chamfer-depth"]').click();
+            assert.equal(await page.locator('#step-chamfer-depth-tooltip').isVisible(), true);
+            assert.equal(await page.locator('#step-options').evaluate((node) => node.scrollWidth <= node.clientWidth), true);
+            await page.keyboard.press('Escape');
+            await page.locator('#step-options').screenshot({ path: '/private/tmp/thread-step-inline-' + theme + '-mobile.png' });
+            await page.locator('#step-end-options > summary').click();
+            await page.locator('#open-step').click();
+        }
+        const touch = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+        touch.on('pageerror', (error) => errors.push(error.message));
+        await touch.goto(url);
+        await touch.locator('#tool-main[data-boot-state="ready"]').waitFor({ timeout: 60000 });
+        for (const selector of ['#open-step', '#open-print', '[data-ledger="pitch-diameter"] > summary', '#copy-detailed-note']) {
+            assert.ok((await touch.locator(selector).boundingBox()).height >= 44, 'Touch targets remain 44px: ' + selector);
+        }
+        await touch.locator('#open-step').tap();
+        assert.ok((await touch.locator('#step-length').boundingBox()).height >= 44);
+        assert.equal(await touch.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await touch.close();
+        assert.deepEqual(errors, []);
+        console.log('PASS dense dimensions, inline exports, no modals, keyboard/help, mobile themes and lazy settings.');
+    } finally { await browser.close(); }
+})().catch((error) => { console.error(error); process.exit(1); });

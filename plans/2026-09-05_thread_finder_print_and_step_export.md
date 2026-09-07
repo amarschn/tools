@@ -480,3 +480,71 @@ guarantee. Find selects and highlights while incompatible unversioned code is
 still cached. The UI and Find/export suites pass, as do all 1,363 Python tests,
 Ruff, cache-key consistency, SEO checks and whitespace checks. Release gates
 above are unchanged.
+
+### Naming, standards and PDF preview (2026-09-06)
+
+- Renamed the page and catalog entry to Thread Calculator & Identifier, with
+  Metric & Inch Threads in the page title. The existing URL stays valid.
+  Regenerated SEO descriptions and added search tags for the covered standards.
+- Added linked ISO/ASME coverage notes below the workspace. Numerical tolerance
+  limits and pipe gage-plane verification remain unimplemented. VDI 2230 is a
+  related reference only, not a claim about the axial-load screen.
+- Selected-size sheets keep up to 16 separately labeled sizes, including sizes
+  with the same pitch. Each machine-thread row has a true-size diameter circle
+  and nominal-major or basic-minor dimension. Common pitch strips remain a
+  separate layout. Pipe rows explicitly omit diameter comparisons.
+- PDF.js 6.3.289 and its worker load only on Preview comparison PDF. The canvas
+  renders the generated vector PDF; download and native print reuse its bytes.
+  Edits and panel closure discard the old document. Failed imports can retry.
+- The PDF browser test checks download byte identity, selection, unknown basis,
+  delayed-load cancellation, retries, pagination, mobile help and both themes.
+  It independently checks decoded vectors across 172 pages spanning every
+  supported nominal record, both sides, Letter and A4. No scaled diameters,
+  clipped vectors or overlapping row bounds were found.
+- All 1,363 Python tests and the specification, Find/export, preview and startup
+  browser suites pass. Warm startup measured 0.46–0.50 seconds locally, including
+  slow-network and offline runs. No PDF or CAD runtime loads at startup.
+  Physical printer calibration and the release gates above remain pending.
+
+### Reimported STEP viewer and finished lead-ins (2026-09-07)
+
+- Added Preview 3D before Download STEP. The worker writes STEP, reimports it,
+  checks validity and volume, and meshes that reimported solid for the viewer.
+  Download reuses the same bytes. The STEP product name and persistent preview
+  label identify thread, hand, side, overall length and end treatment.
+- Added finished chamfers to both stud ends or coupon entries by default.
+  Collapsed end details allow one end, custom finished angle/axial length, or
+  square ends. Defaults are representative root-clearance choices, not ISO
+  4753 table dimensions. Internal entry dimensions and external tip dimensions
+  are checked, with at least one pitch of full-profile span required.
+- The visible detailed note, clipboard and CSV share an export-only CAD note.
+  It separates overall length from full-profile span and required usable
+  engagement. Writing review clarified finished geometry versus rolling-blank
+  preparation, internal entry versus tap lead, and reference-only ISO 4753
+  coverage. Drawing requirements are not silently changed by export defaults.
+- Pinned Three.js 0.180.0 supplies orbit/zoom/pan and optional edges. An axial
+  stencil-capped section affects display only. Theme and keyboard support,
+  graphics-loss fallback, stale/cancel protection and resource disposal are
+  included. Rendering is on demand, not an idle animation loop. The 758,751-byte
+  viewer and CAD kernel load only on Preview 3D, with no server or STL added.
+- Fourteen STEP fixtures passed independent OCP 7.9.3.1 checks for one valid
+  solid, volume and 40 profile/hand samples each. Chamfered fixtures add 32
+  surface-neighbor samples per treated end, including one-ended and custom-angle
+  cases. Analytical clipped-profile integration independently checks end volume.
+- The new viewer browser test passes exact STEP-byte preservation under
+  section/edges, embedded identification, clipboard/CSV note equality, keyboard
+  controls, no idle redraws, graphics-loss download fallback, cancellation and
+  320px light/dark views. Screenshots were visually reviewed. This does not
+  replace a maintainer's review in their normal CAD application.
+- All 1,379 Python tests pass, along with specification, Find/export, PDF
+  preview, CAD preview/artifact and startup browser suites. Ruff, JS syntax,
+  cache-key, SEO metadata and whitespace checks pass. Desktop startup measured
+  0.87 seconds cold and 0.43–0.47 seconds warm/slow-network/offline, with no
+  CAD or viewer runtime requests. Mobile-hardware timing remains unmeasured.
+- Chamfered fixtures took roughly 1.2–9.5 seconds for construction and STEP
+  round-trip checks after initialization; the longest was a 20-turn fine thread.
+  The test sequence reached 199 MiB of WASM linear memory, excluding viewer and
+  other browser memory. These are local desktop observations, not guarantees.
+
+Physical print calibration, maintainer CAD-app review and production release
+remain pending. No commit, production merge or push was performed for this update.

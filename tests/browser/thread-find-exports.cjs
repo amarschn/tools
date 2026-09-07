@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-visualizer-sizer/';
 
 (async () => {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1280, height: 1000 }, serviceWorkers: 'block' });
     const errors = [], requests = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -56,7 +56,8 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         await page.locator('#find-more > summary').click();
         await page.locator('#find-pitch').fill('');
         await update();
-        await page.locator('[data-open-print]').click();
+        await page.locator('#open-print').click();
+        await page.locator('#preview-thread-pdf').click();
         const downloadEvent = page.waitForEvent('download');
         await page.locator('#download-thread-pdf').click();
         const pdf = await downloadEvent;
@@ -89,6 +90,7 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         fs.writeFileSync('/private/tmp/thread-pdf-scale-check.json', JSON.stringify(scale, null, 2));
         await page.locator('#print-scope').selectOption('common');
         await page.locator('#print-paper').selectOption('a4');
+        await page.locator('#preview-thread-pdf').click();
         const commonEvent = page.waitForEvent('download');
         await page.locator('#download-thread-pdf').click();
         await (await commonEvent).saveAs('/private/tmp/thread-common-a4.pdf');
@@ -105,6 +107,7 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         assert.ok(commonCheck.length > 1);
         assert.ok(commonCheck.every((page) => page.horizontal && page.vertical && !page.clipped));
 
+        await page.locator('#open-print').click();
         await page.locator('#find-span').evaluate((field) => field.value = '');
         await page.locator('#find-intervals').evaluate((field) => field.value = '');
         await page.locator('#find-side').selectOption('external');
@@ -121,37 +124,41 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         await page.locator('#tab-find').click();
         await page.locator('#find-example').click();
         await page.locator('.candidate-select').filter({ hasText: 'M8x1.25' }).click();
-        page.once('dialog', (dialog) => dialog.dismiss());
         await page.locator('.find-candidate > .btn-secondary').click();
+        await page.locator('[data-cancel-replace]').click();
         assert.equal(await page.locator('#tab-find').getAttribute('aria-selected'), 'true');
         assert.equal(await page.locator('#spec-family').inputValue(), 'unf');
-        page.once('dialog', (dialog) => dialog.accept());
         await page.locator('.find-candidate > .btn-secondary').click();
+        await page.locator('[data-confirm-replace]').click();
         assert.equal(await page.locator('#tab-specify').getAttribute('aria-selected'), 'true');
         assert.match(await page.locator('#task-assumptions').innerText(), /design choices/);
-        await page.locator('#step-options > summary').click();
+        await page.locator('#open-step').click();
         await page.locator('#step-length').fill('5');
+        await page.locator('#preview-thread-step').click();
         const stepEvent = page.waitForEvent('download');
         await page.locator('#download-thread-step').click();
         const step = await stepEvent;
-        assert.match(step.suggestedFilename(), /representative-v1\.step$/);
+        assert.match(step.suggestedFilename(), /representative-v2\.step$/);
         assert.equal(hasCAD(), true);
-        await page.locator('#download-thread-step').click();
+        await page.locator('#preview-thread-step').click();
         await page.locator('#cancel-thread-step').click();
         assert.match(await page.locator('#step-status').innerText(), /Canceled/);
-        assert.equal(await page.locator('#download-thread-step').isEnabled(), true);
-        await page.locator('#download-thread-step').click();
+        assert.equal(await page.locator('#download-thread-step').isEnabled(), false);
+        assert.equal(await page.locator('#preview-thread-step').isEnabled(), true);
+        await page.locator('#preview-thread-step').click();
+        // The part remains editable while an inline export is running.
         await page.locator('#spec-family').selectOption('unc');
         assert.equal(await page.locator('#cancel-thread-step').isVisible(), false);
         assert.match(await page.locator('#step-status').innerText(), /changed/);
         await page.waitForFunction(() => document.getElementById('spec-output').dataset.stale === 'false');
         await page.locator('#step-length').fill('5');
         await page.route('**/thread-cad-worker.js?*', (route) => route.abort());
-        await page.locator('#download-thread-step').click();
+        await page.locator('#preview-thread-step').click();
         await page.waitForFunction(() => document.getElementById('step-status').textContent.includes('Could not load'));
-        assert.equal(await page.locator('#download-thread-step').isEnabled(), true);
+        assert.equal(await page.locator('#preview-thread-step').isEnabled(), true);
         await page.unroute('**/thread-cad-worker.js?*');
         const retry = page.waitForEvent('download');
+        await page.locator('#preview-thread-step').click();
         await page.locator('#download-thread-step').click();
         assert.match((await retry).suggestedFilename(), /\.step$/);
 
@@ -189,8 +196,9 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         });
         await boot(url.replace('/tools/', '/static-mirror/tools/'));
         assert.equal(await page.evaluate(() => crossOriginIsolated), false);
-        await page.locator('#step-options > summary').click();
+        await page.locator('#open-step').click();
         await page.locator('#step-length').fill('5');
+        await page.locator('#preview-thread-step').click();
         const subpathDownload = page.waitForEvent('download');
         await page.locator('#download-thread-step').click();
         assert.match((await subpathDownload).suggestedFilename(), /\.step$/);

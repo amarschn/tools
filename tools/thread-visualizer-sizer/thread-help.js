@@ -43,6 +43,12 @@
     }
 
     function refresh() {
+        for (let i = entries.length - 1; i >= 0; i--) {
+            if (entries[i].control.isConnected) continue;
+            if (active === entries[i]) close();
+            entries[i].tooltip.remove();
+            entries.splice(i, 1);
+        }
         entries.forEach((entry) => {
             const { control, label, button, tooltip, introduction, sources } = entry;
             const name = label.textContent.trim();
@@ -71,7 +77,9 @@
         }, 180);
     }
 
-    document.querySelectorAll('#spec-form input[id], #spec-form select[id], #find-form input[id], #find-form select[id], #thread-export-controls input[id], #thread-export-controls select[id]').forEach((control) => {
+    function register(root) {
+      root.querySelectorAll('input[id], select[id]').forEach((control) => {
+        if (entries.some((entry) => entry.control === control)) return;
         const label = control.labels[0];
         if (!label) return;
         const sources = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
@@ -121,7 +129,10 @@
         });
         tooltip.addEventListener('pointerenter', () => window.clearTimeout(hideTimer));
         tooltip.addEventListener('pointerleave', () => scheduleClose(entry));
-    });
+      });
+      refresh();
+    }
+    ['spec-form', 'find-form', 'thread-export-controls'].forEach((id) => register(document.getElementById(id)));
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && active) {
@@ -136,5 +147,5 @@
     window.addEventListener('scroll', position, { capture: true, passive: true });
     form.addEventListener('toggle', position, true);
     refresh();
-    window.threadFieldHelp = { refresh, close };
+    window.threadFieldHelp = { refresh, close, register };
 })();

@@ -77,7 +77,7 @@ for (const path of ['catalog.json', 'data/homepage-tool-meta.json', 'pycalcs/flu
             await page.locator('#find-candidates .candidate-select').first().waitFor();
             const interaction = await page.evaluate((count) => ({ timings: window.threadTimings.slice(count), section: window.threadSpecification.section }), startup.work.length);
             if (process.env.THREAD_PROFILE_VERBOSE) console.log(label + ' interactions', JSON.stringify(interaction));
-            const cadRequests = startup.resources.filter(({ name }) => /replicad|opencascade|thread-cad|thread-print|pdf-lib/.test(name));
+            const cadRequests = startup.resources.filter(({ name }) => /replicad|opencascade|thread-cad|three-0|thread-print\.js|thread-pdf-preview|pdf-lib|pdfjs-dist/.test(name));
             assert.deepEqual(cadRequests, [], 'Export runtimes must not load at startup.');
             const modules = startup.resources.filter(({ name }) => /\/pycalcs\/.*\.py/.test(name));
             assert.equal(modules.length, 4);

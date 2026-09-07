@@ -9,7 +9,7 @@ def test_checked_in_thread_asset_keys_are_current() -> None:
     source = assets.INDEX.read_text(encoding="utf-8")
     assert source == assets.versioned_index(), "Run scripts/version_thread_assets.py"
     keys = assets.VERSION.findall(source)
-    assert len(keys) == 7  # One shared meta key, five controllers, one stylesheet.
+    assert len(keys) == 8  # One shared meta key, six controllers, one stylesheet.
     assert len(set(keys)) == 1
     assert re.fullmatch(r"thread-[a-f0-9]{16}", keys[0])
 
@@ -42,5 +42,9 @@ def test_revision_tracks_sources_and_is_idempotent(tmp_path, monkeypatch) -> Non
 
 def test_lazy_export_controllers_use_the_page_revision() -> None:
     source = (assets.TOOL / "thread-exports.js").read_text(encoding="utf-8")
-    for path in ("thread-print.js", "thread-cad-worker.js"):
-        assert f"window.threadAssetUrl('{path}')" in source
+    assert "window.threadAssetUrl('thread-cad-worker.js')" in source
+    assert "window.threadAssetUrl('thread-cad-viewer.js')" in source
+    source = (assets.TOOL / "thread-print-ui.js").read_text(encoding="utf-8")
+    assert "window.threadAssetUrl(path)" in source
+    for path in ("thread-print.js", "thread-pdf-preview.js"):
+        assert f"moduleUrl('{path}')" in source
