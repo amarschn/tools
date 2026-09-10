@@ -26,7 +26,7 @@ and verification evidence.
 
 - [ ] Run the deferred 10,000-identity scale fixture and measure topology/index
   alternatives from the original schema-lab serving plan. Current measurements
-  qualify this 158-material candidate, not a larger corpus.
+  qualify this 201-material candidate, not a larger corpus.
 - [ ] Implement the separate tools-repository compatibility collapse if that
   integration is still wanted. Legacy navigation redirects are already covered.
 - [ ] Broaden the independent source audit and source-revision lifecycle before
@@ -42,8 +42,10 @@ and verification evidence.
   short-lived downloads, and tests for anonymous/unpaid/expired access.
 - [ ] Move local review snapshots from temporary storage to the chosen durable
   private archive before relying on them for long-term source maintenance.
-- [ ] Continue expansion into aluminum, copper, titanium, and non-stainless
-  steels, with independent review of each pinned manufacturer-table batch.
+- [ ] Continue expansion into non-stainless steels and additional nonferrous
+  grades/conditions, with independent review of each pinned source-table batch.
+  See [the completed 43-metal batch](docs/nonferrous-batch-review.md) for
+  deferred rows and dimensional ambiguities.
 
 - [ ] How to scope large collections of commercial grades and generic chemistry
   aliases as coverage grows.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createSearch, MAX_RESULTS} from '../src/search.mjs';
-import {displayUnit, resultText, summaryText, summarize, significant} from '../src/format.mjs';
+import {displayUnit, resultText, summaryText, summarize, significant, thicknessText} from '../src/format.mjs';
 
 const manifest = JSON.parse(fs.readFileSync('materials/release-manifest.json'));
 const index = JSON.parse(fs.readFileSync('materials/' + manifest.index));
@@ -24,6 +24,18 @@ const routeCases = [
   ['904L', {material:'stainless-ultra-904l'}],
   ['Alloy 825', {material:'nickel-ultra-alloy-825'}],
   ['N08367', {material:'stainless-ultra-6xn'}],
+  ['6063 T6 extrusion', {material:'al-6063', state:'al-6063-t6', form:'extrusion'}],
+  ['6005A-T61', {material:'al-6005a', state:'al-6005a-t61'}],
+  ['1100-O', {material:'al-1100', state:'al-1100-o'}],
+  ['C11000', {material:'cu-c11000'}],
+  ['C36000', {material:'cu-c36000'}],
+  ['C51000', {material:'cu-c51000'}],
+  ['copper thermal conductivity', {category:'copper-alloys', property:'thermal_conductivity'}],
+  ['brass density', {category:'brasses', property:'density'}],
+  ['bronze density', {category:'bronzes', property:'density'}],
+  ['titanium density', {category:'titanium-alloys', property:'density'}],
+  ['Ti6Al4V', {material:'ti-6al-4v'}],
+  ['Ti6246 DA', {material:'ti-6al-2sn-4zr-6mo', state:'ti-6246-da'}],
 ];
 for (const [q, expected] of routeCases) assert.deepEqual(resolve(q), {kind:'route', route:expected}, q);
 assert.equal(resolve('plastic strength').kind, 'clarify');
@@ -45,6 +57,9 @@ assert.equal(displayUnit(prop('youngs_modulus'), metric).unit, 'GPa');
 assert.equal(displayUnit(prop('poissons_ratio'), metric).unit, '1');
 assert.equal(displayUnit(prop('specific_heat'), imperial).unit, 'BTU/(lb*degF)');
 assert.equal(significant(27679.904710203122*.098, 2), '2700');
+assert.equal(thicknessText({minimum:null, maximum:.124*.0254}, 'imperial'), '≤ 0.124 in');
+assert.equal(thicknessText({minimum:.5*.0254, maximum:null}, 'metric'), '≥ 12.7 mm');
+assert.equal(thicknessText({minimum:.062*.0254, maximum:.124*.0254}, 'metric'), '1.5748–3.1496 mm');
 assert.equal(summaryText(summarize([point], yieldProp.id), displayUnit(yieldProp, metric)), '≥ 240 MPa');
 const interval = {...point, result:{kind:'interval', canonical:{minimum:470e6, maximum:520e6}, reported:{significant_figures:2}}};
 assert.equal(resultText(interval, displayUnit(yieldProp, imperial)), '68–75 ksi');

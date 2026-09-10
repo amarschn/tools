@@ -1,8 +1,8 @@
 # Materials Lookup
 
 A local release candidate for source-traceable material and property lookup.
-The static site contains **158 material identities, 37 named states, 1,138
-observations, 10 registered properties and references to 8 source documents**. It has no
+The static site contains **201 material identities, 64 named states, 1,381
+observations, 10 registered properties and references to 19 source documents**. It has no
 runtime dependencies, backend, accounts, or network search service.
 
 Material queries open complete datasheets. Exact property queries open
@@ -27,7 +27,8 @@ Open <http://localhost:8001/materials/>. Useful searches:
 - `TECAPEEK tensile strength`;
 - `PEEK` or `316L` (an ambiguous designation);
 - `density` or `plastic strength`.
-- `2205`, `253 MA`, `904L`, or `Alloy 825`.
+- `2205`, `253 MA`, `904L`, or `Alloy 825`;
+- `6063 T6 extrusion`, `C11000`, `brass density`, or `Ti6Al4V`.
 
 The toolbar switches metric/imperial display. Each property has its own unit
 override; individual values and citations appear below its heading. Both

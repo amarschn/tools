@@ -33,21 +33,25 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
 8. Search `2205`, `253 MA`, `904L`, and `Alloy 825` for the new manufacturer
    grades. The source references in their records and exports remain text-only.
 
+9. Search `6063 T6 extrusion`, `C11000`, `bronze density` and `Ti6246 DA`.
+   Check thickness unit conversion, reported copper ranges, and the titanium
+   size restriction under Test details. See [batch review](nonferrous-batch-review.md).
+
 ## Evidence
 
-- 130 Python tests pass with no skips. Full structural and semantic validation of the factual catalog and synthetic
+- 134 Python tests pass with no skips. Full structural and semantic validation of the factual catalog and synthetic
   contract, including negative cases and exact source-to-SI conversion checks.
 - Deterministic compilation; every checked-in artifact and manifest hash is
   verified against a fresh in-memory build. Extra files in the publish tree
   fail the release gate.
-- 158 factual material identities, 37 named states, 1,138 observations,
-  10 registered properties, and text references to 8 source documents. One registered property
+- 201 factual material identities, 64 named states, 1,381 observations,
+  10 registered properties, and text references to 19 source documents. One registered property
   currently has no observations; missing data is displayed as unreported.
-- Readable search index approximately 186 KB raw / 16 KB gzip. Warm Node query
+- Readable search index approximately 227 KB raw / 20 KB gzip. Warm Node query
   p95 is approximately 4 ms on the development machine. This measurement is a
   current-corpus baseline, not a large-corpus performance claim.
 - Search routing, conversion, significant figures, bounds, intervals,
-  uncertainty conversion, and compiler/browser parity across all 158 records.
+  uncertainty conversion, and compiler/browser parity across all 201 records.
 - Chromium browser verification at root and `/nested/reference/`: material and
   property flows, clarification, ambiguity, rejected ranking intent, deep links,
   reload, browser history, units, missing data, and a 50-row result cap.
@@ -59,7 +63,7 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
   rejected, and retry succeeds after the correct data becomes available.
 - Desktop and 320px layouts inspected, including long citations and a category
   overview. Browser runs finish without console errors or page exceptions.
-- Saved PDF hashes checked for all eight documents. The full import reconstructs
+- Saved PDF hashes checked for all 19 documents. The full import reconstructs
   the curated files byte-for-byte using `import_reference_tables.py --check`.
   The Hydro corrections are documented in Schema Decision 002. Reproducible
   extraction is not a substitute for an independent audit of every source fact.

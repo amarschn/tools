@@ -14,6 +14,12 @@ from schema_lab.registries import condition_registry
 from schema_lab.validator import validate
 
 PROPERTY_IDS = {"yield_strength": "tensile_yield_strength", "tensile_strength": "ultimate_tensile_strength"}
+REVIEWED_TEMPERS = ("O", "H111", "H112", "T1", "T4", "T5", "T6", "T61", "T63", "T64")
+REVIEWED_HEAT_TREATMENTS = {
+    "mill annealed": "annealed",
+    "duplex annealed": "annealed",
+    "solution treated and aged": "solution_treated_aged",
+}
 
 
 def canonical_bytes(value):
@@ -26,6 +32,8 @@ def adapt(database):
     by_condition = {c["id"]: c for c in conditions}
     by_condition["product_form"]["allowed_values"].extend(["stock_shape", "coil"])
     by_condition["work_condition"]["allowed_values"].append("cold_rolled")
+    by_condition["temper"]["allowed_values"] = sorted(set(by_condition["temper"]["allowed_values"]) | set(REVIEWED_TEMPERS))
+    by_condition["thickness_m"]["nullable_bounds"] = True
     data = {
         "dataset": {"id": "materials-reference", "contract_version": "0.1.0", "corpus_version": "1.0.0-rc.1", "synthetic": False,
                     "warning": "Published reference values. Check source, basis and conditions for your application."},
@@ -71,10 +79,14 @@ def adapt(database):
         else:
             material_id = row["parent_id"]
             state_id = None
-            if row["condition"] in ("T4", "T6"):
+            if row["condition"] in REVIEWED_TEMPERS:
                 state_id = rid
                 fixed = {"temper": row["condition"]}
                 name = row["condition"]
+            elif row["condition"] in REVIEWED_HEAT_TREATMENTS:
+                state_id = rid
+                fixed = {"heat_treatment": REVIEWED_HEAT_TREATMENTS[row["condition"]]}
+                name = row["condition"].capitalize()
             elif row["condition"] in ("cold rolled sheet", "cold rolled coil", "cold rolled"):
                 state_id = rid
                 fixed = {"work_condition": "cold_rolled"}
@@ -96,6 +108,9 @@ def adapt(database):
                 oid = "obs-" + hashlib.sha256(canonical_bytes(identity)).hexdigest()[:20]
                 context = deepcopy(old["conditions"])
                 note = context.pop("material_state", "")
+                if "thickness_m" in context:
+                    low, high = context["thickness_m"]
+                    context["thickness_m"] = {"minimum": low, "maximum": high}
                 owner_state = state_id
                 # The physical table is grade-level. Do not imply that it was
                 # measured on the cold rolled sheet used by the mechanical table.

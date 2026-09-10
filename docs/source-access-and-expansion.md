@@ -43,7 +43,8 @@ documents private. Do not rewrite history without separate authorization.
 
 ## Catalog expansion
 
-Add a bounded batch from primary manufacturer tables, prioritizing gaps beyond
+Add a bounded batch from primary manufacturer tables or clearly identified
+supplier reference tables, prioritizing gaps beyond
 the existing engineering plastics, technical ceramics, and basic stainless
 grades. Pin each downloaded snapshot by SHA-256. Keep exact printed numbers,
 units, page/column locators, conditions, and statistical meaning. Avoid counting
@@ -90,3 +91,11 @@ Review decisions:
 snapshots through the existing importer and `scripts/import_specialty_metals.py`.
 Pins reject silent document revisions. Publisher prose, document images, and
 full datasheets are not checked in or included in the public artifact.
+
+## Additional metals — 2026-09-10
+
+Added 43 nonferrous identities and 243 observations: 11 aluminum grades, 30
+copper-family grades and two titanium alloys. Current totals are 201 materials,
+64 states, 1,381 observations and 19 pinned sources. See the
+[table review and deferred rows](nonferrous-batch-review.md). Private originals
+and public document-exclusion checks use the existing workflow.

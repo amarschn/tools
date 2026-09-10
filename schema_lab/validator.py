@@ -543,15 +543,17 @@ class _Semantic:
                 )
                 return
             low, high = value.get("minimum"), value.get("maximum")
-            if not _is_finite_number(low) or not _is_finite_number(high):
+            nullable = registered.get("nullable_bounds", False)
+            valid_bounds = all(_is_finite_number(v) or (nullable and v is None) for v in (low, high))
+            if not valid_bounds or (low is None and high is None):
                 self.add(
                     D.CONDITION_VALUE_INVALID,
                     path,
-                    f"{key!r} requires finite interval bounds.",
+                    f"{key!r} requires finite bounds; one null endpoint is allowed only when nullable_bounds is enabled.",
                     key=key,
                     value=value,
                 )
-            elif low > high:
+            elif low is not None and high is not None and low > high:
                 self.add(
                     D.RESULT_INTERVAL_ORDER,
                     path,

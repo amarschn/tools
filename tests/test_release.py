@@ -26,9 +26,10 @@ class ReleaseTests(unittest.TestCase):
     def test_factual_contract_and_no_artificial_states(self):
         self.assertFalse(self.data['dataset']['synthetic'])
         self.assertEqual([], [str(d) for d in validate(self.data) if d.severity == 'error'])
-        self.assertEqual(158, len(self.data['materials']))
-        self.assertEqual(37, len(self.data['states']))
-        self.assertEqual(1138, len(self.data['observations']))
+        self.assertEqual(201, len(self.data['materials']))
+        self.assertEqual(64, len(self.data['states']))
+        self.assertEqual(1381, len(self.data['observations']))
+        self.assertEqual(19, len(self.data['sources']))
         self.assertFalse(any(s['name'] in ('stock shape', 'supplier reference state') for s in self.data['states']))
 
     def test_every_authored_observation_survives_with_its_source_literal(self):
@@ -95,6 +96,77 @@ class ReleaseTests(unittest.TestCase):
         s = summary(pool + [point], 'tensile_yield_strength', Corpus(self.data))
         self.assertEqual(200e6, s['range']['minimum'])
         self.assertEqual(200e6, s['range']['maximum'])
+
+    def test_aluminum_tempers_thickness_and_elongation_exemptions(self):
+        rows = self.records['al-6063']['observations']
+        density = next(o for o in rows if o['property_id'] == 'density')
+        self.assertIsNone(density['state_id'])
+        t6 = [o for o in rows if o['state_id'] == 'al-6063-t6']
+        strength = next(o for o in t6 if o['property_id'] == 'tensile_yield_strength')
+        self.assertEqual('lower_bound', strength['result']['kind'])
+        self.assertEqual(170e6, strength['result']['canonical']['value'])
+        self.assertEqual({'minimum': None, 'maximum': .124 * .0254}, strength['conditions']['thickness_m'])
+        elongation = next(o for o in t6 if o['property_id'] == 'elongation_at_break')
+        self.assertEqual(.062 * .0254, elongation['conditions']['thickness_m']['minimum'])
+        self.assertIn('standard specimen', elongation['notes'])
+        conductivity = next(o for o in t6 if o['property_id'] == 'thermal_conductivity')
+        self.assertEqual(298.15, conductivity['conditions']['temperature_K'])
+        self.assertEqual(201, conductivity['result']['canonical']['value'])
+        # The conflicting second T6 thickness row is not silently imported.
+        self.assertEqual(4, len(t6))
+        annealed = next(o for o in self.records['al-1100']['observations']
+                        if o['state_id'] == 'al-1100-o' and o['property_id'] == 'ultimate_tensile_strength')
+        self.assertEqual('interval', annealed['result']['kind'])
+        self.assertEqual({'minimum': 75e6, 'maximum': 105e6, 'unit': 'Pa'}, annealed['result']['canonical'])
+        self.assertFalse(any(o['property_id'] == 'elongation_at_break' for o in self.records['al-1350']['observations']))
+
+    def test_copper_physical_units_intervals_and_missing_cells(self):
+        copper = self.records['cu-c11000']['observations']
+        density = next(o for o in copper if o['property_id'] == 'density')
+        self.assertEqual('interval', density['result']['kind'])
+        self.assertAlmostEqual(.321 * 27679.904710203122, density['result']['canonical']['minimum'])
+        self.assertAlmostEqual(.323 * 27679.904710203122, density['result']['canonical']['maximum'])
+        heat = next(o for o in copper if o['property_id'] == 'specific_heat')
+        self.assertAlmostEqual(385.1856, heat['result']['canonical']['value'])
+        self.assertTrue(all(o['state_id'] is None and o['conditions']['temperature_K'] == 293.15 for o in copper))
+        self.assertTrue(all(o['basis'] == 'reference' for o in copper))
+        thermal = next(o for o in self.records['cu-c17200']['observations'] if o['property_id'] == 'thermal_conductivity')
+        self.assertAlmostEqual(62 * 1.730734666295328, thermal['result']['canonical']['minimum'])
+        self.assertAlmostEqual(75 * 1.730734666295328, thermal['result']['canonical']['maximum'])
+        self.assertFalse(any(o['property_id'] == 'thermal_conductivity' for o in self.records['cu-c18200']['observations']))
+        self.assertFalse(any(o['property_id'] == 'specific_heat' for o in self.records['cu-c38500']['observations']))
+        self.assertEqual('supplier_catalog', next(s for s in self.data['sources'] if s['id'] == 'copper-alloys-guide')['source_type'])
+
+    def test_titanium_retains_temperature_state_and_size_scope(self):
+        ti64 = self.records['ti-6al-4v']['observations']
+        thermal = [o for o in ti64 if o['property_id'] == 'thermal_conductivity']
+        self.assertEqual({293.15: 6.6, 588.15: 10.6, 923.15: 17.5},
+                         {o['conditions']['temperature_K']: o['result']['canonical']['value'] for o in thermal})
+        self.assertTrue(all(o['state_id'] == 'ti-6al-4v-mill-annealed' for o in thermal))
+        modulus = next(o for o in ti64 if o['property_id'] == 'youngs_modulus')
+        self.assertEqual({'minimum': 107e9, 'maximum': 122e9, 'unit': 'Pa'}, modulus['result']['canonical'])
+        self.assertIsNone(modulus['state_id'])
+        self.assertIn('texture', modulus['notes'])
+        ti6246 = self.records['ti-6al-2sn-4zr-6mo']['observations']
+        heat = next(o for o in ti6246 if o['property_id'] == 'specific_heat')
+        self.assertNotIn('temperature_K', heat['conditions'])
+        sta = next(o for o in ti6246 if o['property_id'] == 'tensile_yield_strength' and o['state_id'] == 'ti-6246-sta')
+        self.assertEqual(1103e6, sta['result']['canonical']['value'])
+        self.assertEqual('lower_bound', sta['result']['kind'])
+        self.assertIn('≤2.50 in', sta['notes'])
+        self.assertIn('water quench or air cool', sta['notes'])
+
+    def test_one_sided_condition_intervals_require_explicit_opt_in(self):
+        data = deepcopy(self.data)
+        registry = next(c for c in data['conditions'] if c['id'] == 'thickness_m')
+        registry['nullable_bounds'] = False
+        self.assertTrue(any(d.code == 'CONDITION_VALUE_INVALID' for d in validate(data)))
+        registry['nullable_bounds'] = True
+        row = next(o for o in data['observations'] if 'thickness_m' in o['conditions'])
+        for bounds in [{'minimum': None, 'maximum': None}, {'minimum': .02, 'maximum': .01},
+                       {'minimum': 'unknown', 'maximum': .01}]:
+            row['conditions']['thickness_m'] = bounds
+            self.assertTrue(any(d.severity == 'error' for d in validate(data)), bounds)
 
     def test_release_rejects_a_changed_canonical_value_without_a_matching_literal(self):
         db = deepcopy(self.database)

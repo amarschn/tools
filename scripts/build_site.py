@@ -35,6 +35,7 @@ BUILD_VERSION = 1
 DEFAULT_SCHEMA_VERSION = "0.1.0"
 SUPPORTED_SCHEMA_VERSIONS = {DEFAULT_SCHEMA_VERSION}
 BASIS_VALUES = {
+    "reference",
     "typical",
     "minimum",
     "A-basis",
@@ -47,6 +48,7 @@ BASIS_VALUES = {
 RECORD_TYPES = {"family", "grade", "variant"}
 PARENT_TYPES = {"family": "family", "grade": "family", "variant": "grade"}
 SOURCE_TYPES = {
+    "supplier_catalog",
     "government_handbook",
     "manufacturer_datasheet",
     "prototype_seed",

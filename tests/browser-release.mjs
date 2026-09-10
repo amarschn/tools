@@ -151,9 +151,9 @@ try {
     await page.locator('#state-al-6061-t6[open] .citation details[open]').waitFor();
     assert.match(await page.locator('#state-al-6061-t6 .value').innerText(), /≥ 35 ksi/);
     await page.getByRole('link',{name:'Sources',exact:true}).click(); await settled();
-    assert.equal(await page.locator('.source-card').count(),8);
+    assert.equal(await page.locator('.source-card').count(),19);
     assert.equal(await page.locator('.source-card a, iframe, embed, object').count(),0);
-    for (const file of ['hydro-6061.pdf','private-sources/index.html']) {
+    for (const file of ['hydro-6061.pdf','hydro-6063.pdf','copper-alloys-guide.pdf','timet-6-4.pdf','private-sources/index.html']) {
       const response = await context.request.get(base+file);
       assert.equal(response.status(),404,'public document access must be absent');
     }
@@ -164,6 +164,26 @@ try {
     assert.equal(await page.locator('.citation a, iframe, embed, object').count(),0);
     await search('Alloy 825');
     await page.getByRole('heading',{name:'Nickel alloy Ultra Alloy 825',exact:true}).waitFor();
+    await page.locator('#unit-system').selectOption('metric');
+    await search('6063 T6 extrusion');
+    await page.getByRole('heading',{name:'Aluminium 6063 · T6',exact:true}).waitFor();
+    assert.match(await page.locator('#property-tensile_yield_strength').innerText(), /≥ 170 MPa/);
+    assert.match(await page.locator('#property-tensile_yield_strength').innerText(), /Thickness: ≤ 3\.1496 mm/);
+    await page.locator('#unit-system').selectOption('imperial');
+    assert.match(await page.locator('#property-tensile_yield_strength').innerText(), /Thickness: ≤ 0\.124 in/);
+    await search('C11000');
+    await page.getByRole('heading',{name:'Copper C11000',exact:true}).waitFor();
+    await page.locator('[data-unit="density"]').selectOption('lb/in^3');
+    assert.match(await page.locator('#property-density .value').innerText(), /0\.321–0\.323 lb\/in³/);
+    await search('bronze density');
+    await page.locator('#taxon-bronzes[open]').waitFor();
+    await page.locator('#material-cu-c51000 > summary').click();
+    await page.locator('#material-cu-c51000 .observation').waitFor();
+    await search('Ti6246 DA');
+    await page.getByRole('heading',{name:'Titanium Ti-6Al-2Sn-4Zr-6Mo · Duplex annealed',exact:true}).waitFor();
+    await page.locator('#property-tensile_yield_strength [id^="test-"] > summary').click();
+    await page.locator('#property-tensile_yield_strength [id^="test-"][open]').waitFor();
+    assert.match(await page.locator('#property-tensile_yield_strength').innerText(), /≤2\.00 in/);
     await go(base, '?q=TECAPEEK+tensile+strength');
     await page.locator('#unit-system').selectOption('metric');
     await page.screenshot({path:`test-results/release-${mount==='/'?'desktop':'subpath'}.png`,fullPage:true});
@@ -177,6 +197,12 @@ try {
   await go(origin+'/?property=thermal_conductivity&category=engineering-plastics');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),'320px overview overflow');
   await page.screenshot({path:'test-results/release-mobile-overview.png',fullPage:true});
+  for (const query of ['6063 T6 extrusion', 'C11000', 'Ti6246 DA']) {
+    await go(origin+'/?q='+encodeURIComponent(query));
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth), query+' mobile overflow');
+  }
+  await page.screenshot({path:'test-results/release-mobile-titanium.png',fullPage:true});
+  report.assertions.push('nonferrous searches and bronze tree', 'one-sided thickness limits in metric and imperial', 'copper source ranges', 'titanium state and size scope');
   report.assertions.push('320px layout', 'root and subpath deep links', 'units and property overrides survive reload', 'one lazy record request', 'expandable taxonomy and inline observations', 'expanded tree survives unit changes', 'collapsed record reuses cached data', 'clarification and comparison boundary', 'text-only citations; document paths unavailable', 'new specialty-metal searches', 'browser history', 'missing property', '50-row cap');
   // Input entered before the index arrives must survive initialization.
   const delayed = await context.newPage();

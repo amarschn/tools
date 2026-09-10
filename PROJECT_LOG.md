@@ -9,11 +9,31 @@ in the linked plans and decision documents.
 - Phase: local release candidate 1.0.0-rc.1 complete; public deployment pending.
 - Selected interface: Prototype 05, with dual-mode material datasheets and
   expandable property/category lookup. Redesigns require express permission.
-- Catalog: 158 material identities, 37 named states, 1,138 observations, 8 source
+- Catalog: 201 material identities, 64 named states, 1,381 observations, 19 source
   documents. The factual release uses the normalized v0.1.0 contract.
 - Review artifact and verification: [docs/release-candidate.md](docs/release-candidate.md).
 - Next gate: review the local candidate, choose the publishing destination, and
   verify an authorized deployment at its actual public URL.
+
+## 2026-09-10 — Add 43 nonferrous metals
+
+- Added 11 aluminum grades, 30 copper-family grades and two titanium alloys,
+  with 27 named states and 243 source-traceable observations. All 348 existing
+  authoring records and their 1,138 observations remain unchanged.
+- Pinned 11 additional source snapshots, bringing the private review index to
+  19 documents. Public citation and document-exclusion rules remain in force.
+- Retained source intervals, mechanical minima, thermal test temperatures,
+  elongation exemptions and heat-treatment/size restrictions. Deferred rows
+  with conflicting thickness columns rather than silently choosing a value.
+- Added explicit one-sided thickness support to the factual contract and
+  formatted thickness in mm/inches in the existing condition column. The
+  Prototype 05 layout, stylesheet and original prototypes are unchanged.
+- Verification: 134 Python tests, 37 release routing checks, 21 prototype
+  golden queries, compiler/browser parity for 201 records, and Chromium root,
+  nested-path and mobile checks pass. All 19 snapshots reconstruct the import;
+  all 700 public artifacts pass freshness, hash and document-exclusion checks.
+
+See [the batch review](docs/nonferrous-batch-review.md).
 
 ## 2026-09-10 — Exclude source documents and expand the catalog
 

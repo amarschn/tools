@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.import_specialty_metals import DOCUMENTS as SPECIALTY_DOCUMENTS, DATE as SPECIALTY_DATE, import_specialty_metals
+from scripts.import_nonferrous_metals import DOCUMENTS as NONFERROUS_DOCUMENTS, DATE as NONFERROUS_DATE, SOURCE_TYPES as NONFERROUS_SOURCE_TYPES, import_nonferrous_metals
 DATE = "2026-09-07"
 PROPERTIES = {
     "density": ("kg/m^3", "g/cm³", 1000),
@@ -64,7 +65,7 @@ def obs(prop, raw, source, page, column, row, *, method, conditions=None,
     original_unit = raw_unit or original_unit
     cleaned = str(raw).replace(",", "").replace(" ", "")
     parts = re.split("[–-]", cleaned)
-    if not all(re.fullmatch(r"\d+(?:\.\d+)?", p) for p in parts) or len(parts) > 2:
+    if not all(re.fullmatch(r"(?:\d+(?:\.\d+)?|\.\d+)", p) for p in parts) or len(parts) > 2:
         raise ValueError((prop, raw, column))
     numbers = [float(p) * scale for p in parts]
     precision = min(digits(p) for p in parts)
@@ -259,7 +260,7 @@ def main():
     manifest_path=ROOT/"curated/reference-manifest.json"
     pins=json.loads(manifest_path.read_text()) if manifest_path.exists() else None
     sources=[]; manifest=[]; all_pages={}
-    for id,title,organization,url,notes,published in DOCUMENTS + SPECIALTY_DOCUMENTS:
+    for id,title,organization,url,notes,published in DOCUMENTS + SPECIALTY_DOCUMENTS + NONFERROUS_DOCUMENTS:
         path=args.pdf_dir/(id+".pdf")
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         if pins:
@@ -267,10 +268,10 @@ def main():
             if pin["sha256"] != digest: raise ValueError(f"{id}: PDF differs from reviewed snapshot; review before changing the pin")
         pdf=PdfReader(path)
         all_pages[id]=[p.extract_text(extraction_mode="layout") for p in pdf.pages]
-        retrieved = SPECIALTY_DATE if id in {d[0] for d in SPECIALTY_DOCUMENTS} else DATE
+        retrieved = NONFERROUS_DATE if id in {d[0] for d in NONFERROUS_DOCUMENTS} else SPECIALTY_DATE if id in {d[0] for d in SPECIALTY_DOCUMENTS} else DATE
         manifest.append({"id":id,"url":url,"filename":path.name,"sha256":digest,"bytes":path.stat().st_size,"pages":len(pdf.pages),"retrieved_date":retrieved})
         sources.append({"id":id,"title":title,"organization":organization,
-            "source_type":"manufacturer_datasheet","publication_date":published,
+            "source_type":NONFERROUS_SOURCE_TYPES.get(id, "manufacturer_datasheet"),"publication_date":published,
             "revision":"Snapshot "+digest[:12],"url":url,"retrieved_date":retrieved,
             "license":"Publisher copyright retained; selected numerical facts with attribution. Source document not redistributed.",
             "notes":notes,"sha256":digest})
@@ -301,9 +302,10 @@ def main():
     import_ceramics(records)
     import_stainless(all_pages,records)
     import_specialty_metals(all_pages,records,obs=obs,record=record,pair=pair,slug=slug)
+    import_nonferrous_metals(all_pages,records,obs=obs,record=record,pair=pair,slug=slug)
     outputs = {ROOT/f"curated/{name}.json": json.dumps({"schema_version":"0.1.0",key:data},ensure_ascii=False,indent=2)+"\n"
                for name,key,data in [("materials","materials",records),("sources","sources",sources)]}
-    outputs[manifest_path] = json.dumps({"retrieved_date":SPECIALTY_DATE,"documents":manifest},indent=2)+"\n"
+    outputs[manifest_path] = json.dumps({"retrieved_date":NONFERROUS_DATE,"documents":manifest},indent=2)+"\n"
     for path, text in outputs.items():
         if args.check:
             if path.read_text() != text: raise ValueError(f"{path.name} differs from a fresh import")
