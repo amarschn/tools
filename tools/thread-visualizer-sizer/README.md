@@ -292,6 +292,13 @@ catalog. Tooltips stay inside the viewport and close when their section collapse
 specification's `diagram` payload. Dimension lines and arrowheads share their
 endpoints. The overall and close-up views stack at narrow output widths.
 
+The schematic uses the same `.thread-svg` drawing vocabulary as the calculated
+metric and Unified profiles: the same section fill and hatch, stroke weights,
+dash patterns, arrowheads, and annotation type. Both figures are also capped at
+the same width so type renders at the same size in each. A browser test compares
+the resolved styles of both SVGs element by element, so a second private style
+set cannot reappear on either side.
+
 `pycalcs.thread_models` owns the millimetre axial-profile contract, side-aware
 Find comparisons and STEP validation. `thread-finder.js` owns measurement state;
 `thread-print-ui.js` manages the shortlist, preview lifecycle and downloads;

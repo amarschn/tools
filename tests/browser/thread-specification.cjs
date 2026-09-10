@@ -286,6 +286,32 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         assert.match(await page.locator('#family-taper-label').textContent(), /no taper/);
         assert.equal(await page.locator('#family-taper-envelope').getAttribute('data-diameter-taper'), '0');
         await checkFamilyDiagram();
+        // The schematic must draw in the same vocabulary as the calculated
+        // profiles. Comparing resolved styles catches a private style set
+        // reappearing on either side.
+        const styleParity = await page.evaluate(() => {
+            const resolve = (root, selector) => {
+                const node = document.querySelector(root).querySelector(selector);
+                if (!node) return 'missing: ' + root + ' ' + selector;
+                const style = getComputedStyle(node);
+                return [style.stroke, style.strokeWidth, style.fill, style.fontSize,
+                    style.fontFamily, style.strokeDasharray, style.vectorEffect].join('|');
+            };
+            const pairs = ['.thread-line', '.dimension-line', '.dimension-arrow',
+                '.dimension-text', '.figure-text', '.material-label', '.center-line',
+                '.thread-fill', '.hatch-line'];
+            return pairs.map((selector) => ({
+                selector,
+                machine: resolve('#thread-profile-svg', selector),
+                schematic: resolve('#family-profile-svg', selector),
+            }));
+        });
+        for (const row of styleParity) {
+            assert.equal(row.schematic, row.machine,
+                `Schematic ${row.selector} must resolve to the calculated profile's style.`);
+        }
+        assert.equal(await page.locator('#family-profile-svg [class^="family-"]:not(.family-dimension)').count(), 0,
+            'The schematic must not reintroduce a private drawing style set.');
         await select('spec-family', 'unef');
         await select('spec-size', '1 1/2-18 UNEF');
         assert.equal(await callout(), '1 1/2-18 UNEF-2B THRU');
