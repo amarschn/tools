@@ -299,6 +299,18 @@ the same width so type renders at the same size in each. A browser test compares
 the resolved styles of both SVGs element by element, so a second private style
 set cannot reappear on either side.
 
+Both panels share one vertical rhythm, set by `HEADING_Y`, `CAPTION_Y` and
+`PANEL_H` in `thread-family-diagram.js`, so the schematic stands no taller than
+the calculated profile it sits beside. A browser test measures both figures at
+one width and fails if the schematic grows past it. The two panels stack only
+below 430px of available width, where a side-by-side pair would be cramped;
+above it they stay side by side, as the calculated profile does at every width.
+
+Product schematics show the published nominal thread where one exists. Wood and
+DIN 7500 sizes draw a real diameter and pitch and name their standard;
+plastic-forming screws keep the illustrative tooth and say which numbers the
+supplier has to provide.
+
 `pycalcs.thread_models` owns the millimetre axial-profile contract, side-aware
 Find comparisons and STEP validation. `thread-finder.js` owns measurement state;
 `thread-print-ui.js` manages the shortlist, preview lifecycle and downloads;
@@ -351,8 +363,28 @@ The specification catalog contains 147 nominal choices:
 - NPT and NPTF: 10 nominal pipe sizes each, 1/16 through 2.
 - BSPP (G) and ISO 7 (R/Rc/Rp): 9 nominal pipe sizes each, 1/8 through 2.
 
-Three product-based workflows use supplier dimensions: metal-forming,
-plastic-forming, and wood screws.
+Three product-based workflows are bought by product reference rather than by a
+drawing callout. Two of them still have a published nominal thread, which the
+tool states instead of leaving blank:
+
+- Wood screws: 17 ASME B18.6.1 sizes, #0 through #24. The screw number sets the
+  major diameter and threads per inch.
+- Thread-forming screws for metal: the 8 DIN 7500 sizes, M2 through M10. The
+  trilobular shank forms an ISO metric thread, so the screw's own thread is an
+  ordinary metric thread and reuses the shared metric geometry.
+- Thread-forming screws for plastic: no size list. Pitch, flank angle and boss
+  geometry are product-specific, so the tool asks for the product instead of
+  inventing a profile.
+
+Pilot and core hole diameters are deliberately absent everywhere. For timber
+they depend on species and density, and for DIN 7500 on the material and
+engagement length, so a single number would be wrong more often than right.
+Head, drive, point, coating and any structural rating stay with the product.
+Wood screws also appear in Find as external-only rows: a caliper reading of
+major diameter and pitch identifies a screw gauge. They carry no published root
+diameter, so they are never offered against an internal bore measurement. DIN
+7500 screws are left out of Find because their thread is the metric thread of
+the same size, already in the catalog.
 
 The load screen uses 35 metric and 30 Unified entries. These start
 with `ISO_FASTENER_GEOMETRY` and `UTS_FASTENER_GEOMETRY` in `pycalcs.fasteners`,
@@ -408,6 +440,7 @@ to the tool name as a certification claim.
 - [Rastro BSP reference tables](https://www.rastro.ai/resources/glossary/bsp-thread-dimensions-in-mm-complete-reference-tables), ISO 7-1 gauge length and useful thread length.
 - [Vermont Gage NPT/NPTF guide](https://vermontgage.com/assets/ea696d90d9/NPT-NPTF-2019.pdf), pipe-thread inspection classes.
 - [Bossard DIN 7500](https://www.bossard.com/no-en/product-solutions/product-applications/din-7500/), forming screws in metal.
+- [Engineers Edge ANSI B18.6.1 wood screws](https://www.engineersedge.com/hardware/ansi_wood_screws_per_ansi_b1861__14855.htm), nominal diameter and threads per inch by screw number.
 - [EJOT PT and DELTA PT](https://www.ejot.com/PT-History), plastic-fastening product families.
 - [Sandvik Coromant threading guide](https://cdn.sandvik.coromant.com/files/sitecollectiondocuments/downloads/global/technical%20guides/en-gb/c-2920-031.pdf), thread-manufacturing processes.
 - [Gühring fluteless taps](https://guhring.com/media/catalogs/044mlrkbbek.pdf), forming-tap process and pilot-hole requirements.

@@ -23,6 +23,7 @@ def test_revision_tracks_sources_and_is_idempotent(tmp_path, monkeypatch) -> Non
         "fasteners",
         "threads",
         "pipe_threads",
+        "screw_products",
         "thread_specifications",
         "thread_models",
     ):

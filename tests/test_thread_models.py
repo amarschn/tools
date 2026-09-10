@@ -92,8 +92,8 @@ def test_pipe_diameter_outside_every_band_is_not_forced_into_a_match():
 
 
 def test_uncomparable_rows_are_reported_separately_from_a_poor_match():
-    """Product families carry no dimensions; that is not 'no close match'."""
-    result = find(diameter=5, family="wood")
+    """Plastic-forming screws carry no dimensions; not 'no close match'."""
+    result = find(diameter=5, family="forming_plastic")
     assert result["status"] == "no-comparable-data"
     assert result["candidates"] == []
     assert any("No diameter was used" in text for text in result["warnings"])

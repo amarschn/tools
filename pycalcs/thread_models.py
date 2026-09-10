@@ -15,6 +15,7 @@ from typing import Any
 
 try:
     from .pipe_threads import pipe_dimensions
+    from .screw_products import product_dimensions
     from .thread_specifications import (
         PIPE_PAIRS,
         _pairs,
@@ -25,6 +26,7 @@ try:
     )
 except ImportError:
     from pipe_threads import pipe_dimensions
+    from screw_products import product_dimensions
     from thread_specifications import (
         PIPE_PAIRS,
         _pairs,
@@ -106,8 +108,13 @@ def _records() -> tuple[dict[str, Any], ...]:
     records = []
     for family, meta in specification_catalog().items():
         machine = meta["kind"] == "machine"
+        # A DIN 7500 screw's thread is the metric thread of the same size, so
+        # listing it here would only duplicate that row.
+        if meta["kind"] == "product" and family != "wood":
+            continue
         for size in meta["sizes"]:
             geometry = model = None
+            pipe = screw = None
             if machine:
                 if family == "metric":
                     diameter, pitch = parse_metric_thread_designation(size)
@@ -122,12 +129,17 @@ def _records() -> tuple[dict[str, Any], ...]:
                 model = physical_profile(geometry)
                 geometry["physical_model"] = model
                 pitch_mm = model["pitch_mm"]
+            elif meta["kind"] == "product":
+                screw = product_dimensions(family, size)
+                pitch_mm = screw["pitch_mm"]
+                pipe = None
             else:
                 pairs = dict(
                     _pairs(PIPE_PAIRS["npt" if family in ("npt", "nptf") else "bsp"])
                 )
                 pitch_mm = 25.4 / float(pairs[size])
                 pipe = pipe_dimensions(family, size)
+                screw = None
             records.append(
                 {
                     "id": family + ":" + size,
@@ -140,23 +152,27 @@ def _records() -> tuple[dict[str, Any], ...]:
                     "tpi": 25.4 / pitch_mm,
                     "diameter_mm": model["major_diameter_mm"]
                     if model
-                    else pipe["major_mm"],
+                    else (pipe or screw)["major_mm"],
+                    # A wood screw's root diameter is not carried, so it is
+                    # never offered as an internal-bore comparison.
                     "internal_minor_mm": model["internal_minor_mm"]
                     if model
-                    else pipe["minor_mm"],
+                    else pipe["minor_mm"]
+                    if pipe
+                    else None,
                     # A tapered thread has no single diameter, so compare
                     # against the band its own length can legitimately present.
-                    "external_band_mm": None
-                    if model
-                    else list(pipe["external_major_band_mm"]),
-                    "internal_band_mm": None
-                    if model
-                    else list(pipe["internal_minor_band_mm"]),
-                    "tapered": None if model else pipe["tapered"],
+                    "external_band_mm": list(pipe["external_major_band_mm"])
+                    if pipe
+                    else None,
+                    "internal_band_mm": list(pipe["internal_minor_band_mm"])
+                    if pipe
+                    else None,
+                    "tapered": pipe["tapered"] if pipe else None,
                     "model": model,
                     "geometry": geometry,
                     "diagram": None
-                    if machine
+                    if machine or screw
                     else {
                         "kind": "pipe",
                         "pitch_mm": pitch_mm,
@@ -174,7 +190,7 @@ def _records() -> tuple[dict[str, Any], ...]:
                     "capabilities": {
                         "specify": True,
                         "identify_external": True,
-                        "identify_internal": True,
+                        "identify_internal": pipe is not None or machine,
                         "print_pitch": True,
                         "print_profile": machine,
                         "step": machine,
@@ -315,8 +331,13 @@ def find_threads(state_json: str) -> dict[str, Any]:
     for record in _records():
         if family != "all" and record["family"] != family:
             continue
-        machine = record["kind"] == "machine"
-        if form == "tapered" and (machine or record["family"] == "bspp"):
+        # Only rows carrying a diameter for this side can be compared on it.
+        if not record["capabilities"][
+            "identify_internal" if side == "internal" else "identify_external"
+        ]:
+            continue
+        # ISO 7 rows stay in a parallel search because Rp is parallel.
+        if form == "tapered" and record["tapered"] is not True:
             continue
         if form == "parallel" and record["family"] in ("npt", "nptf"):
             continue

@@ -28,6 +28,7 @@ def versioned_index() -> str:
             "fasteners",
             "threads",
             "pipe_threads",
+            "screw_products",
             "thread_specifications",
             "thread_models",
         )]
