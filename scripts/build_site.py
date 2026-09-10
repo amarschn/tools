@@ -13,8 +13,10 @@ perform every load and validation step without writing generated files.
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as _datetime
 import html
+import io
 import json
 import math
 import os
@@ -40,6 +42,7 @@ BASIS_VALUES = {
     "S-basis",
     "computed",
     "estimated",
+    "specified_range",
 }
 RECORD_TYPES = {"family", "grade", "variant"}
 PARENT_TYPES = {"family": "family", "grade": "family", "variant": "grade"}
@@ -1342,17 +1345,23 @@ def _format_observation_value(
         and isinstance(uncertainty.get("sigfigs"), int)
     ):
         precision = min(precision, uncertainty["sigfigs"])
-    value = _format_number(observation["value"], precision)
+    raw = observation.get("source_value", {})
+    precision = raw.get("significant_figures", precision)
+    scale = prop.get("typical_scale", 1)
+    display_unit = {"Pa": "GPa" if scale == 1e9 else "MPa", "kg/m^3": "kg/m³", "W/(m*K)": "W/(m·K)", "J/(kg*K)": "J/(kg·K)"}.get(prop["canonical_unit"], prop["canonical_unit"])
+    if prop["canonical_unit"] == "Pa": scale = 1e9 if scale == 1e9 else 1e6
+    if prop["id"] == "elongation_at_break": display_unit = "%"
+    def number(v): return _format_number(v / scale, precision)
+    value = number(observation["value"])
     if isinstance(uncertainty, dict):
         if uncertainty.get("kind") == "range":
-            value += (
-                " "
-                f"({_format_number(uncertainty['min'], precision)}–"
-                f"{_format_number(uncertainty['max'], precision)})"
-            )
+            interval = f"{number(uncertainty['min'])}–{number(uncertainty['max'])}"
+            value = interval if observation.get("result_kind") == "interval" else f"{value} ({interval})"
         elif uncertainty.get("kind") == "stddev":
-            value += f" ± {_format_number(uncertainty['sd'], precision)}"
-    return f"{html.escape(value)} <span class=\"muted\">{html.escape(prop['canonical_unit'])}</span>"
+            value += f" ± {number(uncertainty['sd'])}"
+    if observation["basis"] == "minimum": value = "≥ " + value
+    payload = html.escape(json.dumps({"observation": observation, "property": prop}, separators=(",", ":")), quote=True)
+    return f'<span data-quantity="{payload}">{html.escape(value)} <span class="muted">{html.escape(display_unit)}</span></span>'
 
 
 def _format_conditions(conditions: Mapping[str, Any]) -> str:
@@ -1382,10 +1391,13 @@ def _source_html(
     title = html.escape(source["title"])
     url = source.get("url")
     if isinstance(url, str):
+        if observation.get("source_page"): url += f"#page={observation['source_page']}"
         title = (
             f'<a href="{html.escape(url, quote=True)}" rel="noreferrer">{title}</a>'
         )
-    return f"{title}<br><span class=\"muted\">{html.escape(observation['source_locator'])}</span>"
+    raw = observation.get("source_value")
+    original = f'<br><span class="source-original">As published: {html.escape(raw["text"])} {html.escape(raw["unit"])}</span>' if raw else ""
+    return f"{title}<br><span class=\"muted\">{html.escape(observation['source_locator'])}</span>{original}"
 
 
 def _page_template(title: str, description: str, content: str) -> str:
@@ -1544,6 +1556,7 @@ def _render_record_content(
             )
         designation_html = "<p>" + " · ".join(rendered) + "</p>"
 
+    downloads = f'<a class="download-link" href="/materials/records/{material["id"]}.json" download>Download record JSON ↓</a>'
     return f"""\
 <main>
   <nav>{breadcrumb}</nav>
@@ -1553,6 +1566,7 @@ def _render_record_content(
   <div class="meta"><span class="badge">{families}</span>{condition}</div>
   {f'<p><strong>Also known as:</strong> {aliases}</p>' if aliases else ''}
   {designation_html}
+  {downloads}
   <h2>Property observations</h2>
   {table}
   {envelope_html}
@@ -1695,6 +1709,32 @@ def render_outputs(root: Path, database: Database) -> dict[str, bytes]:
     )
 
     src = root / "src"
+    for asset in ["app.mjs", "catalog.mjs", "detail.mjs", "app.css"]:
+        path = src / asset
+        if path.is_file(): add_text("assets/" + asset, path.read_text(encoding="utf-8"))
+
+    grades = [m for m in database.materials if m["record_type"] == "grade"]
+    observations = [o for m in database.materials for o in m["observations"]]
+    catalog = {
+        "schema_version": database.schema_version,
+        "catalog_version": "1.0.0",
+        "counts": {"materials": len(grades), "states": sum(m["record_type"] == "variant" for m in database.materials),
+                   "observations": len(observations), "sources": len(database.sources)},
+        "materials": database.materials, "properties": database.properties,
+        "conditions": database.conditions, "sources": database.sources,
+        "notes": "Material counts exclude families and states. Missing values are unreported, never zero. SI storage; observation-level source attribution applies.",
+    }
+    add_text("catalog.json", json.dumps(catalog, ensure_ascii=False, separators=(",", ":"), allow_nan=False)+"\n")
+    add_text("coverage.json", json.dumps({"counts": catalog["counts"], "properties": {p["id"]: sum(o["property"] == p["id"] for o in observations) for p in database.properties}}, indent=2)+"\n")
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream)
+    writer.writerow(["material_id", "state_id", "name", "property", "value_si", "min_si", "max_si", "unit", "result_kind", "basis", "conditions", "test_method", "source_id", "source_url", "source_locator", "original_value", "original_unit"])
+    for material in database.materials:
+        for o in material["observations"]:
+            uncertainty = o["uncertainty"]
+            raw = o.get("source_value", {})
+            writer.writerow([material["parent_id"], material["id"], material["name"], o["property"], o["value"], uncertainty.get("min", ""), uncertainty.get("max", ""), o["unit"], o.get("result_kind", "point"), o["basis"], json.dumps(o["conditions"], ensure_ascii=False, sort_keys=True), o["test_method"], o["source_id"], database.source_by_id[o["source_id"]]["url"], o["source_locator"], raw.get("text", ""), raw.get("unit", "")])
+    add_text("observations.csv", stream.getvalue())
     index_path = src / "index.html"
     add_text(
         "index.html",
@@ -1952,7 +1992,14 @@ def build(root: Path, output: Path | None = None, *, check: bool = False) -> tup
     if not check:
         _validate_output_location(root, destination)
     database = load_database(root)
-    outputs = render_outputs(root, database)
+    # A release frontend opts into the canonical compiler. Fixture-only roots
+    # retain the legacy renderer to keep its compatibility contract executable.
+    if (root / "src" / "app.mjs").is_file():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from release.compiler import render_outputs as render_release
+        outputs = render_release(root, database)
+    else:
+        outputs = render_outputs(root, database)
     if not check:
         write_outputs(destination, outputs)
     return len(database.materials), len(database.properties)

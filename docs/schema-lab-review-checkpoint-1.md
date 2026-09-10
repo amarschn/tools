@@ -1,6 +1,9 @@
 # Schema lab review checkpoint 1
 
-Status: ready for review; no contract has been adopted yet
+Status: reviewed and closed 2026-08-22. Decisions 2 and 3 below were modified at
+the gate; see [`schema-lab-checkpoint-1-decisions.md`](schema-lab-checkpoint-1-decisions.md)
+for what was actually adopted. This document is retained as the question that
+was asked, not as the answer.
 
 ## Short version
 
@@ -44,12 +47,22 @@ individual measurements.
 
 ### 3. Product form is measurement context in v1
 
+> **Modified at the gate.** Product form remains stored on observations as
+> described here, but it is now also a *navigable* drill-down level: `AX70 T6`
+> reports a range across forms and the user downselects to `AX70 T6 plate`. See
+> the recorded decisions document.
+
 Plate, extrusion, sheet, and molded form normally remain on an observation.
 Thus `AX70 T6 plate` becomes the `T6` state with `product_form: plate` on its
 measurements, rather than a separate plate state. We can revisit this if real
 sources consistently treat form as part of the lookup identity.
 
 ### 4. Values preserve what the source said
+
+> **Modified at the gate.** Both forms are still stored, but the canonical form
+> is what the UI displays, converted into a user-selected unit. The reported
+> form is retained for audit and significant figures rather than for display.
+> See the recorded decisions document.
 
 A result can be a point, reported interval, lower bound, upper bound, or an
 explicit unavailable/not-applicable assertion. Numeric results retain both the

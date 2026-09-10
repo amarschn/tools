@@ -1,73 +1,43 @@
 # TODO
 
-This is the live work queue. Completed outcomes move to
-[`PROJECT_LOG.md`](PROJECT_LOG.md) so this file remains useful rather than
-becoming an archive.
+Live work queue. Completed outcomes belong in [PROJECT_LOG.md](PROJECT_LOG.md).
 
-## Now — M1 domain-contract prototype
+## Next milestone — review and public deployment
 
-Approved execution plan:
-[`plans/2026-07-31_synthetic-schema-lab.md`](plans/2026-07-31_synthetic-schema-lab.md).
+The local release candidate is complete. See
+[docs/release-candidate.md](docs/release-candidate.md) for the reviewable artifact
+and verification evidence.
 
-Current review gate:
-[`docs/schema-lab-review-checkpoint-1.md`](docs/schema-lab-review-checkpoint-1.md).
+- [ ] Review the local candidate's material, category and property flows.
+- [ ] Choose the hosting destination, public URL, and repository remote.
+- [ ] Configure the selected host's HTML revalidation and immutable asset rules.
+- [ ] Publish the verified `materials/` artifact as an atomic release after
+  deployment authorization, then smoke-test the actual public URL.
+- [ ] Decide how source revisions and import reviews will be maintained before
+  adding more documents; reconstruction from pinned PDFs is already repeatable.
 
-- [ ] Define versioned contracts for taxonomy nodes, material identities, named
-  states, observations, properties, conditions, and sources.
-- [ ] Add stable IDs and distinguish primary browsing taxonomy from
-  supplemental classifications.
-- [ ] Define which conditions create named states and which remain attached to
-  individual observations.
-- [ ] Represent multiple observations, source-reported ranges, uncertainty,
-  missingness, basis, and precise source locators without hidden defaults.
-- [ ] Define derived category/property projections, coverage counts, and
-  mixed-condition warnings.
-- [ ] Add schema validators and executable positive and negative examples.
-- [ ] Decide whether the taxonomy/material/state/observation contract
-  supersedes [`docs/schema-decision.md`](docs/schema-decision.md), then record a
-  new decision instead of silently rewriting the old one.
+## Before substantially expanding the catalog
 
-## Next — prove the contract and search behavior
+- [ ] Run the deferred 10,000-identity scale fixture and measure topology/index
+  alternatives from the original schema-lab serving plan. Current measurements
+  qualify this 134-material candidate, not a larger corpus.
+- [ ] Implement the separate tools-repository compatibility collapse if that
+  integration is still wanted. Legacy navigation redirects are already covered.
+- [ ] Broaden the independent source audit and source-revision lifecycle before
+  scaling ingestion. Keep numerical facts, exact source labels, and units
+  independently reviewable.
+- [ ] Add actual uncertainty forms to the factual adapter only when source data
+  requires them; unknown forms currently fail rather than lose information.
 
-- [ ] Port the current synthetic fixture through the versioned contracts
-  without changing the accepted Prototype 05 behavior.
-- [ ] Define the boundary between compact search-index records and complete
-  material records.
-- [ ] Add golden queries for exact IDs, aliases, short tokens, misspellings,
-  ambiguous properties, category scopes, and comparison intent.
-- [ ] Generate at least 10,000 synthetic records and record index size, query
-  latency, render latency, and the 50-row rendering budget.
-- [ ] Prove the compatibility export using deterministic synthetic output.
-- [ ] Preserve a small repeatable review script for the selected interaction.
+## Later product decisions
 
-## Then — small real-source reality check
+- [ ] How to scope large collections of commercial grades and generic chemistry
+  aliases as coverage grows.
+- [ ] Whether ratings-only properties belong in a later version.
+- [ ] Whether a separate comparison product is warranted after lookup is trusted.
 
-- [ ] Select two structurally different, legally usable source documents.
-- [ ] Manually model 8–12 material identities and 3–5 substantially different
-  properties.
-- [ ] Include named states, conditioned or conflicting observations, a
-  source-reported range, missing data, and precise citations.
-- [ ] Render the real-source slice through the selected interaction and record
-  every schema change it forces.
-- [ ] Prototype the source-snapshot, candidate-extraction, review, and publish
-  lifecycle before scaling ingestion.
-
-## Open product and UI decisions
-
-- [ ] Should singular property counts be hidden or renamed from “1 observation”
-  to “1 reported value”?
-- [ ] Should the search index contain property values or availability only?
-- [ ] How should near-duplicate conditioned observations appear by default?
-- [ ] How are commercial materials without standard designations identified?
-- [ ] Are ratings-only properties part of v1?
-- [ ] Which review and provenance details must remain visible in the compact
-  lookup surface?
-
-## Later
-
-- [ ] Reimplement the selected UI cleanly against the frozen contract rather
-  than promoting the disposable prototype directly.
-- [ ] Expand material and property coverage only after provenance, licensing,
-  deterministic rebuild, and offline validation gates pass.
-- [ ] Revisit a separate comparison product only after the lookup tool is
-  trustworthy.
+The August M1 Phases 3–5 queue has been superseded for this bounded release by
+the September 9 request to complete a local release candidate. The normalized
+contract and selected dual-mode behavior are implemented in the release. The
+full serving bake-off, tools compatibility export, and universal contract freeze
+are not being marked complete by that narrower milestone.

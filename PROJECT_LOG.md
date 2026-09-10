@@ -6,12 +6,105 @@ in the linked plans and decision documents.
 
 ## Current status
 
-- Phase: M1 synthetic data-contract lab active; review checkpoint 1 is ready.
-- Selected interaction candidate: Prototype 05, dual-mode lookup.
-- Current UI evidence: synthetic fixture only, with no network requests or
-  engineering claims.
-- Next gate: approve the domain vocabulary, state/condition boundary, and
-  representative record before formal validation and full-corpus migration.
+- Phase: local release candidate 1.0.0-rc.1 complete; public deployment pending.
+- Selected interaction: dual-mode material datasheets and property/category lookup.
+- Catalog: 134 material identities, 24 named states, 840 observations, 5 source
+  documents. The factual release uses the normalized v0.1.0 contract.
+- Review artifact and verification: [docs/release-candidate.md](docs/release-candidate.md).
+- Next gate: review the local candidate, choose the publishing destination, and
+  verify an authorized deployment at its actual public URL.
+
+## 2026-09-09 — Complete local release candidate
+
+- Recovered the September 7 factual import work that had not reached the UI or
+  project notes. Connected the selected dual-mode interaction to that catalog
+  through one canonical adapter and deterministic release compiler.
+- Added material/state/form lookup, category/property ranges, ambiguity and broad
+  property clarification, persistent metric/imperial units and property overrides,
+  source-page links, printed values, JSON records, and complete JSON/CSV exports.
+- Dissolved 111 artificial reference-state wrappers; retained 24 named states.
+  Kept stainless physical-table observations at grade level. One-sided limits
+  stay out of measured ranges, with explicit coverage and separate limit labels.
+- Rechecked Hydro page 2: removed duplicated alloy-wide density, preserved its
+  original precision and exact conversion, and restored the stated conductivity
+  temperature. Every retained authoring observation survives the canonical
+  adapter with a page locator and source literal.
+- Added source snapshot hashing and a read-only import reconstruction check for
+  all five saved PDFs. The adapter rejects unmapped uncertainty and reported/SI
+  discrepancies rather than silently losing information.
+- Replaced stale generated output with a self-contained, relocatable publish
+  directory. Hashed assets/data, matching-build checks, retained legacy redirects,
+  and retry/reload behavior cover cache updates and subpath hosting.
+- Added factual-contract, projection-parity, search, conversion, provenance,
+  determinism, output-freshness, and browser checks; the optional validator is
+  installed and full structural tests pass locally.
+- Browser evidence covers desktop and 320px screens, root and nested mounts,
+  persistent units, browser history, ambiguous/missing queries, delayed loading,
+  cache mismatch recovery, and no external or full-corpus browsing requests.
+- Added CI verification and artifact packaging. No public deployment or remote
+  configuration was performed.
+- Recorded [Schema Decision 002](docs/schema-decision-002-release.md). The old
+  full-scale bake-off and tools compatibility export remain deferred; the local
+  release milestone does not silently mark those earlier gates complete.
+
+## 2026-08-23 — Phase 2 contract, validation, and migration
+
+- Added contract v0.1.0: a JSON Schema for document shape and a standard-library
+  semantic validator for references, taxonomy, placement, units, precision, and
+  provenance, with stable diagnostic codes negative fixtures assert against.
+- Migrated the full prototype corpus with zero validation errors and no
+  unexplained loss. Every observation, material, and taxon id survives and every
+  canonical number is unchanged.
+- Verified before removing anything that the 228 state-attributes copied onto
+  observations were exact duplicates, with no conflicts and no orphans; the
+  check re-runs against the legacy corpus rather than trusting the number.
+- Retired `material_state` into precise keys, recovered temper from display
+  labels, split labels of the form `T6 · plate`, and dissolved three states that
+  product form alone had defined.
+- Added an adversarial overlay for shapes the corpus lacked: interval, one-sided
+  bound, uncertainty with sample count, unavailable and not-applicable
+  assertions, a superseded observation, a long structured locator, an
+  undesignated commercial grade, and a supplemental classification path.
+- Made 24 negative fixtures executable, each asserting its own diagnostic code
+  rather than merely failing.
+- Moved counting and range rules out of page code into tested projections,
+  including the checkpoint 1 drill-down where product form yields a landable
+  level while staying stored on the observation.
+- Modelled unit conversion as affine rather than a single scale factor. The
+  legacy scale factor could not express temperature, so the prototype hardcodes
+  a 273.15 subtraction in its formatter; the offset is now data, and adding
+  Fahrenheit needs a registry entry rather than another renderer special case.
+- Test count rose from 14 to 93. `jsonschema` is a development-only dependency;
+  semantic validation and the suite still pass without it.
+
+Related:
+
+- [`docs/schema-lab-migration-report.md`](docs/schema-lab-migration-report.md)
+- [`schemas/v0.1.0/dataset.schema.json`](schemas/v0.1.0/dataset.schema.json)
+- [`fixtures/schema-lab/v0.1.0/`](fixtures/schema-lab/v0.1.0/)
+
+## 2026-08-22 — Checkpoint 1 closed with modifications
+
+- Adopted purchasability as the governing test for what earns a page, refined so
+  that discrete purchasable choices become navigable levels while continuous
+  quantities remain filters.
+- Confirmed named states as landable lookup targets, and required every level to
+  report a range aggregated from its members so intermediate pages are never
+  empty while data exists beneath them.
+- Made product form a navigable drill-down level while keeping it stored on
+  observations, separating where a fact lives from what a user can land on.
+- Inverted the result-form roles: the canonical value drives display and
+  conversion, and the reported value is retained for audit and significant
+  figures rather than for display.
+- Accepted the property renames and carried the structured designation form.
+- Recorded a new requirement not previously in the plan: display units are a
+  user preference with a metric default, imperial option, and per-property
+  override.
+- No contract is frozen yet; Schema Decision 002 still lands at Phase 5.
+
+Related:
+
+- [`docs/schema-lab-checkpoint-1-decisions.md`](docs/schema-lab-checkpoint-1-decisions.md)
 
 ## 2026-08-02 — Schema lab baseline and first review checkpoint
 
@@ -93,7 +186,15 @@ Related:
 Run before milestone commits:
 
 ```sh
-python3 scripts/build_site.py --check
-python3 -m unittest discover -s tests -v
-node tests/prototype_search.test.js
+.venv/bin/python3.13 scripts/build_site.py --check
+.venv/bin/python3.13 scripts/schema_lab.py check
+.venv/bin/python3.13 -m unittest discover -s tests
+.venv/bin/python3.13 scripts/verify_release.py
+npm test
+npm run test:browser
 ```
+
+`schema_lab.py check` re-runs the migration in memory and fails when the
+checked-in corpus differs, then validates it. Structural validation needs
+`pip install -r requirements-dev.txt`; without it the semantic checks still run
+and the structural tests skip rather than fail.

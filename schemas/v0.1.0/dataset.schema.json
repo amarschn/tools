@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://materials.local/schemas/v0.1.0/dataset.schema.json",
+  "title": "Materials schema lab dataset",
+  "description": "Canonical normalized dataset for the M1 synthetic schema lab. Encodes the model adopted at review checkpoint 1: taxonomy -> material -> named state -> observation, with conditions placed in exactly one container.",
+  "type": "object",
+  "required": [
+    "dataset",
+    "taxa",
+    "properties",
+    "property_groups",
+    "conditions",
+    "bases",
+    "sources",
+    "materials",
+    "states",
+    "observations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dataset": { "$ref": "#/$defs/manifest" },
+    "taxa": { "type": "array", "items": { "$ref": "#/$defs/taxon" } },
+    "properties": { "type": "array", "items": { "$ref": "#/$defs/property" } },
+    "property_groups": { "type": "array", "items": { "$ref": "#/$defs/propertyGroup" } },
+    "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+    "bases": { "type": "array", "items": { "$ref": "#/$defs/basis" } },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+    "materials": { "type": "array", "items": { "$ref": "#/$defs/material" } },
+    "states": { "type": "array", "items": { "$ref": "#/$defs/state" } },
+    "observations": { "type": "array", "items": { "$ref": "#/$defs/observation" } },
+    "legacy_mappings": { "$ref": "#/$defs/legacyMappings" }
+  },
+
+  "$defs": {
+    "id": {
+      "type": "string",
+      "description": "Uppercase is permitted so unit-suffixed condition keys keep SI symbol case, as in temperature_K. Identifiers are otherwise lowercase by convention.",
+      "pattern": "^[A-Za-z0-9]+([-_.][A-Za-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "idList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" },
+      "uniqueItems": true
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "finiteNumber": {
+      "type": "number"
+    },
+
+    "manifest": {
+      "type": "object",
+      "required": ["id", "contract_version", "corpus_version", "synthetic", "warning"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "contract_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.\\-]+)?$" },
+        "corpus_version": { "type": "string", "minLength": 1 },
+        "synthetic": { "type": "boolean" },
+        "warning": { "type": "string", "minLength": 1 },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "seed": { "type": ["integer", "string", "null"] }
+          }
+        },
+        "expected_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+
+    "taxon": {
+      "type": "object",
+      "required": ["id", "name", "primary_parent_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "primary_parent_id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "supplemental_broader_ids": { "$ref": "#/$defs/idList" }
+      }
+    },
+
+    "property": {
+      "type": "object",
+      "required": ["id", "name", "quantity_kind", "canonical_unit"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "quantity_kind": { "type": "string", "minLength": 1 },
+        "canonical_unit": { "type": "string", "minLength": 1 },
+        "symbol": { "type": "string" },
+        "definition": { "type": "string" },
+        "group_id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }
+      }
+    },
+
+    "propertyGroup": {
+      "type": "object",
+      "required": ["id", "name", "member_property_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "member_property_ids": { "$ref": "#/$defs/idList" }
+      }
+    },
+
+    "condition": {
+      "type": "object",
+      "required": ["id", "name", "value_type", "allowed_placement"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "value_type": { "enum": ["enum", "number", "number_interval"] },
+        "canonical_unit": { "type": ["string", "null"] },
+        "allowed_values": {
+          "oneOf": [
+            { "type": "array", "items": { "type": "string" }, "uniqueItems": true, "minItems": 1 },
+            { "type": "null" }
+          ]
+        },
+        "allowed_placement": {
+          "enum": ["state_fixed_attribute", "observation_condition"]
+        },
+        "navigable": {
+          "type": "boolean",
+          "description": "Adopted at checkpoint 1. A navigable condition generates a drill-down level such as AX70 T6 plate. Only enum conditions may be navigable; continuous quantities stay filters."
+        },
+        "retired": { "type": "boolean" },
+        "retired_reason": { "type": "string" }
+      }
+    },
+
+    "basis": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "definition": { "type": "string" }
+      }
+    },
+
+    "source": {
+      "type": "object",
+      "required": ["id", "title", "source_type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "organization": { "type": "string" },
+        "source_type": { "type": "string", "minLength": 1 },
+        "publication_date": { "type": ["string", "null"] },
+        "revision": { "type": ["string", "null"] },
+        "license": { "type": ["string", "null"] },
+        "synthetic": { "type": "boolean" }
+      }
+    },
+
+    "designation": {
+      "type": "object",
+      "required": ["system_id", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "system_id": { "$ref": "#/$defs/id" },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "material": {
+      "type": "object",
+      "required": ["id", "name", "identity_kind", "primary_taxon_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "identity_kind": { "type": "string", "minLength": 1 },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "designations": { "type": "array", "items": { "$ref": "#/$defs/designation" } },
+        "primary_taxon_id": { "$ref": "#/$defs/id" },
+        "supplemental_taxon_ids": { "$ref": "#/$defs/idList" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "state": {
+      "type": "object",
+      "required": ["id", "material_id", "name", "fixed_attributes"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "material_id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "fixed_attributes": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "$ref": "#/$defs/numberInterval" }
+            ]
+          }
+        },
+        "supplemental_taxon_ids": { "$ref": "#/$defs/idList" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "numberInterval": {
+      "type": "object",
+      "required": ["minimum", "maximum"],
+      "additionalProperties": false,
+      "properties": {
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" }
+      }
+    },
+
+    "reportedPoint": {
+      "type": "object",
+      "required": ["value", "unit", "significant_figures"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 },
+        "significant_figures": { "type": "integer", "minimum": 1, "maximum": 15 }
+      }
+    },
+    "canonicalPoint": {
+      "type": "object",
+      "required": ["value", "unit"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reportedInterval": {
+      "type": "object",
+      "required": ["minimum", "maximum", "unit", "significant_figures"],
+      "additionalProperties": false,
+      "properties": {
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 },
+        "significant_figures": { "type": "integer", "minimum": 1, "maximum": 15 }
+      }
+    },
+    "canonicalInterval": {
+      "type": "object",
+      "required": ["minimum", "maximum", "unit"],
+      "additionalProperties": false,
+      "properties": {
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reportedBound": {
+      "type": "object",
+      "required": ["value", "unit", "significant_figures"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 },
+        "significant_figures": { "type": "integer", "minimum": 1, "maximum": 15 }
+      }
+    },
+
+    "result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "reported", "canonical"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "point" },
+            "reported": { "$ref": "#/$defs/reportedPoint" },
+            "canonical": { "$ref": "#/$defs/canonicalPoint" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "reported", "canonical"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "interval" },
+            "reported": { "$ref": "#/$defs/reportedInterval" },
+            "canonical": { "$ref": "#/$defs/canonicalInterval" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "reported", "canonical"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["lower_bound", "upper_bound"] },
+            "reported": { "$ref": "#/$defs/reportedBound" },
+            "canonical": { "$ref": "#/$defs/canonicalPoint" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["unavailable", "not_applicable"] },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+
+    "uncertainty": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["kind", "reported", "canonical"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["standard_deviation", "expanded", "tolerance"] },
+            "reported": { "$ref": "#/$defs/reportedPoint" },
+            "canonical": { "$ref": "#/$defs/canonicalPoint" },
+            "sample_count": { "type": ["integer", "null"], "minimum": 1 },
+            "coverage_factor": { "type": ["number", "null"] }
+          }
+        }
+      ]
+    },
+
+    "sourceLocator": {
+      "type": "object",
+      "required": ["label"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "page": { "type": ["integer", "null"] },
+        "table": { "type": ["string", "null"] },
+        "figure": { "type": ["string", "null"] },
+        "section": { "type": ["string", "null"] },
+        "row": { "type": ["string", "null"] },
+        "column": { "type": ["string", "null"] },
+        "record": { "type": ["string", "null"] }
+      }
+    },
+
+    "observation": {
+      "type": "object",
+      "required": [
+        "id",
+        "material_id",
+        "state_id",
+        "property_id",
+        "result",
+        "basis",
+        "conditions",
+        "source_id",
+        "source_locator",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "material_id": { "$ref": "#/$defs/id" },
+        "state_id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "property_id": { "$ref": "#/$defs/id" },
+        "result": { "$ref": "#/$defs/result" },
+        "uncertainty": { "$ref": "#/$defs/uncertainty" },
+        "basis": { "$ref": "#/$defs/id" },
+        "conditions": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "$ref": "#/$defs/numberInterval" }
+            ]
+          }
+        },
+        "test_method": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["reported_label"],
+              "additionalProperties": false,
+              "properties": {
+                "reported_label": { "type": "string", "minLength": 1 },
+                "method_id": { "type": ["string", "null"] }
+              }
+            }
+          ]
+        },
+        "source_id": { "$ref": "#/$defs/id" },
+        "source_locator": { "$ref": "#/$defs/sourceLocator" },
+        "status": { "enum": ["active", "superseded"] },
+        "supersedes_observation_ids": { "$ref": "#/$defs/idList" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "legacyMappings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "property_ids": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/id" }
+        },
+        "condition_keys": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/id" }
+        },
+        "state_ids": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
