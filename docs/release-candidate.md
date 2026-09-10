@@ -37,21 +37,25 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
    Check thickness unit conversion, reported copper ranges, and the titanium
    size restriction under Test details. See [batch review](nonferrous-batch-review.md).
 
+10. Search `4140`, `1045`, `D2`, `H13` and `steel density`. Check specified
+    versus typical minima, diameter scope under Test details, and the hardness
+    conditions of tool steel properties. See [steel review](steel-batch-review.md).
+
 ## Evidence
 
-- 134 Python tests pass with no skips. Full structural and semantic validation of the factual catalog and synthetic
+- 140 Python tests pass with no skips. Full structural and semantic validation of the factual catalog and synthetic
   contract, including negative cases and exact source-to-SI conversion checks.
 - Deterministic compilation; every checked-in artifact and manifest hash is
   verified against a fresh in-memory build. Extra files in the publish tree
   fail the release gate.
-- 201 factual material identities, 64 named states, 1,381 observations,
-  10 registered properties, and text references to 19 source documents. One registered property
+- 222 factual material identities, 92 named states, 1,593 observations,
+  10 registered properties, and text references to 28 source documents. One registered property
   currently has no observations; missing data is displayed as unreported.
-- Readable search index approximately 227 KB raw / 20 KB gzip. Warm Node query
-  p95 is approximately 4 ms on the development machine. This measurement is a
+- Readable search index approximately 269 KB raw / 23 KB gzip. Warm Node query
+  p95 is approximately 5–7 ms on the development machine. This measurement is a
   current-corpus baseline, not a large-corpus performance claim.
 - Search routing, conversion, significant figures, bounds, intervals,
-  uncertainty conversion, and compiler/browser parity across all 201 records.
+  uncertainty conversion, and compiler/browser parity across all 222 records.
 - Chromium browser verification at root and `/nested/reference/`: material and
   property flows, clarification, ambiguity, rejected ranking intent, deep links,
   reload, browser history, units, missing data, and a 50-row result cap.
@@ -63,7 +67,7 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
   rejected, and retry succeeds after the correct data becomes available.
 - Desktop and 320px layouts inspected, including long citations and a category
   overview. Browser runs finish without console errors or page exceptions.
-- Saved PDF hashes checked for all 19 documents. The full import reconstructs
+- Saved PDF hashes checked for all 28 documents. The full import reconstructs
   the curated files byte-for-byte using `import_reference_tables.py --check`.
   The Hydro corrections are documented in Schema Decision 002. Reproducible
   extraction is not a substitute for an independent audit of every source fact.

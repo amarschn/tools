@@ -26,10 +26,10 @@ class ReleaseTests(unittest.TestCase):
     def test_factual_contract_and_no_artificial_states(self):
         self.assertFalse(self.data['dataset']['synthetic'])
         self.assertEqual([], [str(d) for d in validate(self.data) if d.severity == 'error'])
-        self.assertEqual(201, len(self.data['materials']))
-        self.assertEqual(64, len(self.data['states']))
-        self.assertEqual(1381, len(self.data['observations']))
-        self.assertEqual(19, len(self.data['sources']))
+        self.assertEqual(222, len(self.data['materials']))
+        self.assertEqual(92, len(self.data['states']))
+        self.assertEqual(1593, len(self.data['observations']))
+        self.assertEqual(28, len(self.data['sources']))
         self.assertFalse(any(s['name'] in ('stock shape', 'supplier reference state') for s in self.data['states']))
 
     def test_every_authored_observation_survives_with_its_source_literal(self):
@@ -172,6 +172,82 @@ class ReleaseTests(unittest.TestCase):
         db = deepcopy(self.database)
         next(m for m in db.materials if m['observations'])['observations'][0]['value'] *= 1.01
         with self.assertRaisesRegex(ValueError, 'Reported/SI mismatch'): adapt(db)
+
+    def test_steel_taxonomy_includes_stainless_without_false_grade_equivalences(self):
+        parents = {t['id']: t['primary_parent_id'] for t in self.data['taxa']}
+        for family in ('stainless-steels', 'carbon-steels', 'alloy-steels', 'tool-steels'):
+            self.assertEqual('steels', parents[family])
+        self.assertEqual('alloy-steels', parents['case-hardening-steels'])
+        m1020 = self.records['steel-atlas-m1020']['material']
+        self.assertNotIn('1020', m1020['aliases'])
+        self.assertNotIn('4340', self.records['steel-atlas-6582']['material']['aliases'])
+        self.assertEqual([{'system_id':'as', 'value':'M1020'}, {'system_id':'supplier', 'value':'Atlas M1020'}], m1020['designations'])
+
+    def test_steel_reference_minima_are_not_points_or_guaranteed_supply_limits(self):
+        carbon = self.records['steel-atlas-1045']
+        values = [o for o in carbon['observations'] if o['property_id'] == 'tensile_yield_strength']
+        self.assertEqual([540e6, 510e6, 500e6], [o['result']['canonical']['value'] for o in values])
+        self.assertTrue(all(o['result']['kind'] == 'lower_bound' and o['basis'] == 'typical' for o in values))
+        self.assertIsNone(carbon['summaries']['tensile_yield_strength']['range'])
+        self.assertIn('not guaranteed', values[0]['notes'])
+        self.assertIn('≤16 mm', values[0]['notes'])
+        self.assertNotIn('temperature_K', values[0]['conditions'])
+        self.assertEqual({'work_condition':'cold_drawn'}, carbon['states'][0]['fixed_attributes'])
+        supplied = self.records['steel-atlas-4140']['observations']
+        yield_row = next(o for o in supplied if o['property_id'] == 'tensile_yield_strength')
+        self.assertEqual(('lower_bound', 'minimum', 740e6),
+                         (yield_row['result']['kind'], yield_row['basis'], yield_row['result']['canonical']['value']))
+        self.assertIn('≤180 mm; AS1444 condition U', yield_row['notes'])
+        tensile = next(o for o in supplied if o['property_id'] == 'ultimate_tensile_strength')
+        self.assertEqual({'minimum':930e6, 'maximum':1080e6, 'unit':'Pa'}, tensile['result']['canonical'])
+        self.assertEqual('specified_range', tensile['basis'])
+
+    def test_case_hardened_core_properties_keep_size_and_state_scope(self):
+        record = self.records['steel-atlas-8620h']
+        self.assertEqual({'heat_treatment':'carburized_hardened_tempered'}, record['states'][0]['fixed_attributes'])
+        tensile = [o for o in record['observations'] if o['property_id'] == 'ultimate_tensile_strength']
+        self.assertEqual([980e6, 780e6, 690e6], [o['result']['canonical']['minimum'] for o in tensile])
+        self.assertTrue(all(o['basis'] == 'typical' and 'core properties' in o['notes'] for o in tensile))
+        self.assertIn('diameter 11 mm', tensile[0]['notes'])
+        self.assertFalse(any(o['property_id'] == 'tensile_yield_strength' for o in self.records['steel-atlas-6657']['observations']))
+        self.assertEqual('thermomechanically_rolled', self.records['steel-atlas-micro900']['states'][0]['fixed_attributes']['work_condition'])
+
+    def test_tool_steel_physical_values_retain_hardness_and_temperature(self):
+        arne = self.records['steel-uddeholm-arne']
+        self.assertEqual('62 HRC', arne['states'][0]['fixed_attributes']['hardness_condition'])
+        self.assertTrue(all(o['state_id'] is not None for o in arne['observations']))
+        moduli = {o['conditions']['temperature_K']:o['result']['canonical']['value'] for o in arne['observations'] if o['property_id'] == 'youngs_modulus'}
+        self.assertEqual({293.15:190e9, 473.15:185e9, 673.15:170e9}, moduli)
+        self.assertEqual([2, 3, 2], [o['result']['reported']['significant_figures']
+                                    for o in arne['observations'] if o['property_id'] == 'youngs_modulus'])
+        for name, expected in [('orvar-supreme', 140e9), ('dievar', 145e9)]:
+            high = next(o for o in self.records['steel-uddeholm-'+name]['observations'] if o['property_id'] == 'youngs_modulus' and o['conditions']['temperature_K'] == 873.15)
+            self.assertEqual(expected, high['result']['canonical']['value'])
+        stavax = self.records['steel-uddeholm-stavax-esr']['observations']
+        self.assertFalse(any(o['property_id'] == 'tensile_yield_strength' for o in stavax))
+        thermal = [o for o in stavax if o['property_id'] == 'thermal_conductivity']
+        self.assertTrue(all('±15%' in o['notes'] for o in thermal))
+        self.assertFalse(any(o['property_id'] == 'thermal_conductivity' and o['conditions'].get('temperature_K') == 293.15 for o in self.records['steel-uddeholm-caldie']['observations']))
+
+    def test_tool_steel_tensile_rows_do_not_inherit_physical_specimen_conditions(self):
+        dievar = self.records['steel-uddeholm-dievar']
+        bystate = {s['id']:s for s in dievar['states']}
+        tensile = [o for o in dievar['observations'] if o['property_id'] == 'ultimate_tensile_strength']
+        self.assertEqual({'44 HRC':1480e6, '48 HRC':1640e6, '52 HRC':1900e6},
+                         {bystate[o['state_id']]['fixed_attributes']['hardness_condition']:o['result']['canonical']['value'] for o in tensile})
+        self.assertTrue(all(o['conditions']['orientation'] == 'ST' and 'temperature_K' not in o['conditions'] for o in tensile))
+        self.assertTrue(all('cycles are not supplied' in o['notes'] for o in tensile))
+        self.assertTrue(all('615 °C' not in o['notes'] for o in tensile))
+        carmo = self.records['steel-uddeholm-carmo']
+        states = {s['id']:s['fixed_attributes']['hardness_condition'] for s in carmo['states']}
+        for o in carmo['observations']:
+            expected = '270 HB' if o['property_id'] in ('ultimate_tensile_strength','tensile_yield_strength','elongation_at_break') else '240–270 HB'
+            self.assertEqual(expected, states[o['state_id']])
+
+    def test_release_rejects_unreviewed_result_kinds(self):
+        db = deepcopy(self.database)
+        next(m for m in db.materials if m['observations'])['observations'][0]['result_kind'] = 'unsupported'
+        with self.assertRaisesRegex(ValueError, 'Unreviewed result kind'): adapt(db)
 
     def test_release_cannot_silently_drop_unmapped_uncertainty(self):
         db = deepcopy(self.database)

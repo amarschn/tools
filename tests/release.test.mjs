@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createSearch, MAX_RESULTS} from '../src/search.mjs';
-import {displayUnit, resultText, summaryText, summarize, significant, thicknessText} from '../src/format.mjs';
+import {displayUnit, resultText, summaryText, summarize, significant, thicknessText, resultBasis} from '../src/format.mjs';
 
 const manifest = JSON.parse(fs.readFileSync('materials/release-manifest.json'));
 const index = JSON.parse(fs.readFileSync('materials/' + manifest.index));
@@ -36,6 +36,21 @@ const routeCases = [
   ['titanium density', {category:'titanium-alloys', property:'density'}],
   ['Ti6Al4V', {material:'ti-6al-4v'}],
   ['Ti6246 DA', {material:'ti-6al-2sn-4zr-6mo', state:'ti-6246-da'}],
+  ['steel density', {category:'steels', property:'density'}],
+  ['stainless steel density', {category:'stainless-steels', property:'density'}],
+  ['carbon steel yield strength', {category:'carbon-steels', property:'tensile_yield_strength'}],
+  ['tool steel thermal conductivity', {category:'tool-steels', property:'thermal_conductivity'}],
+  ['1045', {material:'steel-atlas-1045'}],
+  ['4140', {material:'steel-atlas-4140'}],
+  ['4340', {material:'steel-atlas-4340'}],
+  ['34CrNiMo6', {material:'steel-atlas-6582'}],
+  ['18CrNiMo7-6', {material:'steel-atlas-6587'}],
+  ['8620H', {material:'steel-atlas-8620h'}],
+  ['12L14', {material:'steel-atlas-12l14fm'}],
+  ['O1', {material:'steel-uddeholm-arne'}],
+  ['A2', {material:'steel-uddeholm-rigor'}],
+  ['D2', {material:'steel-uddeholm-sverker-21'}],
+  ['H13', {material:'steel-uddeholm-orvar-supreme'}],
 ];
 for (const [q, expected] of routeCases) assert.deepEqual(resolve(q), {kind:'route', route:expected}, q);
 assert.equal(resolve('plastic strength').kind, 'clarify');
@@ -60,6 +75,8 @@ assert.equal(significant(27679.904710203122*.098, 2), '2700');
 assert.equal(thicknessText({minimum:null, maximum:.124*.0254}, 'imperial'), '≤ 0.124 in');
 assert.equal(thicknessText({minimum:.5*.0254, maximum:null}, 'metric'), '≥ 12.7 mm');
 assert.equal(thicknessText({minimum:.062*.0254, maximum:.124*.0254}, 'metric'), '1.5748–3.1496 mm');
+assert.equal(resultBasis({...point, basis:'typical'}), 'Typical minimum (not guaranteed)');
+assert.equal(resultBasis({...point, basis:'minimum'}), 'Minimum');
 assert.equal(summaryText(summarize([point], yieldProp.id), displayUnit(yieldProp, metric)), '≥ 240 MPa');
 const interval = {...point, result:{kind:'interval', canonical:{minimum:470e6, maximum:520e6}, reported:{significant_figures:2}}};
 assert.equal(resultText(interval, displayUnit(yieldProp, imperial)), '68–75 ksi');

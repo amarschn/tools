@@ -12,6 +12,7 @@ import re
 
 from schema_lab.registries import condition_registry
 from schema_lab.validator import validate
+from scripts.import_steel_grades import STATE_ATTRIBUTES as STEEL_STATE_ATTRIBUTES, HARDNESS_CONDITIONS
 
 PROPERTY_IDS = {"yield_strength": "tensile_yield_strength", "tensile_strength": "ultimate_tensile_strength"}
 REVIEWED_TEMPERS = ("O", "H111", "H112", "T1", "T4", "T5", "T6", "T61", "T63", "T64")
@@ -34,6 +35,12 @@ def adapt(database):
     by_condition["work_condition"]["allowed_values"].append("cold_rolled")
     by_condition["temper"]["allowed_values"] = sorted(set(by_condition["temper"]["allowed_values"]) | set(REVIEWED_TEMPERS))
     by_condition["thickness_m"]["nullable_bounds"] = True
+    by_condition["heat_treatment"]["allowed_values"].extend(["hardened_tempered", "carburized_hardened_tempered"])
+    by_condition["work_condition"]["allowed_values"].append("thermomechanically_rolled")
+    conditions.append({"id": "hardness_condition", "name": "Hardness", "value_type": "enum",
+        "canonical_unit": None, "allowed_values": HARDNESS_CONDITIONS[:],
+        "allowed_placement": "state_fixed_attribute"})
+    has_steel_taxon = any(r["id"] == "steels" for r in rows)
     data = {
         "dataset": {"id": "materials-reference", "contract_version": "0.1.0", "corpus_version": "1.0.0-rc.1", "synthetic": False,
                     "warning": "Published reference values. Check source, basis and conditions for your application."},
@@ -64,10 +71,11 @@ def adapt(database):
         if row["record_type"] == "family":
             aliases = list(row["aliases"])
             if rid == "engineering-plastics": aliases += ["plastic", "plastics", "polymer", "polymers"]
-            if rid == "stainless-steels": aliases += ["stainless", "stainless steel", "steel", "steels"]
+            if rid == "stainless-steels":
+                aliases += ["stainless", "stainless steel"] + ([] if has_steel_taxon else ["steel", "steels"])
             if rid == "ceramics": aliases += ["ceramic"]
             data["taxa"].append({"id": rid, "name": row["name"], "aliases": sorted(set(aliases)),
-                "primary_parent_id": row["parent_id"], "supplemental_broader_ids": []})
+                "primary_parent_id": "steels" if rid == "stainless-steels" and has_steel_taxon else row["parent_id"], "supplemental_broader_ids": []})
             extras["legacy_targets"][rid] = {"category": rid}
         elif row["record_type"] == "grade":
             data["materials"].append({"id": rid, "name": row["name"], "aliases": row["aliases"],
@@ -87,6 +95,10 @@ def adapt(database):
                 state_id = rid
                 fixed = {"heat_treatment": REVIEWED_HEAT_TREATMENTS[row["condition"]]}
                 name = row["condition"].capitalize()
+            elif row["condition"] in STEEL_STATE_ATTRIBUTES:
+                state_id = rid
+                fixed = deepcopy(STEEL_STATE_ATTRIBUTES[row["condition"]])
+                name = row["condition"][0].upper() + row["condition"][1:]
             elif row["condition"] in ("cold rolled sheet", "cold rolled coil", "cold rolled"):
                 state_id = rid
                 fixed = {"work_condition": "cold_rolled"}
@@ -123,7 +135,9 @@ def adapt(database):
                     raise ValueError(f"Missing source literal for {rid}/{old['property']}; review the source before release")
                 nums = [float(v.replace(",", "")) for v in re.split("[–]", raw["text"])]
                 scale, offset = raw["scale_to_si"], raw.get("offset_to_si", 0)
-                kind = "interval" if old.get("result_kind") == "interval" else "lower_bound" if old["basis"] == "minimum" else "point"
+                kind = old.get("result_kind", "lower_bound" if old["basis"] == "minimum" else "point")
+                if kind not in ("point", "interval", "lower_bound", "upper_bound"):
+                    raise ValueError(f"Unreviewed result kind: {oid}/{kind}")
                 if len(nums) != (2 if kind == "interval" else 1):
                     raise ValueError(f"Invalid source literal: {oid}")
                 keys = ("minimum", "maximum") if kind == "interval" else ("value",)

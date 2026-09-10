@@ -9,11 +9,31 @@ in the linked plans and decision documents.
 - Phase: local release candidate 1.0.0-rc.1 complete; public deployment pending.
 - Selected interface: Prototype 05, with dual-mode material datasheets and
   expandable property/category lookup. Redesigns require express permission.
-- Catalog: 201 material identities, 64 named states, 1,381 observations, 19 source
+- Catalog: 222 material identities, 92 named states, 1,593 observations, 28 source
   documents. The factual release uses the normalized v0.1.0 contract.
 - Review artifact and verification: [docs/release-candidate.md](docs/release-candidate.md).
 - Next gate: review the local candidate, choose the publishing destination, and
   verify an authorized deployment at its actual public URL.
+
+## 2026-09-10 — Add 21 steel grades
+
+- Added 13 Atlas engineering-bar grades and eight Uddeholm tool steels, with
+  28 named states and 212 observations. All 465 previous authoring records and
+  their 1,381 observations remain unchanged.
+- Added a Steels category containing carbon, alloy, case-hardening, tool and
+  existing stainless families. Existing stainless routes are preserved.
+- Kept non-guaranteed typical minima distinct from measured points and
+  specified supply minima. Retained bar-size, core-versus-case, hardness,
+  orientation and temperature scope; deferred inconsistent source cells.
+- Added nine pinned references and refreshed private review for all 28
+  documents. Public output and exports remain text-only for source citations.
+  Prototype 05 layout, stylesheet and original prototypes are unchanged.
+- Verification: 140 Python tests, 52 release search checks, 21 prototype golden
+  queries and compiler/browser parity for 222 records pass. Root, nested-path
+  and mobile browser checks finish without errors. All 28 pinned sources
+  reconstruct the import; the release gate verifies 775 public artifacts.
+
+See [the steel source review](docs/steel-batch-review.md).
 
 ## 2026-09-10 — Add 43 nonferrous metals
 

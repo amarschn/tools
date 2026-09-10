@@ -99,3 +99,11 @@ copper-family grades and two titanium alloys. Current totals are 201 materials,
 64 states, 1,381 observations and 19 pinned sources. See the
 [table review and deferred rows](nonferrous-batch-review.md). Private originals
 and public document-exclusion checks use the existing workflow.
+
+## Steel grades — 2026-09-10
+
+Added 21 steel grades and 212 observations from one Atlas handbook and eight
+Uddeholm brochures. Current totals are 222 materials, 92 states, 1,593
+observations and 28 pinned sources. See the [steel source review](steel-batch-review.md)
+for scope, typical-minimum handling and excluded cells. Source documents remain
+outside Git and the public build.
