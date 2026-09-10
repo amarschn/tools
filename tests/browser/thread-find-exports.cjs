@@ -119,6 +119,39 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         assert.match(await page.locator('#family-taper-label').textContent(), /1:16/);
         assert.match(await page.locator('#spec-note').textContent(), /PITCH ONLY/);
 
+        // A measured 1/2 NPT fitting: the taper band must drop the 3/4 sizes
+        // that share 14 TPI, and the surviving rows stop being pitch-only.
+        await page.locator('#find-unit').selectOption('in');
+        await page.locator('#find-diameter').fill('0.83');
+        await page.locator('#find-pitch').fill('14');
+        await update();
+        const shortlist = await page.locator('.candidate-select').allTextContents();
+        assert.ok(shortlist.length > 0, 'A measured pipe thread must return candidates.');
+        assert.ok(shortlist.some((row) => /^1\/2 NPT/.test(row)), '1/2 NPT must survive.');
+        assert.ok(!shortlist.some((row) => /^3\/4 /.test(row)), '3/4 shares the pitch but not the diameter band.');
+        assert.ok(!shortlist.some((row) => /pitch only/.test(row)), 'Diameter was used, so no row is pitch-only.');
+        // Both 1/2 NPT and 1/2 NPTF survive: they share basic dimensions.
+        await page.locator('.candidate-select').filter({ hasText: /^1\/2 NPT/ }).first().click();
+        assert.match(await page.locator('#spec-note').textContent(), /flank angle/);
+
+        // Filters that leave nothing to compare must not read as "no close
+        // match", which would mean the thread is not in the catalog at all.
+        // No metric thread is tapered, so this pairing empties the search.
+        await page.locator('#find-more > summary').click();
+        await page.locator('#find-family').selectOption('metric');
+        await page.locator('#find-thread-form').selectOption('tapered');
+        await update();
+        assert.match(await page.locator('#find-summary').textContent(), /Nothing here could be compared/);
+        await page.locator('#find-thread-form').selectOption('unknown');
+        await update();
+        assert.ok(!/Nothing here could be compared/.test(await page.locator('#find-summary').textContent()),
+            'Clearing the impossible filter must restore ordinary matching.');
+        await page.locator('#find-family').selectOption('all');
+        await page.locator('#find-more > summary').click();
+        await page.locator('#find-unit').selectOption('mm');
+        await page.locator('#find-diameter').fill('');
+        await update();
+
         await page.locator('#tab-specify').click();
         await page.locator('#spec-family').selectOption('unf');
         await page.locator('#tab-find').click();

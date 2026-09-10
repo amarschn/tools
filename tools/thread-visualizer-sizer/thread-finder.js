@@ -32,6 +32,7 @@
         const labels = {
             incomplete: 'Start with a diameter or pitch. Not sure of the pitch? Print a comparison sheet.',
             'no-close-supported-match': 'No close supported match. Recheck your measurements or consider a family outside this catalog.',
+            'no-comparable-data': 'Nothing here could be compared with those measurements. The filters left no thread carrying what you entered. Widen the family or form filter, or add a pitch measurement.',
             ambiguous: `${result?.candidates.length || 0} possible candidates. More than one thread may fit these observations.`,
             'possible-match': 'One close supported candidate. Confirm it with further measurements or proper gaging.',
         };

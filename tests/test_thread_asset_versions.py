@@ -19,7 +19,13 @@ def test_revision_tracks_sources_and_is_idempotent(tmp_path, monkeypatch) -> Non
     tool.mkdir(parents=True)
     calculations = tmp_path / "pycalcs"
     calculations.mkdir()
-    for name in ("fasteners", "threads", "thread_specifications", "thread_models"):
+    for name in (
+        "fasteners",
+        "threads",
+        "pipe_threads",
+        "thread_specifications",
+        "thread_models",
+    ):
         (calculations / (name + ".py")).write_text("# initial\n")
     index = tool / "index.html"
     index.write_text('<meta name="thread-asset-version" content="thread-dev">')

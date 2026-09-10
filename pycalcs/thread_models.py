@@ -14,6 +14,7 @@ from itertools import pairwise
 from typing import Any
 
 try:
+    from .pipe_threads import pipe_dimensions
     from .thread_specifications import (
         PIPE_PAIRS,
         _pairs,
@@ -23,6 +24,7 @@ try:
         specification_catalog,
     )
 except ImportError:
+    from pipe_threads import pipe_dimensions
     from thread_specifications import (
         PIPE_PAIRS,
         _pairs,
@@ -125,6 +127,7 @@ def _records() -> tuple[dict[str, Any], ...]:
                     _pairs(PIPE_PAIRS["npt" if family in ("npt", "nptf") else "bsp"])
                 )
                 pitch_mm = 25.4 / float(pairs[size])
+                pipe = pipe_dimensions(family, size)
             records.append(
                 {
                     "id": family + ":" + size,
@@ -135,8 +138,21 @@ def _records() -> tuple[dict[str, Any], ...]:
                     "source": meta["standard"],
                     "pitch_mm": pitch_mm,
                     "tpi": 25.4 / pitch_mm,
-                    "diameter_mm": model["major_diameter_mm"] if model else None,
-                    "internal_minor_mm": model["internal_minor_mm"] if model else None,
+                    "diameter_mm": model["major_diameter_mm"]
+                    if model
+                    else pipe["major_mm"],
+                    "internal_minor_mm": model["internal_minor_mm"]
+                    if model
+                    else pipe["minor_mm"],
+                    # A tapered thread has no single diameter, so compare
+                    # against the band its own length can legitimately present.
+                    "external_band_mm": None
+                    if model
+                    else list(pipe["external_major_band_mm"]),
+                    "internal_band_mm": None
+                    if model
+                    else list(pipe["internal_minor_band_mm"]),
+                    "tapered": None if model else pipe["tapered"],
                     "model": model,
                     "geometry": geometry,
                     "diagram": None
@@ -151,11 +167,14 @@ def _records() -> tuple[dict[str, Any], ...]:
                         "half_angle_deg": 0
                         if family == "bspp"
                         else math.degrees(math.atan(1 / 32)),
+                        "major_mm": pipe["major_mm"],
+                        "pitch_diameter_mm": pipe["pitch_mm_dia"],
+                        "minor_mm": pipe["minor_mm"],
                     },
                     "capabilities": {
                         "specify": True,
-                        "identify_external": machine,
-                        "identify_internal": machine,
+                        "identify_external": True,
+                        "identify_internal": True,
                         "print_pitch": True,
                         "print_profile": machine,
                         "step": machine,
@@ -198,7 +217,8 @@ def find_threads(state_json: str) -> dict[str, Any]:
     ---Returns---
     result : dict
         State, shortlist, measurement explanation, warnings and search windows.
-        No score is a probability. Pipe rows compare pitch only, not diameter.
+        No score is a probability. Tapered pipe rows compare against the band
+        of diameters along their own length, not one plane.
 
     ---LaTeX---
     P = S / n
@@ -268,7 +288,6 @@ def find_threads(state_json: str) -> dict[str, Any]:
     pitch_window = pitch_uncertainty
     warnings = [
         "Preliminary identification only. Fit class, material, process, strength and pressure rating cannot be inferred. Do not force an unknown thread into a mating part.",
-        f"Search windows: diameter ±{diameter_window:g} mm (entered uncertainty plus {'0.35' if side == 'internal' else '0.20'} mm comparison allowance); pitch ±{pitch_window:g} mm. These are not standard tolerance limits.",
     ]
     if side == "internal":
         warnings.append(
@@ -291,6 +310,8 @@ def find_threads(state_json: str) -> dict[str, Any]:
                 "The measured taper is within diameter uncertainty; it does not establish a parallel thread."
             )
     candidates = []
+    compared_any = False
+    compared_diameter = False
     for record in _records():
         if family != "all" and record["family"] != family:
             continue
@@ -302,10 +323,29 @@ def find_threads(state_json: str) -> dict[str, Any]:
         expected = (
             record["internal_minor_mm"] if side == "internal" else record["diameter_mm"]
         )
-        use_diameter = machine and side != "unsure" and diameter is not None
+        band = (
+            record["internal_band_mm"]
+            if side == "internal"
+            else record["external_band_mm"]
+        )
+        use_diameter = (
+            expected is not None and side != "unsure" and diameter is not None
+        )
         if not use_diameter and pitch is None:
             continue
-        delta_d = diameter - expected if use_diameter else None
+        compared_any = True
+        compared_diameter = compared_diameter or use_diameter
+        # A tapered thread presents a range of diameters along its own length,
+        # so measure the distance outside that range rather than to one plane.
+        if use_diameter and band and band[1] > band[0]:
+            if diameter < band[0]:
+                delta_d = diameter - band[0]
+            elif diameter > band[1]:
+                delta_d = diameter - band[1]
+            else:
+                delta_d = 0.0
+        else:
+            delta_d = diameter - expected if use_diameter else None
         delta_p = pitch - record["pitch_mm"] if pitch is not None else None
         if delta_d is not None and abs(delta_d) > diameter_window + 1e-10:
             continue
@@ -324,9 +364,12 @@ def find_threads(state_json: str) -> dict[str, Any]:
                 "delta_d_mm": delta_d,
                 "delta_p_mm": delta_p,
                 "expected_diameter_mm": expected if side != "unsure" else None,
-                "basis": "basic internal minor"
-                if side == "internal"
-                else "nominal external major",
+                "basis": (
+                    "basic internal minor"
+                    if side == "internal"
+                    else "nominal external major"
+                )
+                + (" band along the taper" if band and band[1] > band[0] else ""),
                 "pitch_only": not use_diameter,
                 "distance": score,
             }
@@ -334,14 +377,43 @@ def find_threads(state_json: str) -> dict[str, Any]:
     candidates.sort(
         key=lambda row: (row["pitch_only"], row["distance"], row["designation"])
     )
-    if any(row["kind"] == "pipe" for row in candidates):
-        warnings.append(
-            "Pipe candidates are PITCH ONLY: diameter-at-measurement-plane data are not implemented. Nominal pipe size is not OD. NPT/NPTF may be inseparable by these readings; BSPT internal form also needs checking."
+    warnings.insert(
+        1,
+        (
+            f"Search windows: diameter ±{diameter_window:g} mm (entered uncertainty plus"
+            f" {'0.35' if side == 'internal' else '0.20'} mm comparison allowance);"
+            f" pitch ±{pitch_window:g} mm. These are not standard tolerance limits."
         )
+        if compared_diameter
+        else f"Search window: pitch ±{pitch_window:g} mm. These are not standard tolerance limits. No diameter was used in this comparison.",
+    )
+    pipe_rows = [row for row in candidates if row["kind"] == "pipe"]
+    if pipe_rows:
+        warnings.append(
+            "Pipe diameters are basic dimensions, not acceptance limits. Nominal pipe size is not OD. A tapered thread is compared against the band of diameters between its small end and the end of its effective thread, because where you measure along the taper changes the reading."
+        )
+        if any(row["pitch_only"] for row in pipe_rows):
+            warnings.append(
+                "Some pipe candidates were compared on PITCH ONLY because no usable diameter was given."
+            )
+        pipe_families = {row["family"] for row in pipe_rows}
+        if {"npt", "nptf"} <= pipe_families:
+            warnings.append(
+                "NPT and NPTF share basic dimensions. These measurements cannot separate them; that needs crest and root truncation inspection."
+            )
+        # 60 degree American and 55 degree Whitworth forms overlap on size.
+        if len({60 if row in ("npt", "nptf") else 55 for row in pipe_families}) > 1:
+            warnings.append(
+                "Candidates include both 60 degree American and 55 degree Whitworth forms, which can share a nominal size and pitch. Check the flank angle to separate them."
+            )
     usable = pitch is not None or (diameter is not None and side != "unsure")
     status = (
         "incomplete"
         if not usable
+        # Nothing could be compared: the observations given do not apply to any
+        # row left after filtering. That is not the same as a poor match.
+        else "no-comparable-data"
+        if not compared_any
         else "no-close-supported-match"
         if not candidates
         else "ambiguous"

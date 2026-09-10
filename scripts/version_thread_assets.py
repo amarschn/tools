@@ -25,7 +25,11 @@ def versioned_index() -> str:
     paths = sorted(
         [INDEX, *TOOL.glob("*.js"), *TOOL.glob("*.css")]
         + [REPO / "pycalcs" / (name + ".py") for name in (
-            "fasteners", "threads", "thread_specifications", "thread_models"
+            "fasteners",
+            "threads",
+            "pipe_threads",
+            "thread_specifications",
+            "thread_models",
         )]
     )
     for path in paths:

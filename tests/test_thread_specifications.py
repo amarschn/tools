@@ -74,10 +74,14 @@ def test_pipe_annotations_follow_family_size_and_connection(
         assert diagram["pitch_mm"] == pytest.approx(25.4 / diagram["tpi"])
         assert diagram["pitch_in"] == pytest.approx(1 / diagram["tpi"])
         assert diagram["half_angle_deg"] == pytest.approx(1.789910608 if taper else 0)
-        assert "diameter" not in diagram
-        assert dict(result["breakdown"])["Diameter at gage plane"].startswith(
-            "Not included"
-        )
+        rows = dict(result["breakdown"])
+        # Basic dimensions are now carried; the plane is named for a taper.
+        plane = " at gage plane" if taper else ""
+        assert diagram["major_mm"] > diagram["pitch_diameter_mm"] > diagram["minor_mm"]
+        assert rows["Major diameter" + plane].endswith(" in)")
+        assert "Diameter at gage plane" not in rows
+        # Nominal pipe size is still never presented as the outside diameter.
+        assert rows["Nominal pipe size"].endswith("(not outside diameter)")
         assert "PITCH:" in result["note"] and "TAPER:" in result["note"]
 
 

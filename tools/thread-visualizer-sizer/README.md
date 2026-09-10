@@ -104,12 +104,26 @@ physical measurements. The form starts empty; Try an example enters a labeled
 M8-sized example. For known nominal-size browsing, use Specify with an undecided
 external extent.
 
-Find searches every metric, UNC, UNF and UNEF specification entry together.
-External measurements compare to nominal major diameter; internal bore readings
-compare to basic minor diameter. Unknown measurement basis excludes diameter
-from ranking. Missing pitch leaves a broad shortlist, not a zero pitch error.
-Pipe candidates are pitch-only references because diameter-at-measurement-plane
-data are not implemented. NPT and NPTF can remain indistinguishable.
+Find searches every metric, UNC, UNF, UNEF and pipe specification entry
+together. External measurements compare to nominal major diameter; internal bore
+readings compare to basic minor diameter. Unknown measurement basis excludes
+diameter from ranking. Missing pitch leaves a broad shortlist, not a zero pitch
+error.
+
+A tapered pipe thread has no single diameter, so it is compared against the band
+of diameters between its small end and the end of its effective thread. A
+reading inside that band is a zero-distance comparison, and ties then break on
+pitch. Parallel threads (G, and the Rp internal form) compare against one plane
+like a machine thread. This separates sizes that share a pitch, such as 1/4 and
+3/8 NPT at 18 TPI, but it cannot separate NPT from NPTF, which share basic
+dimensions and differ only in crest and root truncation inspection. A 60 degree
+NPT and a 55 degree BSPT of the same size can also overlap on diameter, so the
+result names the flank angle as the discriminator instead of guessing.
+
+When a filter leaves no row carrying the measurement that was entered, the
+result says so rather than reporting no close match. Those are different
+outcomes: one means the catalog has nothing to compare, the other means it
+compared and nothing was near.
 
 More measurements and filters contains span/interval pitch measurement, form,
 hand, optional two-plane taper readings and measurement uncertainty. Eleven
@@ -143,7 +157,8 @@ An unsure measurement basis requires an explicit choice for the sheet.
 Use it for a general reference sheet with no measurements. Both layouts include numbered
 pitch intervals, simplified actual-size axial profiles where supported, a
 worksheet, horizontal and vertical 100 mm checks and a 1 inch check on every
-page. Pipe rows have pitch ticks only and explicitly omit diameter comparisons.
+page. Pipe rows have pitch ticks only. Their basic diameters are listed in the
+specification output but are not yet drawn to scale on the sheet.
 No arbitrary schematic is printed as
 a physical thread form.
 
@@ -349,6 +364,15 @@ standards, and multi-start callouts are outside the builder's current scope.
 Numerical tolerance limits, gage dimensions, tap drills, stripping capacity,
 and pipe-port details are not calculated.
 
+Pipe basic dimensions come from `pycalcs/pipe_threads.py`. Each table stores
+only the anchor values a standard publishes, and every other diameter is derived
+with that standard's form equations, so two transcribed numbers cannot disagree.
+`tests/test_pipe_threads.py` checks each table against an identity the standard
+supplies independently: for NPT the gage-plane pitch diameter must equal
+E1 = E0 + L1/16, and for BSPP the derived pitch and minor diameters must
+reproduce the printed ISO 228-1 values. Pipe sizes above 2 in, NPSM/NPSF, and
+to-scale pipe profiles are still out of scope.
+
 ## Load-screen scope
 
 The size screen compares factored direct axial demand with proof strength times tensile-stress area. It omits preload, joint stiffness, external-load sharing, separation, fatigue, shear, thread stripping, engagement length, temperature, and installation scatter. Use the Bolt Torque Calculator for a preloaded-joint analysis.
@@ -371,6 +395,10 @@ to the tool name as a certification claim.
 - [Optimas UNC, UNF and UNEF table](https://optimas.com/en_gb/technical-resources/unc-and-unf-thread/), nominal size/pitch pairs only.
 - [Bossard metric tolerances](https://www.bossard.com/ch-en/-/media/bossard-group/website/documents/technical-resources/en/f-079-en.pdf), ISO 965 fit conventions.
 - [Swagelok Thread and End Connection Identification Guide](https://www.swagelok.com/downloads/webcatalogs/en/ms-13-77.pdf), pipe families and nominal sizes.
+- [AmesWeb NPT thread chart](https://amesweb.info/screws/NPT-Thread-Chart.aspx), ASME B1.20.1 basic dimensions: pipe outside diameter, E0, E1, L1 and L2.
+- [AmesWeb BSPP thread chart](https://amesweb.info/Screws/bspp-thread-chart-calculator.aspx), ISO 228-1 basic major, pitch and minor diameters.
+- [Engineers Edge external British ISO pipe threads](https://www.engineersedge.com/hardware/iso-external-pipe-thrds.htm) and the [Wikipedia British Standard Pipe table](https://en.wikipedia.org/wiki/ISO_7), independent cross-checks of the ISO 228-1 diameters.
+- [Rastro BSP reference tables](https://www.rastro.ai/resources/glossary/bsp-thread-dimensions-in-mm-complete-reference-tables), ISO 7-1 gauge length and useful thread length.
 - [Vermont Gage NPT/NPTF guide](https://vermontgage.com/assets/ea696d90d9/NPT-NPTF-2019.pdf), pipe-thread inspection classes.
 - [Bossard DIN 7500](https://www.bossard.com/no-en/product-solutions/product-applications/din-7500/), forming screws in metal.
 - [EJOT PT and DELTA PT](https://www.ejot.com/PT-History), plastic-fastening product families.

@@ -136,7 +136,7 @@
         else productOverview(data);
         closeup(data);
         const note = data.kind === 'pipe'
-            ? 'Schematic only, not to scale. ØA and ØB are diameters at planes L apart. Gage-plane diameters, thread length and tolerance limits are not yet included. The close-up shows nominal pitch and angle; taper is shown in the overall view.'
+            ? 'Schematic only, not to scale. ØA and ØB are diameters at planes L apart. Basic diameters and thread lengths are listed under Specification details; tolerance and gaging limits are not included. The close-up shows nominal pitch and angle; taper is shown in the overall view.'
             : "Illustration only, not to scale. d and L show your entered nominal size, using the supplier's measurement conventions. Pitch, flank shape, lobes, lead-in and pilot hole require the exact product drawing.";
         document.getElementById('family-profile-title').textContent = `${spec.family.toUpperCase()} annotated thread schematic`;
         document.getElementById('family-profile-desc').textContent = [overview.textContent, profile.textContent, note].join('. ');

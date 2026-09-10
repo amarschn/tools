@@ -80,7 +80,7 @@ for (const path of ['catalog.json', 'data/homepage-tool-meta.json', 'pycalcs/flu
             const cadRequests = startup.resources.filter(({ name }) => /replicad|opencascade|thread-cad|three-0|thread-print\.js|thread-pdf-preview|pdf-lib|pdfjs-dist/.test(name));
             assert.deepEqual(cadRequests, [], 'Export runtimes must not load at startup.');
             const modules = startup.resources.filter(({ name }) => /\/pycalcs\/.*\.py/.test(name));
-            assert.equal(modules.length, 4);
+            assert.equal(modules.length, 5, 'fasteners, threads, pipe_threads, thread_specifications, thread_models');
             assert.ok(Math.max(...modules.map((entry) => entry.startTime)) < Math.min(...modules.map((entry) => entry.startTime + entry.duration)),
                 'All Python downloads start before the first one finishes.');
             const version = await page.locator('meta[name="thread-asset-version"]').getAttribute('content');
