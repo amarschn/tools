@@ -12,9 +12,12 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from scripts.import_specialty_metals import DOCUMENTS as SPECIALTY_DOCUMENTS, DATE as SPECIALTY_DATE, import_specialty_metals
 DATE = "2026-09-07"
 PROPERTIES = {
     "density": ("kg/m^3", "g/cm³", 1000),
@@ -256,7 +259,7 @@ def main():
     manifest_path=ROOT/"curated/reference-manifest.json"
     pins=json.loads(manifest_path.read_text()) if manifest_path.exists() else None
     sources=[]; manifest=[]; all_pages={}
-    for id,title,organization,url,notes,published in DOCUMENTS:
+    for id,title,organization,url,notes,published in DOCUMENTS + SPECIALTY_DOCUMENTS:
         path=args.pdf_dir/(id+".pdf")
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         if pins:
@@ -264,10 +267,11 @@ def main():
             if pin["sha256"] != digest: raise ValueError(f"{id}: PDF differs from reviewed snapshot; review before changing the pin")
         pdf=PdfReader(path)
         all_pages[id]=[p.extract_text(extraction_mode="layout") for p in pdf.pages]
-        manifest.append({"id":id,"url":url,"filename":path.name,"sha256":digest,"bytes":path.stat().st_size,"pages":len(pdf.pages),"retrieved_date":DATE})
+        retrieved = SPECIALTY_DATE if id in {d[0] for d in SPECIALTY_DOCUMENTS} else DATE
+        manifest.append({"id":id,"url":url,"filename":path.name,"sha256":digest,"bytes":path.stat().st_size,"pages":len(pdf.pages),"retrieved_date":retrieved})
         sources.append({"id":id,"title":title,"organization":organization,
             "source_type":"manufacturer_datasheet","publication_date":published,
-            "revision":"Snapshot "+digest[:12],"url":url,"retrieved_date":DATE,
+            "revision":"Snapshot "+digest[:12],"url":url,"retrieved_date":retrieved,
             "license":"Publisher copyright retained; selected numerical facts with attribution. Source document not redistributed.",
             "notes":notes,"sha256":digest})
     seed_path=ROOT/"fixtures/legacy-site-seed/materials.json"
@@ -286,6 +290,7 @@ def main():
     if hydro_digest != "cc3cc79ef34d7ccd2a69fe5216f726be23d23d0b07e12c2ea1091adbba7fd009":
         raise ValueError("Hydro PDF differs from the reviewed snapshot")
     sources[-1]["sha256"] = hydro_digest
+    sources[-1]['license'] = 'Manufacturer-published datasheet; textual attribution only; source document not redistributed.'
     sources[-1]["notes"] += " Page 2 rechecked 2026-09-09: alloy-wide density is not temper-specific; thermal conductivity is at 25 °C."
     manifest.append({"id":"hydro-6061-2019","url":sources[-1]["url"],"filename":hydro_path.name,"sha256":hydro_digest,
                      "bytes":hydro_path.stat().st_size,"pages":len(PdfReader(hydro_path).pages),"retrieved_date":sources[-1]["retrieved_date"]})
@@ -295,9 +300,10 @@ def main():
         import_plastics(pdf.pages,records)
     import_ceramics(records)
     import_stainless(all_pages,records)
+    import_specialty_metals(all_pages,records,obs=obs,record=record,pair=pair,slug=slug)
     outputs = {ROOT/f"curated/{name}.json": json.dumps({"schema_version":"0.1.0",key:data},ensure_ascii=False,indent=2)+"\n"
                for name,key,data in [("materials","materials",records),("sources","sources",sources)]}
-    outputs[manifest_path] = json.dumps({"retrieved_date":DATE,"documents":manifest},indent=2)+"\n"
+    outputs[manifest_path] = json.dumps({"retrieved_date":SPECIALTY_DATE,"documents":manifest},indent=2)+"\n"
     for path, text in outputs.items():
         if args.check:
             if path.read_text() != text: raise ValueError(f"{path.name} differs from a fresh import")

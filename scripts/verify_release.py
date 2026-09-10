@@ -3,11 +3,13 @@
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.build_site import load_database
 from release.compiler import render_outputs
+from release.publication import document_file
 from schema_lab.validator import jsonschema_available
 
 
@@ -19,6 +21,11 @@ def main():
     actual_paths = {p.relative_to(output).as_posix() for p in output.rglob('*') if p.is_file()}
     owned = set(expected) | {'.build-manifest.json'}
     errors = []
+    tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+    for relative in filter(None, tracked):
+        path = ROOT / relative
+        if path.is_file() and document_file(relative, path.read_bytes()[:1024]):
+            errors.append(f'Source document tracked in Git: {relative}')
     for relative, content in expected.items():
         path = output / relative
         if not path.is_file() or path.read_bytes() != content:

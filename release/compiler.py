@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from schema_lab.projections import Corpus, active, mixed_condition_flags, span
 from schema_lab.units import conversions_for
 from .catalog import PROPERTY_IDS, adapt, canonical_bytes
+from .publication import public_source, verify_public_outputs
 
 VERSION = "1.0.0-rc.1"
 ASSETS = ("app.mjs", "search.mjs", "format.mjs", "app.css")
@@ -34,6 +35,7 @@ def summary(observations, property_id, corpus):
 
 def compile_data(database):
     data, extras = adapt(database)
+    extras['sources'] = [public_source(s) for s in extras['sources']]
     corpus = Corpus(data)
     source_by_id = {s["id"]: s for s in extras["sources"]}
     material_by_id = corpus.materials
@@ -131,12 +133,13 @@ def render_outputs(root, database):
     json_file(f"{prefix}/catalog.json", {"canonical": data, "citation_details": extras})
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, lineterminator="\n")
-    writer.writerow(["observation_id", "material_id", "state_id", "property", "result_kind", "value_si", "minimum_si", "maximum_si", "unit", "basis", "conditions", "method", "source_url", "source_locator", "original_value", "original_unit", "significant_figures"])
+    writer.writerow(["observation_id", "material_id", "state_id", "property", "result_kind", "value_si", "minimum_si", "maximum_si", "unit", "basis", "conditions", "method", "source_id", "source_organization", "source_title", "source_revision", "source_locator", "original_value", "original_unit", "significant_figures"])
     sources = {s["id"]: s for s in extras["sources"]}
     for o in data["observations"]:
         c = o["result"]["canonical"]
         raw = extras["observations"][o["id"]]["source_value"]
-        writer.writerow([o["id"], o["material_id"], o["state_id"], o["property_id"], o["result"]["kind"], c.get("value", ""), c.get("minimum", ""), c.get("maximum", ""), c["unit"], o["basis"], json.dumps(o["conditions"], sort_keys=True), o["test_method"]["reported_label"], sources[o["source_id"]]["url"], o["source_locator"]["label"], raw["text"], raw["unit"], raw["significant_figures"]])
+        source = sources[o['source_id']]
+        writer.writerow([o["id"], o["material_id"], o["state_id"], o["property_id"], o["result"]["kind"], c.get("value", ""), c.get("minimum", ""), c.get("maximum", ""), c["unit"], o["basis"], json.dumps(o["conditions"], sort_keys=True), o["test_method"]["reported_label"], source['id'], source['organization'], source['title'], source['revision'], o["source_locator"]["label"], raw["text"], raw["unit"], raw["significant_figures"]])
     add(f"{prefix}/observations.csv", stream.getvalue())
     for token, value in {"BUILD_ID": build_id, "DATA_PATH": prefix, "VERSION": VERSION,
         "MATERIAL_COUNT": str(len(data["materials"])), "OBSERVATION_COUNT": str(len(data["observations"]))}.items():
@@ -159,4 +162,5 @@ def render_outputs(root, database):
         "index_bytes": len(outputs[f"{prefix}/index.json"]), "index_gzip_bytes": len(gzip.compress(outputs[f"{prefix}/index.json"], mtime=0)),
         "files": {path: {"bytes": len(content), "sha256": hashlib.sha256(content).hexdigest()} for path, content in sorted(outputs.items())}}
     json_file("release-manifest.json", manifest)
+    verify_public_outputs(outputs, database.sources)
     return outputs

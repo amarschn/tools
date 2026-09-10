@@ -82,8 +82,9 @@ try {
     assert.match(await page.locator('#property-tensile_yield_strength').innerText(), /≥ 240 MPa/);
     await page.reload();await settled();
     assert.match(await page.locator('#property-tensile_yield_strength').innerText(), /≥ 240 MPa/);
-    const citation = page.locator('#property-tensile_yield_strength .citation a');
-    assert.match(await citation.getAttribute('href'), /hydro.*#page=2/);
+    const citation = page.locator('#property-tensile_yield_strength .citation');
+    assert.match(await citation.innerText(), /Hydro · p\. 2/);
+    assert.equal(await citation.locator('a, iframe, embed, object').count(),0);
     await page.locator('#property-tensile_yield_strength .citation summary').click();
     assert.match(await page.locator('#property-tensile_yield_strength .original').innerText(), /110|240/);
     await search('plastic strength');
@@ -150,7 +151,19 @@ try {
     await page.locator('#state-al-6061-t6[open] .citation details[open]').waitFor();
     assert.match(await page.locator('#state-al-6061-t6 .value').innerText(), /≥ 35 ksi/);
     await page.getByRole('link',{name:'Sources',exact:true}).click(); await settled();
-    assert.equal(await page.locator('.source-card').count(),5);
+    assert.equal(await page.locator('.source-card').count(),8);
+    assert.equal(await page.locator('.source-card a, iframe, embed, object').count(),0);
+    for (const file of ['hydro-6061.pdf','private-sources/index.html']) {
+      const response = await context.request.get(base+file);
+      assert.equal(response.status(),404,'public document access must be absent');
+    }
+    await search('2205');
+    await page.getByRole('heading',{name:'Stainless steel Forta DX 2205',exact:true}).waitFor();
+    assert.match(await page.locator('#property-tensile_yield_strength .value').innerText(), /≥ 72\.5 ksi/);
+    assert.match(await page.locator('#property-tensile_yield_strength .citation').innerText(), /Outokumpu · p\. 9/);
+    assert.equal(await page.locator('.citation a, iframe, embed, object').count(),0);
+    await search('Alloy 825');
+    await page.getByRole('heading',{name:'Nickel alloy Ultra Alloy 825',exact:true}).waitFor();
     await go(base, '?q=TECAPEEK+tensile+strength');
     await page.locator('#unit-system').selectOption('metric');
     await page.screenshot({path:`test-results/release-${mount==='/'?'desktop':'subpath'}.png`,fullPage:true});
@@ -164,7 +177,7 @@ try {
   await go(origin+'/?property=thermal_conductivity&category=engineering-plastics');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),'320px overview overflow');
   await page.screenshot({path:'test-results/release-mobile-overview.png',fullPage:true});
-  report.assertions.push('320px layout', 'root and subpath deep links', 'units and property overrides survive reload', 'one lazy record request', 'expandable taxonomy and inline observations', 'expanded tree survives unit changes', 'collapsed record reuses cached data', 'clarification and comparison boundary', 'source locators', 'browser history', 'missing property', '50-row cap');
+  report.assertions.push('320px layout', 'root and subpath deep links', 'units and property overrides survive reload', 'one lazy record request', 'expandable taxonomy and inline observations', 'expanded tree survives unit changes', 'collapsed record reuses cached data', 'clarification and comparison boundary', 'text-only citations; document paths unavailable', 'new specialty-metal searches', 'browser history', 'missing property', '50-row cap');
   // Input entered before the index arrives must survive initialization.
   const delayed = await context.newPage();
   await delayed.route('**/index.json', async route => {await new Promise(r=>setTimeout(r,400));await route.continue();});

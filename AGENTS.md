@@ -13,3 +13,14 @@
   distinctions such as minimum limits and test conditions intact.
 - Preserve the original prototype files. Make production changes in `src/`
   and regenerate `materials/` through the builder.
+
+# Source documents
+
+- Keep manufacturer PDFs and other original source documents outside the
+  repository and every publicly served directory. Never commit them.
+- The public application and all its exports may contain textual citations,
+  but must not contain document URLs, embeds, download endpoints, or documents.
+- Preserve local owner access through a separate private review directory.
+- Future customer document access requires server-side authentication and paid
+  entitlement checks, private storage, and reviewed distribution rights. It
+  must not be implemented by hiding links or bundling files in the static app.

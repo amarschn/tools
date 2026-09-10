@@ -24,7 +24,7 @@ def adapt(database):
     rows = database.materials
     conditions = [c for c in condition_registry() if not c.get("retired")]
     by_condition = {c["id"]: c for c in conditions}
-    by_condition["product_form"]["allowed_values"].append("stock_shape")
+    by_condition["product_form"]["allowed_values"].extend(["stock_shape", "coil"])
     by_condition["work_condition"]["allowed_values"].append("cold_rolled")
     data = {
         "dataset": {"id": "materials-reference", "contract_version": "0.1.0", "corpus_version": "1.0.0-rc.1", "synthetic": False,
@@ -75,7 +75,7 @@ def adapt(database):
                 state_id = rid
                 fixed = {"temper": row["condition"]}
                 name = row["condition"]
-            elif row["condition"] == "cold rolled sheet":
+            elif row["condition"] in ("cold rolled sheet", "cold rolled coil", "cold rolled"):
                 state_id = rid
                 fixed = {"work_condition": "cold_rolled"}
                 name = "Cold rolled"
@@ -99,7 +99,7 @@ def adapt(database):
                 owner_state = state_id
                 # The physical table is grade-level. Do not imply that it was
                 # measured on the cold rolled sheet used by the mechanical table.
-                if row["condition"] == "cold rolled sheet" and not note:
+                if row["condition"] in ("cold rolled sheet", "cold rolled coil", "cold rolled") and not note:
                     owner_state = None
                 if old["source_id"] == "hydro-6061-2019" and old["property"] == "density":
                     owner_state = None

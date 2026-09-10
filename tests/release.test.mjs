@@ -19,6 +19,11 @@ const routeCases = [
   ['yield strength', {property:'tensile_yield_strength'}],
   ['stiffness', {property:'youngs_modulus'}],
   ['polymers', {category:'engineering-plastics'}],
+  ['2205', {material:'stainless-forta-dx-2205'}],
+  ['253 MA', {material:'stainless-therma-253-ma'}],
+  ['904L', {material:'stainless-ultra-904l'}],
+  ['Alloy 825', {material:'nickel-ultra-alloy-825'}],
+  ['N08367', {material:'stainless-ultra-6xn'}],
 ];
 for (const [q, expected] of routeCases) assert.deepEqual(resolve(q), {kind:'route', route:expected}, q);
 assert.equal(resolve('plastic strength').kind, 'clarify');
@@ -59,4 +64,4 @@ for (const filename of fs.readdirSync(directory)) {
 const times=[];
 for (let n=0;n<8;n++) for (const [q] of routeCases) {const start=performance.now();resolve(q);if(n>1)times.push(performance.now()-start);}
 times.sort((a,b)=>a-b);
-console.log(`Release search: ${routeCases.length + 8} routing checks; conversions, bounds, uncertainty, and 134 record projections passed. Query p95 ${times[Math.floor(times.length*.95)].toFixed(2)} ms. Index ${manifest.index_gzip_bytes} bytes gzip.`);
+console.log(`Release search: ${routeCases.length + 8} routing checks; conversions, bounds, uncertainty, and ${fs.readdirSync(directory).length} record projections passed. Query p95 ${times[Math.floor(times.length*.95)].toFixed(2)} ms. Index ${manifest.index_gzip_bytes} bytes gzip.`);

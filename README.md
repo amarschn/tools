@@ -1,8 +1,8 @@
 # Materials Lookup
 
 A local release candidate for source-traceable material and property lookup.
-The static site contains **134 material identities, 24 named states, 840
-observations, 10 registered properties and 5 source documents**. It has no
+The static site contains **158 material identities, 37 named states, 1,138
+observations, 10 registered properties and references to 8 source documents**. It has no
 runtime dependencies, backend, accounts, or network search service.
 
 Material queries open complete datasheets. Exact property queries open
@@ -18,19 +18,25 @@ Use Python 3.10 or newer; development and CI are verified with Python 3.13.
 python3.13 -m venv .venv
 .venv/bin/python3.13 -m pip install -r requirements-dev.txt
 .venv/bin/python3.13 scripts/build_site.py
-python3 -m http.server 8000 --bind 127.0.0.1
+python3 -m http.server 8001 --bind 127.0.0.1
 ```
 
-Open <http://localhost:8000/materials/>. Useful searches:
+Open <http://localhost:8001/materials/>. Useful searches:
 
 - `6061-T6` or `6061 T6 extrusion`;
 - `TECAPEEK tensile strength`;
 - `PEEK` or `316L` (an ambiguous designation);
 - `density` or `plastic strength`.
+- `2205`, `253 MA`, `904L`, or `Alloy 825`.
 
 The toolbar switches metric/imperial display. Each property has its own unit
 override; individual values and citations appear below its heading. Both
 preferences persist locally; switching the system resets property overrides.
+
+Source references are text-only. Original manufacturer PDFs and document URLs
+are excluded from the public site and all JSON/CSV exports. The material record
+view remains available. Paid access to original documents is planned separately
+in [the source access plan](docs/source-access-and-expansion.md).
 
 ## Release checks
 
@@ -94,6 +100,18 @@ in [Schema Decision 002](docs/schema-decision-002-release.md).
 Normal builds read checked-in JSON and make no external requests. PDF extraction
 is an optional development task, using locally saved documents matching the
 SHA-256 hashes in `curated/reference-manifest.json`.
+
+Keep those PDFs outside the repository and the preview server root. To prepare
+a local owner-only review index from already downloaded, hash-matching files:
+
+```sh
+.venv/bin/python3.13 scripts/prepare_source_review.py \
+  --pdf-dir /private/tmp --output-dir /private/tmp/materials-source-documents
+```
+
+Open `/private/tmp/materials-source-documents/index.html` locally. This temporary
+directory is not a backup; use a durable private directory outside the repository
+for retained source snapshots. Never publish the review index or documents.
 
 ```sh
 .venv/bin/python3.13 -m pip install -r requirements-ingest.txt

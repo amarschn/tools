@@ -9,11 +9,37 @@ in the linked plans and decision documents.
 - Phase: local release candidate 1.0.0-rc.1 complete; public deployment pending.
 - Selected interface: Prototype 05, with dual-mode material datasheets and
   expandable property/category lookup. Redesigns require express permission.
-- Catalog: 134 material identities, 24 named states, 840 observations, 5 source
+- Catalog: 158 material identities, 37 named states, 1,138 observations, 8 source
   documents. The factual release uses the normalized v0.1.0 contract.
 - Review artifact and verification: [docs/release-candidate.md](docs/release-candidate.md).
 - Next gate: review the local candidate, choose the publishing destination, and
   verify an authorized deployment at its actual public URL.
+
+## 2026-09-10 — Exclude source documents and expand the catalog
+
+- Removed manufacturer-document links from observation citations and Sources.
+  Source titles, publishers, revisions, page/table locators, hashes, and printed
+  values remain available as text. Prototype 05 layout remains unchanged.
+- Removed document URLs from all public JSON and CSV exports. The compiler
+  allowlists public citation fields and rejects document assets/links. Release
+  verification also rejects source documents tracked in Git; common document
+  extensions are ignored. No source-document paths were found in Git history.
+- Prepared eight hash-verified original PDFs and a local review index at
+  `/private/tmp/materials-source-documents/`, outside Git and the preview root.
+  This is temporary review storage, not a durable archive.
+- Recorded paid access as a separate future milestone requiring distribution
+  rights, private storage, and server-side authentication/entitlement checks.
+  No public document endpoint or client-side paywall was added.
+- Added 24 material identities and 298 observations from three pinned Outokumpu
+  documents: Forta duplex grades, Therma heat-resistant grades, and Ultra grades
+  including nickel Alloy 825. Added coil as an explicit product form. Reviewed
+  source tables and footnotes; all 299 old authoring records and their 840
+  observations remain byte-equivalent as structured data.
+- Verification: 130 Python tests, 25 release routing checks, the 21 prototype
+  queries, compiler/browser projection parity for all 158 materials, and root/
+  subpath browser checks pass. Public output hashes and source exclusion pass.
+
+See [source access and expansion](docs/source-access-and-expansion.md).
 
 ## 2026-09-09 — Restore the Prototype 05 interface
 

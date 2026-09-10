@@ -4,6 +4,12 @@ Live work queue. Completed outcomes belong in [PROJECT_LOG.md](PROJECT_LOG.md).
 
 ## Next milestone — review and public deployment
 
+Source-document access and the next ingestion batch are governed by
+[the source access and expansion plan](docs/source-access-and-expansion.md).
+Original documents are excluded from the public app and exports; authenticated
+paid document access is a later milestone, with private storage and rights
+review required first.
+
 The local release candidate is complete. See
 [docs/release-candidate.md](docs/release-candidate.md) for the reviewable artifact
 and verification evidence.
@@ -13,14 +19,14 @@ and verification evidence.
 - [ ] Configure the selected host's HTML revalidation and immutable asset rules.
 - [ ] Publish the verified `materials/` artifact as an atomic release after
   deployment authorization, then smoke-test the actual public URL.
-- [ ] Decide how source revisions and import reviews will be maintained before
-  adding more documents; reconstruction from pinned PDFs is already repeatable.
+- [ ] Establish the ongoing source-review owner and revision schedule. Each
+  ingestion batch must pin snapshots and document its table/footnote review.
 
 ## Before substantially expanding the catalog
 
 - [ ] Run the deferred 10,000-identity scale fixture and measure topology/index
   alternatives from the original schema-lab serving plan. Current measurements
-  qualify this 134-material candidate, not a larger corpus.
+  qualify this 158-material candidate, not a larger corpus.
 - [ ] Implement the separate tools-repository compatibility collapse if that
   integration is still wanted. Legacy navigation redirects are already covered.
 - [ ] Broaden the independent source audit and source-revision lifecycle before
@@ -30,6 +36,14 @@ and verification evidence.
   requires them; unknown forms currently fail rather than lose information.
 
 ## Later product decisions
+
+- [ ] Implement paid source-document access according to the separate plan:
+  distribution rights, private storage, billing, server-side entitlement checks,
+  short-lived downloads, and tests for anonymous/unpaid/expired access.
+- [ ] Move local review snapshots from temporary storage to the chosen durable
+  private archive before relying on them for long-term source maintenance.
+- [ ] Continue expansion into aluminum, copper, titanium, and non-stainless
+  steels, with independent review of each pinned manufacturer-table batch.
 
 - [ ] How to scope large collections of commercial grades and generic chemistry
   aliases as coverage grows.
