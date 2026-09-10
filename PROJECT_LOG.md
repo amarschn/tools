@@ -7,12 +7,27 @@ in the linked plans and decision documents.
 ## Current status
 
 - Phase: local release candidate 1.0.0-rc.1 complete; public deployment pending.
-- Selected interaction: dual-mode material datasheets and property/category lookup.
+- Selected interface: Prototype 05, with dual-mode material datasheets and
+  expandable property/category lookup. Redesigns require express permission.
 - Catalog: 134 material identities, 24 named states, 840 observations, 5 source
   documents. The factual release uses the normalized v0.1.0 contract.
 - Review artifact and verification: [docs/release-candidate.md](docs/release-candidate.md).
 - Next gate: review the local candidate, choose the publishing destination, and
   verify an authorized deployment at its actual public URL.
+
+## 2026-09-09 — Restore the Prototype 05 interface
+
+- Restored Prototype 05's stylesheet and compact structure: toolbar, direct
+  search, expandable taxonomy/material/state rows, and value/condition/source
+  columns. Removed the added hero panels, badges, and explanatory UI prose.
+- Preserved the original prototypes and the factual catalog integration, unit
+  preferences, citations, exports, and deployment build. Longer source and test
+  details remain available through compact disclosure links.
+- Recorded the user's requirement in `AGENTS.md`: future interface redesigns
+  require express permission; completing a milestone does not authorize them.
+- Compared desktop screenshots with the original prototype and checked 320px
+  layouts. Browser checks cover expanded rows across unit changes, inline source
+  details, cached reopening, and navigation into focused records at both mounts.
 
 ## 2026-09-09 — Complete local release candidate
 

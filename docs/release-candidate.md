@@ -7,22 +7,27 @@ interaction runs on the factual catalog, with persistent units, visible
 provenance, generated downloads, and repeatable release checks. The publishable
 directory is `materials/`. No public deployment has been made.
 
+The interface follows Prototype 05: compact toolbar and search, expandable
+category/material rows, and shared value/condition/source columns. The original
+prototypes remain intact. Future interface redesigns require express permission.
+
 ## Review locally
 
 Build using the README commands, then open `http://localhost:8000/materials/`.
 
-1. Search `6061-T6`, expand tensile yield strength, switch to imperial, and
+1. Search `6061-T6`, find tensile yield strength, switch to imperial, and
    confirm the specified minimum displays as `≥ 35 ksi`. Override that property
    to MPa and reload; both preferences persist.
 2. Follow the source link to Hydro page 2. It opens the cited PDF page; the
-   original printed value and significant figures remain visible in the record.
+   original printed value and significant figures are under Source details.
 3. Open the grade from its breadcrumb. Alloy-wide density is present there;
    it is not silently inherited by each temper.
 4. Search `plastic strength`, choose ultimate tensile strength, and drill down
    through a category into a supplier grade. Ranges and limits remain distinct.
 5. Search `316L` to see the distinct EN grades behind an ambiguous ASTM label.
-6. Search `TECAPEEK tensile strength`, then use Show all properties. Expand
-   maximum service temperature to see an explicitly unreported property.
+6. Search `TECAPEEK tensile strength`, then use Show all properties to see its
+   seven reported properties. Search `TECAPEEK max service temperature` to see
+   an explicitly unreported property.
 7. Try `6061 T6 extrusion`, browser Back, the Sources page, and JSON/CSV downloads.
 
 ## Evidence
@@ -45,6 +50,8 @@ Build using the README commands, then open `http://localhost:8000/materials/`.
   reload, browser history, units, missing data, and a 50-row result cap.
 - One additional JSON request opens a full datasheet. Normal browsing makes no
   external requests and never loads the full-catalog export or synthetic corpus.
+- Category, material, and state rows expand in place. Unit changes preserve open
+  rows and source details; reopening a material uses its cached record.
 - Typed input survives a delayed initial index. A mismatched lazy record is
   rejected, and retry succeeds after the correct data becomes available.
 - Desktop and 320px layouts inspected, including long citations and a category

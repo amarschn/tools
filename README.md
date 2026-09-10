@@ -28,8 +28,8 @@ Open <http://localhost:8000/materials/>. Useful searches:
 - `PEEK` or `316L` (an ambiguous designation);
 - `density` or `plastic strength`.
 
-The Units control switches metric/imperial display. Expand a property to set
-its own unit override and inspect the individual values and citations. Both
+The toolbar switches metric/imperial display. Each property has its own unit
+override; individual values and citations appear below its heading. Both
 preferences persist locally; switching the system resets property overrides.
 
 ## Release checks
@@ -78,9 +78,11 @@ curated/ + registry/       reviewed authoring records and source snapshots' hash
        materials/         generated static website
 ```
 
-`src/` contains the production interface. The original static renderer remains
+`src/` contains the production interface, based on Prototype 05. Interface
+redesigns require express user permission; see [AGENTS.md](AGENTS.md).
+The original static renderer remains
 in `scripts/build_site.py` for compatibility fixtures; a root with `src/app.mjs`
-uses the canonical release compiler. The synthetic schema lab and disposable
+uses the canonical release compiler. The synthetic schema lab and preserved
 UI prototypes remain under `schema_lab/`, `fixtures/`, and `prototypes/`. They
 are not part of the publish artifact.
 
