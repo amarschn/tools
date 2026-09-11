@@ -64,6 +64,20 @@ root. `release-manifest.json` records the build id, per-file hashes and the
 counts above, so a vendored copy can always be checked against the build it
 came from.
 
+## Where source documents live
+
+Manufacturer datasheets and other originals are never committed and never
+served. Keep them in `private-sources/` at the repository root, which is
+git-ignored apart from its README. That directory explains why it sits there
+rather than under `tools/`: this repository publishes its root, and the
+documented local server serves untracked files too.
+
+`tests/test_source_documents_stay_private.py` enforces it. No document may be
+tracked by git, the published data may carry no document URL, every cited
+source must keep its publisher and snapshot hash, and the vendored build must
+still hash to `release-manifest.json` apart from two files adapted on purpose
+(`_headers` and `index.html`).
+
 ## Licensing
 
 * Code: MIT, see `code-license.txt`.
