@@ -29,7 +29,7 @@ The Materials tool publishes textual citations only: publisher, document title,
 revision, page or table locator, the source literal, and a snapshot hash. It
 must not contain document URLs, embeds, download endpoints, or the documents
 themselves. That rule is enforced by the builder at compile time and by
-`materials/builder/verify_release.py`, not only in the interface.
+`materials-lookup/builder/verify_release.py`, not only in the interface.
 
 `tests/test_source_documents_stay_private.py` enforces the repository half of
 it: no document may be tracked by git, and no document URL may appear in the
@@ -51,7 +51,7 @@ The materials project can populate a private review index for you, with each
 file checked against the SHA-256 recorded when it was reviewed:
 
 ```sh
-python3 materials/builder/prepare_source_review.py \
+python3 materials-lookup/builder/prepare_source_review.py \
   --pdf-dir private-sources --output-dir /private/tmp/materials-source-documents
 ```
 

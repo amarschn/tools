@@ -112,9 +112,9 @@ The project is a static web app hosted on GitHub Pages, with calculations perfor
   tool: curated records, the site builder, and the validation gates.
   `tools/materials/` is its generated output and must never be hand-edited.
   Its Python packages (`builder`, `release`, `schema_lab`) resolve through
-  `materials/conftest.py`, and `pytest.ini` runs its suite alongside the tools'
+  `materials-lookup/conftest.py`, and `pytest.ini` runs its suite alongside the tools'
   own. Source documents belong in `private-sources/`, git-ignored and never
-  served. See `materials/README.md` and `materials/AGENTS.md`.
+  served. See `materials-lookup/README.md` and `materials-lookup/AGENTS.md`.
 * **Core Library (`/pycalcs/`):** This package is the heart of our project. It contains the reusable Python functions that power every tool, split into discipline-focused modules (e.g., `structures.py`, `fluids.py`). Shared helpers live in `utils.py`. Keep the package import-safe so that running `from pycalcs import structures` (or similar) inside Pyodide loads the right module without side-effects.
     * **Docstrings are CRITICAL:** Every function in this library *must* have a detailed docstring that includes:
         * A clear description of what the function does.

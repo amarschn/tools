@@ -57,23 +57,23 @@ See AGENTS.md "Parameter JSON Test Cases" for the full specification.
 
 ### Materials Data Project
 
-`materials/` is the source of truth for the **Materials** tool. It holds the
+`materials-lookup/` is the source of truth for the **Materials** tool. It holds the
 curated data, the builder and the validation gates; `tools/materials/` is
 generated output and must never be hand-edited. Adding a material, correcting a
-value, or changing that tool's interface all happen in `materials/`.
+value, or changing that tool's interface all happen in `materials-lookup/`.
 
 ```bash
-python3 materials/builder/build_site.py --output ../tools/materials   # rebuild
-python3 materials/builder/build_site.py --check                       # validate only
-python3 materials/builder/verify_release.py                           # hash + document gate
+python3 materials-lookup/builder/build_site.py --output ../tools/materials   # rebuild
+python3 materials-lookup/builder/build_site.py --check                       # validate only
+python3 materials-lookup/builder/verify_release.py                           # hash + document gate
 ```
 
 Re-run the three discoverability scripts below after any rebuild, because the
-published page is regenerated from `materials/src/index.html`.
+published page is regenerated from `materials-lookup/src/index.html`.
 
 Manufacturer datasheets live in `private-sources/` at the repository root,
-git-ignored and never served. See `materials/README.md` for the full workflow
-and `materials/AGENTS.md` for the design and source-document rules.
+git-ignored and never served. See `materials-lookup/README.md` for the full workflow
+and `materials-lookup/AGENTS.md` for the design and source-document rules.
 
 ### Discoverability / SEO Automation
 After editing `catalog.json` (e.g. adding a tool), run both self-maintaining SEO scripts and commit their output:

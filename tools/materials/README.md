@@ -53,18 +53,18 @@ preferences persist in the browser.
 This directory is **generated**. Do not edit it by hand: a rebuild overwrites
 everything here except the tags `scripts/inject_seo_meta.py` adds.
 
-The source of truth is `materials/` at the repository root, which holds the
+The source of truth is `materials-lookup/` at the repository root, which holds the
 curated data, the builder and the validation gates. Adding a material, fixing a
 value, or changing the interface all happen there.
 
 ```sh
-python3 materials/builder/build_site.py --output ../tools/materials
+python3 materials-lookup/builder/build_site.py --output ../tools/materials
 python3 scripts/inject_seo_meta.py
 python3 scripts/generate_sitemap.py
 python3 scripts/generate_homepage_metadata.py
 ```
 
-See [materials/README.md](../../materials/README.md) for the full workflow.
+See [materials-lookup/README.md](../../materials-lookup/README.md) for the full workflow.
 `release-manifest.json` records the build id, per-file hashes and the counts
 above, so a published copy can always be checked against the build it came
 from.
@@ -102,7 +102,7 @@ immutable for a year, everything else revalidates.
 
 * Pages for individual materials are redirects, not rendered content, so
   search engines see one page rather than several hundred. Pre-rendering them
-  in `materials/release/compiler.py` is the open opportunity.
+  in `materials-lookup/release/compiler.py` is the open opportunity.
 * The dataset is tool-local for now. Promoting it to a shared location, and
   pointing `pycalcs/materials.py` at it so the Ashby tools rank all 222
   materials instead of a hardcoded seven, is planned separately.

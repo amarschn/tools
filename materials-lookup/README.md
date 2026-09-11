@@ -24,7 +24,7 @@ The builder uses only the Python standard library, so a normal rebuild needs no
 virtual environment:
 
 ```sh
-python3 materials/builder/build_site.py --output ../tools/materials
+python3 materials-lookup/builder/build_site.py --output ../tools/materials
 ```
 
 Run it from the repository root. `--check` validates and renders in memory
@@ -86,10 +86,10 @@ still passes the document-exclusion gate.
 ## Checks
 
 ```sh
-python3 materials/builder/build_site.py --check
-python3 materials/builder/schema_lab.py check
-python3 -m pytest materials/tests
-python3 materials/builder/verify_release.py
+python3 materials-lookup/builder/build_site.py --check
+python3 materials-lookup/builder/schema_lab.py check
+python3 -m pytest materials-lookup/tests
+python3 materials-lookup/builder/verify_release.py
 ```
 
 `verify_release.py` needs `jsonschema` for structural validation; install
@@ -117,7 +117,7 @@ files, enforced at compile time and by
 To build a local owner-only review index from hash-matching downloads:
 
 ```sh
-python3 materials/builder/prepare_source_review.py \
+python3 materials-lookup/builder/prepare_source_review.py \
   --pdf-dir private-sources --output-dir /private/tmp/materials-source-documents
 ```
 
@@ -128,8 +128,8 @@ PDF extraction is optional and only needed to reconstruct an import. Normal
 builds read the checked-in JSON and make no external requests:
 
 ```sh
-python3 -m pip install -r materials/requirements-ingest.txt
-python3 materials/builder/import_reference_tables.py --pdf-dir private-sources --check
+python3 -m pip install -r materials-lookup/requirements-ingest.txt
+python3 materials-lookup/builder/import_reference_tables.py --pdf-dir private-sources --check
 ```
 
 Omit `--check` to regenerate the reviewed authoring files. The importer rejects
