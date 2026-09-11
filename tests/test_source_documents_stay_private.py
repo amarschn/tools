@@ -101,11 +101,9 @@ def test_vendored_build_matches_its_release_manifest():
     import hashlib
 
     adapted = {
-        # Netlify reads _headers only from a publish root, so its rules were
-        # moved into netlify.toml and the inert file removed.
-        "_headers",
-        # Carries this site's GA4 snippet, canonical/OG tags, and the catalog
-        # description. See tools/materials/README.md.
+        # scripts/inject_seo_meta.py adds catalog-derived canonical and Open
+        # Graph tags after the build. The GA4 snippet and description are baked
+        # into materials/src/index.html, so a rebuild cannot drop those.
         "index.html",
     }
     mismatched = []
@@ -120,3 +118,16 @@ def test_vendored_build_matches_its_release_manifest():
         if digest != expected["sha256"]:
             mismatched.append(f"{name}: content changed since the build")
     assert mismatched == [], mismatched[:5]
+
+
+@pytest.mark.skipif(not MATERIALS.exists(), reason="Materials tool not vendored")
+def test_published_materials_page_keeps_its_analytics():
+    """A rebuild must not silently ship the tool without analytics.
+
+    The snippet is invisible on the page, so nothing else would reveal its
+    loss. It lives in materials/src/index.html for exactly this reason.
+    """
+    page = (MATERIALS / "index.html").read_text(encoding="utf-8")
+    assert "G-YG3SBRRZFZ" in page, "GA4 snippet missing from the built page"
+    assert "analytics-autotrack.js" in page, "run scripts/inject_seo_meta.py"
+    assert 'rel="canonical"' in page, "run scripts/inject_seo_meta.py"

@@ -108,6 +108,13 @@ The project is a static web app hosted on GitHub Pages, with calculations perfor
 
 * **Frontend:** Each tool is a self-contained HTML file. We use a consistent CSS stylesheet for a uniform look and feel. JavaScript is used to handle user input, interact with the Pyodide environment, and update the UI. There should be a relatively straightforward navigation between different tools and within the base `tools` home page.
 * **Backend (Client-Side):** We use [Pyodide](https://pyodide.org/) to run Python code directly in the browser. This allows us to write complex calculation logic in Python without needing a server.
+* **Materials Data (`/materials/`):** The source of truth for the Materials
+  tool: curated records, the site builder, and the validation gates.
+  `tools/materials/` is its generated output and must never be hand-edited.
+  Its Python packages (`builder`, `release`, `schema_lab`) resolve through
+  `materials/conftest.py`, and `pytest.ini` runs its suite alongside the tools'
+  own. Source documents belong in `private-sources/`, git-ignored and never
+  served. See `materials/README.md` and `materials/AGENTS.md`.
 * **Core Library (`/pycalcs/`):** This package is the heart of our project. It contains the reusable Python functions that power every tool, split into discipline-focused modules (e.g., `structures.py`, `fluids.py`). Shared helpers live in `utils.py`. Keep the package import-safe so that running `from pycalcs import structures` (or similar) inside Pyodide loads the right module without side-effects.
     * **Docstrings are CRITICAL:** Every function in this library *must* have a detailed docstring that includes:
         * A clear description of what the function does.

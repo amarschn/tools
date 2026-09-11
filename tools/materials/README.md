@@ -48,21 +48,26 @@ preferences persist in the browser.
 * No record marked `prototype-seed-estimates-v0` may ship. Those are
   non-production demonstration values and are not present in this build.
 
-## Provenance and updates
+## Where this comes from
 
-This tool is the built output of the Materials Lookup project, vendored here.
-The generator, curated source data and ingestion scripts live in that separate
-repository; this directory holds only its published site.
+This directory is **generated**. Do not edit it by hand: a rebuild overwrites
+everything here except the tags `scripts/inject_seo_meta.py` adds.
 
-The as-is import is preserved in this repository's history (`git log --diff-filter=A
--- tools/materials`), including the upstream commit history brought in by
-`git subtree`.
+The source of truth is `materials/` at the repository root, which holds the
+curated data, the builder and the validation gates. Adding a material, fixing a
+value, or changing the interface all happen there.
 
-To take a new dataset: rebuild the site upstream, then replace this directory
-with the new output and re-run the discoverability scripts in the repository
-root. `release-manifest.json` records the build id, per-file hashes and the
-counts above, so a vendored copy can always be checked against the build it
-came from.
+```sh
+python3 materials/builder/build_site.py --output ../tools/materials
+python3 scripts/inject_seo_meta.py
+python3 scripts/generate_sitemap.py
+python3 scripts/generate_homepage_metadata.py
+```
+
+See [materials/README.md](../../materials/README.md) for the full workflow.
+`release-manifest.json` records the build id, per-file hashes and the counts
+above, so a published copy can always be checked against the build it came
+from.
 
 ## Where source documents live
 
@@ -88,16 +93,16 @@ still hash to `release-manifest.json` apart from two files adapted on purpose
 
 ## Caching
 
-The upstream build ships a Netlify `_headers` file, which only takes effect at
-a publish root. Its rules are reproduced for this path in the repository's
-`netlify.toml`: content-hashed `assets/` and `data/` are immutable for a year,
-everything else revalidates.
+The build emits a Netlify `_headers` file, which only takes effect at a
+publish root, so it is inert here. Its rules are reproduced for this path in
+the repository's `netlify.toml`: content-hashed `assets/` and `data/` are
+immutable for a year, everything else revalidates.
 
 ## Not yet done
 
 * Pages for individual materials are redirects, not rendered content, so
   search engines see one page rather than several hundred. Pre-rendering them
-  upstream is the open opportunity.
+  in `materials/release/compiler.py` is the open opportunity.
 * The dataset is tool-local for now. Promoting it to a shared location, and
   pointing `pycalcs/materials.py` at it so the Ashby tools rank all 222
   materials instead of a hardcoded seven, is planned separately.

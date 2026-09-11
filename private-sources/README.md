@@ -28,8 +28,8 @@ python3 -m http.server --bind 127.0.0.1
 The Materials tool publishes textual citations only: publisher, document title,
 revision, page or table locator, the source literal, and a snapshot hash. It
 must not contain document URLs, embeds, download endpoints, or the documents
-themselves. That rule comes from the upstream Materials Lookup project and is
-enforced there at compile and release verification, not only in the interface.
+themselves. That rule is enforced by the builder at compile time and by
+`materials/builder/verify_release.py`, not only in the interface.
 
 `tests/test_source_documents_stay_private.py` enforces the repository half of
 it: no document may be tracked by git, and no document URL may appear in the
@@ -47,17 +47,16 @@ private-sources/
   ensinger/
 ```
 
-The upstream project can populate a private review index for you, with each
+The materials project can populate a private review index for you, with each
 file checked against the SHA-256 recorded when it was reviewed:
 
 ```sh
-cd ../materials
-.venv/bin/python3 scripts/prepare_source_review.py <pdf-dir> <output-dir>
+python3 materials/builder/prepare_source_review.py \
+  --pdf-dir private-sources --output-dir /private/tmp/materials-source-documents
 ```
 
 That script refuses to write inside a repository or a preview server root, so
-point it at this directory only if you accept the local-serving note above.
-Otherwise give it a path outside the repository entirely.
+its output must go somewhere outside this tree.
 
 ## Paid access later
 
