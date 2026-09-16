@@ -1,0 +1,173 @@
+/* Real Pyodide integration checks. Serve the repository root on port 8157. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '/opt/homebrew/lib/node_modules/@playwright/test');
+const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tipping-stability/';
+
+(async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+        const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, serviceWorkers: 'block', colorScheme: 'light' });
+        await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+        await context.route('**/www.googletagmanager.com/**', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }));
+        await context.route('**/google-analytics.com/**', (route) => route.fulfill({ body: '' }));
+        const page = await context.newPage();
+        const errors = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+        page.setDefaultTimeout(15000);
+        const result = () => page.evaluate(() => window.TippingTool.getResults());
+        const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} ≈ ${b}`);
+        const boot = async (url = base) => {
+            await page.goto(url);
+            await page.locator('#tool-main[data-boot-state="ready"]').waitFor({ timeout: 120000 });
+            await page.locator('#loading-overlay.hidden').waitFor({ state: 'attached' });
+        };
+        const calc = async () => {
+            await page.locator('#calculate-btn').click();
+            await page.waitForFunction(() => document.getElementById('dirty-note').hidden && !document.getElementById('calculate-btn').disabled);
+        };
+        const fill = async (id, value) => page.locator('#' + id).fill(String(value));
+        const select = async (id, value) => page.locator('#' + id).selectOption(value);
+        const noOverflow = async () => {
+            try {
+                await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth + 1, null, { timeout: 5000 });
+            } catch (error) {
+                console.log(await page.evaluate(() => [...document.querySelectorAll('body *')].filter((el) => el.getBoundingClientRect().right > innerWidth + 1 && getComputedStyle(el).visibility !== 'hidden').slice(0, 15).map((el) => ({ tag: el.tagName, id: el.id, class: el.className, right: el.getBoundingClientRect().right }))));
+                await page.screenshot({ path: '/private/tmp/tipping-stability-overflow.png', fullPage: true, animations: 'disabled' });
+                throw error;
+            }
+        };
+        await boot();
+        near((await result()).threshold.value, 33.690067525979785);
+        assert.equal(await page.locator('#advanced-inputs').getAttribute('open'), null);
+        assert.equal(await page.locator('#calc-form input:visible, #calc-form select:visible').count(), 6);
+        assert.equal(await page.locator('.url-state-share-btn').isVisible(), true);
+        await page.screenshot({ path: '/private/tmp/tipping-stability-light.png', fullPage: true, animations: 'disabled' });
+        await noOverflow();
+        await page.locator('[data-for="cg_height"]').focus();
+        assert.match(await page.locator('#help-popup').innerText(), /normal to the surface/);
+        await page.keyboard.press('Escape');
+        await page.locator('[data-derivation="threshold"]').click();
+        await page.waitForFunction(() => document.querySelector('#derivation-content mjx-container'));
+        assert.match(await page.locator('#derivation-content').innerText(), /Equation \(2\)/);
+        await page.locator('#close-derivation').click();
+
+        await select('load_case', 'turn');
+        await fill('slope_deg', 10);
+        await fill('downhill_deg', 270);
+        assert.equal(await page.locator('#dirty-note').isVisible(), true);
+        assert.equal(await page.locator('#export-csv').isDisabled(), true);
+        await calc();
+        const radians = 10 * Math.PI / 180;
+        near((await result()).threshold.value, Math.sqrt(2 * 9.80665 * ((.4 / .6) * Math.cos(radians) - Math.sin(radians))));
+        assert.match((await result()).threshold.edge, /Right/);
+        await page.locator('#tab-directions').click();
+        await page.waitForFunction(() => document.getElementById('direction-plot').data?.length === 1);
+        assert.equal(await page.locator('#direction-plot').evaluate((el) => el.layout.polar.radialaxis.type), 'linear');
+        await page.locator('#tab-directions').focus();
+        await page.keyboard.press('ArrowRight');
+        assert.equal(await page.locator('#tab-background').getAttribute('aria-selected'), 'true');
+        assert.equal(await page.locator('#theory-equations .equation-card').count(), 9);
+        await page.locator('#tab-results').click();
+
+        await select('load_case', 'combined');
+        await select('limit_parameter', 'force');
+        await fill('acceleration', 0);
+        await fill('downhill_deg', 90);
+        await fill('force', 100);
+        await calc();
+        near((await result()).threshold.value, 100 * 9.80665 * (.4 * Math.cos(radians) - .6 * Math.sin(radians)));
+        await page.locator('#advanced-inputs > summary').click();
+        await select('mass_mode', 'components');
+        await page.locator('#components-rows tr').nth(1).locator('[data-field="y"]').fill('.15');
+        await select('geometry_mode', 'custom');
+        await page.locator('#contacts-rows tr').last().locator('button').click();
+        await page.locator('#contacts-rows tr').last().locator('[data-field="x"]').fill('0');
+        await page.locator('[data-add="extra_forces"]').click();
+        await page.locator('#extra_forces-rows [data-field="name"]').fill('Arm, vertical load');
+        await calc();
+        let r = await result();
+        assert.equal(r.equilibrium.polygon.length, 3);
+        near(r.equilibrium.center[1], .03);
+        assert.equal(r.equilibrium.loads.at(-1).name, 'Arm, vertical load');
+        assert.equal(r.equilibrium.loads.at(-1).vector[2], -50);
+
+        // The shared link preserves dynamic tables as well as scalar inputs.
+        const before = r;
+        await page.locator('.url-state-share-btn').click();
+        const shared = await page.evaluate(() => navigator.clipboard.readText());
+        assert.match(shared, /components=/);
+        assert.match(shared, /contacts=/);
+        assert.match(shared, /extra_forces=/);
+        await boot(shared);
+        assert.deepEqual(await result(), before);
+        const jsonDownload = page.waitForEvent('download');
+        await page.locator('#export-json').click();
+        const file = await jsonDownload;
+        const exported = JSON.parse(await fs.readFile(await file.path(), 'utf8'));
+        assert.deepEqual(exported.results, JSON.parse(JSON.stringify(before)));
+        assert.equal(exported.inputs.components.length, 2);
+        const csvDownload = page.waitForEvent('download');
+        await page.locator('#export-csv').click();
+        const csvFile = await csvDownload;
+        const csv = await fs.readFile(await csvFile.path(), 'utf8');
+        assert.match(csv, /Margin \(m\)/);
+        assert.match(csv, /Arm, vertical load/);
+        assert.ok(csv.includes(String(before.equilibrium.moment_reserve)));
+
+        await page.locator('#settings-button').click();
+        await page.locator('.settings-panel [data-theme="dark"]').click();
+        await page.locator('.settings-panel [data-precision="4"]').click();
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('body').getAttribute('data-theme'), 'dark');
+        const contrast = await page.locator('.url-state-share-btn').evaluate((el) => { const s = getComputedStyle(el); return s.color !== s.backgroundColor; });
+        assert.equal(contrast, true);
+        await page.locator('#advanced-inputs > summary').click();
+        await page.screenshot({ path: '/private/tmp/tipping-stability-dark.png', fullPage: true, animations: 'disabled' });
+        await page.reload();
+        await page.locator('#tool-main[data-boot-state="ready"]').waitFor({ timeout: 120000 });
+        assert.equal(await page.locator('body').getAttribute('data-theme'), 'dark');
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.locator('#advanced-inputs > summary').click();
+        await noOverflow();
+        await page.screenshot({ path: '/private/tmp/tipping-stability-mobile.png', fullPage: true, animations: 'disabled' });
+        await page.locator('#tab-directions').click();
+        await noOverflow();
+        await page.screenshot({ path: '/private/tmp/tipping-stability-directions-mobile.png', fullPage: true, animations: 'disabled' });
+        await page.locator('#tab-results').click();
+        await page.locator('#settings-button').click();
+        await page.locator('.settings-panel [data-density="compact"]').click();
+        await page.locator('.settings-panel [data-theme="system"]').click();
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('body').getAttribute('data-theme'), 'system');
+        assert.equal(await page.locator('body').getAttribute('data-density'), 'compact');
+        await noOverflow();
+        await page.locator('#reset-case').click();
+        await fill('slope_deg', 90);
+        await page.locator('#calculate-btn').click();
+        assert.equal(await page.locator('#error-message').isVisible(), true);
+        assert.equal(await page.locator('#result-content').isVisible(), false);
+        await fill('slope_deg', 0);
+        await calc();
+        near((await result()).threshold.value, 33.690067525979785);
+        await select('load_case', 'acceleration');
+        await fill('accel_direction', 180);
+        await calc();
+        near((await result()).threshold.value, 9.80665);
+        assert.match((await result()).threshold.edge, /Front/);
+        await select('load_case', 'push');
+        await calc();
+        near((await result()).threshold.value, 392.266);
+        if (await page.locator('#advanced-inputs').getAttribute('open') === null) await page.locator('#advanced-inputs > summary').click();
+        await fill('force_vertical', 980.665);
+        await calc();
+        assert.match(await page.locator('#error-message').innerText(), /No compressive/);
+        assert.equal(await page.locator('#result-content').isVisible(), false);
+        assert.deepEqual(errors, []);
+        console.log(JSON.stringify({ checks: 'Real Python, all load modes, charts, derivations, tooltips, keyboard tabs, editable tables, share round-trip, exports, themes, mobile, and invalid input recovery passed.', screenshots: ['/private/tmp/tipping-stability-light.png', '/private/tmp/tipping-stability-dark.png', '/private/tmp/tipping-stability-mobile.png'] }));
+    } finally {
+        await browser.close();
+    }
+})().catch((error) => { console.error(error); process.exitCode = 1; });
