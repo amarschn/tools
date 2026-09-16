@@ -12,7 +12,7 @@
   lookup flow without express permission. Keep source facts and essential
   distinctions such as minimum limits and test conditions intact.
 - Preserve the original prototype files. Make production changes in `src/`
-  and regenerate `materials-lookup/` through the builder.
+  and regenerate `tools/materials/` through the builder.
 
 # Source documents
 

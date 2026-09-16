@@ -1,11 +1,13 @@
-# Local release candidate — 1.0.0-rc.1
+# Materials release review
 
-Updated: 2026-09-10
+Updated: 2026-09-15
 
-The September 9 local-release milestone is complete: the selected dual-mode
-interaction runs on the factual catalog, with persistent units, visible
-provenance, generated downloads, and repeatable release checks. The publishable
-directory is `materials/`. No public deployment has been made.
+The Materials lookup and data pipeline are integrated into the tools repository.
+The generated page is `tools/materials/`, backed by `materials-lookup/`.
+The September 15 review added persistent light/dark/system settings, a Tools
+link, input help, copy-link sharing, and structured page metadata. The browser
+and release checks now target the integrated output. The README is generated
+from `src/README.md` so it survives a rebuild.
 
 The interface follows Prototype 05: compact toolbar and search, expandable
 category/material rows, and shared value/condition/source columns. The original
@@ -13,7 +15,7 @@ prototypes remain intact. Future interface redesigns require express permission.
 
 ## Review locally
 
-Build using the README commands, then open `http://localhost:8001/materials/`.
+Build using the README commands, serve the repository on port 8148, then open `http://127.0.0.1:8148/tools/materials/`.
 
 1. Search `6061-T6`, find tensile yield strength, switch to imperial, and
    confirm the specified minimum displays as `≥ 35 ksi`. Override that property
@@ -41,10 +43,19 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
     versus typical minima, diameter scope under Test details, and the hardness
     conditions of tool steel properties. See [steel review](steel-batch-review.md).
 
+11. Open Settings, switch light/dark/Auto, and reload. Check Copy link and the
+    Tools navigation. Repeat at 320px; source details and unit controls remain
+    visible. Download the record JSON, catalog JSON, and observations CSV.
+
 ## Evidence
 
-- 140 Python tests pass with no skips. Full structural and semantic validation of the factual catalog and synthetic
-  contract, including negative cases and exact source-to-SI conversion checks.
+- The combined repository suite passes: 1,603 tests and 2,611 subtests on
+  Python 3.13, with no skips. This includes full structural and semantic
+  validation, negative cases, and source-to-SI conversion checks.
+- Node checks pass: 52 search cases, conversions, and all 222 record
+  projections, plus 21 prototype queries.
+- Both thread-tool browser suites pass, covering the pipe and product-screw
+  work carried by this branch, including diagrams, unit changes, and exports.
 - Deterministic compilation; every checked-in artifact and manifest hash is
   verified against a fresh in-memory build. Extra files in the publish tree
   fail the release gate.
@@ -52,23 +63,28 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
   10 registered properties, and text references to 28 source documents. One registered property
   currently has no observations; missing data is displayed as unreported.
 - Readable search index approximately 269 KB raw / 23 KB gzip. Warm Node query
-  p95 is approximately 5–7 ms on the development machine. This measurement is a
+  p95 is approximately 8 ms on the development machine. This measurement is a
   current-corpus baseline, not a large-corpus performance claim.
 - Search routing, conversion, significant figures, bounds, intervals,
   uncertainty conversion, and compiler/browser parity across all 222 records.
-- Chromium browser verification at root and `/nested/reference/`: material and
+- Chromium browser verification at root, `/nested/reference/`, and
+  `/tools/materials/`: material and
   property flows, clarification, ambiguity, rejected ranking intent, deep links,
   reload, browser history, units, missing data, and a 50-row result cap.
-- One additional JSON request opens a full datasheet. Normal browsing makes no
-  external requests and never loads the full-catalog export or synthetic corpus.
+- One additional JSON request opens a full datasheet. Lookup data stays local;
+  the shared Google Analytics script is the only external script. Browsing
+  never loads the full-catalog export or synthetic corpus. Tests intercept
+  Analytics requests and check export events without sending test traffic.
 - Category, material, and state rows expand in place. Unit changes preserve open
   rows and source details; reopening a material uses its cached record.
 - Typed input survives a delayed initial index. A mismatched lazy record is
   rejected, and retry succeeds after the correct data becomes available.
-- Desktop and 320px layouts inspected, including long citations and a category
-  overview. Browser runs finish without console errors or page exceptions.
-- Saved PDF hashes checked for all 28 documents. The full import reconstructs
-  the curated files byte-for-byte using `import_reference_tables.py --check`.
+- Desktop and 320px layouts inspected in light and dark, including long
+  citations, settings, and a category overview. Theme choices persist. Copy
+  link matches the current URL. Downloaded JSON and CSV match the generated
+  files. Browser runs finish without console errors or page exceptions.
+- The earlier data-batch review checked saved hashes for all 28 documents
+  and reconstructed the curated files with `import_reference_tables.py --check`.
   The Hydro corrections are documented in Schema Decision 002. Reproducible
   extraction is not a substitute for an independent audit of every source fact.
 - The compiler excludes document URLs from the entire public artifact, including
@@ -76,31 +92,28 @@ Build using the README commands, then open `http://localhost:8001/materials/`.
   tracked source documents. Private owner review is separate from this build.
 
 Screenshots and machine-readable browser results are generated in
-`test-results/`. They are excluded from source control and uploaded as a CI
-artifact. The version, counts, byte sizes, and exact hashes are recorded in
-`materials/release-manifest.json`.
+`materials-lookup/test-results/`, excluded from source control. The version,
+counts, byte sizes, and hashes are in `tools/materials/release-manifest.json`.
+The release gate compares all 776 outputs against the source, including the
+complete index after the shared SEO transform.
 
 ## Deployment handoff
 
-1. Run `scripts/verify_release.py`, the Python/Node tests, and browser tests.
-2. Publish **only `materials/`**, including its `data/` and `assets/` directories.
-   Do not publish the repository root: it includes synthetic fixtures and
-   development prototypes.
-3. Mount the artifact at a root or directory URL ending in `/`. Serve `.mjs` as
-   JavaScript, JSON as JSON, and the remaining files with their normal MIME types.
-4. Revalidate HTML and the release manifest on navigation. Content-addressed
-   assets/data may be cached immutably. `_headers` contains suggested rules for
-   hosts that support that file; translate them for the selected host.
-5. Publish atomically so HTML and its pinned data appear together. Keep a prior
-   complete artifact if rollback or active old-tab continuity is required; the
-   local builder prunes earlier generated builds rather than retaining releases.
-6. Smoke-test the actual public URL, including a retained legacy material URL,
-   a focused property query, and a download.
+Follow the repository's [release procedure](../../docs/RELEASE.md): push the
+verified task branch, compare local and remote SHAs, merge once into `main`,
+check the integrated result, and push `main` once. Netlify publishes
+`https://transparent.tools/tools/materials/`; GitHub Pages is the secondary host.
+The user confirmed the Netlify project is active, has at least 15 credits, and
+has no running deployment before this release.
 
-The repository includes a verification workflow and artifact packaging, but
-there is no configured remote, domain, hosting account, or publishing workflow.
-Those are the remaining deployment decisions. The large-scale serving bake-off
-and tools-repository compatibility export are explicitly deferred.
+After publication, verify the expected SHA, the homepage, Materials, the
+changed thread tool, an unchanged calculator, and `sitemap.xml`. Save the
+published SHA and live results with the local browser report before closing
+the task.
+
+Source documents remain in the ignored `private-sources/` directory. The
+public artifact and exports contain citations only. Shared-data consolidation
+and rendered pages for individual materials remain separate follow-up work.
 
 Original document access for paying customers is also deferred to
 [the source access plan](source-access-and-expansion.md); this static artifact

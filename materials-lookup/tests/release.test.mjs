@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
 import {createSearch, MAX_RESULTS} from '../src/search.mjs';
 import {displayUnit, resultText, summaryText, summarize, significant, thicknessText, resultBasis} from '../src/format.mjs';
 
-const manifest = JSON.parse(fs.readFileSync('materials/release-manifest.json'));
-const index = JSON.parse(fs.readFileSync('materials/' + manifest.index));
+const output = fileURLToPath(new URL('../../tools/materials/', import.meta.url));
+const manifest = JSON.parse(fs.readFileSync(path.join(output, 'release-manifest.json')));
+const index = JSON.parse(fs.readFileSync(path.join(output, manifest.index)));
 const resolve = createSearch(index);
 const routeCases = [
   ['6061', {material:'al-6061'}],
@@ -85,7 +88,7 @@ assert.equal(resultText(uncertain, displayUnit(yieldProp, imperial)), '35 ± 0.7
 const temperature = {property_id:'max_service_temperature', result:{kind:'point', canonical:{value:373.15}, reported:{significant_figures:3}}, uncertainty:{canonical:{value:5}, reported:{significant_figures:1}}};
 assert.equal(resultText(temperature, displayUnit(prop('max_service_temperature'), imperial)), '212 ± 9 °F');
 // Browser and compiler summaries must agree for the real catalog, including bounds.
-const directory = 'materials/' + manifest.index.replace('index.json', 'records/');
+const directory = path.join(output, manifest.index.replace('index.json', 'records/'));
 for (const filename of fs.readdirSync(directory)) {
   const record = JSON.parse(fs.readFileSync(directory + filename));
   for (const p of index.properties) {

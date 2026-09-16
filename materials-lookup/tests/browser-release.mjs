@@ -2,14 +2,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import http from 'node:http';
+import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
 
-const output = path.resolve('materials');
-await fs.mkdir('test-results', {recursive:true});
+const project = fileURLToPath(new URL('../', import.meta.url));
+const repo = path.resolve(project, '..');
+const output = path.join(repo, 'tools/materials');
+const results = path.join(project, 'test-results');
+await fs.mkdir(results, {recursive:true});
 const server = http.createServer(async (req,res) => {
   const url = new URL(req.url, 'http://localhost');
-  let relative = decodeURIComponent(url.pathname).replace(/^\/nested\/reference\//, '/');
-  const root = relative.startsWith('/prototype/') ? path.resolve('prototypes') : output;
+  let relative = decodeURIComponent(url.pathname).replace(/^\/(?:nested\/reference|tools\/materials)\//, '/');
+  const shared = relative.startsWith('/shared/') || relative === '/manifest.json';
+  const root = shared ? repo : relative.startsWith('/prototype/') ? path.join(project, 'prototypes') : output;
   relative = relative.replace(/^\/prototype\//, '/');
   let file = path.resolve(root, '.' + relative);
   if (!file.startsWith(root + path.sep) && file !== root) {res.writeHead(403).end(); return;}
@@ -27,7 +32,10 @@ const report = {hosting:[], assertions:[], consoleErrors:[], pageErrors:[]};
 try {
   browser = await chromium.launch({headless:true});
   report.environment = {browser:browser.version(), node:process.version, platform:process.platform, architecture:process.arch};
-  const context = await browser.newContext({viewport:{width:1360,height:1000}});
+  const context = await browser.newContext({viewport:{width:1360,height:1000}, colorScheme:'light'});
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Keep analytics events inspectable without sending test traffic to GA.
+  await context.route('https://www.googletagmanager.com/**', route => route.fulfill({contentType:'text/javascript', body:''}));
   const page = await context.newPage();
   page.on('pageerror', e => report.pageErrors.push(e.message));
   page.on('console', m => {if(m.type()==='error') report.consoleErrors.push(m.text());});
@@ -41,23 +49,23 @@ try {
       const base = variant === 'prototype' ? origin+'/prototype/05-dual-mode.html' : origin+'/';
       await page.goto(base);
       await page.waitForFunction(()=>!document.querySelector('#route-label').textContent.match(/Loading|Opening/));
-      await page.screenshot({path:`test-results/${variant}-home.png`,fullPage:true});
+      await page.screenshot({path:path.join(results, `${variant}-home.png`),fullPage:true});
       await page.locator('#query').fill(variant === 'prototype' ? 'AX60-T6' : '6061-T6');
       await page.locator('#query').press('Enter');
       await page.locator('.property-section').first().waitFor();
-      await page.screenshot({path:`test-results/${variant}-record.png`,fullPage:true});
+      await page.screenshot({path:path.join(results, `${variant}-record.png`),fullPage:true});
       await page.locator('#query').fill('tensile strength');
       await page.locator('#query').press('Enter');
       await page.locator('.tree').waitFor();
       await page.locator('.tree > .taxon > summary').first().click();
       await page.locator('.tree > .taxon[open] .node-body > .taxon').first().waitFor();
-      await page.screenshot({path:`test-results/${variant}-tree.png`,fullPage:true});
+      await page.screenshot({path:path.join(results, `${variant}-tree.png`),fullPage:true});
     }
     await browser.close();
     await new Promise(resolve=>server.close(resolve));
     process.exit(0);
   }
-  for (const mount of ['/', '/nested/reference/']) {
+  for (const mount of ['/', '/nested/reference/', '/tools/materials/']) {
     const base = origin + mount;
     await context.clearCookies();
     await go(base);
@@ -206,22 +214,22 @@ try {
     await page.locator('#material-steel-uddeholm-arne .observation').first().waitFor();
     await go(base, '?q=TECAPEEK+tensile+strength');
     await page.locator('#unit-system').selectOption('metric');
-    await page.screenshot({path:`test-results/release-${mount==='/'?'desktop':'subpath'}.png`,fullPage:true});
+    await page.screenshot({path:path.join(results, `release-${mount==='/'?'desktop':mount.includes('tools')?'integrated':'subpath'}.png`),fullPage:true});
     report.hosting.push({mount,passed:true});
   }
   // At 320px the search, long record names, values and citations stay in view.
   await page.setViewportSize({width:320,height:800});
   await go(origin+'/?q=TECAPEEK+tensile+strength');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),'320px overflow');
-  await page.screenshot({path:'test-results/release-mobile.png',fullPage:true});
+  await page.screenshot({path:path.join(results, 'release-mobile.png'),fullPage:true});
   await go(origin+'/?property=thermal_conductivity&category=engineering-plastics');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),'320px overview overflow');
-  await page.screenshot({path:'test-results/release-mobile-overview.png',fullPage:true});
+  await page.screenshot({path:path.join(results, 'release-mobile-overview.png'),fullPage:true});
   for (const query of ['6063 T6 extrusion', 'C11000', 'Ti6246 DA', '1045', 'H13']) {
     await go(origin+'/?q='+encodeURIComponent(query));
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth), query+' mobile overflow');
   }
-  await page.screenshot({path:'test-results/release-mobile-steel.png',fullPage:true});
+  await page.screenshot({path:path.join(results, 'release-mobile-steel.png'),fullPage:true});
   report.assertions.push('nonferrous searches and bronze tree', 'one-sided thickness limits in metric and imperial', 'copper source ranges', 'titanium state and size scope');
   report.assertions.push('steel grade searches and inclusive steel taxonomy', 'typical steel minima stay qualified', 'tool steel hardness conditions');
   report.assertions.push('320px layout', 'root and subpath deep links', 'units and property overrides survive reload', 'one lazy record request', 'expandable taxonomy and inline observations', 'expanded tree survives unit changes', 'collapsed record reuses cached data', 'clarification and comparison boundary', 'text-only citations; document paths unavailable', 'new specialty-metal searches', 'browser history', 'missing property', '50-row cap');
@@ -249,10 +257,70 @@ try {
   report.assertions.push('cache mismatch detection and retry');
   assert.deepEqual(report.pageErrors, []);
   assert.deepEqual(report.consoleErrors, []);
-  const external = requests.filter(u=>!u.startsWith(origin));
-  assert.deepEqual(external, [], 'normal browsing has no external requests');
+  const external = requests.filter(u=>!u.startsWith(origin) && !u.startsWith('https://www.googletagmanager.com/'));
+  assert.deepEqual(external, [], 'lookup data stays local; only the shared GA script is external');
   assert.ok(!requests.some(u=>u.includes('synthetic-corpus') || u.endsWith('/catalog.json')), 'browse never fetches the whole corpus');
-  await fs.writeFile('test-results/release-browser.json', JSON.stringify(report,null,2)+'\n');
+  // Integrated toolbar, first-paint theme preference, sharing and downloads.
+  await page.setViewportSize({width:1360,height:1000});
+  const integrated = origin + '/tools/materials/';
+  await go(integrated, '?q=6061-T6');
+  assert.equal(await page.getByRole('link', {name:'Tools',exact:true}).getAttribute('href'), '../../');
+  assert.equal(await page.locator('script[type="application/ld+json"]').count(), 2);
+  assert.equal(await page.locator('#theme').inputValue(), 'system');
+  await page.emulateMedia({colorScheme:'dark'});
+  const background = () => page.locator('html').evaluate(el => getComputedStyle(el).backgroundColor);
+  assert.equal(await background(), 'rgb(21, 21, 21)');
+  for (const theme of ['light', 'dark']) {
+    await page.locator('#settings > summary').click();
+    await page.locator('#theme').selectOption(theme);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#settings').getAttribute('open'), null);
+    await page.reload(); await settled();
+    assert.equal(await page.locator('#theme').inputValue(), theme);
+    assert.equal(await background(), theme === 'dark' ? 'rgb(21, 21, 21)' : 'rgb(255, 255, 255)');
+    await page.locator('#property-tensile_yield_strength .citation summary').click();
+    await page.screenshot({path:path.join(results, `release-${theme}.png`), fullPage:true});
+    await page.setViewportSize({width:320,height:800});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth));
+    await page.locator('#settings > summary').click();
+    assert.ok(await page.locator('#theme').isVisible());
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({path:path.join(results, `release-mobile-${theme}.png`), fullPage:true});
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({width:1360,height:1000});
+  }
+  await page.locator('#copy-link').click();
+  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()), page.url());
+  await page.waitForFunction(()=>document.querySelector('#copy-link').textContent === 'Copied');
+  assert.ok(await page.evaluate(()=>dataLayer.some(event=>event[0]==='event' && event[1]==='export_action' && event[2].tool==='materials')));
+  const manifest = JSON.parse(await fs.readFile(path.join(output, 'release-manifest.json'), 'utf8'));
+  for (const [label, file] of [['JSON', manifest.catalog], ['CSV', manifest.csv]]) {
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('footer').getByRole('link', {name:label,exact:true}).click();
+    const download = await downloadPromise;
+    assert.equal(await download.failure(), null);
+    assert.deepEqual(await fs.readFile(await download.path()), await fs.readFile(path.join(output, file)));
+  }
+  const recordDownload = page.waitForEvent('download');
+  await page.locator('.section-actions').getByRole('link', {name:'JSON',exact:true}).click();
+  const record = JSON.parse(await fs.readFile(await (await recordDownload).path(), 'utf8'));
+  assert.equal(record.material.id, 'al-6061');
+  assert.ok(record.observations.some(o=>o.state_id==='al-6061-t6'));
+  await go(integrated, '?q=unobtainium+thing');
+  assert.match(await page.locator('#view').innerText(), /No matching material or property/);
+  for (const suffix of ['?q=0','?q=-999999999999999999999999']) {
+    await go(integrated, suffix);
+    assert.equal(await page.getByRole('alert').count(), 0);
+    assert.ok((await page.locator('[data-result-row]').count()) <= 50);
+  }
+  await go(integrated, '?material=al-6061&state=invalid');
+  assert.match(await page.getByRole('alert').innerText(), /Unknown state/);
+  await page.getByRole('link', {name:'New search',exact:true}).click(); await settled();
+  assert.equal(await page.locator('.mode-row').count(), 2);
+  assert.deepEqual(report.pageErrors, []);
+  assert.deepEqual(report.consoleErrors, []);
+  report.assertions.push('system, light and dark themes with persisted preference', '320px settings and source details', 'Tools navigation and structured metadata', 'copy link and export analytics', 'downloaded JSON and CSV match published artifacts', 'invalid query and state recovery');
+  await fs.writeFile(path.join(results, 'release-browser.json'), JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report,null,2));
 } finally {
   await browser?.close();

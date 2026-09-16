@@ -22,7 +22,7 @@ def document_file(path, content):
 def verify_public_outputs(outputs, sources):
     urls = [s['url'].encode() for s in sources]
     for path, content in outputs.items():
-        if PurePosixPath(path).suffix not in {'.html', '.mjs', '.css', '.json', '.csv', '.txt'} and path != '_headers':
+        if PurePosixPath(path).suffix not in {'.html', '.mjs', '.css', '.json', '.csv', '.txt'} and path not in {'_headers', 'README.md'}:
             raise ValueError(f'Unsupported public asset: {path}')
         if document_file(path, content):
             raise ValueError(f'Source document in public output: {path}')

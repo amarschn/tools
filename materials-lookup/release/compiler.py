@@ -116,6 +116,7 @@ def render_outputs(root, database):
         fingerprint.update(path.name.encode() + path.read_bytes())
     for name, content in sorted(assets.items()): fingerprint.update(name.encode() + content)
     fingerprint.update(template.encode())
+    fingerprint.update((root / "src" / "README.md").read_bytes())
     build_id = fingerprint.hexdigest()[:20]
     prefix = f"data/{build_id}"
     index["build_id"] = build_id
@@ -145,6 +146,7 @@ def render_outputs(root, database):
         "MATERIAL_COUNT": str(len(data["materials"])), "OBSERVATION_COUNT": str(len(data["observations"]))}.items():
         template = template.replace("{{" + token + "}}", value)
     add("index.html", template)
+    add("README.md", (root / "src" / "README.md").read_bytes())
     add("data-license.txt", (root / "DATA-LICENSE.md").read_bytes())
     add("code-license.txt", (root / "LICENSE").read_bytes())
 

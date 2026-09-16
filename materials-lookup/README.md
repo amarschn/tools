@@ -90,6 +90,8 @@ python3 materials-lookup/builder/build_site.py --check
 python3 materials-lookup/builder/schema_lab.py check
 python3 -m pytest materials-lookup/tests
 python3 materials-lookup/builder/verify_release.py
+npm --prefix materials-lookup test
+npm --prefix materials-lookup run test:browser
 ```
 
 `verify_release.py` needs `jsonschema` for structural validation; install
@@ -101,9 +103,12 @@ by hash and rejects extra files in the publish directory.
 A bare `pytest` at the repository root runs this suite together with the tools'
 own tests; `pytest.ini` lists both paths.
 
-The Node browser tests (`package.json`) came from the standalone project and
-still reference its own layout. This repository's browser tests live in
-`tests/browser/`. Porting them is outstanding work.
+The Node tests read the generated `tools/materials/` tree. Install Playwright
+with `npm --prefix materials-lookup install` and
+`npm --prefix materials-lookup exec playwright install chromium` if needed.
+The browser suite covers root, nested, and `/tools/materials/` mounting,
+lookup and source flows, unit conversion, downloads, sharing, both themes,
+and narrow screens. Reports and screenshots go to `materials-lookup/test-results/`.
 
 ## Where source documents live
 
