@@ -113,7 +113,9 @@
         const canIdentify = section === 'explore' && ['metric', 'unc', 'unf'].includes(byId('spec-family').value);
         if (!canIdentify) byId('identify-enabled').checked = false;
         byId('identify-options').hidden = !canIdentify;
-        byId('spec-size-group').hidden = product || section === 'load' || byId('identify-enabled').checked;
+        const standardSize = product && family.sizes.length > 0;
+        byId('spec-size-group').hidden = (product && !standardSize) || section === 'load' || byId('identify-enabled').checked;
+        byId('spec-screw-diameter-group').hidden = standardSize;
         byId('spec-feature-group').hidden = product;
         byId('spec-product-fields').hidden = !product;
         byId('thread-details').hidden = product;
@@ -153,7 +155,12 @@
         const kind = catalog[values.family].kind;
         values.extent = { through: 'thru', blind: 'blind', external: 'length', nominal: 'unspecified' }[values.feature];
         if (kind === 'product') {
-            ['fit', 'extent', 'depth', 'hand', 'size', 'seal'].forEach((key) => delete values[key]);
+            const keys = ['fit', 'extent', 'depth', 'hand', 'seal'];
+            // Wood and DIN 7500 screws have a published nominal thread; the
+            // rest of the product is still supplier data, so size stays.
+            if (!catalog[values.family].sizes.length) keys.push('size');
+            else delete values.screw_diameter;
+            keys.forEach((key) => delete values[key]);
         } else {
             ['product', 'screw_diameter', 'screw_length', 'product_unit', 'head', 'substrate'].forEach((key) => delete values[key]);
             if (kind === 'pipe') {
@@ -539,7 +546,7 @@
             render(result);
             byId('spec-result-heading').textContent = 'Possible thread candidates';
             byId('spec-result-caption').textContent = 'Diameter and pitch do not establish a fit class or rating.';
-            byId('spec-status').textContent = search?.status === 'no-close-supported-match' ? 'No close match' : row ? 'Candidate only' : 'Measurements';
+            byId('spec-status').textContent = search?.status === 'no-close-supported-match' ? 'No close match' : search?.status === 'no-comparable-data' ? 'Nothing comparable' : row ? 'Candidate only' : 'Measurements';
             if (!row) {
                 byId('drawing-callout').textContent = 'Select a candidate to inspect its nominal profile';
                 byId('profile-unavailable').textContent = 'Known nominal size? Use Specify a thread. Unknown pitch? Print a comparison sheet below.';

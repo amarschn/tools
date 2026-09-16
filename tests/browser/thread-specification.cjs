@@ -28,7 +28,8 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
             // Assert text bounds and arrow/line attachment on the drawing itself.
             await page.waitForFunction(() => {
                 const svg = document.querySelector('#family-profile-svg');
-                return svg.viewBox.baseVal.width === (svg.parentElement.clientWidth < 540 ? 300 : 620);
+                // Mirrors the stacking breakpoint in thread-family-diagram.js.
+                return svg.viewBox.baseVal.width === (svg.parentElement.clientWidth < 430 ? 300 : 620);
             });
             const problems = await page.locator('#family-profile-svg').evaluate((svg) => {
                 const bounds = svg.getBoundingClientRect();
@@ -286,6 +287,43 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         assert.match(await page.locator('#family-taper-label').textContent(), /no taper/);
         assert.equal(await page.locator('#family-taper-envelope').getAttribute('data-diameter-taper'), '0');
         await checkFamilyDiagram();
+        // The schematic must draw in the same vocabulary as the calculated
+        // profiles. Comparing resolved styles catches a private style set
+        // reappearing on either side.
+        const styleParity = await page.evaluate(() => {
+            const resolve = (root, selector) => {
+                const node = document.querySelector(root).querySelector(selector);
+                if (!node) return 'missing: ' + root + ' ' + selector;
+                const style = getComputedStyle(node);
+                return [style.stroke, style.strokeWidth, style.fill, style.fontSize,
+                    style.fontFamily, style.strokeDasharray, style.vectorEffect].join('|');
+            };
+            const pairs = ['.thread-line', '.dimension-line', '.dimension-arrow',
+                '.dimension-text', '.figure-text', '.material-label', '.center-line',
+                '.thread-fill', '.hatch-line'];
+            return pairs.map((selector) => ({
+                selector,
+                machine: resolve('#thread-profile-svg', selector),
+                schematic: resolve('#family-profile-svg', selector),
+            }));
+        });
+        for (const row of styleParity) {
+            assert.equal(row.schematic, row.machine,
+                `Schematic ${row.selector} must resolve to the calculated profile's style.`);
+        }
+        assert.equal(await page.locator('#family-profile-svg [class^="family-"]:not(.family-dimension)').count(), 0,
+            'The schematic must not reintroduce a private drawing style set.');
+        // Each figure is measured while it is the visible one, at one width, so
+        // the schematic cannot quietly grow taller than the profile beside it.
+        const figureHeight = async (family, selector) => {
+            await select('spec-family', family);
+            await page.waitForFunction((s) => document.querySelector(s).getBoundingClientRect().height > 0, selector);
+            return page.locator(selector).evaluate((el) => el.getBoundingClientRect().height);
+        };
+        const machineHeight = await figureHeight('metric', '#thread-profile-svg');
+        const schematicHeight = await figureHeight('npt', '#family-profile-svg');
+        assert.ok(schematicHeight <= machineHeight,
+            `Schematic (${schematicHeight}px) must not stand taller than the calculated profile (${machineHeight}px).`);
         await select('spec-family', 'unef');
         await select('spec-size', '1 1/2-18 UNEF');
         assert.equal(await callout(), '1 1/2-18 UNEF-2B THRU');
@@ -294,16 +332,40 @@ const url = process.env.THREAD_TOOL_URL || 'http://127.0.0.1:8148/tools/thread-v
         await page.locator('#export-results').click();
         assert.equal((await downloadEvent).suggestedFilename(), 'thread-results.csv');
 
+        // Wood and DIN 7500 screws have a published nominal thread and state
+        // it; plastic-forming screws have none and must not invent one.
+        const published = { forming_metal: /DIN 7500/, wood: /ASME B18\.6\.1/ };
         for (const family of ['forming_metal', 'forming_plastic', 'wood']) {
             await select('spec-family', family);
             assert.equal(await page.locator('#spec-product').isVisible(), true);
             assert.equal(await page.locator('#callout-symbol').isVisible(), false);
             assert.match(await callout(), /^DRAFT:/);
-            assert.match(await page.locator('#family-overview').textContent(), /d: not specified/);
-            assert.match(await page.locator('#family-closeup').textContent(), /supplier data needed/);
-            assert.equal(await page.locator('#family-included-angle').count(), 0);
+            const overview = await page.locator('#family-overview').textContent();
+            const closeup = await page.locator('#family-closeup').textContent();
+            if (published[family]) {
+                assert.match(overview, published[family]);
+                assert.match(overview, /d = [\d.]+ mm/, 'A published size must show its diameter.');
+                assert.match(closeup, /P = [\d.]+ mm/, 'A published size must show its pitch.');
+                assert.equal(await page.locator('#spec-size-group').isVisible(), true);
+                assert.equal(await page.locator('#spec-screw-diameter-group').isVisible(), false,
+                    'The standard sets the diameter, so the free-text entry is hidden.');
+            } else {
+                assert.match(overview, /d: not specified/);
+                assert.match(closeup, /supplier data needed/);
+                assert.equal(await page.locator('#spec-size-group').isVisible(), false);
+                assert.equal(await page.locator('#spec-screw-diameter-group').isVisible(), true);
+            }
             await checkFamilyDiagram();
         }
+        // Selecting a different screw number must move the stated dimensions.
+        await select('spec-family', 'wood');
+        await select('spec-size', '#14');
+        await page.waitForFunction(() => document.getElementById('family-overview').textContent.includes('6.1468'));
+        assert.match(await page.locator('#family-closeup').textContent(), /10 TPI/);
+        await select('spec-size', '#8');
+        await page.waitForFunction(() => document.getElementById('family-overview').textContent.includes('4.1656'));
+        // Free-text entry still applies to the family that has no size list.
+        await select('spec-family', 'forming_plastic');
         await page.locator('#spec-product').fill('Supplier <img src=x onerror=alert(1)>');
         await page.locator('#spec-screw-diameter').fill('4');
         await page.locator('#spec-screw-length').fill('30');

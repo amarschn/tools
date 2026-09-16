@@ -24,6 +24,8 @@ try:
         calculate_basic_thread_geometry,
         parse_metric_thread_designation,
     )
+    from .pipe_threads import BSPP_BASIC, NPT_BASIC, pipe_dimensions
+    from .screw_products import product_dimensions, product_sizes
     from .threads import analyze_thread, get_thread_catalog
 except ImportError:  # Pyodide loads modules as top-level files.
     from fasteners import (
@@ -31,6 +33,8 @@ except ImportError:  # Pyodide loads modules as top-level files.
         calculate_basic_thread_geometry,
         parse_metric_thread_designation,
     )
+    from pipe_threads import BSPP_BASIC, NPT_BASIC, pipe_dimensions
+    from screw_products import product_dimensions, product_sizes
     from threads import analyze_thread, get_thread_catalog
 
 
@@ -55,9 +59,19 @@ UNIFIED_PAIRS = {
     ),
 }
 
+
+def _pipe_pairs(table: dict[str, tuple]) -> str:
+    """Encode a pipe_threads anchor table as compact size:TPI text."""
+    return " ".join(
+        f"{size.replace(' ', '_')}:{values[0]:g}" for size, values in table.items()
+    )
+
+
+# Derived from the dimension tables so a size list cannot drift from the
+# dimensions carried for it. BSPP and BSPT share sizes and pitches.
 PIPE_PAIRS = {
-    "npt": "1/16:27 1/8:27 1/4:18 3/8:18 1/2:14 3/4:14 1:11.5 1_1/4:11.5 1_1/2:11.5 2:11.5",
-    "bsp": "1/8:28 1/4:19 3/8:19 1/2:14 3/4:14 1:11 1_1/4:11 1_1/2:11 2:11",
+    "npt": _pipe_pairs(NPT_BASIC),
+    "bsp": _pipe_pairs(BSPP_BASIC),
 }
 
 FAMILIES = {
@@ -151,8 +165,9 @@ FAMILIES = {
         "group": "Self-forming & wood screws",
         "kind": "product",
         "standard": "Supplier product specification; DIN 7500 where applicable",
+        "default_size": "M5x0.8",
         "unit": "mm",
-        "help": "A forming screw displaces material in a pilot hole. Specify a product (for example a DIN 7500 screw) and the substrate. Pilot diameter and installation torque need supplier data and application tests.",
+        "help": "A forming screw displaces material instead of cutting chips, so the mating thread is formed on assembly. A DIN 7500 screw forms an ISO metric thread, and that nominal thread is listed here. The core hole diameter depends on the material and the engagement length, so it comes from the product data, not from the thread size.",
     },
     "forming_plastic": {
         "label": "Thread-forming screw · plastic",
@@ -160,15 +175,16 @@ FAMILIES = {
         "kind": "product",
         "standard": "Supplier product specification",
         "unit": "mm",
-        "help": "Plastic-fastening screws use product-specific profiles, such as EJOT DELTA PT. Specify the resin, reinforcement, boss, pilot hole, and installation requirements using that product's data.",
+        "help": "Plastic-fastening screws use product-specific profiles with a narrower flank angle and deeper flights than a 60 degree machine thread, which lowers the hoop stress in the boss. Pitch, flank angle and boss geometry differ by product, so there is no standard size list to offer. Get the numbers from the product data for your resin.",
     },
     "wood": {
         "label": "Wood / structural timber screw",
         "group": "Self-forming & wood screws",
         "kind": "product",
         "standard": "Supplier specification and applicable product evaluation",
+        "default_size": "#8",
         "unit": "mm",
-        "help": "Specify a screw product, diameter and length, head/drive, coating, and timber. Structural capacity depends on the product evaluation, wood, penetration, spacing, load direction, and service conditions.",
+        "help": "Wood screws have a published nominal thread in ASME B18.6.1: the screw number sets the major diameter and threads per inch, both listed here. Head, drive, point, coating and any structural rating still come from the product. Pilot hole size depends on the species and density of the timber.",
     },
 }
 
@@ -314,7 +330,7 @@ def specification_catalog() -> dict[str, dict[str, Any]]:
                 )
             ]
         else:
-            family["sizes"] = []
+            family["sizes"] = product_sizes(key)
     return families
 
 
@@ -426,11 +442,26 @@ def build_thread_specification(state_json: str = "{}") -> dict[str, Any]:
         unit = state.get("product_unit", "mm")
         if unit not in ("mm", "in"):
             raise ValueError("Product dimensions must use mm or in.")
+        # Families with a published nominal thread state it exactly; the rest
+        # of the screw still comes from the supplier's own product data.
+        standard_size = None
+        if family["sizes"]:
+            size = state.get("size", family.get("default_size", family["sizes"][0]))
+            if size not in family["sizes"]:
+                raise ValueError("Choose a listed nominal size for this family.")
+            standard_size = product_dimensions(family_key, size)
         dimensions = []
         for key, label in (
             ("screw_diameter", "screw diameter"),
             ("screw_length", "screw length"),
         ):
+            if key == "screw_diameter" and standard_size:
+                # The standard size sets the diameter, but a value supplied
+                # anyway is still checked rather than silently dropped.
+                if state.get(key, "") != "":
+                    _positive(state.get(key), label)
+                dimensions.append(standard_size["callout_size"])
+                continue
             value = state.get(key, "")
             dimensions.append(
                 _positive(value, label) if value != "" else f"[{label.upper()}]"
@@ -452,7 +483,14 @@ def build_thread_specification(state_json: str = "{}") -> dict[str, Any]:
             else:
                 review.append(f"Specify {label.lower()}.")
         review.append(
-            "Confirm pilot hole, usable engagement, installation torque, and joint capacity against this product's data and the actual substrate."
+            {
+                "wood": "Get the pilot hole diameter for the species and density of your timber, plus the required penetration, from the product data. A nominal thread size does not set it.",
+                "forming_metal": "Get the core hole diameter for your material and engagement length, and the drive and strip torques, from the product data. The core hole is not derivable from the thread size.",
+                "forming_plastic": "Get these from the product data for your resin: boss outside diameter, core hole diameter, boss depth, engagement length, drive torque and strip torque. Confirm them by test on the actual moulding.",
+            }[family_key]
+        )
+        review.append(
+            "Confirm usable engagement and joint capacity against this product's data and the actual substrate."
         )
         if family_key == "wood":
             review.append(
@@ -464,16 +502,53 @@ def build_thread_specification(state_json: str = "{}") -> dict[str, Any]:
                 ["Dimensions", f"{' x '.join(dimensions)} {unit}"],
             ]
         )
+        if standard_size:
+            major_mm = standard_size["major_mm"]
+            breakdown.extend(
+                [
+                    ["Nominal thread", standard_size["standard"]],
+                    [
+                        "Nominal major diameter",
+                        f"{major_mm:.3f} mm ({major_mm / 25.4:.4f} in)",
+                    ],
+                    [
+                        "Pitch",
+                        f"{standard_size['pitch_mm']:.4f} mm"
+                        f" ({standard_size['tpi']:.6g} TPI)"
+                        if standard_size["unit"] == "mm"
+                        else f"{standard_size['tpi']:.6g} TPI"
+                        f" ({standard_size['pitch_mm']:.4f} mm)",
+                    ],
+                ]
+            )
+            lines.append(
+                f"NOMINAL THREAD PER {standard_size['standard'].upper()}:"
+                f" {standard_size['designation']}; {major_mm:.3f} MM MAJOR DIA;"
+                f" {standard_size['pitch_mm']:.4f} MM PITCH"
+                f" ({standard_size['tpi']:.6g} TPI). BASIC DIMENSIONS ONLY."
+            )
+            review.append(
+                "Nominal thread dimensions do not fix the head, drive, point, "
+                "coating, or pilot hole; take those from the product."
+            )
         callout = "DRAFT: " + callout
         status = "Procurement draft; application checks required"
         diagram = {
             "kind": "product",
             "unit": unit,
-            "diameter": float(dimensions[0])
+            "diameter": standard_size["major_mm"] / (1 if unit == "mm" else 25.4)
+            if standard_size
+            else float(dimensions[0])
             if state.get("screw_diameter", "") != ""
             else None,
             "length": float(dimensions[1])
             if state.get("screw_length", "") != ""
+            else None,
+            "standard_thread": standard_size["standard"] if standard_size else None,
+            "tpi": standard_size["tpi"] if standard_size else None,
+            "pitch_mm": standard_size["pitch_mm"] if standard_size else None,
+            "included_angle_deg": standard_size["included_angle_deg"]
+            if standard_size
             else None,
         }
     else:
@@ -575,6 +650,7 @@ def build_thread_specification(state_json: str = "{}") -> dict[str, Any]:
             pipe_tpi = float(dict(_pairs(PIPE_PAIRS[pipe_series]))[size])
             tapered = family_key != "bspp" and fit != "Rp"
             diameter_taper = 1 / 16 if tapered else 0.0
+            dimensions = pipe_dimensions(family_key, size, parallel=not tapered)
             diagram = {
                 "kind": "pipe",
                 "tpi": pipe_tpi,
@@ -583,27 +659,84 @@ def build_thread_specification(state_json: str = "{}") -> dict[str, Any]:
                 "included_angle_deg": 60 if pipe_series == "npt" else 55,
                 "diameter_taper": diameter_taper,
                 "half_angle_deg": math.degrees(math.atan(diameter_taper / 2)),
+                "major_mm": dimensions["major_mm"],
+                "pitch_diameter_mm": dimensions["pitch_mm_dia"],
+                "minor_mm": dimensions["minor_mm"],
+                "thread_height_mm": dimensions["thread_height_mm"],
+                "gage_length_mm": dimensions["gage_length_mm"],
+                "effective_length_mm": dimensions["effective_length_mm"],
+                "outside_diameter_mm": dimensions["outside_diameter_mm"],
             }
             taper_note = (
                 f"1:16 on diameter; {diagram['half_angle_deg']:.3f} deg to axis"
                 if tapered
                 else "Parallel (no taper)"
             )
+            # A tapered thread has no single diameter, so name the plane.
+            plane = " at gage plane" if tapered else ""
             breakdown.extend(
                 [
                     ["Pitch", f"{pipe_tpi:g} TPI ({diagram['pitch_mm']:.4f} mm)"],
                     ["Included angle", f"{diagram['included_angle_deg']} deg"],
                     ["Taper", taper_note],
                     [
-                        "Diameter at gage plane",
-                        "Not included; verify the thread standard",
+                        "Major diameter" + plane,
+                        f"{dimensions['major_mm']:.3f} mm ({dimensions['major_mm'] / 25.4:.4f} in)",
+                    ],
+                    [
+                        "Pitch diameter" + plane,
+                        f"{dimensions['pitch_mm_dia']:.3f} mm ({dimensions['pitch_mm_dia'] / 25.4:.4f} in)",
+                    ],
+                    [
+                        "Minor diameter" + plane,
+                        f"{dimensions['minor_mm']:.3f} mm ({dimensions['minor_mm'] / 25.4:.4f} in)",
                     ],
                 ]
             )
+            if dimensions["outside_diameter_mm"] is not None:
+                breakdown.append(
+                    [
+                        "Pipe outside diameter",
+                        (
+                            f"{dimensions['outside_diameter_mm']:.3f} mm"
+                            f" ({dimensions['outside_diameter_mm'] / 25.4:.4f} in)"
+                        ),
+                    ]
+                )
+            if tapered and dimensions["gage_length_mm"] is not None:
+                length_label = (
+                    "Hand-tight engagement (L1)"
+                    if pipe_series == "npt"
+                    else "Gauge length from small end"
+                )
+                breakdown.append(
+                    [
+                        length_label,
+                        (
+                            f"{dimensions['gage_length_mm']:.3f} mm"
+                            f" ({dimensions['gage_length_mm'] / 25.4:.4f} in)"
+                        ),
+                    ]
+                )
+            if tapered and dimensions["effective_length_mm"] is not None:
+                breakdown.append(
+                    [
+                        "Effective thread length"
+                        + (" (L2)" if pipe_series == "npt" else ""),
+                        (
+                            f"{dimensions['effective_length_mm']:.3f} mm"
+                            f" ({dimensions['effective_length_mm'] / 25.4:.4f} in)"
+                        ),
+                    ]
+                )
             lines.append(
                 f"PITCH: {pipe_tpi:g} TPI; INCLUDED ANGLE: {diagram['included_angle_deg']} DEG."
             )
             lines.append("TAPER: " + taper_note.upper() + ".")
+            lines.append(
+                f"BASIC MAJOR DIA{plane.upper()}: {dimensions['major_mm']:.3f} MM"
+                f" ({dimensions['major_mm'] / 25.4:.4f} IN); BASIC DIMENSIONS ONLY, NOT ACCEPTANCE LIMITS."
+            )
             seal = _text(state.get("seal", ""), "Seal specification")
             if seal:
                 lines.append(f"SEAL / MATING CONNECTION: {seal}")

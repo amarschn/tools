@@ -104,12 +104,26 @@ physical measurements. The form starts empty; Try an example enters a labeled
 M8-sized example. For known nominal-size browsing, use Specify with an undecided
 external extent.
 
-Find searches every metric, UNC, UNF and UNEF specification entry together.
-External measurements compare to nominal major diameter; internal bore readings
-compare to basic minor diameter. Unknown measurement basis excludes diameter
-from ranking. Missing pitch leaves a broad shortlist, not a zero pitch error.
-Pipe candidates are pitch-only references because diameter-at-measurement-plane
-data are not implemented. NPT and NPTF can remain indistinguishable.
+Find searches every metric, UNC, UNF, UNEF and pipe specification entry
+together. External measurements compare to nominal major diameter; internal bore
+readings compare to basic minor diameter. Unknown measurement basis excludes
+diameter from ranking. Missing pitch leaves a broad shortlist, not a zero pitch
+error.
+
+A tapered pipe thread has no single diameter, so it is compared against the band
+of diameters between its small end and the end of its effective thread. A
+reading inside that band is a zero-distance comparison, and ties then break on
+pitch. Parallel threads (G, and the Rp internal form) compare against one plane
+like a machine thread. This separates sizes that share a pitch, such as 1/4 and
+3/8 NPT at 18 TPI, but it cannot separate NPT from NPTF, which share basic
+dimensions and differ only in crest and root truncation inspection. A 60 degree
+NPT and a 55 degree BSPT of the same size can also overlap on diameter, so the
+result names the flank angle as the discriminator instead of guessing.
+
+When a filter leaves no row carrying the measurement that was entered, the
+result says so rather than reporting no close match. Those are different
+outcomes: one means the catalog has nothing to compare, the other means it
+compared and nothing was near.
 
 More measurements and filters contains span/interval pitch measurement, form,
 hand, optional two-plane taper readings and measurement uncertainty. Eleven
@@ -143,7 +157,8 @@ An unsure measurement basis requires an explicit choice for the sheet.
 Use it for a general reference sheet with no measurements. Both layouts include numbered
 pitch intervals, simplified actual-size axial profiles where supported, a
 worksheet, horizontal and vertical 100 mm checks and a 1 inch check on every
-page. Pipe rows have pitch ticks only and explicitly omit diameter comparisons.
+page. Pipe rows have pitch ticks only. Their basic diameters are listed in the
+specification output but are not yet drawn to scale on the sheet.
 No arbitrary schematic is printed as
 a physical thread form.
 
@@ -277,6 +292,25 @@ catalog. Tooltips stay inside the viewport and close when their section collapse
 specification's `diagram` payload. Dimension lines and arrowheads share their
 endpoints. The overall and close-up views stack at narrow output widths.
 
+The schematic uses the same `.thread-svg` drawing vocabulary as the calculated
+metric and Unified profiles: the same section fill and hatch, stroke weights,
+dash patterns, arrowheads, and annotation type. Both figures are also capped at
+the same width so type renders at the same size in each. A browser test compares
+the resolved styles of both SVGs element by element, so a second private style
+set cannot reappear on either side.
+
+Both panels share one vertical rhythm, set by `HEADING_Y`, `CAPTION_Y` and
+`PANEL_H` in `thread-family-diagram.js`, so the schematic stands no taller than
+the calculated profile it sits beside. A browser test measures both figures at
+one width and fails if the schematic grows past it. The two panels stack only
+below 430px of available width, where a side-by-side pair would be cramped;
+above it they stay side by side, as the calculated profile does at every width.
+
+Product schematics show the published nominal thread where one exists. Wood and
+DIN 7500 sizes draw a real diameter and pitch and name their standard;
+plastic-forming screws keep the illustrative tooth and say which numbers the
+supplier has to provide.
+
 `pycalcs.thread_models` owns the millimetre axial-profile contract, side-aware
 Find comparisons and STEP validation. `thread-finder.js` owns measurement state;
 `thread-print-ui.js` manages the shortlist, preview lifecycle and downloads;
@@ -329,8 +363,28 @@ The specification catalog contains 147 nominal choices:
 - NPT and NPTF: 10 nominal pipe sizes each, 1/16 through 2.
 - BSPP (G) and ISO 7 (R/Rc/Rp): 9 nominal pipe sizes each, 1/8 through 2.
 
-Three product-based workflows use supplier dimensions: metal-forming,
-plastic-forming, and wood screws.
+Three product-based workflows are bought by product reference rather than by a
+drawing callout. Two of them still have a published nominal thread, which the
+tool states instead of leaving blank:
+
+- Wood screws: 17 ASME B18.6.1 sizes, #0 through #24. The screw number sets the
+  major diameter and threads per inch.
+- Thread-forming screws for metal: the 8 DIN 7500 sizes, M2 through M10. The
+  trilobular shank forms an ISO metric thread, so the screw's own thread is an
+  ordinary metric thread and reuses the shared metric geometry.
+- Thread-forming screws for plastic: no size list. Pitch, flank angle and boss
+  geometry are product-specific, so the tool asks for the product instead of
+  inventing a profile.
+
+Pilot and core hole diameters are deliberately absent everywhere. For timber
+they depend on species and density, and for DIN 7500 on the material and
+engagement length, so a single number would be wrong more often than right.
+Head, drive, point, coating and any structural rating stay with the product.
+Wood screws also appear in Find as external-only rows: a caliper reading of
+major diameter and pitch identifies a screw gauge. They carry no published root
+diameter, so they are never offered against an internal bore measurement. DIN
+7500 screws are left out of Find because their thread is the metric thread of
+the same size, already in the catalog.
 
 The load screen uses 35 metric and 30 Unified entries. These start
 with `ISO_FASTENER_GEOMETRY` and `UTS_FASTENER_GEOMETRY` in `pycalcs.fasteners`,
@@ -348,6 +402,15 @@ UNJ/UNR, ACME/Tr, buttress, Whitworth/BSF, NPS, thread-cutting/tapping-screw
 standards, and multi-start callouts are outside the builder's current scope.
 Numerical tolerance limits, gage dimensions, tap drills, stripping capacity,
 and pipe-port details are not calculated.
+
+Pipe basic dimensions come from `pycalcs/pipe_threads.py`. Each table stores
+only the anchor values a standard publishes, and every other diameter is derived
+with that standard's form equations, so two transcribed numbers cannot disagree.
+`tests/test_pipe_threads.py` checks each table against an identity the standard
+supplies independently: for NPT the gage-plane pitch diameter must equal
+E1 = E0 + L1/16, and for BSPP the derived pitch and minor diameters must
+reproduce the printed ISO 228-1 values. Pipe sizes above 2 in, NPSM/NPSF, and
+to-scale pipe profiles are still out of scope.
 
 ## Load-screen scope
 
@@ -371,8 +434,13 @@ to the tool name as a certification claim.
 - [Optimas UNC, UNF and UNEF table](https://optimas.com/en_gb/technical-resources/unc-and-unf-thread/), nominal size/pitch pairs only.
 - [Bossard metric tolerances](https://www.bossard.com/ch-en/-/media/bossard-group/website/documents/technical-resources/en/f-079-en.pdf), ISO 965 fit conventions.
 - [Swagelok Thread and End Connection Identification Guide](https://www.swagelok.com/downloads/webcatalogs/en/ms-13-77.pdf), pipe families and nominal sizes.
+- [AmesWeb NPT thread chart](https://amesweb.info/screws/NPT-Thread-Chart.aspx), ASME B1.20.1 basic dimensions: pipe outside diameter, E0, E1, L1 and L2.
+- [AmesWeb BSPP thread chart](https://amesweb.info/Screws/bspp-thread-chart-calculator.aspx), ISO 228-1 basic major, pitch and minor diameters.
+- [Engineers Edge external British ISO pipe threads](https://www.engineersedge.com/hardware/iso-external-pipe-thrds.htm) and the [Wikipedia British Standard Pipe table](https://en.wikipedia.org/wiki/ISO_7), independent cross-checks of the ISO 228-1 diameters.
+- [Rastro BSP reference tables](https://www.rastro.ai/resources/glossary/bsp-thread-dimensions-in-mm-complete-reference-tables), ISO 7-1 gauge length and useful thread length.
 - [Vermont Gage NPT/NPTF guide](https://vermontgage.com/assets/ea696d90d9/NPT-NPTF-2019.pdf), pipe-thread inspection classes.
 - [Bossard DIN 7500](https://www.bossard.com/no-en/product-solutions/product-applications/din-7500/), forming screws in metal.
+- [Engineers Edge ANSI B18.6.1 wood screws](https://www.engineersedge.com/hardware/ansi_wood_screws_per_ansi_b1861__14855.htm), nominal diameter and threads per inch by screw number.
 - [EJOT PT and DELTA PT](https://www.ejot.com/PT-History), plastic-fastening product families.
 - [Sandvik Coromant threading guide](https://cdn.sandvik.coromant.com/files/sitecollectiondocuments/downloads/global/technical%20guides/en-gb/c-2920-031.pdf), thread-manufacturing processes.
 - [Gühring fluteless taps](https://guhring.com/media/catalogs/044mlrkbbek.pdf), forming-tap process and pilot-hole requirements.

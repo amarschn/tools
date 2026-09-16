@@ -55,14 +55,48 @@ def test_intervals_tpi_and_units():
         find(span=10, intervals=10.5)
 
 
-def test_pipe_taper_does_not_establish_diameter_match():
-    result = find(diameter=13, second_diameter=14, separation=16, pitch=25.4 / 27)
-    assert result["taper"] == pytest.approx(1 / 16)
+def test_pipe_taper_without_diameter_stays_pitch_only():
+    """A measured taper narrows the form but never pins a nominal size alone."""
+    result = find(pitch=25.4 / 27, form="tapered")
     assert {row["family"] for row in result["candidates"]} >= {"npt", "nptf"}
     assert all(
         row["pitch_only"] and row["delta_d_mm"] is None for row in result["candidates"]
     )
     assert all(row["kind"] == "pipe" for row in result["candidates"])
+    # 1/16 and 1/8 NPT share 27 TPI, so pitch alone cannot separate them.
+    assert {row["size"] for row in result["candidates"] if row["family"] == "npt"} == {
+        "1/16",
+        "1/8",
+    }
+
+
+def test_pipe_diameter_separates_sizes_that_share_a_pitch():
+    """1/8 NPT sits in its own taper band; 1/16 NPT shares the pitch but not it."""
+    result = find(
+        diameter=10.2, second_diameter=11.2, separation=16, pitch=25.4 / 27
+    )
+    assert result["taper"] == pytest.approx(1 / 16)
+    sizes = {(row["family"], row["size"]) for row in result["candidates"]}
+    assert ("npt", "1/8") in sizes and ("nptf", "1/8") in sizes
+    assert ("npt", "1/16") not in sizes
+    assert all(not row["pitch_only"] for row in result["candidates"])
+    # A reading inside the band is a zero-distance diameter comparison.
+    assert all(row["delta_d_mm"] == 0.0 for row in result["candidates"])
+
+
+def test_pipe_diameter_outside_every_band_is_not_forced_into_a_match():
+    """13 mm is between 1/16 and 1/8 NPT; neither band may claim it."""
+    result = find(diameter=13, second_diameter=14, separation=16, pitch=25.4 / 27)
+    assert result["candidates"] == []
+    assert result["status"] == "no-close-supported-match"
+
+
+def test_uncomparable_rows_are_reported_separately_from_a_poor_match():
+    """Plastic-forming screws carry no dimensions; not 'no close match'."""
+    result = find(diameter=5, family="forming_plastic")
+    assert result["status"] == "no-comparable-data"
+    assert result["candidates"] == []
+    assert any("No diameter was used" in text for text in result["warnings"])
 
 
 @pytest.mark.parametrize("value", [-1, 0, "abc", "inf", "nan", 1e999, 1e308, 1e-320])
@@ -100,8 +134,11 @@ def test_catalog_covers_unef_and_caps_missing_pipe_geometry():
     assert len([row for row in records if row["family"] == "metric"]) >= 35
     for row in records:
         if row["kind"] == "pipe":
-            assert row["diameter_mm"] is None and row["model"] is None
+            # Basic diameters are carried, but no calculated profile or solid.
+            assert row["diameter_mm"] > row["internal_minor_mm"] > 0
+            assert row["model"] is None
             assert row["capabilities"]["print_pitch"]
+            assert not row["capabilities"]["print_profile"]
             assert not row["capabilities"]["step"]
 
 

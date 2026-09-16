@@ -74,10 +74,14 @@ def test_pipe_annotations_follow_family_size_and_connection(
         assert diagram["pitch_mm"] == pytest.approx(25.4 / diagram["tpi"])
         assert diagram["pitch_in"] == pytest.approx(1 / diagram["tpi"])
         assert diagram["half_angle_deg"] == pytest.approx(1.789910608 if taper else 0)
-        assert "diameter" not in diagram
-        assert dict(result["breakdown"])["Diameter at gage plane"].startswith(
-            "Not included"
-        )
+        rows = dict(result["breakdown"])
+        # Basic dimensions are now carried; the plane is named for a taper.
+        plane = " at gage plane" if taper else ""
+        assert diagram["major_mm"] > diagram["pitch_diameter_mm"] > diagram["minor_mm"]
+        assert rows["Major diameter" + plane].endswith(" in)")
+        assert "Diameter at gage plane" not in rows
+        # Nominal pipe size is still never presented as the outside diameter.
+        assert rows["Nominal pipe size"].endswith("(not outside diameter)")
         assert "PITCH:" in result["note"] and "TAPER:" in result["note"]
 
 
@@ -92,12 +96,25 @@ def test_known_pipe_pitch_annotations_change_with_size():
 @pytest.mark.parametrize("unit", ["mm", "in"])
 def test_product_diagram_uses_only_validated_supplied_dimensions(family, unit):
     """Do not invent a proprietary pitch, angle, tip, or nominal size."""
-    assert build(family=family)["diagram"] == {
-        "kind": "product",
-        "unit": "mm",
-        "diameter": None,
-        "length": None,
-    }
+    blank = build(family=family)["diagram"]
+    assert blank["kind"] == "product" and blank["length"] is None
+    if family == "forming_plastic":
+        # No published standard list, so nothing may be filled in.
+        assert blank["diameter"] is None
+        assert blank["standard_thread"] is None
+        assert blank["tpi"] is None and blank["included_angle_deg"] is None
+    else:
+        # A published nominal thread is stated, not invented.
+        from pycalcs.screw_products import product_dimensions
+
+        expected = product_dimensions(
+            family, specification_catalog()[family]["default_size"]
+        )
+        assert blank["standard_thread"] == expected["standard"]
+        assert blank["tpi"] == pytest.approx(expected["tpi"])
+        assert blank["pitch_mm"] == pytest.approx(expected["pitch_mm"])
+    if family != "forming_plastic":
+        return
     assert build(
         family=family, product_unit=unit, screw_diameter="4.5", screw_length="30"
     )["diagram"] == {
@@ -105,6 +122,10 @@ def test_product_diagram_uses_only_validated_supplied_dimensions(family, unit):
         "unit": unit,
         "diameter": 4.5,
         "length": 30,
+        "standard_thread": None,
+        "tpi": None,
+        "pitch_mm": None,
+        "included_angle_deg": None,
     }
 
 
@@ -347,10 +368,13 @@ def test_product_screws_remain_reviewable_procurement_drafts(family):
         material="Per supplier drawing",
         finish="Per supplier drawing",
     )
-    assert "Supplier ABC-123, 4 x 20 mm" in result["callout"]
+    # A family with a published size list names it; the rest echo the entry.
+    expected = {"wood": "#8", "forming_metal": "M5", "forming_plastic": "4"}[family]
+    assert f"Supplier ABC-123, {expected} x 20 mm" in result["callout"]
     assert "6H" not in result["callout"]
     assert "PA66 GF30" in result["note"]
-    assert "pilot hole" in result["note"]
+    # Every product family must put the hole on the reader, by its own name.
+    assert ("pilot hole" in result["note"]) or ("core hole" in result["note"])
     assert "tensile_stress_area" not in result
     assert "pressure_rating" not in result
 
@@ -413,7 +437,8 @@ def test_catalog_is_independent_and_covers_requested_families():
         "forming_plastic",
         "wood",
     }
-    assert sum(len(family["sizes"]) for family in catalog.values()) == 147
+    # 122 machine, 25 pipe, and 25 product sizes with a published nominal thread.
+    assert sum(len(family["sizes"]) for family in catalog.values()) == 172
     catalog["unc"]["classes"]["internal"].clear()
     assert specification_catalog()["unc"]["classes"]["internal"] == ["2B", "1B", "3B"]
 

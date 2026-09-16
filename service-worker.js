@@ -92,7 +92,7 @@ function isVersionedCalculationAsset(url) {
   // These Python modules share the thread page's content-derived asset key.
   // Unversioned sources must keep revalidating so development edits stay fresh.
   return parsed.origin === self.location.origin &&
-    /\/pycalcs\/(fasteners|threads|thread_specifications|thread_models)\.py$/.test(parsed.pathname) &&
+    /\/pycalcs\/(fasteners|threads|pipe_threads|screw_products|thread_specifications|thread_models)\.py$/.test(parsed.pathname) &&
     /^thread-[a-f0-9]{16}$/.test(parsed.searchParams.get('v') || '');
 }
 

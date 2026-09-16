@@ -41,7 +41,10 @@ python -m http.server
 
 ### Testing
 ```bash
-# Run pytest suite
+# Run every suite: the tools' tests plus the materials data project
+pytest
+
+# Tools only
 pytest tests/
 
 # Verify docstring parsing
@@ -52,12 +55,39 @@ python -c "from pycalcs import utils, <module>; print(utils.get_documentation('<
 Tools may include `test-cases/*.json` files with pre-configured input parameters.
 See AGENTS.md "Parameter JSON Test Cases" for the full specification.
 
+### Materials Data Project
+
+`materials-lookup/` is the source of truth for the **Materials** tool. It holds the
+curated data, the builder and the validation gates; `tools/materials/` is
+generated output and must never be hand-edited. Adding a material, correcting a
+value, or changing that tool's interface all happen in `materials-lookup/`.
+
+```bash
+python3 materials-lookup/builder/build_site.py --output ../tools/materials   # rebuild
+python3 materials-lookup/builder/build_site.py --check                       # validate only
+python3 materials-lookup/builder/verify_release.py                           # hash + document gate
+```
+
+Re-run the three discoverability scripts below after any rebuild, because the
+published page is regenerated from `materials-lookup/src/index.html`.
+
+Manufacturer datasheets live in `private-sources/` at the repository root,
+git-ignored and never served. See `materials-lookup/README.md` for the full workflow
+and `materials-lookup/AGENTS.md` for the design and source-document rules.
+
 ### Discoverability / SEO Automation
 After editing `catalog.json` (e.g. adding a tool), run both self-maintaining SEO scripts and commit their output:
 ```bash
-python3 scripts/generate_sitemap.py   # rebuilds sitemap.xml from catalog.json (also runs on Netlify deploy)
-python3 scripts/inject_seo_meta.py     # idempotently backfills <head> meta/canonical/OG + analytics into tool pages
+python3 scripts/generate_sitemap.py           # rebuilds sitemap.xml from catalog.json (also runs on Netlify deploy)
+python3 scripts/inject_seo_meta.py            # idempotently backfills <head> meta/canonical/OG + analytics into tool pages
+python3 scripts/generate_homepage_metadata.py # refreshes data/homepage-tool-meta.json
 ```
+
+`scripts/build_site.py` runs `generate_homepage_metadata.py --check` on every
+Netlify deploy, so a stale `data/homepage-tool-meta.json` fails the build. It
+derives each tool's date from git history, so it can only be run **after** the
+tool is committed. Run it, and the other two, whenever a tool or `catalog.json`
+changes.
 `catalog.json` is the single source of truth. `scripts/inject_seo_meta.py --check` is a dry run. Detail in AGENTS.md step 8 of "Creating a New Tool" and `plans/2026-07-12_seo_distribution_wins.md`.
 
 ### Netlify Deployment & Site Management
