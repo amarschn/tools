@@ -8,18 +8,27 @@ window.TippingDiagram = class TippingDiagram {
         this.entity = 'G';
         this.result = null;
         this.state = 'loading';
+        this.expanded = false;
         this.model = document.getElementById('model-scene');
         this.fbd = document.getElementById('fbd-scene');
         this.key = document.getElementById('force-key');
         this.edgeControl = document.getElementById('diagram-edge');
+        this.toggle = document.getElementById('toggle-fbd');
+        this.toggle.addEventListener('click', () => this.setExpanded(!this.expanded));
         this.edgeControl.addEventListener('change', () => this.onEdge(this.edgeControl.value));
         document.getElementById('diagram-derivation').addEventListener('click', () => onDerivation(this.entity));
         for (const element of [this.model, this.fbd, this.key]) {
             element.addEventListener('click', (event) => {
                 const edge = event.target.closest('[data-diagram-edge]');
                 const entity = event.target.closest('[data-entity]');
-                if (edge) this.onEdge(edge.dataset.diagramEdge);
-                else if (entity) this.select(entity.dataset.entity);
+                if (edge) {
+                    this.setExpanded(true);
+                    this.onEdge(edge.dataset.diagramEdge);
+                } else if (entity) {
+                    this.setExpanded(true);
+                    document.getElementById('force-details').open = true;
+                    this.select(entity.dataset.entity);
+                }
             });
         }
         let previousWidth = 0;
@@ -42,6 +51,19 @@ window.TippingDiagram = class TippingDiagram {
         return `(${values.map((value) => this.number(value)).join(', ')})`;
     }
 
+    setExpanded(open) {
+        if (this.expanded === open) return;
+        this.expanded = open;
+        document.querySelector('.model-workspace').classList.toggle('show-fbd', open);
+        this.toggle.setAttribute('aria-expanded', String(open));
+        this.toggle.firstElementChild.textContent = open ? 'Hide forces & free-body diagram' : 'Show forces & free-body diagram';
+        this.toggle.lastElementChild.textContent = open ? '−' : '+';
+        document.getElementById('fbd-panel').hidden = !open;
+        document.getElementById('fbd-controls').hidden = !open;
+        this.model.setAttribute('aria-label', open ? 'Isometric cart model with ground contacts, center of mass, and forces linked to the free-body diagram' : 'Isometric cart model with ground contacts and center of mass');
+        this.draw();
+    }
+
     update(result, inputs, edge) {
         this.result = result;
         this.inputs = inputs;
@@ -49,9 +71,7 @@ window.TippingDiagram = class TippingDiagram {
         if (this.entity !== 'G' && !result.free_body.forces.some((force) => force.id === this.entity)) this.entity = 'G';
         this.edgeControl.innerHTML = result.equilibrium.edges.map((item) => `<option value="${item.id}" ${item.id === result.equilibrium.governing_edge ? 'selected' : ''}>${this.escape(item.label)}${item.id === result.equilibrium.governing_edge ? ' · nearest' : ''}</option>`).join('');
         this.edgeControl.value = edge;
-        const threshold = result.threshold;
-        document.getElementById('diagram-limit-value').textContent = threshold.value === null ? (threshold.state === 'baseline_unstable' ? 'No stable start' : 'No finite limit') : `${this.number(threshold.value)} ${threshold.unit}`;
-        document.getElementById('diagram-limit-label').textContent = threshold.title;
+        this.fbd.dataset.edge = edge;
         this.draw();
         this.setState('current');
     }
@@ -64,8 +84,9 @@ window.TippingDiagram = class TippingDiagram {
         }
         const element = document.getElementById('diagram-state');
         element.dataset.state = state;
-        const labels = { slope: 'Parked on a slope', acceleration: 'Acceleration / braking', turn: 'Steady turn', push: 'Push / pull', combined: 'Combined loads' };
-        element.textContent = state === 'stale' ? 'Inputs changed. Both diagrams show the last calculated case until you calculate again.' : state === 'invalid' ? 'Input error. Both diagrams retain the last valid case; these are not results for the current inputs.' : `${labels[this.inputs?.load_case || 'slope']} · ground slope ${this.number(this.inputs?.slope_deg || 0)}° · ${this.result?.equilibrium.status === 'beyond' ? 'required reaction outside the support polygon' : 'calculated case'}`;
+        element.hidden = state !== 'invalid';
+        element.textContent = state === 'invalid' ? 'The image shows the last valid case. Correct the input to update it.' : '';
+        document.querySelector('.primary-result').disabled = state !== 'current';
         if (message && state === 'invalid') element.title = message;
         else element.removeAttribute('title');
     }
@@ -73,7 +94,7 @@ window.TippingDiagram = class TippingDiagram {
     select(entity) {
         this.entity = entity;
         for (const element of document.querySelectorAll('.model-workspace [data-entity]')) {
-            const selected = element.dataset.entity === entity;
+            const selected = this.expanded && element.dataset.entity === entity;
             element.classList.toggle('linked-active', selected);
             if (element.tagName === 'BUTTON') element.setAttribute('aria-pressed', String(selected));
         }
@@ -83,10 +104,12 @@ window.TippingDiagram = class TippingDiagram {
     draw() {
         if (!this.result) return;
         this.renderModel();
-        this.renderFbd();
         this.arrangeLabels(this.model);
-        this.arrangeLabels(this.fbd);
-        this.renderKey();
+        if (this.expanded) {
+            this.renderFbd();
+            this.arrangeLabels(this.fbd);
+            this.renderKey();
+        }
         this.select(this.entity);
     }
 
@@ -210,16 +233,17 @@ window.TippingDiagram = class TippingDiagram {
             if (component.z - halfZ > deckHeight) box(component.x-span*.014, component.y-span*.014, deckHeight, component.x+span*.014, component.y+span*.014, component.z-halfZ);
         }
         const ground = [[xmin-span*.27,ymin-span*.27,0],[xmax+span*.27,ymin-span*.27,0],[xmax+span*.27,ymax+span*.27,0],[xmin-span*.27,ymax+span*.27,0]];
-        const fitPoints = [...ground, ...meshes.flatMap((mesh) => mesh.points), e.center, [...e.reaction_point, 0], ...this.result.free_body.forces.filter((force) => Math.hypot(...force.vector)>1e-8).map((force) => force.point)];
+        const fitPoints = [...ground, ...meshes.flatMap((mesh) => mesh.points), e.center];
+        if (this.expanded) fitPoints.push([...e.reaction_point, 0], ...this.result.free_body.forces.filter((force) => Math.hypot(...force.vector)>1e-8).map((force) => force.point));
         const bounds = fitPoints.map(raw);
         const left = Math.min(...bounds.map((p) => p[0])), rightBound = Math.max(...bounds.map((p) => p[0]));
         const top = Math.min(...bounds.map((p) => p[1])), bottom = Math.max(...bounds.map((p) => p[1]));
-        const scale = Math.min((width - 108) / Math.max(rightBound-left, .001), (height-125) / Math.max(bottom-top, .001));
+        const scale = Math.min((width - 108) / Math.max(rightBound-left, .001), (height-(this.expanded ? 125 : 75)) / Math.max(bottom-top, .001));
         const project = (point) => { const p = raw(point); return [width/2 + (p[0]-(left+rightBound)/2)*scale, (height-30)/2 + (p[1]-(top+bottom)/2)*scale]; };
         const coordinates = (points) => points.map((point) => project(point).join(',')).join(' ');
         let svg = this.definitions('model');
         svg += `<polygon points="${coordinates(ground)}" fill="var(--model-ground)" stroke="var(--border-color)"/>`;
-        for (let i = 1; i < 5; i++) {
+        for (let i = 1; this.expanded && i < 5; i++) {
             const x = ground[0][0] + (ground[1][0]-ground[0][0])*i/5;
             const y = ground[0][1] + (ground[3][1]-ground[0][1])*i/5;
             svg += this.line(project([x,ground[0][1],0]),project([x,ground[3][1],0]),'stroke="var(--border-color)" stroke-width=".6"');
@@ -229,13 +253,13 @@ window.TippingDiagram = class TippingDiagram {
         svg += meshes.sort((a,b) => a.depth-b.depth).map((mesh) => `<polygon points="${coordinates(mesh.points)}" fill="${mesh.fill}" stroke="var(--secondary-color)" stroke-width=".45" ${mesh.extra}/>`).join('');
         for (const edge of e.edges) {
             const a = project([...edge.start,0]), b = project([...edge.end,0]);
-            const active = edge.id === this.edge;
-            svg += `<g data-diagram-edge="${edge.id}"><title>${this.escape(edge.label)}: select its FBD</title>${this.line(a,b,`stroke="var(--text-light)" stroke-width="1.2" ${active ? 'class="edge-active"' : ''}`)}${this.line(a,b,'class="edge-hit"')}${e.edges.length <= 8 || active ? this.label((a[0]+b[0])/2,(a[1]+b[1])/2+15,edge.id, active ? 'font-weight="700"' : '') : ''}</g>`;
+            const active = this.expanded && edge.id === this.edge;
+            svg += `<g data-diagram-edge="${edge.id}"><title>${this.escape(edge.label)}: select its FBD</title>${this.line(a,b,`stroke="var(--text-light)" stroke-width="1.2" ${active ? 'class="edge-active"' : ''}`)}${this.line(a,b,'class="edge-hit"')}${this.expanded && (e.edges.length <= 8 || active) ? this.label((a[0]+b[0])/2,(a[1]+b[1])/2+15,edge.id, active ? 'font-weight="700"' : '') : ''}</g>`;
         }
         contacts.forEach((point, index) => {
             const p = project([...point,0]);
             svg += `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="var(--bg-card)" stroke="var(--text-color)"/>`;
-            if (contacts.length <= 8) svg += this.label(p[0]-8,p[1]+5,`C${index+1}`,'text-anchor="end"');
+            if (this.expanded && contacts.length <= 8) svg += this.label(p[0]-8,p[1]+5,`C${index+1}`,'text-anchor="end"');
         });
         const center = project(e.center), foot = project([e.center[0],e.center[1],0]);
         svg += this.line(center,foot,'class="leader"');
@@ -244,9 +268,11 @@ window.TippingDiagram = class TippingDiagram {
         const edgeFoot = [e.center[0]-section.center[0]*selected.normal[0],e.center[1]-section.center[0]*selected.normal[1],0];
         const inward = [edgeFoot[0]+selected.normal[0]*span*.22,edgeFoot[1]+selected.normal[1]*span*.22,0];
         const inwardStart = project(edgeFoot), inwardEnd = project(inward);
-        svg += this.line(inwardStart,inwardEnd,'stroke="var(--warning-color)" stroke-width="1.4" marker-end="url(#model-arrow)"');
-        svg += this.label(inwardEnd[0]+6,inwardEnd[1]+10,'u');
-        for (const force of this.result.free_body.forces) {
+        if (this.expanded) {
+            svg += this.line(inwardStart,inwardEnd,'stroke="var(--warning-color)" stroke-width="1.4" marker-end="url(#model-arrow)"');
+            svg += this.label(inwardEnd[0]+6,inwardEnd[1]+10,'u');
+        }
+        for (const force of this.expanded ? this.result.free_body.forces : []) {
             if (Math.hypot(...force.vector) < 1e-8) continue;
             const direction = raw(force.vector);
             const norm = Math.hypot(direction[0],direction[1]);
@@ -255,28 +281,30 @@ window.TippingDiagram = class TippingDiagram {
             const offset = force.id === 'W' ? [-10,0] : force.id === 'N' ? [10,0] : [0,0];
             svg += this.arrow(project(force.point), [direction[0]/norm*size,direction[1]/norm*size], force, 'model', [0,0], offset);
         }
-        svg += this.centerGlyph(center);
-        if (components.length > 1 && components.length <= 8) components.forEach((component,index) => {
+        svg += this.centerGlyph(center, this.expanded ? 'G' : 'Center of mass');
+        if (this.expanded && components.length > 1 && components.length <= 8) components.forEach((component,index) => {
             const p = project([component.x,component.y,component.z]);
             svg += `<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="var(--text-color)"/>` + this.label(p[0]+10,p[1]-8,`m${index+1}`);
         });
         const reaction = project([...e.reaction_point,0]);
-        svg += `<path d="M${reaction[0]},${reaction[1]-5} l5,5 l-5,5 l-5,-5 z" fill="var(--bg-card)" stroke="var(--text-color)" data-entity="N"/>`;
+        if (this.expanded) svg += `<path d="M${reaction[0]},${reaction[1]-5} l5,5 l-5,5 l-5,-5 z" fill="var(--bg-card)" stroke="var(--text-color)" data-entity="N"/>`;
         // Camera-independent axis triad. Directions rotate with the inclined surface.
         const origin = [43,height-38];
-        for (const [basis,label] of [[[1,0,0],'x'],[[0,1,0],'y'],[[0,0,1],'z']]) {
+        for (const [basis,label] of this.expanded ? [[[1,0,0],'x'],[[0,1,0],'y'],[[0,0,1],'z']] : [[[1,0,0],'Forward']]) {
             const vector = raw(basis), p = [origin[0]+vector[0]*25, origin[1]+vector[1]*25];
             svg += this.line(origin,p,'stroke="var(--text-light)" stroke-width="1" marker-end="url(#model-arrow)"') + this.label(p[0]+4,p[1],label);
         }
-        svg += this.label(width-12,height-17,custom ? `${contacts.length} fixed contacts` : `L ${this.number(length)} m · B ${this.number(track)} m`,'text-anchor="end"');
-        svg += `<text x="12" y="17" class="small-label">Ground ${this.number(this.inputs.slope_deg || 0)}° · x forward / y left / z normal</text>`;
+        if (this.expanded) {
+            svg += this.label(width-12,height-17,custom ? `${contacts.length} fixed contacts` : `L ${this.number(length)} m · B ${this.number(track)} m`,'text-anchor="end"');
+            svg += `<text x="12" y="17" class="small-label">Ground ${this.number(this.inputs.slope_deg || 0)}° · x forward / y left / z normal</text>`;
+        } else svg += this.label(width-12,height-17,`Center height ${this.number(e.center[2])} m`,'text-anchor="end"');
         this.model.innerHTML = svg;
         this.model.dataset.edge = this.edge;
         this.model.dataset.slope = String(this.inputs.slope_deg || 0);
     }
 
-    centerGlyph(point) {
-        return `<g data-entity="G"><title>G: combined center of mass</title><circle class="entity-mark" cx="${point[0]}" cy="${point[1]}" r="6" fill="var(--bg-card)" stroke="var(--text-color)" stroke-width="1.8"/><path d="M${point[0]-4},${point[1]} h8 M${point[0]},${point[1]-4} v8" stroke="var(--text-color)"/>${this.label(point[0]+10,point[1]-10,'G','font-weight="700"')}</g>`;
+    centerGlyph(point, label = 'G') {
+        return `<g data-entity="G"><title>G: combined center of mass</title><circle class="entity-mark" cx="${point[0]}" cy="${point[1]}" r="6" fill="var(--bg-card)" stroke="var(--text-color)" stroke-width="1.8"/><path d="M${point[0]-4},${point[1]} h8 M${point[0]},${point[1]-4} v8" stroke="var(--text-color)"/>${this.label(point[0]+10,point[1]-10,label,'font-weight="700"')}</g>`;
     }
 
     renderFbd() {

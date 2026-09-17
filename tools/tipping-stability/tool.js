@@ -237,14 +237,43 @@ function syncVisibility() {
     $('contacts-editor').hidden = !custom;
     const components = $('mass_mode').value === 'components';
     $('single-mass-inputs').hidden = components;
+    const massGroup = document.querySelector('[data-group="mass"]');
+    const massHome = $(['push', 'combined'].includes(mode) ? 'essential-mass' : 'advanced-mass');
+    if (massGroup.parentElement !== massHome) massHome.append(massGroup);
+    massGroup.hidden = components;
     document.querySelector('[data-group="cg_height"]').hidden = components;
     $('component-summary').hidden = !components;
     $('components-editor').hidden = !components;
     $('extra_forces-editor').hidden = false;
     $('calc-form').querySelectorAll('input:not([hidden]), select').forEach((input) => { input.disabled = Boolean(input.closest('[hidden]')); });
+    updateInputSummaries();
+}
+
+function updateInputSummaries() {
+    const angle = Number($('downhill_deg').value);
+    const side = { 0: 'forward', 90: 'left side', 180: 'rearward', 270: 'right side' }[angle] || `${$('downhill_deg').value}° direction`;
+    $('ground-summary').textContent = `${Number($('slope_deg').value) === 0 ? 'Level' : $('slope_deg').value + '° slope'} · ${side}`;
+    const custom = [];
+    if ($('mass_mode').value === 'components') custom.push('Component masses');
+    else {
+        if ($('mass').value !== $('mass').defaultValue && !['push', 'combined'].includes($('load_case').value)) custom.push(`${$('mass').value} kg`);
+        if (Number($('cg_x').value) || Number($('cg_y').value)) custom.push('Offset mass center');
+    }
+    if ($('geometry_mode').value === 'custom') custom.push('Custom contacts');
+    if ($('friction_coefficient').value !== '') custom.push('Sliding check');
+    if (['push', 'combined'].includes($('load_case').value) && (Number($('force_x').value) || Number($('force_y').value) || Number($('force_vertical').value) || $('extra_forces').value !== '[]')) custom.push('Extra loads');
+    $('custom-summary').textContent = custom.join(' · ');
+}
+
+function syncDirectionPicker() {
+    const picker = document.querySelector('[data-direction-for="downhill_deg"]');
+    const raw = $('downhill_deg').value;
+    picker.value = raw !== '' && ['0', '90', '180', '270'].includes(String(Number(raw))) ? String(Number(raw)) : 'custom';
+    $('downhill_deg').hidden = picker.value !== 'custom';
 }
 
 function markDirty() {
+    updateInputSummaries();
     diagram?.setState('stale');
     if (!lastResults) return;
     dirty = true;
@@ -285,6 +314,9 @@ function clearResults(message) {
     $('error-message').textContent = message;
     $('error-message').hidden = false;
     $('result-content').hidden = true;
+    $('primary-result').hidden = true;
+    $('export-csv').disabled = true;
+    $('export-json').disabled = true;
     $('results-placeholder').hidden = true;
     $('dirty-note').hidden = true;
     $('direction-note').textContent = 'Calculate a valid case to draw the direction limits.';
@@ -334,8 +366,15 @@ function equationCards(ids, source = lastResults?.theory) {
 }
 
 function showDerivation(key) {
+    if (!lastResults) return;
+    $('analysis-details').open = true;
+    openTab('results');
     openDerivation = openDerivation === key ? null : key;
     renderDerivation();
+    if (openDerivation) {
+        $('derivation-title').focus({ preventScroll: true });
+        $('derivation-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 function renderDerivation() {
@@ -363,9 +402,10 @@ function renderResults() {
     const { equilibrium: e, threshold: t } = lastResults;
     $('results-placeholder').hidden = true;
     $('result-content').hidden = false;
+    $('primary-result').hidden = false;
     $('status-banner').className = 'status-banner ' + e.status;
-    $('status-title').textContent = { positive: 'Positive tipping margin', threshold: 'At the tipping threshold', beyond: 'Beyond the tipping threshold' }[e.status];
-    $('status-detail').textContent = `${e.governing_label} is the nearest support edge. ${e.status === 'beyond' ? 'The required normal reaction lies outside the support polygon.' : 'This describes normal-force equilibrium for the stated rigid-body model.'}`;
+    $('status-title').textContent = { positive: t.state === 'finite' && t.remaining >= 0 ? 'Below the tipping threshold' : 'Positive tipping margin', threshold: 'At the tipping threshold', beyond: 'Beyond the tipping threshold' }[e.status];
+    $('status-detail').textContent = `Current ${formatNumber(t.demand)} ${t.unit}${t.edge ? ' · ' + t.edge.replace(/ · E\d+$/, '') : ''}`;
     $('threshold-label').textContent = t.title;
     $('threshold-value').innerHTML = t.state === 'finite' ? valueWithUnit(t.value, t.unit) : `<span class="unit">${t.state === 'baseline_unstable' ? 'No stable start' : 'No finite limit'}</span>`;
     $('threshold-demand').textContent = t.state === 'finite' ? `Current ${formatNumber(t.demand)} ${t.unit} · remaining ${formatNumber(t.remaining)} ${t.unit}` : t.state === 'baseline_unstable' ? 'The zero-load starting point is outside the model’s stable region.' : 'The selected sweep does not exhaust the tipping reserve.';
@@ -376,6 +416,8 @@ function renderResults() {
     $('height-value').innerHTML = valueWithUnit(e.center[2], 'm');
     $('mass-value').textContent = `Total mass ${formatNumber(e.mass)} kg · click for components`;
     const f = e.friction;
+    $('model-scope').textContent = `3D rigid-body tipping · ${f.status === 'unevaluated' ? 'sliding not checked' : f.status === 'exceeded' ? 'sliding limit exceeded' : 'within aggregate friction capacity'}`;
+    $('model-scope').dataset.warning = String(f.status === 'exceeded');
     $('friction-note').className = 'friction-note ' + f.status;
     $('friction-note').textContent = f.status === 'unevaluated' ? 'Sliding has not been evaluated. Add a friction coefficient under advanced options for an aggregate translation check.' : `Aggregate sliding check: ${f.status === 'exceeded' ? 'friction capacity exceeded' : 'within friction capacity'}. Required ${formatNumber(f.demand)} N; capacity ${formatNumber(f.capacity)} N. Individual tire traction, wheel brakes, and yaw resistance are not evaluated.`;
     $('edge-rows').innerHTML = e.edges.map((edge) => `<tr class="${edge.id === selectedEdge ? 'selected-edge' : ''}"><td><button type="button" class="edge-button" data-edge="${edge.id}">${escapeHtml(edge.label)}</button></td><td class="numeric">${formatNumber(edge.distance)}</td><td class="numeric">${formatNumber(edge.reserve)}</td></tr>`).join('');
@@ -393,7 +435,7 @@ function chartTheme() {
 }
 
 function renderPlots() {
-    if (!lastResults || !window.Plotly) return;
+    if (!lastResults || !window.Plotly || !$('analysis-details').open) return;
     const e = lastResults.equilibrium;
     const c = chartTheme();
     const x = e.polygon.map((p) => p[0]);
@@ -454,7 +496,7 @@ function openTab(name, focus = false) {
         if (active && focus) button.focus();
     }
     if (name === 'background') typesetMath([$('background')]);
-    if (lastResults) { renderPlots(); requestAnimationFrame(() => { if (name === 'results') Plotly.Plots.resize('plan-plot'); if (name === 'directions') Plotly.Plots.resize('direction-plot'); }); }
+    if (lastResults) { renderPlots(); requestAnimationFrame(() => { const plot = $(name === 'results' ? 'plan-plot' : 'direction-plot'); if ($('analysis-details').open && plot.data && !plot.closest('[hidden]')) Plotly.Plots.resize(plot); }); }
 }
 
 function download(name, contents, type) {
@@ -487,13 +529,25 @@ function exportCsv() {
 }
 
 function bindControls() {
+    document.querySelector('[data-direction-for="downhill_deg"]').addEventListener('change', (event) => {
+        const custom = event.target.value === 'custom';
+        $('downhill_deg').hidden = !custom;
+        if (!custom) {
+            $('downhill_deg').value = event.target.value;
+            $('downhill_deg').dispatchEvent(new Event('input', { bubbles: true }));
+        } else $('downhill_deg').focus();
+    });
+    $('analysis-details').addEventListener('toggle', () => {
+        if ($('analysis-details').open) openTab(document.querySelector('[data-tab][aria-selected="true"]').dataset.tab);
+        else { openDerivation = null; renderDerivation(); }
+    });
     $('calc-form').addEventListener('submit', calculate);
     $('calc-form').addEventListener('input', markDirty);
     $('calc-form').addEventListener('change', () => { syncVisibility(); markDirty(); });
     // Native constraint validation happens before submit; clear previous results here too.
     $('calc-form').addEventListener('invalid', (event) => {
-        const details = event.target.closest('details');
-        if (details) details.open = true;
+        let parent = event.target.parentElement;
+        while (parent) { if (parent.tagName === 'DETAILS') parent.open = true; parent = parent.parentElement; }
         clearResults('Check the highlighted input. Results are cleared until the case is valid.');
     }, true);
     $('reset-case').addEventListener('click', () => {
@@ -501,6 +555,7 @@ function bindControls() {
         for (const [key, schema] of Object.entries(editors)) {
             $(key).value = JSON.stringify(schema.defaults); renderEditor(key, schema.defaults);
         }
+        syncDirectionPicker();
         syncVisibility(); markDirty();
         $('load_case').dispatchEvent(new Event('change', { bubbles: true }));
     });
@@ -566,18 +621,22 @@ async function loadEngine() {
 async function main() {
     // Let the shared URL-state module restore scalar and serialized table inputs.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    bindSettings(); bindHelp(); initEditors(); bindControls(); syncVisibility();
+    bindSettings(); bindHelp(); initEditors(); bindControls(); syncDirectionPicker(); syncVisibility();
     diagram = new TippingDiagram({
         format: formatNumber,
         onEdge: selectEdge,
-        onDerivation: (entity) => {
+        onDerivation: () => {
+            $('analysis-details').open = true;
             openTab('results');
-            openDerivation = entity === 'G' ? 'mass' : 'reaction';
+            openDerivation = 'reaction';
             renderDerivation();
+            $('derivation-title').focus({ preventScroll: true });
             $('derivation-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
         },
     });
     if ($('geometry_mode').value === 'custom' || $('mass_mode').value === 'components') $('advanced-inputs').open = true;
+    $('mass-inputs').open = $('mass_mode').value === 'components';
+    $('contact-inputs').open = $('geometry_mode').value === 'custom';
     $('retry-load').addEventListener('click', loadEngine);
     await loadEngine();
 }

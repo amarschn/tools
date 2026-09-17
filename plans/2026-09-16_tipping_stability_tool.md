@@ -373,3 +373,30 @@ The revised full suite passes with 1,639 tests and 2,611 subtests. Browser check
 pass in light, dark, and system themes, including the linked diagrams. The
 page and README received the required writing review. Changes remain on
 `task/tipping-analysis` for the user's review.
+
+### Progressive disclosure revision (2026-09-17)
+
+The user found the revised tool too complex on first use. The starting view now
+shows the case and three geometry inputs, one tipping limit, and the fixed
+isometric image. Slope and direction have their own disclosure. Platform
+customizations open into separate mass, contact, friction, and extra-load
+sections. Short summaries identify settings that affect the calculation even
+when the controls are closed. Push cases show total mass beside the other
+essential inputs.
+
+The image starts with a center-of-mass marker and forward direction. Its
+**Show forces & free-body diagram** control adds the linked force overlays and
+FBD. Force vectors and the inspector have a further disclosure. A separate
+**Explore results & calculations** section contains the result cards, plots,
+moment tables, exports, and theory; clicking the main result opens its
+derivation directly. This changes presentation only, with all mechanics still
+provided by the Python module. The task remains on its branch for review.
+
+Verification passed: 1,639 Python tests and 2,611 subtests, the site build,
+and the real-Pyodide browser regression. The browser checks cover the four-input
+default, keyboard disclosure and focus, all load cases, linked force selection,
+arbitrary downhill angles, shared cases, CSV/JSON downloads, and error recovery.
+Tipping and sliding warnings remain visible with the analysis closed. Reviewed
+desktop and mobile screenshots in light and dark themes, corrected overflow
+from table accessibility labels, and applied the writing review to page and
+README copy.
