@@ -5,6 +5,10 @@ mobile robot, or freestanding assembly to a tipping edge. Compare payload
 positions and support layouts, then inspect the forces and moments behind the
 result.
 
+The solver uses **3D forces and moments with contacts in one plane**. It finds
+tipping onset under static or quasi-static loading. The free-body diagram (FBD)
+is a 2D projection normal to a selected support edge.
+
 ## Using the tool
 
 The default example is a centered cart with a 1.2 m wheelbase, 0.8 m track,
@@ -27,6 +31,47 @@ table replaces the total mass and center fields, so include the base assembly.
 Custom contacts replace wheelbase and track. A force's positive z component
 lifts away from the ground.
 
+## Connecting the model to the FBD
+
+A fixed isometric schematic and its FBD stay above the results, outside the
+analysis tabs. The ground and vehicle tilt with the entered slope, while weight
+remains vertical. Contact positions, mass centers, and load application points
+use a linear coordinate scale. The drawn chassis, wheels, and payload blocks
+are illustrative; their sizes do not define additional mass or support geometry.
+On desktop, long input tables scroll within the input panel so the diagrams
+remain beside the controls. On mobile, Calculate returns to the updated model.
+
+Click a force label in either diagram, or use the force key below them. The same
+force highlights in both views. The inspector gives its 3D vector and position,
+its projected components, and its moment about the selected edge. The edge
+selector and clickable support edges update the FBD, footprint, and moment
+table together. **Show force balance** opens the source equations.
+
+| Label | Meaning |
+| --- | --- |
+| G | Combined center of mass; m1, m2… locate mass components when supplied |
+| W | Total weight, acting at G |
+| I | Equivalent inertia, opposite to prescribed acceleration |
+| P1, P2… | Applied loads, at their entered positions |
+| N | Required normal ground reaction |
+| T | Required tangential ground reaction |
+
+In the FBD, u points inward from the selected edge and z points away from the
+support plane. h is the mass-center height, dG its distance from the edge, and
+dR the required reaction's distance. Arrow lengths are schematic; the key gives
+force magnitudes in newtons. Dotted leaders identify application points when
+arrows or labels are separated for readability.
+
+Forces along the selected edge lie outside the FBD projection. The inspector
+reports those components, and the model explanation reports the residual ground
+yaw couple required in addition to N and T. These required reactions do not
+prove that individual wheels can supply them. The tool does not calculate
+individual wheel loads or yaw capacity.
+
+Both diagrams remain visible after edits or invalid inputs, with a notice
+identifying the last calculated case. Numerical results clear when an input
+is invalid.
+
 ## Requirements and supported behavior
 
 - Calculate normal-force equilibrium for one rigid body on fixed, coplanar,
@@ -40,9 +85,9 @@ lifts away from the ground.
   center-of-mass path, and the speed limit assumes a steady turn.
 - Compare aggregate tangential demand with a uniform Coulomb friction capacity
   when a coefficient is supplied. Report sliding separately from tipping.
-- Draw the support polygon, normal-reaction location, center-of-mass projection,
-  and a section normal to a selected edge. A separate direction plot shows
-  gravity-only slope limits.
+- Keep a fixed isometric model and linked FBD visible across analysis tabs.
+  Draw the support polygon, normal-reaction location, and mass-center projection
+  in a separate plan view. A direction plot shows gravity-only slope limits.
 - Expose numbered equations, substituted values, load contributions, and
   references through the result cards and Background tab.
 - Preserve scalar inputs and editable tables in share links. Export the last
@@ -84,7 +129,9 @@ python3.13 -m pytest tests/test_stability.py -q
 
 The browser regression uses the real Pyodide engine and checks diagrams,
 derivations, tables, share-link round trips, downloaded exports, themes,
-mobile layout, and invalid-input recovery:
+mobile layout, and invalid-input recovery. It also checks matching force/edge
+selection, a vertical weight arrow on inclined ground, and diagram persistence
+when inputs are edited or invalid:
 
 ```sh
 python3 -m http.server 8157 --bind 127.0.0.1

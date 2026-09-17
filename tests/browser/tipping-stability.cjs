@@ -38,11 +38,43 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
                 throw error;
             }
         };
+        const checkDiagramLabels = async () => {
+            const issues = await page.evaluate(() => [...document.querySelectorAll('#model-scene, #fbd-scene')].flatMap((svg) => {
+                const width = svg.viewBox.baseVal.width, height = svg.viewBox.baseVal.height;
+                const boxes = [...svg.querySelectorAll('.diagram-label')].map((label) => ({text:label.textContent,box:label.getBBox()}));
+                return boxes.flatMap(({text,box},i) => {
+                    const errors = [];
+                    if (box.x<0 || box.y<0 || box.x+box.width>width || box.y+box.height>height) errors.push(`${svg.id}: clipped ${text}`);
+                    for (const other of boxes.slice(i+1)) {
+                        if (box.x<other.box.x+other.box.width && box.x+box.width>other.box.x && box.y<other.box.y+other.box.height && box.y+box.height>other.box.y) errors.push(`${svg.id}: overlapping ${text} / ${other.text}`);
+                    }
+                    return errors;
+                });
+            }));
+            assert.deepEqual(issues, []);
+        };
         await boot();
         near((await result()).threshold.value, 33.690067525979785);
         assert.equal(await page.locator('#advanced-inputs').getAttribute('open'), null);
         assert.equal(await page.locator('#calc-form input:visible, #calc-form select:visible').count(), 6);
         assert.equal(await page.locator('.url-state-share-btn').isVisible(), true);
+        assert.equal(await page.locator('#model-scene').isVisible(), true);
+        assert.equal(await page.locator('#fbd-scene').isVisible(), true);
+        assert.ok(await page.locator('#model-scene [data-mesh="wheel"]').count() > 20);
+        await select('diagram-edge', 'E1');
+        assert.equal(await page.locator('#model-scene').getAttribute('data-edge'), 'E1');
+        assert.equal(await page.locator('#fbd-scene').getAttribute('data-edge'), 'E1');
+        assert.match(await page.locator('#fbd-subtitle').innerText(), /Right/);
+        await page.locator('#force-key [data-entity="W"]').click();
+        assert.equal(await page.locator('#model-scene [data-entity="W"]').getAttribute('class'), 'force-arrow external linked-active');
+        assert.equal(await page.locator('#fbd-scene [data-entity="W"]').getAttribute('class'), 'force-arrow external linked-active');
+        assert.match(await page.locator('#diagram-inspector').innerText(), /3D force \(0.00, 0.00, -980.66\) N/);
+        await page.locator('#fbd-scene [data-entity="N"]').first().click();
+        assert.equal(await page.locator('#force-key [data-entity="N"]').getAttribute('aria-pressed'), 'true');
+        await select('diagram-edge', 'E3');
+        await page.locator('#force-key [data-entity="G"]').click();
+        await page.locator('.model-workspace').screenshot({ path: '/private/tmp/tipping-linked-fbd-light.png', animations: 'disabled' });
+        await checkDiagramLabels();
         await page.screenshot({ path: '/private/tmp/tipping-stability-light.png', fullPage: true, animations: 'disabled' });
         await noOverflow();
         await page.locator('[data-for="cg_height"]').focus();
@@ -58,17 +90,28 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
         await fill('downhill_deg', 270);
         assert.equal(await page.locator('#dirty-note').isVisible(), true);
         assert.equal(await page.locator('#export-csv').isDisabled(), true);
+        assert.equal(await page.locator('#diagram-state').getAttribute('data-state'), 'stale');
         await calc();
         const radians = 10 * Math.PI / 180;
         near((await result()).threshold.value, Math.sqrt(2 * 9.80665 * ((.4 / .6) * Math.cos(radians) - Math.sin(radians))));
         assert.match((await result()).threshold.edge, /Right/);
+        assert.equal(await page.locator('#diagram-state').getAttribute('data-state'), 'current');
+        const weightArrow = await page.locator('#model-scene [data-entity="W"] .force-shaft').evaluate((line) => ({x1:Number(line.getAttribute('x1')),x2:Number(line.getAttribute('x2')),y1:Number(line.getAttribute('y1')),y2:Number(line.getAttribute('y2'))}));
+        near(weightArrow.x1, weightArrow.x2);
+        assert.ok(weightArrow.y2 > weightArrow.y1, 'Weight stays vertical downward in the inclined isometric view');
+        await page.locator('#force-key [data-entity="I"]').click();
+        assert.match(await page.locator('#diagram-inspector').innerText(), /Equivalent inertia/);
+        await page.locator('.model-workspace').screenshot({ path: '/private/tmp/tipping-linked-fbd-turn.png', animations: 'disabled' });
         await page.locator('#tab-directions').click();
+        assert.equal(await page.locator('#model-scene').isVisible(), true);
+        assert.equal(await page.locator('#fbd-scene').isVisible(), true);
         await page.waitForFunction(() => document.getElementById('direction-plot').data?.length === 1);
         assert.equal(await page.locator('#direction-plot').evaluate((el) => el.layout.polar.radialaxis.type), 'linear');
         await page.locator('#tab-directions').focus();
         await page.keyboard.press('ArrowRight');
         assert.equal(await page.locator('#tab-background').getAttribute('aria-selected'), 'true');
-        assert.equal(await page.locator('#theory-equations .equation-card').count(), 9);
+        assert.equal(await page.locator('#model-scene').isVisible(), true);
+        assert.equal(await page.locator('#theory-equations .equation-card').count(), 11);
         await page.locator('#tab-results').click();
 
         await select('load_case', 'combined');
@@ -92,16 +135,22 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
         near(r.equilibrium.center[1], .03);
         assert.equal(r.equilibrium.loads.at(-1).name, 'Arm, vertical load');
         assert.equal(r.equilibrium.loads.at(-1).vector[2], -50);
+        await page.locator('#force-key [data-entity="P2"]').click();
+        assert.match(await page.locator('#diagram-inspector').innerText(), /Arm, vertical load/);
+        await page.locator('.model-workspace').screenshot({ path: '/private/tmp/tipping-linked-fbd-combined.png', animations: 'disabled' });
 
         // The shared link preserves dynamic tables as well as scalar inputs.
         const before = r;
+        await select('diagram-edge', 'E1');
         await page.locator('.url-state-share-btn').click();
         const shared = await page.evaluate(() => navigator.clipboard.readText());
         assert.match(shared, /components=/);
         assert.match(shared, /contacts=/);
         assert.match(shared, /extra_forces=/);
+        assert.match(shared, /diagram-edge=E1/);
         await boot(shared);
         assert.deepEqual(await result(), before);
+        assert.equal(await page.locator('#fbd-scene').getAttribute('data-edge'), 'E1');
         const jsonDownload = page.waitForEvent('download');
         await page.locator('#export-json').click();
         const file = await jsonDownload;
@@ -114,6 +163,8 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
         const csv = await fs.readFile(await csvFile.path(), 'utf8');
         assert.match(csv, /Margin \(m\)/);
         assert.match(csv, /Arm, vertical load/);
+        assert.match(csv, /Required ground yaw couple/);
+        assert.match(csv, /Along edge \(N\)/);
         assert.ok(csv.includes(String(before.equilibrium.moment_reserve)));
 
         await page.locator('#settings-button').click();
@@ -133,9 +184,13 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
         await page.locator('#advanced-inputs > summary').click();
         await noOverflow();
         await page.screenshot({ path: '/private/tmp/tipping-stability-mobile.png', fullPage: true, animations: 'disabled' });
+        await page.locator('.model-workspace').screenshot({ path: '/private/tmp/tipping-linked-fbd-mobile.png', animations: 'disabled' });
+        await checkDiagramLabels();
         await page.locator('#tab-directions').click();
         await noOverflow();
         await page.screenshot({ path: '/private/tmp/tipping-stability-directions-mobile.png', fullPage: true, animations: 'disabled' });
+        await page.locator('#tab-background').click();
+        await noOverflow();
         await page.locator('#tab-results').click();
         await page.locator('#settings-button').click();
         await page.locator('.settings-panel [data-density="compact"]').click();
@@ -149,9 +204,13 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
         await page.locator('#calculate-btn').click();
         assert.equal(await page.locator('#error-message').isVisible(), true);
         assert.equal(await page.locator('#result-content').isVisible(), false);
+        assert.equal(await page.locator('#model-scene').isVisible(), true);
+        assert.equal(await page.locator('#diagram-state').getAttribute('data-state'), 'invalid');
+        assert.equal(await page.locator('#diagram-edge').isDisabled(), true);
         await fill('slope_deg', 0);
         await calc();
         near((await result()).threshold.value, 33.690067525979785);
+        assert.equal(await page.locator('#diagram-edge').isEnabled(), true);
         await select('load_case', 'acceleration');
         await fill('accel_direction', 180);
         await calc();

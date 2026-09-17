@@ -1,7 +1,7 @@
 # Tipping and Stability Tool: Specification
 
 Date: 2026-09-16
-Status: Implemented and verified; awaiting Netlify account preflight
+Status: Implemented and verified on the task branch; publication deferred by the user
 
 The first application is low-speed vehicles, carts, and mobile robots, as selected
 by the user. Build a reusable rigid-body equilibrium model that can also support
@@ -338,9 +338,38 @@ Verification:
   build command, `python3 scripts/build_site.py`, passes. SEO dry-run reports
   zero pending changes. No `human-verified` badge was added.
 
-Release follows `docs/RELEASE.md`. The production preflight requires confirmation
-that Netlify is unpaused, has enough credits for the current deployment charge,
-and has no production deployment in progress. Public metadata confirms the
-existing published revision but does not expose those account checks. The
-Netlify plugin was suggested for account access; no production push has been
-made for this task.
+The user requested that this work stay on `task/tipping-analysis`. Production
+publication is deferred. No merge or push to `main` is authorized by the current
+request. Any later publication follows `docs/RELEASE.md`.
+
+### Visualization revision
+
+The user requested an always-present image with a clear link to a free-body
+diagram, and chose a fixed isometric schematic. The revision makes the model's
+dimensionality explicit: 3D force and moment balance with planar contacts, paired
+with a 2D projection normal to the selected edge.
+
+- Physical model and FBD appear together above numerical results, outside tabs.
+- The fixed isometric view shows the chassis, contacts, mass locations, inclined
+  ground, and labeled forces. Body/wheel dimensions are illustrative.
+- Selecting an edge updates both views, the plan view, and the moment table.
+  Selecting a force or G highlights it in both views and shows its coordinates,
+  projected components, and moment contribution.
+- The Python output supplies W, I, P1… , N, T, and the required residual ground
+  yaw couple. Required reactions are distinguished from verified wheel capacity.
+- Force/component labels are placed without overlapping in the tested cases.
+  Leaders preserve their connection to physical points. Out-of-plane force
+  components are disclosed in the inspector and beside the FBD.
+- Edits and invalid inputs retain the last valid diagram with a visible state
+  message. Invalid input clears numerical results and disables the edge and
+  derivation controls until a valid calculation succeeds.
+- CSV and JSON include the named FBD forces and their numerical components.
+- Added analytical tests for full contact-wrench balance and FBD projection.
+  There are now 36 tipping tests. The browser regression also covers shared
+  labels/edges, vertical gravity on a slope, image persistence, and text bounds
+  and overlaps on desktop/mobile layouts.
+
+The revised full suite passes with 1,639 tests and 2,611 subtests. Browser checks
+pass in light, dark, and system themes, including the linked diagrams. The
+page and README received the required writing review. Changes remain on
+`task/tipping-analysis` for the user's review.

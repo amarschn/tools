@@ -16,6 +16,8 @@ let lastForm = null;
 let selectedEdge = null;
 let openDerivation = null;
 let dirty = false;
+let diagram;
+let sharedDiagramEdge = new URLSearchParams(location.search).get('diagram-edge');
 let mathQueue = Promise.resolve();
 
 const editors = {
@@ -243,6 +245,7 @@ function syncVisibility() {
 }
 
 function markDirty() {
+    diagram?.setState('stale');
     if (!lastResults) return;
     dirty = true;
     $('dirty-note').hidden = false;
@@ -276,6 +279,7 @@ function callPython(inputs) {
 }
 
 function clearResults(message) {
+    diagram?.setState('invalid', message);
     lastResults = null;
     lastInputs = null;
     $('error-message').textContent = message;
@@ -308,10 +312,13 @@ async function calculate(event) {
         lastResults = result;
         lastForm = Object.fromEntries([...$('calc-form').querySelectorAll('input[id], select[id]')].map((el) => [el.id, el.value]));
         selectedEdge = result.equilibrium.governing_edge;
+        if (result.equilibrium.edges.some((edge) => edge.id === sharedDiagramEdge)) selectedEdge = sharedDiagramEdge;
+        sharedDiagramEdge = null;
         dirty = false;
         $('dirty-note').hidden = true;
         $('error-message').hidden = true;
         renderResults();
+        if (event?.type === 'submit' && innerWidth <= 1120) document.querySelector('.model-workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
         const lines = String(error.message).trim().split('\n');
         clearResults(lines.at(-1).replace(/^(ValueError|TypeError):\s*/, ''));
@@ -343,7 +350,7 @@ function renderDerivation() {
     const details = {
         threshold: { title: t.title, equations: ['force', 'moment', 'margin'], text: t.held, subst: lastResults.subst_threshold },
         margin: { title: 'Margin to the nearest edge', equations: ['margin'], text: `${e.governing_label}: ${formatNumber(e.margin)} m. Moments from individual loads are listed below the diagrams.`, subst: lastResults.subst_margin },
-        reaction: { title: 'Ground reaction and moment reserve', equations: ['force', 'moment', 'reaction'], text: `Resultant non-contact force: (${e.force.map((v) => formatNumber(v)).join(', ')}) N. Moment: (${e.moment.map((v) => formatNumber(v)).join(', ')}) N·m.`, subst: lastResults.subst_reaction },
+        reaction: { title: 'Free-body force balance and ground reactions', equations: ['force', 'moment', 'reaction', 'contact', 'section'], text: `Resultant non-contact force: (${e.force.map((v) => formatNumber(v)).join(', ')}) N. Moment: (${e.moment.map((v) => formatNumber(v)).join(', ')}) N·m. N and T in the FBD are required ground resultants; the residual yaw couple is ${formatNumber(lastResults.free_body.contact_couple[2])} N·m.`, subst: lastResults.subst_reaction },
         mass: { title: 'Combined mass and center', equations: ['mass'], text: lastResults.mass_components.map((c) => `${c.name}: ${formatNumber(c.mass)} kg at (${[c.x, c.y, c.z].map((v) => formatNumber(v)).join(', ')}) m.`).join(' '), subst: lastResults.subst_mass },
     }[openDerivation];
     $('derivation-title').textContent = details.title;
@@ -421,45 +428,19 @@ function renderPlots() {
 
 function renderSelectedEdge() {
     if (!lastResults) return;
-    const e = lastResults.equilibrium;
-    const edge = e.edges.find((item) => item.id === selectedEdge);
+    const edge = lastResults.equilibrium.edges.find((item) => item.id === selectedEdge);
     $('contribution-heading').textContent = edge.label + ': load contributions';
     $('contribution-rows').innerHTML = edge.contributions.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="numeric">${formatNumber(row.reserve)}</td></tr>`).join('');
-    $('section-heading').textContent = 'Section normal to ' + edge.label;
-    // Projection is for drawing only; all equilibrium quantities come from Python.
-    const inward = (point) => (point[0] - edge.start[0]) * edge.normal[0] + (point[1] - edge.start[1]) * edge.normal[1];
-    const center = [inward(e.center), e.center[2]];
-    const reaction = inward(e.reaction_point);
-    const points = [[0, 0], center, [reaction, 0], ...e.loads.map((load) => [inward(load.point), load.point[2]])];
-    const minX = Math.min(0, ...points.map((p) => p[0]));
-    const maxX = Math.max(...points.map((p) => p[0]), .01);
-    const maxZ = Math.max(...points.map((p) => p[1]), .01);
-    const width = Math.max(280, $('section-svg').clientWidth || 560);
-    $('section-svg').setAttribute('viewBox', `0 0 ${width} 280`);
-    const scale = Math.min((width - 140) / Math.max(maxX - minX, .001), 145 / maxZ);
-    const origin = (width - (maxX - minX) * scale) / 2 - minX * scale;
-    const sx = (value) => origin + value * scale;
-    const sz = (value) => 202 - value * scale;
-    const heightLabelOnLeft = sx(center[0]) > width - 135;
-    const maxForce = Math.max(...e.loads.map((load) => Math.hypot(...load.vector)), 1);
-    const arrows = e.loads.filter((load) => Math.hypot(...load.vector) > 1e-12).map((load) => {
-        const x = sx(inward(load.point)), y = sz(load.point[2]);
-        const dx = (load.vector[0] * edge.normal[0] + load.vector[1] * edge.normal[1]) * 60 / maxForce;
-        const dz = -load.vector[2] * 60 / maxForce;
-        if (Math.hypot(dx, dz) < .25) return '';
-        return `<g><title>${escapeHtml(load.name)}: (${load.vector.map((v) => formatNumber(v)).join(', ')}) N</title><line x1="${x}" y1="${y}" x2="${x + dx}" y2="${y + dz}" stroke="var(--secondary-color)" stroke-width="1.8" marker-end="url(#load-arrow)"/></g>`;
-    }).join('');
-    $('section-svg').innerHTML = `<defs><marker id="load-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--secondary-color)"/></marker></defs>
-        <line x1="20" y1="202" x2="${width - 20}" y2="202" stroke="var(--border-color)"/><line x1="${sx(0)}" y1="202" x2="${sx(maxX) + 25}" y2="202" stroke="var(--text-color)" stroke-width="3"/>
-        <line x1="${sx(center[0])}" y1="${sz(center[1])}" x2="${sx(center[0])}" y2="202" stroke="var(--border-color)" stroke-dasharray="4 4"/>
-        <line x1="${sx(0)}" y1="35" x2="${sx(0)}" y2="202" stroke="var(--border-color)" stroke-dasharray="4 4"/>
-        <text x="${sx(0)}" y="27" text-anchor="middle">Tipping edge · x = 0 m</text>
-        ${arrows}
-        <circle cx="${sx(center[0])}" cy="${sz(center[1])}" r="6" fill="var(--bg-card)" stroke="var(--text-color)" stroke-width="1.5"/><path d="M${sx(center[0]) - 4},${sz(center[1])} h8 M${sx(center[0])},${sz(center[1]) - 4} v8" stroke="var(--text-color)"/>
-        <text x="${sx(center[0]) + (heightLabelOnLeft ? -12 : 12)}" y="${sz(center[1]) - 12}" text-anchor="${heightLabelOnLeft ? 'end' : 'start'}">z = ${formatNumber(center[1])} m</text>
-        <path d="M${sx(reaction)},195 l6,7 l-6,7 l-6,-7 z" fill="var(--warning-color)"/>
-        <text x="${Math.max(85, Math.min(width - 85, sx(reaction)))}" y="225" text-anchor="middle">Reaction: ${formatNumber(reaction)} m</text>
-        <text x="${width / 2}" y="258" text-anchor="middle">x: distance inward from edge (m) →</text>`;
+    diagram?.update(lastResults, lastInputs, selectedEdge);
+    if (dirty) diagram?.setState('stale');
+}
+
+function selectEdge(id) {
+    if (!lastResults || !lastResults.equilibrium.edges.some((edge) => edge.id === id)) return;
+    selectedEdge = id;
+    $('edge-rows').querySelectorAll('tr').forEach((row) => row.classList.toggle('selected-edge', row.querySelector('[data-edge]')?.dataset.edge === id));
+    renderSelectedEdge();
+    renderPlots();
 }
 
 function openTab(name, focus = false) {
@@ -493,6 +474,10 @@ function exportCsv() {
     e.edges.forEach((edge) => rows.push([edge.label, edge.distance, edge.reserve]));
     rows.push([], ['Edge', 'Load', 'Restoring moment (N*m)']);
     e.edges.forEach((edge) => edge.contributions.forEach((load) => rows.push([edge.label, load.name, load.reserve])));
+    rows.push([], ['FBD force', 'Meaning', 'Fx (N)', 'Fy (N)', 'Fz (N)', 'x (m)', 'y (m)', 'z (m)']);
+    lastResults.free_body.forces.forEach((force) => rows.push([force.id, force.name, ...force.vector, ...force.point]));
+    rows.push(['Required ground yaw couple', lastResults.free_body.contact_couple[2], 'N*m'], ['FBD section', selectedEdge], ['FBD force', 'Fu (N)', 'Fz (N)', 'Along edge (N)', 'u (m)', 'z (m)', 'Restoring moment (N*m)']);
+    lastResults.free_body.sections[selectedEdge].forces.forEach((force) => rows.push([force.id, ...force.vector, force.out_of_plane, ...force.point, force.restoring_moment]));
     const cell = (value) => {
         let text = String(value);
         if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
@@ -536,9 +521,7 @@ function bindControls() {
     $('edge-rows').addEventListener('click', (event) => {
         const button = event.target.closest('[data-edge]');
         if (!button) return;
-        selectedEdge = button.dataset.edge;
-        $('edge-rows').querySelectorAll('tr').forEach((tr) => tr.classList.toggle('selected-edge', tr.contains(button)));
-        renderSelectedEdge(); renderPlots();
+        selectEdge(button.dataset.edge);
     });
     $('export-csv').addEventListener('click', exportCsv);
     $('export-json').addEventListener('click', () => {
@@ -563,6 +546,7 @@ async function loadEngine() {
         const documentation = JSON.parse(pyodide.runPython("json.dumps(utils.get_documentation('stability', 'analyze_tipping'))"));
         for (const key of PARAM_ORDER) if ($('help-' + key) && documentation.parameters?.[key]) $('help-' + key).textContent = documentation.parameters[key];
         const example = callPython({});
+        diagram.update(example, {}, example.equilibrium.governing_edge);
         $('theory-equations').innerHTML = equationCards(null, example.theory);
         $('worked-example').innerHTML = `<p>A centered cart with a 1.2 m wheelbase, 0.8 m track, and a center of mass 0.6 m above the surface has a gravity-only lateral tipping angle of ${formatNumber(example.threshold.value)}°. Its distance to a side edge is 0.4 m.</p>` + equationCards(['slope', 'acceleration', 'push'], example.theory) + `<p>The lateral acceleration threshold is ${formatNumber(callPython({ load_case: 'acceleration', accel_direction: 90 }).threshold.value)} m/s². For a 100 kg cart, a horizontal push at a height of 1 m reaches the ideal threshold at ${formatNumber(callPython({ load_case: 'push' }).threshold.value)} N.</p><p>Moving mass lower increases the angle and acceleration thresholds. Mass alone cancels from those two ideal limits, but changes the force required to tip the cart.</p>`;
         $('calculate-btn').disabled = false;
@@ -583,12 +567,16 @@ async function main() {
     // Let the shared URL-state module restore scalar and serialized table inputs.
     await new Promise((resolve) => setTimeout(resolve, 0));
     bindSettings(); bindHelp(); initEditors(); bindControls(); syncVisibility();
-    let sectionWidth = 0;
-    new ResizeObserver(([entry]) => {
-        if (Math.abs(entry.contentRect.width - sectionWidth) < 1) return;
-        sectionWidth = entry.contentRect.width;
-        if (lastResults) renderSelectedEdge();
-    }).observe($('section-svg').parentElement);
+    diagram = new TippingDiagram({
+        format: formatNumber,
+        onEdge: selectEdge,
+        onDerivation: (entity) => {
+            openTab('results');
+            openDerivation = entity === 'G' ? 'mass' : 'reaction';
+            renderDerivation();
+            $('derivation-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+    });
     if ($('geometry_mode').value === 'custom' || $('mass_mode').value === 'components') $('advanced-inputs').open = true;
     $('retry-load').addEventListener('click', loadEngine);
     await loadEngine();

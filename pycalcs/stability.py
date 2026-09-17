@@ -70,6 +70,18 @@ THEORY = [
         "latex": r"T=\sqrt{F_x^2+F_y^2},\quad T_{cap}=\mu N",
         "legend": "T: required tangential ground force (N); F_x, F_y: resultant tangential force components (N); T_cap: aggregate friction capacity (N); μ: uniform friction coefficient; N: normal reaction (N). This does not verify individual tire traction or yaw resistance.",
     },
+    {
+        "id": "contact",
+        "title": "Required ground reaction in the free-body diagram",
+        "latex": r"\mathbf R_N=(0,0,N),\quad\mathbf R_T=(-F_x,-F_y,0),\quad C_z=-M_z-(\mathbf r_p\times(\mathbf R_N+\mathbf R_T))_z",
+        "legend": "R_N: required normal ground force (N); R_T: required tangential ground force (N); N, F_x, F_y: as in Equations (2) and (4); r_p=(p_x,p_y,0): reaction position (m); C_z: required residual ground couple about the surface normal (N·m); M_z: non-contact moment about that normal (N·m). These are required resultants, not verified tire capacities.",
+    },
+    {
+        "id": "section",
+        "title": "Projection normal to a support edge",
+        "latex": r"u=\mathbf n_i\cdot(\mathbf r_{xy}-\mathbf v_i),\quad F_u=\mathbf n_i\cdot\mathbf F_{xy},\quad F_{out}=n_yF_x-n_xF_y",
+        "legend": "u: position inward from edge i (m); n_i=(n_x,n_y): inward unit edge normal; r_xy: in-plane position (m); v_i: edge origin (m); F_xy=(F_x,F_y): in-plane force (N); F_u: force into the footprint (N); F_out: force along the edge, out of the diagram (N). Height z and normal force F_z are unchanged. The diagram is a projection of the 3D force balance.",
+    },
 ]
 
 
@@ -498,6 +510,107 @@ def _first_limit(
     return {"value": value, "index": index, "state": "finite"}
 
 
+def free_body_diagram(equilibrium: dict[str, Any]) -> dict[str, Any]:
+    r"""Describe the required contact wrench and every edge-normal FBD.
+
+    Parameters
+    ----------
+    equilibrium : dict
+        A valid result from evaluate_stability, using SI units and the
+        surface-fixed frame. This function does not solve contact feasibility.
+
+    Returns
+    -------
+    dict
+        forces: named W (weight), I (equivalent inertia), P1... (applied),
+        N (normal ground reaction), and T (tangential ground reaction), with
+        their 3D vectors and application points. contact_couple is the required
+        residual couple at the reaction point. sections maps each edge ID to
+        2D positions, projected forces, out-of-plane components, and dimensions.
+        Ground reactions may be infeasible when the tipping margin is negative.
+
+    Equations / references
+    ----------------------
+    THEORY (10)-(11) follow from force and moment equilibrium:
+    \(\mathbf R=-\mathbf F\),
+    \(\mathbf C=-\mathbf M-\mathbf r_p\times\mathbf R\).
+    The support-plane tipping model sets C_x and C_y to zero; C_z records the
+    yaw demand that a separate contact model would need to verify.
+    A projected force contributes restoring reserve \(zF_u-uF_z\).
+    See the module's Engineering Statics reference for free-body isolation.
+    """
+    e = equilibrium
+    forces = []
+    for index, load in enumerate(e["loads"]):
+        force_id = "W" if index == 0 else "I" if index == 1 else f"P{index - 1}"
+        forces.append(
+            {
+                "id": force_id,
+                "name": "Weight"
+                if index == 0
+                else "Equivalent inertia"
+                if index == 1
+                else load["name"],
+                "kind": "inertia" if index == 1 else "external",
+                "vector": load["vector"],
+                "point": load["point"],
+            }
+        )
+    reaction = [*e["reaction_point"], 0.0]
+    forces.extend(
+        [
+            {
+                "id": "N",
+                "name": "Required normal reaction",
+                "kind": "reaction",
+                "vector": [0.0, 0.0, e["normal_reaction"]],
+                "point": reaction,
+            },
+            {
+                "id": "T",
+                "name": "Required tangential reaction",
+                "kind": "reaction",
+                "vector": [-e["force"][0], -e["force"][1], 0.0],
+                "point": reaction,
+            },
+        ]
+    )
+    reaction_moment = _cross(reaction, [-f for f in e["force"]])
+    couple = [0.0, 0.0, -e["moment"][2] - reaction_moment[2]]
+    sections = {}
+    for edge in e["edges"]:
+        nx, ny = edge["normal"]
+        vx, vy = edge["start"]
+        projected = []
+        for force in forces:
+            x, y, z = force["point"]
+            fx, fy, fz = force["vector"]
+            u = nx * (x - vx) + ny * (y - vy)
+            fu = nx * fx + ny * fy
+            projected.append(
+                {
+                    "id": force["id"],
+                    "point": [u, z],
+                    "vector": [fu, fz],
+                    "out_of_plane": ny * fx - nx * fy,
+                    "restoring_moment": z * fu - u * fz,
+                }
+            )
+        sections[edge["id"]] = {
+            "center": [
+                nx * (e["center"][0] - vx) + ny * (e["center"][1] - vy),
+                e["center"][2],
+            ],
+            "reaction": [edge["distance"], 0.0],
+            "support_span": max(
+                nx * (p[0] - vx) + ny * (p[1] - vy) for p in e["polygon"]
+            ),
+            "forces": projected,
+            "reserve": edge["reserve"],
+        }
+    return {"forces": forces, "contact_couple": couple, "sections": sections}
+
+
 def analyze_tipping(
     wheelbase: float = 1.2,
     track: float = 0.8,
@@ -596,6 +709,8 @@ def analyze_tipping(
         Validated component masses and positions used in this case.
     theory : list
         Numbered equations, descriptions, and variable legends.
+    free_body : dict
+        Named 3D forces, required contact resultants and yaw couple, and projected forces and dimensions for every edge-normal free-body diagram.
     subst_margin : str
         Substituted equation for current distance and moment reserve.
     subst_reaction : str
@@ -804,6 +919,7 @@ def analyze_tipping(
         "directions": directions,
         "mass_components": mass_model["components"],
         "theory": THEORY,
+        "free_body": free_body_diagram(current),
         "subst_margin": rf"R_{{{current['governing_edge']}}}={normal:.6g}\times({current['margin']:.6g})={current['moment_reserve']:.6g}\,\mathrm{{N\,m}}",
         "subst_reaction": rf"N={normal:.6g}\,\mathrm{{N}},\quad p_x=\frac{{{current['moment'][1]:.6g}}}{{{normal:.6g}}}={p[0]:.6g}\,\mathrm{{m}},\quad p_y=\frac{{{-current['moment'][0]:.6g}}}{{{normal:.6g}}}={p[1]:.6g}\,\mathrm{{m}}",
         "subst_mass": rf"m={mass:.6g}\,\mathrm{{kg}},\quad\mathbf r_G=({center[0]:.6g},\ {center[1]:.6g},\ {center[2]:.6g})\,\mathrm{{m}}",

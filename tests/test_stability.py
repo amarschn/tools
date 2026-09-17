@@ -260,3 +260,62 @@ def test_extra_forces_remain_fixed_during_sweep():
         extra_forces=[{"name": "Cable", "vector": [0, "50", 0], "point": [0, 0, "1"]}],
     )
     assert r["threshold"]["value"] == pytest.approx(392.266 - 50)
+
+
+def test_fbd_required_contact_wrench_balances_three_dimensional_loads():
+    """An eccentric oblique force needs a yaw couple as well as N and T."""
+    e = s.evaluate_stability(
+        RECT,
+        100,
+        [0, 0, 0.6],
+        forces=[{"vector": [20, -30, 40], "point": [0.2, 0.1, 0.5]}],
+    )
+    fbd = s.free_body_diagram(e)
+    forces = {force["id"]: force for force in fbd["forces"]}
+    normal = 980.665 - 40
+    assert forces["N"]["vector"] == pytest.approx([0, 0, normal])
+    assert forces["T"]["vector"] == pytest.approx([-20, 30, 0])
+    assert forces["N"]["point"] == pytest.approx([2 / normal, -19 / normal, 0])
+    assert fbd["contact_couple"] == pytest.approx([0, 0, 8 + 320 / normal])
+    assert [
+        sum(f["vector"][i] for f in fbd["forces"]) for i in range(3)
+    ] == pytest.approx([0, 0, 0])
+    moments = [s._cross(f["point"], f["vector"]) for f in fbd["forces"]]
+    assert [
+        sum(m[i] for m in moments) + fbd["contact_couple"][i] for i in range(3)
+    ] == pytest.approx([0, 0, 0])
+
+
+def test_fbd_projection_preserves_the_edge_moment_and_out_of_plane_force():
+    """At the left edge, a (20,-30,40) N force has (Fu,Fz)=(30,40) N."""
+    result = s.analyze_tipping(
+        load_case="push",
+        force=0,
+        extra_forces=[{"vector": [20, -30, 40], "point": [0.2, 0.1, 0.5]}],
+    )
+    section = result["free_body"]["sections"]["E3"]
+    force = next(force for force in section["forces"] if force["id"] == "P2")
+    assert force["point"] == pytest.approx([0.3, 0.5])
+    assert force["vector"] == pytest.approx([30, 40])
+    assert force["out_of_plane"] == pytest.approx(-20)
+    assert force["restoring_moment"] == pytest.approx(3)
+    for edge in result["equilibrium"]["edges"]:
+        projected = result["free_body"]["sections"][edge["id"]]
+        noncontact = [f for f in projected["forces"] if f["id"] not in ("N", "T")]
+        assert sum(f["restoring_moment"] for f in noncontact) == pytest.approx(
+            edge["reserve"]
+        )
+        assert sum(f["restoring_moment"] for f in projected["forces"]) == pytest.approx(
+            0, abs=1e-10
+        )
+
+
+def test_fbd_reaction_remains_explicitly_required_beyond_the_tipping_edge():
+    """An outside reaction is a demand, not a set of feasible wheel forces."""
+    result = s.analyze_tipping(slope_deg=40)
+    assert result["equilibrium"]["status"] == "beyond"
+    section = result["free_body"]["sections"]["E3"]
+    assert section["reaction"][0] < 0
+    assert (
+        len([f for f in result["free_body"]["forces"] if f["kind"] == "reaction"]) == 2
+    )
