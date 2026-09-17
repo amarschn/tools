@@ -171,7 +171,7 @@ window.TippingDiagram = class TippingDiagram {
             const cross = [axis[1] * point[2], -axis[0] * point[2], axis[0] * point[1] - axis[1] * point[0]];
             return point.map((value, i) => value * Math.cos(theta) + cross[i] * Math.sin(theta) + axis[i] * dot * (1 - Math.cos(theta)));
         };
-        const azimuth = -50 * Math.PI / 180, elevation = 28 * Math.PI / 180;
+        const azimuth = -Math.PI / 4, elevation = Math.atan(1 / Math.sqrt(2));
         const right = [-Math.sin(azimuth), Math.cos(azimuth), 0];
         const up = [-Math.sin(elevation) * Math.cos(azimuth), -Math.sin(elevation) * Math.sin(azimuth), Math.cos(elevation)];
         const eye = [Math.cos(elevation) * Math.cos(azimuth), Math.cos(elevation) * Math.sin(azimuth), Math.sin(elevation)];
