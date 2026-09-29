@@ -17,6 +17,7 @@ from pycalcs.fasteners import (
     calculate_bolt_stiffness,
     calculate_joint_stiffness,
     calculate_embedding_loss,
+    calculate_basic_thread_geometry,
     get_bolt_grade_properties,
     get_fastener_geometry,
     generate_joint_diagram_data,
@@ -98,8 +99,38 @@ class TestFastenerGeometryDatabases:
         """Verify 1/2-13 UNC geometry matches ASME B1.1."""
         half = UTS_FASTENER_GEOMETRY["1/2-13 UNC"]
         assert half["nominal_diameter"] == pytest.approx(12.7e-3, rel=0.01)
-        # Stress area should be approximately 0.1307 in^2 = 84.3 mm^2
-        assert half["stress_area"] == pytest.approx(84.3e-6, rel=0.02)
+        # A_s = pi/4 * (d - 0.9743/n)^2 = 0.1419 in^2 = 91.55 mm^2.
+        assert half["stress_area"] == pytest.approx(91.547e-6, rel=1e-5)
+
+    @pytest.mark.parametrize(
+        "system,designation,catalog",
+        [
+            ("iso_metric", "M10x1.5", ISO_FASTENER_GEOMETRY),
+            ("unified", "1/2-13 UNC", UTS_FASTENER_GEOMETRY),
+        ],
+    )
+    def test_catalog_geometry_uses_canonical_thread_calculation(
+        self,
+        system,
+        designation,
+        catalog,
+    ):
+        """Bolt-joint and thread tools should share exact stress geometry."""
+        record = catalog[designation]
+        basic = calculate_basic_thread_geometry(
+            system,
+            record["nominal_diameter"],
+            record["pitch"],
+        )
+
+        assert record["stress_area"] == pytest.approx(
+            basic["tensile_stress_area"],
+            rel=1e-12,
+        )
+        assert record["pitch_diameter"] == pytest.approx(
+            basic["pitch_diameter_basic"],
+            rel=1e-12,
+        )
 
     def test_geometry_has_required_keys(self):
         """Each geometry entry should have all required keys."""

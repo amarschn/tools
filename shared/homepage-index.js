@@ -100,6 +100,12 @@
 
   const VERIFIED_LABEL = "Verified";
   const EXPERIMENTAL_LABEL = "Experimental";
+  const TOOL_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
   function normalizedText(value) {
     return String(value || "").trim().toLowerCase();
@@ -149,11 +155,14 @@
       statusLabel: verified ? VERIFIED_LABEL : EXPERIMENTAL_LABEL,
       priorityRank,
       upNext: !verified && priorityRank !== -1,
+      version: null,
+      lastUpdated: null,
+      revisionCount: null,
     };
   }
 
   async function loadCatalog(url = "./catalog.json") {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Catalog request failed with status ${response.status}.`);
     }
@@ -169,7 +178,7 @@
   }
 
   async function loadToolMetadata(url = "./data/homepage-tool-meta.json") {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(
         `Tool metadata request failed with status ${response.status}.`,
@@ -183,21 +192,7 @@
     return data;
   }
 
-  async function loadCatalogWithMetadata(
-    catalogUrl = "./catalog.json",
-    metadataUrl = "./data/homepage-tool-meta.json",
-  ) {
-    const tools = await loadCatalog(catalogUrl);
-    let metadata = {};
-    try {
-      metadata = await loadToolMetadata(metadataUrl);
-    } catch (error) {
-      console.warn(
-        "Tool metadata is unavailable; loading the catalog without it.",
-        error,
-      );
-    }
-
+  function mergeToolMetadata(tools, metadata = {}) {
     return tools.map((tool) => {
       const entry = metadata[toolMetadataKey(tool.path)] || {};
       const revisionCount = Number(entry.revision_count);
@@ -215,6 +210,25 @@
             : null,
       };
     });
+  }
+
+  async function loadCatalogWithMetadata(
+    catalogUrl = "./catalog.json",
+    metadataUrl = "./data/homepage-tool-meta.json",
+  ) {
+    const catalogPromise = loadCatalog(catalogUrl);
+    const metadataPromise = loadToolMetadata(metadataUrl).catch((error) => {
+      console.warn(
+        "Tool metadata is unavailable; loading the catalog without it.",
+        error,
+      );
+      return {};
+    });
+    const [tools, metadata] = await Promise.all([
+      catalogPromise,
+      metadataPromise,
+    ]);
+    return mergeToolMetadata(tools, metadata);
   }
 
   function getFilters(controls) {
@@ -332,12 +346,7 @@
     if (!value) return "Date unavailable";
     const date = new Date(`${value}T00:00:00Z`);
     if (Number.isNaN(date.getTime())) return "Date unavailable";
-    return new Intl.DateTimeFormat("en-US", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "UTC",
-    }).format(date);
+    return TOOL_DATE_FORMATTER.format(date);
   }
 
   function visibleTags(tool, maximum = 4) {
@@ -369,7 +378,9 @@
 
     const childList = Array.isArray(children) ? children : [children];
     childList.filter(Boolean).forEach((child) => {
-      element.append(child instanceof Node ? child : document.createTextNode(child));
+      element.append(
+        child instanceof Node ? child : document.createTextNode(child),
+      );
     });
     return element;
   }
@@ -392,7 +403,10 @@
     filterTools,
     getFilters,
     groupTools,
+    loadCatalog,
     loadCatalogWithMetadata,
+    loadToolMetadata,
+    mergeToolMetadata,
     populateCategorySelect,
     formatToolDate,
     toolHref,

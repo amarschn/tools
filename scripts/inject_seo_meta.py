@@ -103,6 +103,15 @@ def build_block(entry: dict, source: str, slug: str) -> tuple[str, list[str]]:
     return ("\n".join(lines), added)
 
 
+def render_tool(source: str, slug: str, entry: dict) -> tuple[str, list[str]]:
+    """Add missing catalog metadata without writing, also used by release gates."""
+    block, added = build_block(entry, source, slug)
+    if not added:
+        return source, added
+    return re.sub(r"(</title>)", lambda match: match[1] + "\n" + block,
+                  source, count=1), added
+
+
 def patch_tool(slug: str, entry: dict, check: bool) -> str:
     path = REPO / "tools" / slug / "index.html"
     if not path.exists():
@@ -111,18 +120,12 @@ def patch_tool(slug: str, entry: dict, check: bool) -> str:
     if "<title>" not in source:
         return f"  SKIP {slug}: no <title> to anchor insertion"
 
-    block, added = build_block(entry, source, slug)
+    new_source, added = render_tool(source, slug, entry)
     if not added:
         return f"  ok   {slug}: already complete"
     if check:
         return f"  WOULD add [{', '.join(added)}] to {slug}"
 
-    new_source = re.sub(
-        r"(</title>)",
-        r"\1\n" + block,
-        source,
-        count=1,
-    )
     path.write_text(new_source)
     return f"  +    {slug}: added [{', '.join(added)}]"
 

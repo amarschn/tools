@@ -18,7 +18,300 @@ References:
 from __future__ import annotations
 
 import math
+import re
 from typing import Dict, Tuple, Any, List
+
+
+INCH_TO_M = 0.0254
+METERS_TO_MM = 1000.0
+
+_METRIC_THREAD_RE = re.compile(
+    r"^M(?P<diameter>[0-9.]+)x(?P<pitch>[0-9.]+)$"
+)
+_UNIFIED_THREAD_RE = re.compile(
+    r"^(?P<size>#\d+|(?:\d+\s+)?\d+/\d+|\d+)-(?P<tpi>\d+)\s+"
+    r"(?P<series>UNC|UNF)$"
+)
+
+
+def parse_metric_thread_designation(designation: str) -> tuple[float, float]:
+    """Parse an ISO metric thread designation into exact SI dimensions.
+
+    Parameters:
+        designation: Standard text in ``MxP`` form, such as ``"M10x1.5"``.
+
+    Returns:
+        A tuple containing nominal major diameter and pitch in metres.
+
+    Raises:
+        ValueError: If the designation does not use the supported ``MxP`` form.
+
+    Equations:
+        The millimetre values in the designation are divided by 1000 to obtain
+        metres.
+
+    References:
+        ISO 261 and ISO 262 metric thread designations.
+    """
+    match = _METRIC_THREAD_RE.fullmatch(designation)
+    if match is None:
+        raise ValueError(f"Invalid ISO metric designation '{designation}'.")
+    diameter_m = float(match.group("diameter")) / METERS_TO_MM
+    pitch_m = float(match.group("pitch")) / METERS_TO_MM
+    return diameter_m, pitch_m
+
+
+def _parse_unified_size(size_text: str) -> float:
+    """Convert a Unified designation size token to nominal inches.
+
+    Parameters:
+        size_text: Size token such as ``"#10"``, ``"1/4"``, or ``"1"``.
+
+    Returns:
+        Nominal major diameter in inches.
+
+    Raises:
+        ValueError: If a fraction has a zero denominator or the token cannot be
+        converted to a number.
+
+    Equations:
+        Numbered machine screws use ``D = 0.060 + 0.013N`` inches.
+
+    References:
+        ASME B1.1 Unified thread designation practice.
+    """
+    if size_text.startswith("#"):
+        screw_number = int(size_text[1:])
+        return 0.060 + 0.013 * screw_number
+
+    whole_and_fraction = size_text.split()
+    if len(whole_and_fraction) == 2:
+        whole = float(whole_and_fraction[0])
+        fraction = whole_and_fraction[1]
+    else:
+        whole = 0.0
+        fraction = whole_and_fraction[0]
+
+    if "/" in fraction:
+        numerator, denominator = fraction.split("/", 1)
+        return whole + float(numerator) / float(denominator)
+    return float(fraction)
+
+
+def parse_unified_thread_designation(
+    designation: str,
+) -> tuple[float, float, int, str]:
+    """Parse a supported UNC or UNF designation into exact dimensions.
+
+    Parameters:
+        designation: Text such as ``"1/2-13 UNC"`` or ``"#10-32 UNF"``.
+
+    Returns:
+        ``(diameter_m, pitch_m, threads_per_inch, series)``. ``series`` is
+        ``"coarse"`` for UNC and ``"fine"`` for UNF.
+
+    Raises:
+        ValueError: If the designation is not a supported UNC or UNF form.
+
+    Equations:
+        ``P = 0.0254 / n``, where ``n`` is threads per inch.
+
+    References:
+        ASME B1.1 Unified thread designation practice.
+    """
+    match = _UNIFIED_THREAD_RE.fullmatch(designation)
+    if match is None:
+        raise ValueError(f"Invalid Unified designation '{designation}'.")
+
+    diameter_in = _parse_unified_size(match.group("size"))
+    threads_per_inch = int(match.group("tpi"))
+    pitch_m = INCH_TO_M / threads_per_inch
+    series = "coarse" if match.group("series") == "UNC" else "fine"
+    return diameter_in * INCH_TO_M, pitch_m, threads_per_inch, series
+
+
+def calculate_basic_thread_geometry(
+    thread_system: str,
+    nominal_diameter: float,
+    pitch: float,
+) -> dict[str, float | str | None]:
+    r"""Calculate the basic geometry of a 60-degree fastening thread.
+
+    ISO metric output includes the external design-profile root diameter
+    ``d3``. Unified external root limits depend on form and class, so the
+    returned Unified external minor diameter is ``None`` and the drawing uses
+    the basic-profile depth as a schematic reference.
+
+    ---Parameters---
+    thread_system : str
+        Standard family: "iso_metric" or "unified".
+    nominal_diameter : float
+        Basic major diameter d in metres. Must be positive.
+    pitch : float
+        Axial distance between adjacent thread crests P in metres. For Unified
+        threads, P equals 0.0254 divided by threads per inch.
+
+    ---Returns---
+    thread_system : str
+        Normalized standard-family identifier.
+    nominal_diameter : float
+        Basic major diameter d in metres.
+    pitch : float
+        Thread pitch P in metres.
+    threads_per_inch : float
+        Reciprocal pitch expressed as threads per inch.
+    included_angle_deg : float
+        Included thread angle in degrees. ISO metric and Unified threads use 60.
+    fundamental_height : float
+        Height H of the sharp-V fundamental triangle in metres.
+    pitch_diameter_basic : float
+        Basic pitch diameter d2 in metres.
+    internal_minor_diameter_basic : float
+        Basic internal-thread minor diameter D1 in metres.
+    external_minor_diameter_basic : float
+        ISO metric external design-profile root diameter d3 in metres. Unified
+        output is None because the root depends on thread form and class.
+    profile_minor_diameter : float
+        Minor-diameter reference used in the schematic profile in metres.
+    external_thread_depth : float
+        Radial depth from major diameter to the profile-minor reference.
+    internal_thread_depth : float
+        Radial depth of the basic internal profile in metres.
+    tensile_stress_area : float
+        Effective tensile-stress area As in square metres.
+    lead_angle_deg : float
+        Single-start lead angle at the basic pitch diameter in degrees.
+    profile_note : str
+        Scope note describing which root geometry the schematic shows.
+    subst_fundamental_height : str
+        LaTeX substitution for H.
+    subst_pitch_diameter_basic : str
+        LaTeX substitution for d2.
+    subst_internal_minor_diameter_basic : str
+        LaTeX substitution for D1.
+    subst_profile_minor_diameter : str
+        LaTeX substitution for the external profile-minor reference.
+    subst_tensile_stress_area : str
+        LaTeX substitution for As.
+    subst_lead_angle_deg : str
+        LaTeX substitution for the single-start lead angle.
+
+    ---LaTeX---
+    \mathrm{Equation\ (1)}\quad H = \frac{\sqrt{3}}{2}P
+    \mathrm{Equation\ (2)}\quad d_2 = d - \frac{3}{4}H
+    \mathrm{Equation\ (3)}\quad D_1 = D - \frac{5}{4}H
+    \mathrm{Equation\ (4a)}\quad d_3 = d - \frac{17}{12}H
+    \mathrm{Equation\ (4b)}\quad d_{basic} = d - \frac{3}{2}H
+    \mathrm{Equation\ (5a)}\quad A_{s,M} = \frac{\pi}{4}(d - 0.938194P)^2
+    \mathrm{Equation\ (5b)}\quad A_{s,UN} = \frac{\pi}{4}(d - 0.9743P)^2
+    \mathrm{Equation\ (6)}\quad \lambda = \tan^{-1}\left(\frac{P}{\pi d_2}\right)
+    """
+    if thread_system not in ("iso_metric", "unified"):
+        raise ValueError(
+            "thread_system must be 'iso_metric' or 'unified'."
+        )
+    if nominal_diameter <= 0:
+        raise ValueError("nominal_diameter must be positive.")
+    if pitch <= 0:
+        raise ValueError("pitch must be positive.")
+
+    fundamental_height = math.sqrt(3.0) * pitch / 2.0
+    pitch_diameter = nominal_diameter - 0.75 * fundamental_height
+    internal_minor = nominal_diameter - 1.25 * fundamental_height
+
+    if thread_system == "iso_metric":
+        external_minor = nominal_diameter - (17.0 / 12.0) * fundamental_height
+        profile_minor = external_minor
+        stress_coefficient = 0.938194
+        profile_note = (
+            "ISO metric external design profile. Tolerance class and allowance "
+            "are not shown."
+        )
+    else:
+        external_minor = None
+        profile_minor = nominal_diameter - 1.5 * fundamental_height
+        stress_coefficient = 0.9743
+        profile_note = (
+            "Unified 60-degree basic-profile schematic. External root limits "
+            "depend on thread form and class and are not shown."
+        )
+
+    tensile_diameter = nominal_diameter - stress_coefficient * pitch
+    derived_diameters = {
+        "basic pitch diameter": pitch_diameter,
+        "basic internal minor diameter": internal_minor,
+        "profile minor diameter": profile_minor,
+        "tensile-area diameter": tensile_diameter,
+    }
+    nonpositive = [
+        name for name, value in derived_diameters.items() if value <= 0
+    ]
+    if nonpositive:
+        names = ", ".join(nonpositive)
+        raise ValueError(
+            "pitch is too large for nominal_diameter; nonpositive derived "
+            f"geometry: {names}."
+        )
+
+    external_depth = (nominal_diameter - profile_minor) / 2.0
+    internal_depth = (nominal_diameter - internal_minor) / 2.0
+    tensile_stress_area = math.pi * tensile_diameter**2 / 4.0
+    lead_angle = math.degrees(
+        math.atan(pitch / (math.pi * pitch_diameter))
+    )
+    threads_per_inch = INCH_TO_M / pitch
+
+    nominal_mm = nominal_diameter * METERS_TO_MM
+    pitch_mm = pitch * METERS_TO_MM
+    height_mm = fundamental_height * METERS_TO_MM
+    pitch_diameter_mm = pitch_diameter * METERS_TO_MM
+    stress_area_mm2 = tensile_stress_area * 1e6
+
+    return {
+        "thread_system": thread_system,
+        "nominal_diameter": nominal_diameter,
+        "pitch": pitch,
+        "threads_per_inch": threads_per_inch,
+        "included_angle_deg": 60.0,
+        "fundamental_height": fundamental_height,
+        "pitch_diameter_basic": pitch_diameter,
+        "internal_minor_diameter_basic": internal_minor,
+        "external_minor_diameter_basic": external_minor,
+        "profile_minor_diameter": profile_minor,
+        "external_thread_depth": external_depth,
+        "internal_thread_depth": internal_depth,
+        "tensile_stress_area": tensile_stress_area,
+        "lead_angle_deg": lead_angle,
+        "profile_note": profile_note,
+        "subst_fundamental_height": (
+            f"H = \\frac{{\\sqrt{{3}}}}{{2}}({pitch_mm:.6g}) = "
+            f"{height_mm:.6g}\\text{{ mm}}"
+        ),
+        "subst_pitch_diameter_basic": (
+            f"d_2 = {nominal_mm:.6g} - \\frac{{3}}{{4}}"
+            f"({height_mm:.6g}) = {pitch_diameter_mm:.6g}\\text{{ mm}}"
+        ),
+        "subst_internal_minor_diameter_basic": (
+            f"D_1 = {nominal_mm:.6g} - \\frac{{5}}{{4}}"
+            f"({height_mm:.6g}) = "
+            f"{internal_minor*METERS_TO_MM:.6g}\\text{{ mm}}"
+        ),
+        "subst_profile_minor_diameter": (
+            f"d_{{profile}} = {nominal_mm:.6g} - 2"
+            f"({external_depth*METERS_TO_MM:.6g}) = "
+            f"{profile_minor*METERS_TO_MM:.6g}\\text{{ mm}}"
+        ),
+        "subst_tensile_stress_area": (
+            f"A_s = \\frac{{\\pi}}{{4}}[{nominal_mm:.6g} - "
+            f"{stress_coefficient:.6g}({pitch_mm:.6g})]^2 = "
+            f"{stress_area_mm2:.6g}\\text{{ mm}}^2"
+        ),
+        "subst_lead_angle_deg": (
+            f"\\lambda = \\tan^{{-1}}\\left(\\frac{{{pitch_mm:.6g}}}"
+            f"{{\\pi({pitch_diameter_mm:.6g})}}\\right) = "
+            f"{lead_angle:.6g}^\\circ"
+        ),
+    }
 
 
 # =============================================================================
@@ -527,6 +820,65 @@ UTS_FASTENER_GEOMETRY: Dict[str, Dict[str, float]] = {
         "head_height": 16.67e-3,
     },
 }
+
+
+def _normalize_thread_geometry_catalogs() -> None:
+    """Replace rounded catalog thread fields with canonical calculations.
+
+    The literals above retain product head dimensions and readable source
+    values. Nominal diameter, pitch, stress area, pitch diameter, and the
+    profile-minor reference are recalculated here so every consumer uses the
+    same equations and exact designation-derived pitch.
+
+    Returns:
+        ``None``. Both module-level geometry dictionaries are updated in place.
+
+    References:
+        ISO 68-1, ISO 724, ASME B1.1, NIST Handbook 28, and NASA NTRS
+        20110016427.
+    """
+    for designation, record in ISO_FASTENER_GEOMETRY.items():
+        nominal_diameter, pitch = parse_metric_thread_designation(designation)
+        basic = calculate_basic_thread_geometry(
+            "iso_metric",
+            nominal_diameter,
+            pitch,
+        )
+        record.update(
+            {
+                "nominal_diameter": nominal_diameter,
+                "pitch": pitch,
+                "stress_area": float(basic["tensile_stress_area"]),
+                "minor_diameter": float(
+                    basic["profile_minor_diameter"]
+                ),
+                "pitch_diameter": float(basic["pitch_diameter_basic"]),
+            }
+        )
+
+    for designation, record in UTS_FASTENER_GEOMETRY.items():
+        nominal_diameter, pitch, _, _ = parse_unified_thread_designation(
+            designation
+        )
+        basic = calculate_basic_thread_geometry(
+            "unified",
+            nominal_diameter,
+            pitch,
+        )
+        record.update(
+            {
+                "nominal_diameter": nominal_diameter,
+                "pitch": pitch,
+                "stress_area": float(basic["tensile_stress_area"]),
+                "minor_diameter": float(
+                    basic["profile_minor_diameter"]
+                ),
+                "pitch_diameter": float(basic["pitch_diameter_basic"]),
+            }
+        )
+
+
+_normalize_thread_geometry_catalogs()
 
 
 # =============================================================================

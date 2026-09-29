@@ -1,0 +1,736 @@
+"""Physical thread profiles and measurement comparisons, in millimetres.
+
+Nominal catalogs and provenance come from thread_specifications. Basic geometry
+comes from fasteners (ISO 68-1 / ISO 724 and ASME B1.1). The search windows below
+are identification heuristics, NOT tolerance or inspection limits.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from functools import lru_cache
+from itertools import pairwise
+from typing import Any
+
+try:
+    from .pipe_threads import pipe_dimensions
+    from .screw_products import product_dimensions
+    from .thread_specifications import (
+        PIPE_PAIRS,
+        _pairs,
+        _parse_unified_size,
+        calculate_basic_thread_geometry,
+        parse_metric_thread_designation,
+        specification_catalog,
+    )
+except ImportError:
+    from pipe_threads import pipe_dimensions
+    from screw_products import product_dimensions
+    from thread_specifications import (
+        PIPE_PAIRS,
+        _pairs,
+        _parse_unified_size,
+        calculate_basic_thread_geometry,
+        parse_metric_thread_designation,
+        specification_catalog,
+    )
+
+
+MODEL_VERSION = "nominal-axial-v1"
+LIMITATION = (
+    "Representative nominal geometry, not tolerance-controlled manufacturing "
+    "geometry. Straight flanks and simplified flat roots; no allowance, root "
+    "radius, runout, lead-in, coating, or tolerance class is modeled."
+)
+
+
+def physical_profile(geometry: dict[str, Any]) -> dict[str, Any]:
+    """Express the existing explanatory axial profiles in physical coordinates.
+
+    ---Parameters---
+    geometry : dict
+        Basic geometry returned by fasteners, with lengths in metres.
+
+    ---Returns---
+    model : dict
+        Versioned millimetre dimensions and one-pitch [axial, radius] polylines.
+        Internal sharp root reference matches the educational SVG, not a tool.
+
+    ---LaTeX---
+    r = d / 2
+    x = P y / (2H)
+
+    r: radius; d: diameter; P: pitch; H: fundamental triangle height;
+    y: radial distance below the sharp external apex. All lengths in mm.
+    Reference: the basic profiles in ISO 68-1 and ASME B1.1, simplified as stated.
+    """
+    pitch = geometry["pitch"] * 1000
+    height = geometry["fundamental_height"] * 1000
+    radius = geometry["nominal_diameter"] * 500
+    root = radius - geometry["external_thread_depth"] * 1000
+    minor = radius - geometry["internal_thread_depth"] * 1000
+    sharp = radius + height / 8
+    crest_x = pitch / 16
+    root_x = pitch * (sharp - root) / (2 * height)
+    minor_x = pitch * (sharp - minor) / (2 * height)
+    return {
+        "version": MODEL_VERSION,
+        "unit": "mm",
+        "pitch_mm": pitch,
+        "major_diameter_mm": radius * 2,
+        "pitch_diameter_mm": geometry["pitch_diameter_basic"] * 1000,
+        "internal_minor_mm": minor * 2,
+        "external_minor_mm": root * 2,
+        "sharp_radius_mm": sharp,
+        "included_angle_deg": 60,
+        "external": [
+            [0, radius],
+            [crest_x, radius],
+            [root_x, root],
+            [pitch - root_x, root],
+            [pitch - crest_x, radius],
+            [pitch, radius],
+        ],
+        "internal": [
+            [0, sharp],
+            [minor_x, minor],
+            [pitch - minor_x, minor],
+            [pitch, sharp],
+        ],
+        "limitation": LIMITATION,
+    }
+
+
+@lru_cache(maxsize=1)
+def _records() -> tuple[dict[str, Any], ...]:
+    """Normalize the specification catalog once; callers never mutate records."""
+    records = []
+    for family, meta in specification_catalog().items():
+        machine = meta["kind"] == "machine"
+        # A DIN 7500 screw's thread is the metric thread of the same size, so
+        # listing it here would only duplicate that row.
+        if meta["kind"] == "product" and family != "wood":
+            continue
+        for size in meta["sizes"]:
+            geometry = model = None
+            pipe = screw = None
+            if machine:
+                if family == "metric":
+                    diameter, pitch = parse_metric_thread_designation(size)
+                else:
+                    nominal, tpi = size.rsplit(" ", 1)[0].rsplit("-", 1)
+                    diameter = _parse_unified_size(nominal) * 0.0254
+                    pitch = 0.0254 / float(tpi)
+                geometry = calculate_basic_thread_geometry(
+                    "iso_metric" if family == "metric" else "unified", diameter, pitch
+                )
+                geometry.update(designation=size, mode="explore", series=family.upper())
+                model = physical_profile(geometry)
+                geometry["physical_model"] = model
+                pitch_mm = model["pitch_mm"]
+            elif meta["kind"] == "product":
+                screw = product_dimensions(family, size)
+                pitch_mm = screw["pitch_mm"]
+                pipe = None
+            else:
+                pairs = dict(
+                    _pairs(PIPE_PAIRS["npt" if family in ("npt", "nptf") else "bsp"])
+                )
+                pitch_mm = 25.4 / float(pairs[size])
+                pipe = pipe_dimensions(family, size)
+                screw = None
+            records.append(
+                {
+                    "id": family + ":" + size,
+                    "family": family,
+                    "size": size,
+                    "designation": size if machine else size + " " + family.upper(),
+                    "kind": meta["kind"],
+                    "source": meta["standard"],
+                    "pitch_mm": pitch_mm,
+                    "tpi": 25.4 / pitch_mm,
+                    "diameter_mm": model["major_diameter_mm"]
+                    if model
+                    else (pipe or screw)["major_mm"],
+                    # A wood screw's root diameter is not carried, so it is
+                    # never offered as an internal-bore comparison.
+                    "internal_minor_mm": model["internal_minor_mm"]
+                    if model
+                    else pipe["minor_mm"]
+                    if pipe
+                    else None,
+                    # A tapered thread has no single diameter, so compare
+                    # against the band its own length can legitimately present.
+                    "external_band_mm": list(pipe["external_major_band_mm"])
+                    if pipe
+                    else None,
+                    "internal_band_mm": list(pipe["internal_minor_band_mm"])
+                    if pipe
+                    else None,
+                    "tapered": pipe["tapered"] if pipe else None,
+                    "model": model,
+                    "geometry": geometry,
+                    "diagram": None
+                    if machine or screw
+                    else {
+                        "kind": "pipe",
+                        "pitch_mm": pitch_mm,
+                        "pitch_in": pitch_mm / 25.4,
+                        "tpi": 25.4 / pitch_mm,
+                        "included_angle_deg": 60 if family in ("npt", "nptf") else 55,
+                        "diameter_taper": 0 if family == "bspp" else 1 / 16,
+                        "half_angle_deg": 0
+                        if family == "bspp"
+                        else math.degrees(math.atan(1 / 32)),
+                        "major_mm": pipe["major_mm"],
+                        "pitch_diameter_mm": pipe["pitch_mm_dia"],
+                        "minor_mm": pipe["minor_mm"],
+                    },
+                    "capabilities": {
+                        "specify": True,
+                        "identify_external": True,
+                        "identify_internal": pipe is not None or machine,
+                        "print_pitch": True,
+                        "print_profile": machine,
+                        "step": machine,
+                    },
+                }
+            )
+    return tuple(records)
+
+
+def _number(state: dict, key: str, default: float | None = None) -> float | None:
+    """Read an optional positive finite measurement, rejecting malformed values."""
+    value = state.get(key)
+    if value in (None, ""):
+        return default
+    try:
+        result = float(value)
+    except (ValueError, TypeError) as error:
+        raise ValueError(key.replace("_", " ") + " must be a number.") from error
+    if not math.isfinite(result) or result <= 0:
+        raise ValueError(key.replace("_", " ") + " must be positive and finite.")
+    if result < 1e-9 or result > 1e9:
+        raise ValueError(
+            key.replace("_", " ")
+            + " is outside the supported numerical range. Check its units."
+        )
+    return result
+
+
+def find_threads(state_json: str) -> dict[str, Any]:
+    """Compare observations to supported nominal threads without assigning a fit.
+
+    ---Parameters---
+    state_json : str
+        JSON: side external/internal/unsure; diameter, span, separation and
+        second_diameter in unit mm/in; optional pitch in pitch_unit mm/tpi;
+        intervals counts spaces, not crests. Optional diameter_uncertainty in
+        selected length unit and pitch_uncertainty in mm. Family all or catalog
+        key; form unknown/parallel/tapered; hand unknown/RH/LH is an observation.
+
+    ---Returns---
+    result : dict
+        State, shortlist, measurement explanation, warnings and search windows.
+        No score is a probability. Tapered pipe rows compare against the band
+        of diameters along their own length, not one plane.
+
+    ---LaTeX---
+    P = S / n
+    TPI = 25.4 / P
+    T = |d_b - d_a| / L
+
+    P: pitch (mm); S: span (mm); n: positive integer pitch intervals;
+    TPI: threads/inch; T: diameter taper; d_a, d_b: measured diameters (mm);
+    L: positive separation (mm). Search defaults below are engineering
+    comparison windows, not dimensional limits from ISO or ASME standards.
+    """
+    state = json.loads(state_json)
+    side = state.get("side", "external")
+    unit = state.get("unit", "mm")
+    pitch_unit = state.get("pitch_unit", "mm")
+    form = state.get("form", "unknown")
+    family = state.get("family", "all")
+    if side not in ("external", "internal", "unsure") or unit not in ("mm", "in"):
+        raise ValueError("Choose a supported measurement type and length unit.")
+    if pitch_unit not in ("mm", "tpi") or form not in (
+        "unknown",
+        "parallel",
+        "tapered",
+    ):
+        raise ValueError("Choose a supported pitch unit and thread form.")
+    if family != "all" and family not in specification_catalog():
+        raise ValueError("Unknown family filter.")
+    if state.get("hand", "unknown") not in ("unknown", "RH", "LH"):
+        raise ValueError("Choose unknown, right hand, or left hand.")
+    factor = 25.4 if unit == "in" else 1
+    diameter = _number(state, "diameter")
+    diameter = diameter * factor if diameter is not None else None
+    pitch = _number(state, "pitch")
+    if pitch is not None and pitch_unit == "tpi":
+        pitch = 25.4 / pitch
+    equations = []
+    span, intervals = _number(state, "span"), _number(state, "intervals")
+    if span is not None or intervals is not None:
+        if span is None or intervals is None or not intervals.is_integer():
+            raise ValueError(
+                "Enter a span and a positive whole number of intervals (spaces)."
+            )
+        pitch = span * factor / intervals
+        equations.append(
+            f"Equation (1): P = S / n = {span * factor:g} / {intervals:g} = {pitch:g} mm. P: pitch; S: span in mm; n: intervals."
+        )
+    if pitch is not None:
+        equations.append(
+            f"Equation (2): TPI = 25.4 / P = 25.4 / {pitch:g} = {25.4 / pitch:g}. P: pitch in mm; TPI: threads per inch."
+        )
+    taper = None
+    second, separation = _number(state, "second_diameter"), _number(state, "separation")
+    if second is not None or separation is not None:
+        if diameter is None or second is None or separation is None:
+            raise ValueError("Taper needs two diameters and their axial separation.")
+        taper = abs(second * factor - diameter) / (separation * factor)
+        equations.append(
+            f"Equation (3): T = |d_b - d_a| / L = |{second * factor:g} - {diameter:g}| / {separation * factor:g} = {taper:g}. T: diameter taper; diameters and separation in mm."
+        )
+    diameter_uncertainty = (
+        _number(state, "diameter_uncertainty", 0.05 / factor) * factor
+    )
+    pitch_uncertainty = _number(state, "pitch_uncertainty", 0.03)
+    # Allow ordinary crest truncation/wear and a wider internal basic-bore
+    # comparison. These symmetric windows deliberately retain lookalikes.
+    diameter_window = diameter_uncertainty + (0.35 if side == "internal" else 0.20)
+    pitch_window = pitch_uncertainty
+    warnings = [
+        "Preliminary identification only. Fit class, material, process, strength and pressure rating cannot be inferred. Do not force an unknown thread into a mating part.",
+    ]
+    if side == "internal":
+        warnings.append(
+            "Internal diameter compares your bore reading to BASIC minor diameter, not acceptance limits. Caliper access, crest truncation and wear can change the reading."
+        )
+    if side == "unsure" and diameter is not None:
+        warnings.append(
+            "Diameter is not used until its measurement basis is known. Compare pitch or measure a known mating screw."
+        )
+    if pitch is None:
+        warnings.append(
+            "Measure pitch across several intervals to separate same-diameter candidates, or print a comparison sheet."
+        )
+    if taper is not None:
+        taper_error = 2 * diameter_uncertainty / (separation * factor)
+        if taper > taper_error:
+            form = "tapered"
+        else:
+            warnings.append(
+                "The measured taper is within diameter uncertainty; it does not establish a parallel thread."
+            )
+    candidates = []
+    compared_any = False
+    compared_diameter = False
+    for record in _records():
+        if family != "all" and record["family"] != family:
+            continue
+        # Only rows carrying a diameter for this side can be compared on it.
+        if not record["capabilities"][
+            "identify_internal" if side == "internal" else "identify_external"
+        ]:
+            continue
+        # ISO 7 rows stay in a parallel search because Rp is parallel.
+        if form == "tapered" and record["tapered"] is not True:
+            continue
+        if form == "parallel" and record["family"] in ("npt", "nptf"):
+            continue
+        expected = (
+            record["internal_minor_mm"] if side == "internal" else record["diameter_mm"]
+        )
+        band = (
+            record["internal_band_mm"]
+            if side == "internal"
+            else record["external_band_mm"]
+        )
+        use_diameter = (
+            expected is not None and side != "unsure" and diameter is not None
+        )
+        if not use_diameter and pitch is None:
+            continue
+        compared_any = True
+        compared_diameter = compared_diameter or use_diameter
+        # A tapered thread presents a range of diameters along its own length,
+        # so measure the distance outside that range rather than to one plane.
+        if use_diameter and band and band[1] > band[0]:
+            if diameter < band[0]:
+                delta_d = diameter - band[0]
+            elif diameter > band[1]:
+                delta_d = diameter - band[1]
+            else:
+                delta_d = 0.0
+        else:
+            delta_d = diameter - expected if use_diameter else None
+        delta_p = pitch - record["pitch_mm"] if pitch is not None else None
+        if delta_d is not None and abs(delta_d) > diameter_window + 1e-10:
+            continue
+        if delta_p is not None and abs(delta_p) > pitch_window + 1e-10:
+            continue
+        score = sum(
+            value
+            for value in (
+                abs(delta_d) / diameter_window if delta_d is not None else 0,
+                abs(delta_p) / pitch_window if delta_p is not None else 0,
+            )
+        )
+        candidates.append(
+            {
+                **record,
+                "delta_d_mm": delta_d,
+                "delta_p_mm": delta_p,
+                "expected_diameter_mm": expected if side != "unsure" else None,
+                "basis": (
+                    "basic internal minor"
+                    if side == "internal"
+                    else "nominal external major"
+                )
+                + (" band along the taper" if band and band[1] > band[0] else ""),
+                "pitch_only": not use_diameter,
+                "distance": score,
+            }
+        )
+    candidates.sort(
+        key=lambda row: (row["pitch_only"], row["distance"], row["designation"])
+    )
+    warnings.insert(
+        1,
+        (
+            f"Search windows: diameter ±{diameter_window:g} mm (entered uncertainty plus"
+            f" {'0.35' if side == 'internal' else '0.20'} mm comparison allowance);"
+            f" pitch ±{pitch_window:g} mm. These are not standard tolerance limits."
+        )
+        if compared_diameter
+        else f"Search window: pitch ±{pitch_window:g} mm. These are not standard tolerance limits. No diameter was used in this comparison.",
+    )
+    pipe_rows = [row for row in candidates if row["kind"] == "pipe"]
+    if pipe_rows:
+        warnings.append(
+            "Pipe diameters are basic dimensions, not acceptance limits. Nominal pipe size is not OD. A tapered thread is compared against the band of diameters between its small end and the end of its effective thread, because where you measure along the taper changes the reading."
+        )
+        if any(row["pitch_only"] for row in pipe_rows):
+            warnings.append(
+                "Some pipe candidates were compared on PITCH ONLY because no usable diameter was given."
+            )
+        pipe_families = {row["family"] for row in pipe_rows}
+        if {"npt", "nptf"} <= pipe_families:
+            warnings.append(
+                "NPT and NPTF share basic dimensions. These measurements cannot separate them; that needs crest and root truncation inspection."
+            )
+        # 60 degree American and 55 degree Whitworth forms overlap on size.
+        if len({60 if row in ("npt", "nptf") else 55 for row in pipe_families}) > 1:
+            warnings.append(
+                "Candidates include both 60 degree American and 55 degree Whitworth forms, which can share a nominal size and pitch. Check the flank angle to separate them."
+            )
+    usable = pitch is not None or (diameter is not None and side != "unsure")
+    status = (
+        "incomplete"
+        if not usable
+        # Nothing could be compared: the observations given do not apply to any
+        # row left after filtering. That is not the same as a poor match.
+        else "no-comparable-data"
+        if not compared_any
+        else "no-close-supported-match"
+        if not candidates
+        else "ambiguous"
+        if len(candidates) > 1 or pitch is None or candidates[0]["pitch_only"]
+        else "possible-match"
+    )
+    return {
+        "status": status,
+        "candidates": candidates,
+        "warnings": warnings,
+        "equations": equations,
+        "diameter_mm": diameter,
+        "pitch_mm": pitch,
+        "taper": taper,
+        "side": side,
+        "observations": state,
+        "diameter_window_mm": diameter_window,
+        "pitch_window_mm": pitch_window,
+    }
+
+
+def comparison_records() -> list[dict[str, Any]]:
+    """Return supported pitch/profile records for local printing.
+
+    ---Parameters---
+
+    ---Returns---
+    records : list
+        JSON-safe nominal records, with provenance and per-operation capabilities.
+
+    ---LaTeX---
+    P = 25.4 / TPI
+
+    P: pitch in mm; TPI: threads per inch. Catalog sources: module docstring.
+    """
+    return list(_records())
+
+
+def _profile_area(profile: list, pitch: float, radius: float, internal: bool) -> float:
+    r"""Integrate a helical section clipped by a circular end envelope.
+
+    Parameters are an axial/radial profile in mm, pitch in mm, envelope radius
+    in mm and internal/external side. Returns angular-average area in mm².
+    The internal result is bore area; the external result is solid area.
+    Each linear profile segment is split where it crosses the envelope.
+    Equation: \(A = \frac{\pi}{P}\int_0^P \min(r(x)^2,q^2)\,dx\)
+    for an external thread; use max for the internal bore. Here P is pitch,
+    x is axial position, r is profile radius and q is envelope radius.
+    This is geometry integration, not a standard
+    acceptance or strength formula.
+    """
+    integral = 0.0
+    for (x1, r1), (x2, r2) in pairwise(profile):
+        cuts = [0.0, 1.0]
+        if r2 != r1 and 0 < (radius - r1) / (r2 - r1) < 1:
+            cuts.insert(1, (radius - r1) / (r2 - r1))
+        for a, b in pairwise(cuts):
+            ra, rb = r1 + a * (r2 - r1), r1 + b * (r2 - r1)
+            clipped = ((ra + rb) / 2 < radius) if internal else ((ra + rb) / 2 > radius)
+            integral += (
+                (x2 - x1)
+                * (b - a)
+                * (radius * radius if clipped else (ra * ra + ra * rb + rb * rb) / 3)
+            )
+    return math.pi * integral / pitch
+
+
+def _end_volume(
+    profile: list, pitch: float, depth: float, tip: float, base: float, internal: bool
+) -> float:
+    r"""Return clipped solid/bore volume for one conical lead-in, in mm³.
+
+    profile and pitch use mm; depth is axial chamfer length; tip and base are
+    envelope radii at the end and the full-profile boundary. internal selects
+    bore rather than solid volume. \(V = \int_0^c A(q(z))\,dz\), where c is
+    axial depth, z is axial position, A is clipped area and q varies linearly
+    from tip to base radius.
+    Split at every profile radius. A is cubic on each interval, so Simpson's
+    rule is exact there apart from floating-point rounding. This independent
+    analytical reference checks the CAD boolean, without using a CAD kernel.
+    """
+    cuts = sorted(
+        {
+            0.0,
+            1.0,
+            *(
+                (r - tip) / (base - tip)
+                for _, r in profile
+                if 0 < (r - tip) / (base - tip) < 1
+            ),
+        }
+    )
+    result = 0.0
+    for a, b in pairwise(cuts):
+        areas = [
+            _profile_area(profile, pitch, tip + t * (base - tip), internal)
+            for t in (a, (a + b) / 2, b)
+        ]
+        result += depth * (b - a) * (areas[0] + 4 * areas[1] + areas[2]) / 6
+    return result
+
+
+def step_model(state_json: str) -> dict[str, Any]:
+    r"""Validate a nominal straight-thread specimen for the browser CAD worker.
+
+    ---Parameters---
+    state_json : str
+        JSON with family, size, hand RH/LH, specimen external/internal, length
+        and body_diameter in mm. Explicit blind_coupon acknowledgement required
+        when feature is blind. Blank length uses the export-only default 2d.
+        end_style is chamfer (default) or square; ends is both, start or end.
+        chamfer_angle is the finished angle to the axis, in degrees (default
+        45). chamfer_depth is axial length in mm, blank for a suggested end
+        diameter that clears the root by 0.05 pitch radially. These choices
+        define a representative specimen, not ISO 4753 dimensional compliance.
+
+    ---Returns---
+    model : dict
+        Physical profile, end envelope, bounded length, body diameter,
+        independent reference volume, embedded STEP name and CAD detail note.
+
+    ---LaTeX---
+    L_0 = 2d
+    N = L / P
+    V = \pi L \sum_i \Delta x_i (r_i^2 + r_i r_{i+1} + r_{i+1}^2) / (3P)
+
+    L_0: suggested specimen length; d: major diameter; L: model length;
+    P: pitch; N: turns. Millimetres throughout. L is overall specimen length,
+    not usable full-thread length. The equation above is the square-end volume.
+    Chamfers replace each end segment by integral A(q(z)) dz, where q is the
+    linear conical envelope and A clips the radial profile (see _end_volume).
+    The full-profile envelope span is L minus the sum of chamfer axial lengths.
+    V: external solid volume (mm cubed);
+    x_i, r_i: axial/radial profile vertices. The internal coupon subtracts this
+    swept bore volume from its surrounding cylinder. This identity integrates
+    the piecewise linear axial profile over a full angular revolution at each
+    height; it also applies to clipped fractional turns.
+    This does not model a tolerance class.
+    """
+    state = json.loads(state_json)
+    record = next(
+        (
+            row
+            for row in _records()
+            if row["family"] == state.get("family") and row["size"] == state.get("size")
+        ),
+        None,
+    )
+    if record is None or not record["capabilities"]["step"]:
+        raise ValueError(
+            "STEP needs a validated metric or Unified profile. Pipe and supplier profiles are not modeled."
+        )
+    specimen, hand = state.get("specimen", "external"), state.get("hand", "RH")
+    if specimen not in ("external", "internal") or hand not in ("RH", "LH"):
+        raise ValueError("Choose a supported specimen and handedness.")
+    if state.get("feature") == "blind" and (
+        state.get("blind_coupon") is not True or specimen != "internal"
+    ):
+        raise ValueError(
+            "Blind geometry is not supported. Explicitly select a separate through-thread reference coupon."
+        )
+    model = record["model"]
+    diameter, pitch = model["major_diameter_mm"], model["pitch_mm"]
+    length = _number(state, "length", 2 * diameter)
+    if length < pitch or length / pitch > 20 or length > 250:
+        raise ValueError(
+            "Use a specimen at least one pitch long, at most 20 turns and at most 250 mm. This limits browser CAD work."
+        )
+    body = _number(state, "body_diameter", 1.8 * diameter)
+    if body > 500:
+        raise ValueError("Use a coupon outside diameter at most 500 mm.")
+    if specimen == "internal" and body <= 2 * model["sharp_radius_mm"] + 0.2:
+        raise ValueError(
+            "Coupon body must leave more than 0.1 mm wall beyond the thread root."
+        )
+    profile = model[specimen]
+    swept_volume = (
+        math.pi
+        * length
+        / pitch
+        * sum(
+            (x2 - x1) * (r1 * r1 + r1 * r2 + r2 * r2) / 3
+            for (x1, r1), (x2, r2) in pairwise(profile)
+        )
+    )
+    expected_volume = (
+        math.pi * body * body * length / 4 - swept_volume
+        if specimen == "internal"
+        else swept_volume
+    )
+    internal = specimen == "internal"
+    style, ends = state.get("end_style", "chamfer"), state.get("ends", "both")
+    if style not in ("chamfer", "square") or ends not in ("both", "start", "end"):
+        raise ValueError(
+            "Choose chamfered or square ends, at the start, end or both ends."
+        )
+    angle = _number(state, "chamfer_angle", 45) if style == "chamfer" else 45.0
+    if not 15 <= angle <= 75:
+        raise ValueError(
+            "Use a finished chamfer angle from 15 to 75 degrees to the axis."
+        )
+    base = min(r for _, r in profile) if internal else max(r for _, r in profile)
+    root = max(r for _, r in profile) if internal else min(r for _, r in profile)
+    slope = math.tan(math.radians(angle))
+    depth = (
+        _number(state, "chamfer_depth", (abs(root - base) + 0.05 * pitch) / slope)
+        if style == "chamfer"
+        else 0.0
+    )
+    tip = base + depth * slope * (1 if internal else -1)
+    count = (2 if ends == "both" else 1) if style == "chamfer" else 0
+    if style == "chamfer":
+        if tip <= 0 or (tip < root if internal else tip > root):
+            raise ValueError(
+                "The chamfer must clear the thread root and leave a positive end diameter."
+            )
+        if internal and tip >= body / 2 - 0.1:
+            raise ValueError(
+                "The entry chamfer must leave more than 0.1 mm of coupon wall."
+            )
+        if length - count * depth < pitch - 1e-10:
+            raise ValueError(
+                "Leave at least one pitch of full-profile span between the chamfers. Increase length or reduce the lead-in."
+            )
+        chamfer_volume = _end_volume(profile, pitch, depth, tip, base, internal)
+        delta = count * (chamfer_volume - swept_volume / length * depth)
+        expected_volume += -delta if internal else delta
+    start = depth if style == "chamfer" and ends in ("both", "start") else 0.0
+    finish = length - (depth if style == "chamfer" and ends in ("both", "end") else 0.0)
+    location = {
+        "both": "BOTH FACES" if internal else "BOTH ENDS",
+        "start": "START FACE (z = 0)",
+        "end": "END FACE (z = overall length)",
+    }[ends]
+    end_note = (
+        f"FINISHED {'ENTRY' if internal else 'LEAD-IN'} CHAMFER: {location}; "
+        f"axial length {depth:.4f} mm each; "
+        f"{angle:g} deg to the thread axis; {'entry' if internal else 'tip'} diameter {2 * tip:.4f} mm."
+        if style == "chamfer"
+        else "SQUARE ENDS: partial threads meet the end faces; no lead-in is modeled."
+    )
+    cad_note = "\n".join(
+        [
+            "REPRESENTATIVE CAD SPECIMEN (EXPORT ONLY)",
+            f"{record['designation']} {hand}; {'internal through-thread coupon' if internal else 'external stud section'}.",
+            f"OVERALL MODEL LENGTH: {length:.4f} mm. "
+            + (f"COUPON OUTSIDE DIAMETER: {body:.4f} mm." if internal else ""),
+            end_note,
+            (
+                f"FULL-PROFILE ENVELOPE SPAN: {finish - start:.4f} mm (z = {start:.4f} to {finish:.4f} mm). "
+                "Excludes chamfers; not a guaranteed usable engagement length. End phase still produces partial turns."
+            ),
+            (
+                "These specimen choices do not replace drawing dimensions or full-thread-length requirements. "
+                "Confirm end dimensions and usable engagement on the released part drawing."
+            ),
+            (
+                "When selected, the entry chamfer describes the finished hole, not the tap's cutting lead. "
+                "No standardized entry dimensions or tapping process are specified."
+                if internal
+                else "ISO 4753 is a reference for metric external fastener ends only. No end-type compliance is claimed. "
+                "For rolled external threads, specify the FINISHED end shape. Blank chamfer and tooling are process-dependent; "
+                "the finished angle is not a rolling-blank instruction."
+            ),
+            (
+                "Nominal simplified geometry only. Fit classes are requirements, not modeled tolerance limits. "
+                "No root rounding, coating, runout, blind bottom, pilot/dog point or rolling-process simulation. "
+                "A viewer section removes material on screen only; the STEP remains a complete solid."
+            ),
+        ]
+    )
+    return {
+        **model,
+        "designation": record["designation"],
+        "source": record["source"],
+        "expected_volume_mm3": expected_volume,
+        "length_mm": length,
+        "body_diameter_mm": body,
+        "hand": hand,
+        "specimen": specimen,
+        "length_is_default": state.get("length") in (None, ""),
+        "end_style": style,
+        "ends": ends,
+        "chamfer_depth_mm": depth,
+        "chamfer_angle_deg": angle,
+        "end_radius_mm": tip,
+        "envelope_base_radius_mm": base,
+        "full_profile_range_mm": [start, finish],
+        "end_condition": end_note,
+        "cad_note": cad_note,
+        "step_name": f"{record['designation']} {hand} {specimen} L{length:g}mm "
+        + (
+            f"CHAMFER {ends.upper()} C{depth:.4f}mm A{angle:g}deg"
+            if style == "chamfer"
+            else "SQUARE ENDS"
+        )
+        + " REPRESENTATIVE v2",
+        "tolerance_requirement": state.get("fit", "Unspecified"),
+    }
