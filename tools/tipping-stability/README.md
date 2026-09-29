@@ -39,7 +39,7 @@ and track. A force's positive z component lifts away from the ground.
 
 ## Connecting the model to the FBD
 
-Six alternative diagram techniques are available in the
+Eight alternative diagram techniques are available in the
 [FBD comparison gallery](prototypes/). They share the same calculated cases and
 include working Three.js and JSXGraph trials. The [research notes](prototypes/README.md)
 describe the arrow anchoring issue and library options. A replacement for the

@@ -6,7 +6,7 @@
 - [x] Always-present fixed isometric model linked to an edge-normal FBD.
 - [x] Shared force labels, ground reactions, component locations, and selected edges.
 - [x] Four-control starting view, optional FBD, and separate disclosure of input customizations, force values, and calculations.
-- [x] Six FBD rendering studies with shared solver cases and library research: [comparison gallery](prototypes/).
+- [x] Eight FBD rendering studies with shared solver cases and library research: [comparison gallery](prototypes/).
 - [ ] Select an FBD study and integrate it into the calculator after visual review.
 - [ ] Payload-position sweeps and uncertainty ranges for center of mass.
 - [ ] Worst-case caster orientation search.

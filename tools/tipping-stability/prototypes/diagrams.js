@@ -70,13 +70,22 @@ function intersects(box, other) {
     return box.x < other.x+other.w && box.x+box.w > other.x && box.y < other.y+other.h && box.y+box.h > other.y;
 }
 
+let textMetrics;
+function textBox(item) {
+    textMetrics ||= document.createElement('canvas').getContext('2d');
+    textMetrics.font=`${item.bold?600:400} ${item.size}px "Helvetica Neue", Arial, sans-serif`;
+    const width=textMetrics.measureText(item.text).width;
+    const shift=item.align==='end'?width:item.align==='middle'?width/2:0;
+    return {x:item.p[0]-shift-3,y:item.p[1]-item.size,w:width+6,h:item.size+5};
+}
+
 function labelForces(pen) {
-    const occupied = pen.items.filter((p) => p.type === 'text').map((p) => ({x:p.p[0]-4,y:p.p[1]-p.size,w:p.text.length*p.size*.6+8,h:p.size+6}));
+    const occupied = pen.items.filter((p) => p.type === 'text').map(textBox);
     const arrows = pen.items.filter((p) => p.type === 'arrow' && p.id && !p.noLabel);
     for (const arrow of arrows) {
         const origin = arrow.headAtAnchor ? arrow.a : arrow.b;
-        const candidates = [[14,-9],[14,17],[-30,-9],[-30,19],[7,-22],[7,31],[30,0],[-44,0]];
-        const width = arrow.id.length*9+8, height = 21;
+        const candidates = [[14,-9],[14,17],[-30,-9],[-30,19],[7,-22],[7,31],[30,0],[-44,0],[25,-36],[-42,-36],[25,43],[-42,43],[53,-9],[-67,17],[14,-54],[-30,61]];
+        const {w:width,h:height}=textBox({text:arrow.id,p:[0,0],size:15,bold:true});
         let best;
         for (const [dx,dy] of candidates) {
             const x = origin[0]+dx, y = origin[1]+dy;
@@ -93,6 +102,10 @@ function labelForces(pen) {
             if (!best || cost<best.cost) best={x,y,box,cost};
         }
         occupied.push(best.box);
+        if(Math.hypot(best.x-origin[0],best.y-origin[1])>34) {
+            const nearest=[Math.max(best.box.x,Math.min(best.box.x+best.box.w,origin[0])),Math.max(best.box.y,Math.min(best.box.y+best.box.h,origin[1]))];
+            pen.line(origin,nearest,{stroke:'soft',width:.8,opacity:arrow.opacity,dash:[2,3],labelLeader:true});
+        }
         pen.text([best.x,best.y],arrow.id,{size:15,bold:true,opacity:arrow.opacity,id:arrow.id});
     }
 }
@@ -210,11 +223,87 @@ export function svgMarkup(scene, {title='Free-body diagram',interactive=true}={}
         if(p.type==='line')return `<line x1="${p.a[0]}" y1="${p.a[1]}" x2="${p.b[0]}" y2="${p.b[1]}" ${style}/>`;
         if(p.type==='circle')return `<circle ${p.pointName?`data-point="${p.pointName}"`:''} cx="${p.p[0]}" cy="${p.p[1]}" r="${p.radius}" ${style}/>`;
         if(p.type==='poly')return `<polygon points="${p.points.map((q)=>q.join(',')).join(' ')}" ${style}/>`;
-        if(p.type==='text')return `<text x="${p.p[0]}" y="${p.p[1]}" font-size="${p.size}" fill="${stroke}" opacity="${p.opacity??1}" text-anchor="${p.align||'start'}" font-weight="${p.bold?600:400}" paint-order="stroke" stroke="${colors.paper}" stroke-width="4" stroke-linejoin="round">${escape(p.text)}</text>`;
+        if(p.type==='text')return `<text ${p.actionId?`class="force" data-force="${p.actionId}" tabindex="0" role="button" aria-label="Inspect ${p.actionId}"`:''} x="${p.p[0]}" y="${p.p[1]}" font-size="${p.size}" fill="${stroke}" opacity="${p.opacity??1}" text-anchor="${p.align||'start'}" font-weight="${p.bold?600:400}" paint-order="stroke" stroke="${colors.paper}" stroke-width="4" stroke-linejoin="round">${escape(p.text)}</text>`;
         const line=`x1="${p.a[0]}" y1="${p.a[1]}" x2="${p.b[0]}" y2="${p.b[1]}"`;
         return `<g class="force" ${p.id?`data-force="${p.id}" data-anchor-x="${p.anchor[0]}" data-anchor-y="${p.anchor[1]}" data-head-anchor="${p.headAtAnchor}" ${interactive?'tabindex="0" role="button"':''} aria-label="Inspect ${p.id}"`:''} opacity="${p.opacity??1}"><line ${line} stroke="${colors.paper}" stroke-width="6"/><line class="shaft" ${line} stroke="${stroke}" stroke-width="${p.width||2}" ${p.dash?.length?`stroke-dasharray="${p.dash.join(' ')}"`:''}/><polygon points="${arrowHead(p.a,p.b).map((q)=>q.join(',')).join(' ')}" fill="${stroke}"/>${p.id?`<line ${line} stroke="transparent" stroke-width="17"/>`:''}</g>`;
     });
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-label="${escape(title)}">${pieces.join('')}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="${interactive?'group':'img'}" aria-label="${escape(title)}">${pieces.join('')}</svg>`;
+}
+
+/** Keep force names in a separate column; only dotted annotation leaders leave the arrows. */
+export function labelRailScene(view,options) {
+    const base=sectionScene(view,{...options,compact:true});
+    const transform=(p)=>[p[0]*.82-16,p[1]*.82+32];
+    const pen=primitives();
+    for(const item of base.items) {
+        if(item.labelLeader || (item.type==='text' && view.forces.some((force)=>force.id===item.text)))continue;
+        const copy={...item};
+        if(copy.p)copy.p=transform(copy.p);
+        if(copy.a)copy.a=transform(copy.a);
+        if(copy.b)copy.b=transform(copy.b);
+        if(copy.anchor)copy.anchor=transform(copy.anchor);
+        if(copy.points)copy.points=copy.points.map(transform);
+        if(copy.type==='arrow')copy.noLabel=true;
+        pen.items.push(copy);
+    }
+    pen.text([26,28],'LABELS OUTSIDE THE BODY',{size:11,stroke:'muted'});
+    pen.text([654,28],view.edge.label,{size:11,stroke:'muted',align:'end'});
+    const entries=view.forces.map((force)=>{
+        const arrow=pen.items.find((p)=>p.type==='arrow'&&p.id===force.id);
+        return {force,point:arrow?(arrow.headAtAnchor?arrow.a:arrow.b):transform(base.project(force.point))};
+    }).sort((a,b)=>a.point[1]-b.point[1]||a.point[0]-b.point[0]);
+    const step=Math.min(58,306/Math.max(1,entries.length-1));
+    const top=60+(306-step*(entries.length-1))/2;
+    const shortNames={W:'Weight',I:'Inertia',N:'Normal reaction',T:'Tangential reaction'};
+    entries.forEach(({force,point},index)=>{
+        const y=top+index*step,opacity=options.selected!=='all'&&options.selected!==force.id? .2:1;
+        const elbow=[458,y];
+        pen.line(point,elbow,{stroke:'soft',width:.8,dash:[2,4],opacity});
+        pen.line(elbow,[480,y],{stroke:'soft',width:.8,dash:[2,4],opacity});
+        pen.text([492,y-4],`${force.id}  ${shortNames[force.id]||'Applied force'}`,{size:13,bold:true,opacity,actionId:force.id});
+        const out=Math.abs(force.out_of_plane)>1e-7?` · ${force.out_of_plane>0?'⊙':'⊗'} ${fmt(Math.abs(force.out_of_plane),0)} N`:'';
+        pen.text([492,y+15],`${fmt(norm([...force.vector,force.out_of_plane]),0)} N${out}`,{size:12,stroke:'muted',opacity});
+    });
+    pen.text([26,HEIGHT-17],'Dotted lines connect labels only',{size:12,stroke:'muted'});
+    pen.text([654,HEIGHT-17],'Values are full 3D magnitudes',{size:11,stroke:'muted',align:'end'});
+    return {items:pen.items,view};
+}
+
+/** Ground-plane locator. It uses the solver polygon and reaction directly. */
+export function planMarkup(view) {
+    const colors=palette(),polygon=view.e.polygon,center=view.e.center.slice(0,2),reaction=view.e.reaction_point;
+    const points=[...polygon,center,reaction];
+    const lo=[0,1].map((axis)=>Math.min(...points.map((p)=>p[axis])));
+    const hi=[0,1].map((axis)=>Math.max(...points.map((p)=>p[axis])));
+    const scale=Math.min(175/Math.max(hi[0]-lo[0],.1),173/Math.max(hi[1]-lo[1],.1));
+    const project=(p)=>[140+(p[0]-(hi[0]+lo[0])/2)*scale,161-(p[1]-(hi[1]+lo[1])/2)*scale];
+    const line=(a,b,attributes='')=>`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" ${attributes}/>`;
+    const label=(p,text,{align='start',size=12,muted=false}={})=>`<text x="${p[0]}" y="${p[1]}" font-size="${size}" text-anchor="${align}" fill="${muted?colors.muted:colors.ink}" paint-order="stroke" stroke="${colors.paper}" stroke-width="3">${escape(text)}</text>`;
+    let content=label([18,24],'PLAN VIEW',{muted:true,size:11});
+    content+=`<polygon points="${polygon.map((p)=>project(p).join(',')).join(' ')}" fill="${colors.fill}"/>`;
+    for(const edge of view.e.edges) {
+        const a=project(edge.start),b=project(edge.end),active=edge.id===view.edge.id;
+        const midpoint=mul(add(a,b),.5),outward=[-edge.normal[0],edge.normal[1]];
+        content+=`<g data-plan-edge="${edge.id}" tabindex="0" role="button" aria-label="Show section through ${escape(edge.label)}" aria-pressed="${active}">${line(a,b,`stroke="${active?colors.ink:colors.soft}" stroke-width="${active?3:1.5}"`)}${line(a,b,'stroke="transparent" stroke-width="18"')}${label(add(midpoint,add(mul(outward,18),[0,4])),edge.id,{align:'middle'})}</g>`;
+    }
+    for(const point of polygon){const p=project(point);content+=`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${colors.ink}"/>`;}
+    const cg=project(center),r=project(reaction);
+    content+=`<circle data-plan-point="G" cx="${cg[0]}" cy="${cg[1]}" r="5" fill="${colors.paper}" stroke="${colors.ink}"/>`;
+    content+=`<path data-plan-point="R" d="M${r[0]},${r[1]-5} l5,5 l-5,5 l-5,-5z" fill="none" stroke="${view.section.reaction[0]<-1e-8?colors.danger:colors.ink}" stroke-width="1.5"/>`;
+    if(norm(sub(cg,r))<9)content+=label(add(cg,[10,-12]),'G₀ / R');
+    else{content+=label(add(cg,[10,-10]),'G₀');content+=label(add(r,[-10,18]),'R',{align:'end'});}
+    // This is a direction cue, placed away from the central G/R annotations.
+    const edgeFoot=add(view.edge.start,mul(sub(view.edge.end,view.edge.start),.22));
+    const foot=project(edgeFoot),inward=[view.edge.normal[0],-view.edge.normal[1]],end=add(foot,mul(inward,32));
+    content+=line(foot,end,`stroke="${colors.ink}" stroke-width="1.1"`);
+    content+=`<polygon points="${arrowHead(foot,end,6).map((p)=>p.join(',')).join(' ')}" fill="${colors.ink}"/>`;
+    content+=label(add(end,[7,-6]),'u');
+    content+=line([28,279],[54,279],`stroke="${colors.muted}"`)+line([28,279],[28,253],`stroke="${colors.muted}"`);
+    content+=label([59,283],'x')+label([24,247],'y');
+    content+=label([262,279],`${fmt(1/scale*50,2)} m`,{align:'end',size:11});
+    content+=line([210,289],[260,289],`stroke="${colors.muted}" stroke-width="2"`);
+    content+=label([140,315],'Select an edge',{align:'middle',size:11});
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 330" role="group" aria-label="Plan view: select a support edge">${content}</svg>`;
 }
 
 export function renderCanvas(canvas,scene) {

@@ -22,12 +22,15 @@ has not been selected for the calculator.
 | D: Moment about the edge | SVG force line and perpendicular arm | The relationship between application point, line of action, and tipping moment. |
 | E: Orbit the assembly | Three.js, orthographic camera | Attachment points and vectors that disappear in a 2D projection. |
 | F: Geometry board | JSXGraph SVG renderer | Native arrow/point objects, pan, zoom, and the dependency's effect on implementation and appearance. |
+| G: Labels outside the body | SVG with a separate label column | Whether names and values remain legible when several arrows share one point. Select a label to trace its force. |
+| H: Plan and section | Linked SVG views | Select a support edge in the plan and check that the adjacent section is easy to identify. |
 
-All studies share seven solver-generated cases and the selected support edge.
+All studies share eight solver-generated cases and the selected support edge.
 The cases include level ground, cross slope, an elevated push, turning on a
-slope, a triangular footprint with oblique loads, tipping onset, and an outside
-reaction. “Inspect force” highlights the same force across the views. Expand a
-study to give it the full available width.
+slope, a triangular footprint with oblique loads, four forces sharing the mass
+center, tipping onset, and an outside reaction. “Inspect force” highlights the
+same force across the views. Expand a study or choose it from “View” to give it
+the full available width.
 
 Schematic arrow lengths are the default so small forces remain visible.
 Proportional mode uses one scale for the projected vectors within each 2D study
@@ -106,10 +109,28 @@ segments, polygons, labels, SVG rendering, and interaction. The library offers
 MIT and LGPL licensing choices. F uses version 1.13.3 under
 [MIT](vendor/LICENSE.MIT), with the runtime vendored for repeatable local review.
 
-F constructs the same scene as A with JSXGraph objects. Pan and zoom come from
-the library. Physical application points, force projections, arrow conventions,
-label placement, and the chosen visual hierarchy remain our responsibility.
-That is why adding a graphics library alone does not fix the current defect.
+F constructs the same scene as A with fixed JSXGraph objects. Pan and zoom come
+from the library; this trial uses our shared label positions. It does not yet
+exercise JSXGraph's dependent geometry or automatic label placement.
+
+JSXGraph has [dependent points](https://jsxgraph.org/docs/Point.html),
+[automatic label positioning](https://jsxgraph.org/docs/Label.html#autoPosition),
+and [measurement labels](https://jsxgraph.org/docs/Smartlabel.html). Automatic
+positioning searches nearby locations to reduce overlaps; it is disabled by
+default. These features deserve a separate trial before deciding whether to
+use JSXGraph for diagrams that users can edit by dragging geometry.
+
+For the current calculator, native SVG gives us direct control over drawing
+order, arrowheads, text, themes, and standalone vector output. It requires us
+to implement coordinate transforms, label layout, and any dragging or zoom.
+JSXGraph supplies a geometry model and interactions, but adds its own object
+lifecycle, configuration, and dependency updates. The pinned runtime in this
+gallery is 969,075 bytes, or about 251 kB compressed with gzip.
+
+Neither option determines the correct application point or solves equilibrium.
+Those still come from Python. My preference is a small SVG drawing layer for
+generated FBDs, with JSXGraph reserved for geometry that users directly
+manipulate. The current A/F comparison alone cannot settle that second use case.
 
 ### Three.js: working trial in E
 
@@ -141,8 +162,9 @@ tool generates a known scene. There is no Konva runtime trial here.
 A is the clearest main FBD. D is useful when a user asks how a force contributes
 to tipping. E earns its space when 3D attachment points are ambiguous. B makes
 slope more apparent, while C handles a crowded load case without displaced
-arrows. F is an implementation comparison; it does not automatically produce
-a better layout than A.
+arrows. G provides more space for force names and values. H connects the section
+to the footprint and makes edge selection visual. F is an implementation
+comparison; its fixed scene does not show all of JSXGraph's capabilities.
 
 ## Data and verification
 
@@ -160,9 +182,10 @@ node tests/browser/tipping-fbd-prototypes.cjs
 
 The browser checks compare W's tail against G and N's head against R in the
 rendered SVG. They also check the 3D arrow endpoints against the solver points,
-vertical gravity in B, all seven cases and 27 edge combinations, force
-selection, scale modes, themes, narrow screens, camera controls, board zoom,
-and review-link state. Screenshots go to `/private/tmp/tipping-fbd-prototypes/`.
+vertical gravity in B, all eight cases and 31 edge combinations in both arrow
+scales, force selection, keyboard focus after redraw, linked plan selection,
+themes, narrow screens, camera controls, board zoom, and review-link state.
+Screenshots go to `/private/tmp/tipping-fbd-prototypes/`.
 
 The outline is illustrative. It does not define additional body geometry or
 mass. Reactions show the resultants required for equilibrium; an outside

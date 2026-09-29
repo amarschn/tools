@@ -1,10 +1,10 @@
-import { caseView, sectionScene, smallMultiples, svgMarkup, renderCanvas, renderBoard, fmt, escape } from './diagrams.js';
+import { caseView, sectionScene, smallMultiples, labelRailScene, planMarkup, svgMarkup, renderCanvas, renderBoard, fmt, escape } from './diagrams.js';
 
 const $=(id)=>document.getElementById(id);
 const query=new URLSearchParams(location.search);
 let cases=[],current,view,board,assembly,threeError=null;
 const state={case:query.get('case')||'slope',edge:query.get('edge'),force:query.get('force')||'all',study:query.get('view')||'all',anchors:query.get('anchors')==='1',arrowScale:query.get('scale')==='proportional'?'proportional':'schematic'};
-const validStudies=['a','b','c','d','e','f'];
+const validStudies=['a','b','c','d','e','f','g','h'];
 if(!validStudies.includes(state.study))state.study='all';
 const scenes={};
 
@@ -22,15 +22,29 @@ function selectForce(id) {
     render();
 }
 
+function selectEdge(id) {
+    state.edge=id;
+    $('edge-select').value=id;
+    render();
+}
+
 function render() {
     if(!current)return;
+    const focused=document.activeElement;
+    const focusStudy=focused?.closest('[data-study]')?.dataset.study;
+    const focusAttribute=focused?.hasAttribute('data-force')?'data-force':focused?.hasAttribute('data-plan-edge')?'data-plan-edge':null;
+    const focusValue=focusAttribute?focused.getAttribute(focusAttribute):null;
     view=caseView(current,state.edge);
     const options={anchors:state.anchors,selected:state.force,arrowScale:state.arrowScale};
     scenes.a=sectionScene(view,options);
     scenes.b=sectionScene(view,{...options,world:true});
     scenes.c=smallMultiples(view,options);
     scenes.d=sectionScene(view,{...options,moment:true});
-    for(const id of ['a','c','d'])$('scene-'+id).innerHTML=svgMarkup(scenes[id],{title:document.querySelector(`[data-study="${id}"] h2`).textContent});
+    scenes.g=labelRailScene(view,options);
+    for(const id of ['a','c','d','g'])$('scene-'+id).innerHTML=svgMarkup(scenes[id],{title:document.querySelector(`[data-study="${id}"] h2`).textContent});
+    $('scene-h-plan').innerHTML=planMarkup(view);
+    $('scene-h-section').innerHTML=svgMarkup(scenes.a,{title:`Section through ${view.edge.label}`});
+    $('scene-h-section').dataset.edge=view.edge.id;
     renderCanvas($('scene-b').querySelector('canvas'),scenes.b);
     if(board){window.JXG.JSXGraph.freeBoard(board);board=null;}
     if($('scene-f').clientWidth) {
@@ -58,6 +72,10 @@ function render() {
     $('yaw-note').textContent=`Required ground yaw couple: ${fmt(current.result.free_body.contact_couple[2],2)} N·m about +z. It is listed separately from the arrows. Individual contact loads, traction and yaw capacity are outside this model.`;
     saveUrl();
     window.FbdStudies={state,view,scenes,get board(){return board;},get assembly(){return assembly;},threeError};
+    if(focusStudy && focusAttribute) {
+        const matches=[...document.querySelectorAll(`[data-study="${focusStudy}"] [${focusAttribute}="${focusValue}"]`)];
+        (matches.find((element)=>element.tagName===focused.tagName)||matches[0])?.focus({preventScroll:true});
+    }
 }
 
 function changeCase(resetEdge=true) {
@@ -81,25 +99,32 @@ function focusStudy(id,scroll=true) {
     document.querySelectorAll('[data-study]').forEach((card)=>{card.hidden=id!=='all'&&card.dataset.study!==id;});
     document.querySelectorAll('[data-expand]').forEach((button)=>{button.hidden=id!=='all';});
     $('show-all').hidden=id==='all';
-    $('view-description').textContent=id==='all'?'Compare all six. Expand a study for a closer look.':`Study ${id.toUpperCase()} · Shared controls apply to this view.`;
+    $('view-description').textContent=id==='all'?'Compare all eight. Expand a study for a closer look.':`Study ${id.toUpperCase()} · Shared controls apply to this view.`;
+    $('study-select').value=id;
     render();
     if(scroll)$('view-description').scrollIntoView({block:'start',behavior:'instant'});
 }
 
 $('case-select').addEventListener('change',(event)=>{state.case=event.target.value;changeCase();});
 $('edge-select').addEventListener('change',(event)=>{state.edge=event.target.value;render();});
+$('study-select').addEventListener('change',(event)=>focusStudy(event.target.value,false));
 $('force-select').addEventListener('change',(event)=>{state.force=event.target.value;render();});
 $('scale-select').value=state.arrowScale;
 $('scale-select').addEventListener('change',(event)=>{state.arrowScale=event.target.value;render();});
 $('anchor-guides').checked=state.anchors;
 $('anchor-guides').addEventListener('change',(event)=>{state.anchors=event.target.checked;render();});
 $('studies').addEventListener('click',(event)=>{
-    const expand=event.target.closest('[data-expand]'),force=event.target.closest('[data-force]');
+    const expand=event.target.closest('[data-expand]'),force=event.target.closest('[data-force]'),edge=event.target.closest('[data-plan-edge]');
     if(expand)focusStudy(expand.dataset.expand);
+    else if(edge)selectEdge(edge.dataset.planEdge);
     else if(force)selectForce(force.dataset.force);
 });
 $('studies').addEventListener('keydown',(event)=>{
     if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-force]')){event.preventDefault();selectForce(event.target.dataset.force);}
+    if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-plan-edge]')){
+        event.preventDefault();const id=event.target.dataset.planEdge;selectEdge(id);
+        document.querySelector(`[data-plan-edge="${id}"]`)?.focus({preventScroll:true});
+    }
 });
 $('show-all').addEventListener('click',()=>focusStudy('all'));
 $('settings-open').addEventListener('click',()=>$('settings-panel').showModal());

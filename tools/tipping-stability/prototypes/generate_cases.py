@@ -22,6 +22,10 @@ CASES = [
       "force": 110, "force_direction": 120, "force_height": .85, "force_x": .22,
       "contacts": [[-.6, -.45], [.65, 0], [-.5, .5]], "cg_x": -.08, "cg_y": .04,
       "extra_forces": [{"name": "Offset pull", "vector": [-45, 70, 25], "point": [-.3, .2, .75]}]}),
+    ("crowded", "Forces sharing one point", "Weight, inertia, a push, and an oblique pull share the mass center. Select a force to trace its arrow.",
+     {"load_case": "combined", "slope_deg": 8, "downhill_deg": 90, "acceleration": .8, "accel_direction": 270,
+      "force": 160, "force_direction": 90, "force_height": .6,
+      "extra_forces": [{"name": "Oblique pull", "vector": [75, -110, 30], "point": [0, 0, .6]}]}),
     ("threshold", "At the tipping threshold", "The required reaction reaches the selected support edge.",
      {"slope_deg": 33.690067525979785}),
     ("beyond", "Beyond tipping", "The required reaction lies outside the footprint and cannot be supplied by these contacts.",
@@ -56,7 +60,7 @@ if __name__ == "__main__":
     if args.check:
         if not target.exists() or target.read_text() != content:
             raise SystemExit("cases.json is stale; run generate_cases.py")
-        print("Seven FBD cases match the production solver.")
+        print(f"{len(CASES)} FBD cases match the production solver.")
     else:
         target.write_text(content)
         print(f"Wrote {target}")
