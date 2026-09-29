@@ -39,6 +39,12 @@ and track. A force's positive z component lifts away from the ground.
 
 ## Connecting the model to the FBD
 
+Six alternative diagram techniques are available in the
+[FBD comparison gallery](prototypes/). They share the same calculated cases and
+include working Three.js and JSXGraph trials. The [research notes](prototypes/README.md)
+describe the arrow anchoring issue and library options. A replacement for the
+calculator's diagrams is pending visual review.
+
 A fixed isometric schematic stays visible above the results. Select **Show
 forces & free-body diagram** below the image to add labeled forces and the
 linked FBD. Both views stay outside the analysis tabs. The ground and vehicle
