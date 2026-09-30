@@ -11,21 +11,21 @@
       gtag('js', new Date());
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
-    <title>Materials Explorer &mdash; Ashby Charts &amp; Material Selection</title>
-    <meta name="description" content="Interactive Ashby charts for material selection. Plot any two properties across 60 materials, overlay performance index isolines, rank candidates, and i...">
+    <title>Materials Explorer, Ashby Charts &amp; Material Selection</title>
+    <meta name="description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
     <link rel="canonical" href="https://transparent.tools/tools/materials-explorer/">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Materials Explorer — Ashby Charts &amp; Material Selection">
-    <meta property="og:description" content="Interactive Ashby charts for material selection. Plot any two properties across 60 materials, overlay performance index isolines, rank candidates, and i...">
+    <meta property="og:description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
     <meta property="og:url" content="https://transparent.tools/tools/materials-explorer/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Materials Explorer — Ashby Charts &amp; Material Selection">
-    <meta name="twitter:description" content="Interactive Ashby charts for material selection. Plot any two properties across 60 materials, overlay performance index isolines, rank candidates, and i...">
+    <meta name="twitter:description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
     <script src="/shared/analytics-autotrack.js" defer></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script src="/shared/ashby-plot.js?v=4"></script>
+    <script src="../../shared/ashby-plot.js?v=5"></script>
     <script src="/shared/json-ld.js"></script>
     <style>
         /* ── Design tokens ─────────────────────────────────────── */
@@ -123,16 +123,17 @@
         }
         .settings-overlay.open { display: block; }
         .settings-panel {
-            position: fixed; top: 0; right: -400px;
-            width: 380px; height: 100%;
+            position: fixed; top: 0; right: 0;
+            width: min(380px, 100vw); height: 100%;
+            visibility: hidden; transform: translateX(105%);
             background: var(--bg-card);
             border-left: 1px solid var(--border-color);
             box-shadow: var(--shadow-lg);
             z-index: 901;
-            transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             overflow-y: auto;
         }
-        .settings-panel.open { right: 0; }
+        .settings-panel.open { visibility: visible; transform: translateX(0); }
         .settings-header {
             display: flex; justify-content: space-between; align-items: center;
             padding: 20px 24px;
@@ -162,7 +163,7 @@
 
         /* Toggle switch */
         .switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
-        .switch input { display: none; }
+        .switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
         .slider-toggle {
             width: 42px; height: 24px;
             background: var(--border-color); border-radius: 999px;
@@ -186,7 +187,7 @@
             transition: all 0.15s;
         }
         .segmented button:first-child { border-left: none; }
-        .segmented button.active { background: var(--accent-color); color: #fff; }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
         .segmented button:hover:not(.active) { background: var(--bg-color); }
 
         /* ── Container ──────────────────────────────────────────── */
@@ -213,12 +214,13 @@
         /* ── Workspace: left rail + main ────────────────────────── */
         .workspace-layout {
             display: grid;
-            grid-template-columns: 320px 1fr;
+            grid-template-columns: 320px minmax(0, 1fr);
             gap: 20px;
             align-items: start;
         }
         .left-rail { display: grid; gap: 16px; position: sticky; top: 20px; }
-        .main-content { display: grid; gap: 16px; min-width: 0; }
+        .main-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+        .main-content > * { min-width: 0; }
 
         /* ── Inputs ─────────────────────────────────────────────── */
         .input-group { margin-bottom: 14px; }
@@ -229,6 +231,7 @@
             letter-spacing: 0.05em; margin-bottom: 5px;
         }
         .input-group select,
+        .input-group input[type="text"],
         .input-group input[type="number"] {
             width: 100%; padding: 8px 12px;
             border: 1px solid var(--border-color); border-radius: 6px;
@@ -262,7 +265,7 @@
         }
         .preset-chip:hover { border-color: var(--secondary-color); background: var(--bg-color); }
         .preset-chip.active {
-            background: var(--accent-color); color: #fff;
+            background: var(--accent-color); color: var(--bg-card);
             border-color: var(--accent-color);
         }
 
@@ -441,7 +444,7 @@
             z-index: 30;
             white-space: normal;
         }
-        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
+        .tooltip-trigger:hover::after, .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
 
         /* ── Responsive ─────────────────────────────────────────── */
         @media (max-width: 960px) {
@@ -454,23 +457,49 @@
             .container { width: 95%; }
             #ashby-chart { height: 320px; }
         }
+        [hidden] { display: none !important; }
+        .loading-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-content: center; gap: 16px; padding: 28px; background: var(--bg-color); text-align: center; }
+        .loading-overlay button, .chart-toolbar button, .data-link { border: 1px solid var(--border-color); border-radius: 6px; padding: 9px 12px; background: var(--bg-card); color: var(--text-color); font: inherit; cursor: pointer; }
+        .chart-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
+        .chart-toolbar .input-group { flex: 1 1 200px; margin: 0; }
+        .chart-toolbar input { width: 100%; }
+        .data-status, .chart-note, .ranking-note { margin: 10px 0; font-size: .8rem; color: var(--text-light); line-height: 1.5; }
+        .data-status { color: var(--text-color); }
+        .empty-state { border: 1px solid var(--border-color); border-radius: 6px; padding: 16px; background: var(--bg-card); }
+        .table-wrap { overflow-x: auto; }
+        .source-detail { display: block; margin-top: 5px; font: .78rem/1.5 var(--font-sans); color: var(--text-light); overflow-wrap: anywhere; }
+        .result-kind { display: inline-block; font: .72rem var(--font-sans); padding: 2px 5px; border: 1px solid var(--border-color); border-radius: 3px; margin-left: 5px; }
+        .material-button { text-align: left; color: var(--text-color); background: none; border: 0; padding: 4px 0; text-decoration: underline; font: inherit; cursor: pointer; }
+        .data-link { display: inline-block; font-size: .82rem; margin-top: 12px; text-decoration: none; }
+        .index-explanation { font-size: .85rem; line-height: 1.55; margin-bottom: 16px; }
+        .index-explanation summary { cursor: pointer; }
+        .index-explanation code { display: block; margin: 10px 0; }
+        .setting-row select { color: var(--text-color); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px; }
+        :focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+        .switch input:focus-visible + .slider-toggle { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+        body[data-density="compact"] .card { padding: 16px; }
+        body[data-density="compact"] .input-group { margin-bottom: 12px; }
+        @media (max-width: 640px) { .nav-actions { gap: 6px; } .settings-button { padding: 7px 10px; } #ashby-chart { height: 430px; } .chart-toolbar { align-items: stretch; } }
     </style>
 </head>
 
 <body data-theme="system">
+    <script>try { const s = JSON.parse(localStorage.getItem('materials-explorer-settings') || '{}'); if (['light','dark','system'].includes(s.theme)) document.body.dataset.theme = s.theme; if (['compact','comfortable'].includes(s.density)) document.body.dataset.density = s.density; } catch (_) {}</script>
+    <div id="loading-overlay" class="loading-overlay" role="status"><p id="loading-message">Loading material properties…</p><button type="button" id="retry-load" hidden>Retry loading</button></div>
     <!-- ── Navbar ──────────────────────────────────────────────── -->
     <header class="navbar">
         <nav class="nav-container">
             <a href="/" class="nav-brand">Engineering Tools</a>
             <div class="nav-actions">
                 <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+                <button class="settings-button" id="copy-link" type="button" data-track="export">Copy link</button>
             </div>
         </nav>
     </header>
 
     <!-- ── Settings panel ──────────────────────────────────────── -->
     <div class="settings-overlay" id="settings-overlay"></div>
-    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Tool settings" inert>
         <div class="settings-header">
             <h3>Tool Settings</h3>
             <button class="settings-close" id="settings-close" type="button">Close</button>
@@ -489,18 +518,19 @@
                         <button type="button" data-theme="system" class="active">System</button>
                     </div>
                 </div>
+                <div class="setting-row"><label for="setting-density">Density</label><select id="setting-density" title="Spacing of the input and result panels"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
+                <div class="setting-row"><label for="setting-precision">Significant figures</label><select id="setting-precision" title="Display precision; calculations retain full precision"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
             </div>
         </div>
     </aside>
 
     <!-- ── Main ────────────────────────────────────────────────── -->
-    <main class="container">
+    <main class="container" id="explorer-main" data-state="loading">
         <div class="tool-header">
             <h1>Materials Explorer</h1>
             <p class="tool-description">
-                Interactive Ashby charts for material selection. Choose axes, overlay performance index
-                isolines, rank candidates, and click any point to inspect sourced property data across
-                60 engineering materials.
+                Compare sourced material properties on Ashby charts. Select a point to inspect its
+                grade, condition, and source in the Materials database.
             </p>
         </div>
 
@@ -518,24 +548,26 @@
                 <p>
                     A performance index is a grouping of material properties that captures how well
                     a material performs for a specific structural or thermal objective. On log-log
-                    Ashby charts, lines of constant performance index appear as straight isolines &mdash;
-                    materials above the line outperform those below it.
+                    Ashby charts, lines of constant performance index appear as straight isolines.
+                    The preferred side depends on the index and axis order. The ranking equation states the objective.
                 </p>
                 <h3>Using this tool</h3>
                 <ul>
                     <li>Select <strong>X and Y axes</strong> from the left rail, or click a preset to jump to a classic chart.</li>
                     <li>Choose a <strong>performance index</strong> to rank materials and overlay isolines.</li>
                     <li>Toggle <strong>material families</strong> on or off to focus on specific categories.</li>
-                    <li>Open <strong>Tool Settings</strong> to show property ranges, toggle blobs/envelopes, labels, and switch themes.</li>
+                    <li>Use <strong>Display Options</strong> for ranges, envelopes, and labels. Tool Settings controls theme and number formatting.</li>
                     <li><strong>Click any point</strong> on the chart to inspect its full sourced property data.</li>
                 </ul>
                 <h3>Data</h3>
                 <p>
-                    The database contains 60 engineering materials across metals, polymers, ceramics,
-                    composites, and natural materials with 29 properties sourced from Ashby (2011),
-                    ASM Handbooks, MatWeb, MIL-HDBK-5/17, and manufacturer datasheets. Properties include
-                    min/max ranges and statistical basis where available.
+                    Values come from the <a href="../materials/">Materials database</a>.
+                    Each point pairs two observations for one grade and compatible state and conditions.
+                    Known temperatures, forms, thickness ranges, and orientations must agree. A grade-level
+                    physical property may accompany a named state; its original scope stays visible.
+                    Missing properties are omitted. No values are filled from a generic material family.
                 </p>
+                <p>Intervals appear at their midpoint with optional range bars. Open symbols mark specified bounds, not measurements. Rankings use the shown reference coordinates; a high score at a specified bound does not establish which material has the highest measured performance. The default temperature filter includes 20–25 °C and observations with no stated temperature.</p>
             </div>
         </details>
 
@@ -553,13 +585,13 @@
                     <div class="input-group">
                         <label for="x-prop">X-Axis</label>
                         <select id="x-prop"></select>
-                        <span class="tooltip-trigger" data-tooltip="Material property plotted on the horizontal axis. Log scale by default.">?</span>
+                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Material property plotted on the horizontal axis. Log scale by default.">?</span>
                     </div>
 
                     <div class="input-group">
                         <label for="y-prop">Y-Axis</label>
                         <select id="y-prop"></select>
-                        <span class="tooltip-trigger" data-tooltip="Material property plotted on the vertical axis. Log scale by default.">?</span>
+                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Material property plotted on the vertical axis. Log scale by default.">?</span>
                     </div>
 
                     <div class="input-group">
@@ -567,7 +599,7 @@
                         <select id="perf-index">
                             <option value="">(none)</option>
                         </select>
-                        <span class="tooltip-trigger" data-tooltip="Ranks materials by a merit index (e.g. E½/ρ for stiff, light beams). Isolines appear when axes match the index.">?</span>
+                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Ranks materials by a merit index (e.g. E½/ρ for stiff, light beams). Isolines appear when axes match the index.">?</span>
                         <div class="hint" id="index-hint"></div>
                     </div>
 
@@ -575,10 +607,12 @@
                         <div class="input-group">
                             <label for="top-n">Top N Ranked</label>
                             <input type="number" id="top-n" value="5" min="1" max="20">
-                            <span class="tooltip-trigger" data-tooltip="Number of top-ranked materials to highlight on the chart and list in the ranking table.">?</span>
+                            <span class="tooltip-trigger" tabindex="0" data-tooltip="Number of top-ranked materials to highlight on the chart and list in the ranking table.">?</span>
                         </div>
                         <div></div>
                     </div>
+                    <div class="input-group"><label for="temperature-filter">Test temperature</label><select id="temperature-filter" title="Filter known test temperatures; unspecified temperatures remain labeled"><option value="ambient">20–25 °C or unspecified</option><option value="all">All temperatures</option></select></div>
+                    <div class="input-group"><label for="basis-filter">Reported values</label><select id="basis-filter" title="Keep specified lower and upper limits distinct from points and intervals"><option value="all">Measurements and specified limits</option><option value="measured">Points and intervals only</option><option value="limits">Pairs containing a specified limit</option></select></div>
                 </section>
 
                 <section class="card">
@@ -591,35 +625,35 @@
                     <div class="setting-row">
                         <div class="setting-label">Family envelopes</div>
                         <label class="switch">
-                            <input type="checkbox" id="setting-blobs" checked>
+                            <input type="checkbox" id="setting-blobs" checked aria-label="Show family envelopes" title="Enclose the measured points shown; specified bounds are excluded">
                             <span class="slider-toggle"></span>
                         </label>
                     </div>
                     <div class="setting-row">
                         <div class="setting-label">Individual points</div>
                         <label class="switch">
-                            <input type="checkbox" id="setting-points" checked>
+                            <input type="checkbox" id="setting-points" checked aria-label="Show individual points" title="Show each compatible pair of reported property observations">
                             <span class="slider-toggle"></span>
                         </label>
                     </div>
                     <div class="setting-row">
                         <div class="setting-label">Property ranges</div>
                         <label class="switch">
-                            <input type="checkbox" id="setting-ranges">
+                            <input type="checkbox" id="setting-ranges" checked aria-label="Show reported property ranges" title="Draw the endpoints of reported intervals">
                             <span class="slider-toggle"></span>
                         </label>
                     </div>
                     <div class="setting-row">
                         <div class="setting-label">Isolines</div>
                         <label class="switch">
-                            <input type="checkbox" id="setting-isolines" checked>
+                            <input type="checkbox" id="setting-isolines" checked aria-label="Show index isolines" title="Draw constant-index lines for the selected ranking equation">
                             <span class="slider-toggle"></span>
                         </label>
                     </div>
                     <div class="setting-row">
                         <div class="setting-label">Point labels</div>
                         <label class="switch">
-                            <input type="checkbox" id="setting-labels">
+                            <input type="checkbox" id="setting-labels" aria-label="Show point labels" title="Label plotted grades and states; dense charts are easier to read with labels off">
                             <span class="slider-toggle"></span>
                         </label>
                     </div>
@@ -628,7 +662,11 @@
 
             <!-- Main content -->
             <div class="main-content">
+                <div class="chart-toolbar"><div class="input-group"><label for="material-search">Find a grade</label><input type="text" id="material-search" placeholder="6061, PEEK, 316L…" title="Filter by grade name, designation, state, or material family"></div><button type="button" id="export-csv" data-track="export">Export CSV</button></div>
+                <p class="data-status" id="data-status" aria-live="polite"></p>
+                <p class="empty-state" id="empty-state" hidden>No compatible property pairs match these filters. Choose different properties or clear the filters.</p>
                 <div id="ashby-chart"></div>
+                <p class="chart-note">Logarithmic axes, SI units. Open symbols mark specified bounds. Envelopes enclose shown measurements, not family limits.</p>
 
                 <!-- Material detail card -->
                 <div class="card detail-card" id="detail-card">
@@ -637,25 +675,31 @@
                             <h2 id="card-name"></h2>
                             <div class="meta" id="card-meta"></div>
                         </div>
-                        <button class="card-close" id="card-close" type="button">&times;</button>
+                        <button class="card-close" id="card-close" type="button" aria-label="Close material details">&times;</button>
                     </div>
                     <table class="prop-table" id="card-props"></table>
+                    <p id="card-index" class="ranking-note"></p>
+                    <a id="card-datasheet" class="data-link" href="../materials/">Open material datasheet</a>
                 </div>
 
                 <!-- Ranking table -->
                 <section class="card ranking-section" id="ranking-section">
                     <h2 id="ranking-title">Ranked Materials</h2>
+                    <p class="ranking-note">Ranks use displayed reference values, including interval midpoints and specified bounds. Compare basis and conditions before selecting a material.</p>
+                    <details class="index-explanation"><summary>Ranking equation and scope</summary><code id="index-equation"></code><p id="index-variables"></p><p id="index-derivation"></p><p id="index-scope"></p><p id="index-source"></p></details>
+                    <div class="table-wrap">
                     <table class="ranking-table">
                         <thead>
                             <tr>
                                 <th style="width:36px">#</th>
                                 <th>Material</th>
                                 <th>Family</th>
-                                <th>Index Value</th>
+                                <th>Reference index</th>
                             </tr>
                         </thead>
                         <tbody id="ranking-body"></tbody>
                     </table>
+                    </div>
                 </section>
             </div>
         </div>
@@ -663,352 +707,12 @@
 
     <footer>
         <div class="container">
-            Data sourced from Ashby (2011), ASM Handbooks, MatWeb, and manufacturer datasheets.
+            Property data: <a href="../materials/">Materials database</a>. Index equations: Ashby, Materials Selection in Mechanical Design (2011).
             For educational and preliminary design screening only.
             <br><a href="https://ko-fi.com/transparent_tools">Support this project</a>
         </div>
     </footer>
 
-<script>
-/* ══════════════════════════════════════════════════════════════════
-   Materials Explorer — main script
-   ══════════════════════════════════════════════════════════════════ */
-
-let DB = null;
-let chart = null;
-let activeFamilies = new Set();
-
-/* ── Chart presets ────────────────────────────────────────────── */
-const PRESETS = [
-  { label: "E vs \u03c1",       x: "density", y: "youngs_modulus",       index: "stiff_light_beam" },
-  { label: "\u03c3y vs \u03c1", x: "density", y: "yield_strength",       index: "strong_light_beam" },
-  { label: "KIC vs \u03c3y",    x: "yield_strength", y: "fracture_toughness", index: "damage_tolerant" },
-  { label: "k vs CTE",          x: "cte", y: "thermal_conductivity",    index: "thermal_distortion" },
-  { label: "k vs \u03c1",       x: "density", y: "thermal_conductivity", index: "heat_spreading_mass" },
-  { label: "Price vs \u03c3y",  x: "yield_strength", y: "price_per_kg",  index: "" },
-];
-
-/* ── Performance index library (client-side mirror) ──────────── */
-const INDEX_LIB = {
-  stiff_light_tie:    { name: "Stiff, light tie  (E / \u03c1)",                 fn: m => g(m,"youngs_modulus")/g(m,"density"),                                        slope: 1,    cx: "density", cy: "youngs_modulus" },
-  stiff_light_beam:   { name: "Stiff, light beam  (E\u00b9\u02f2 / \u03c1)",    fn: m => Math.sqrt(g(m,"youngs_modulus"))/g(m,"density"),                              slope: 2,    cx: "density", cy: "youngs_modulus" },
-  stiff_light_plate:  { name: "Stiff, light plate  (E\u00b9\u02f3 / \u03c1)",   fn: m => Math.pow(g(m,"youngs_modulus"),1/3)/g(m,"density"),                           slope: 3,    cx: "density", cy: "youngs_modulus" },
-  strong_light_tie:   { name: "Strong, light tie  (\u03c3y / \u03c1)",           fn: m => g(m,"yield_strength")/g(m,"density"),                                        slope: 1,    cx: "density", cy: "yield_strength" },
-  strong_light_beam:  { name: "Strong, light beam  (\u03c3y\u00b2\u02f3 / \u03c1)", fn: m => Math.pow(g(m,"yield_strength"),2/3)/g(m,"density"),                       slope: 1.5,  cx: "density", cy: "yield_strength" },
-  strong_light_plate: { name: "Strong, light plate  (\u03c3y\u00b9\u02f2 / \u03c1)", fn: m => Math.pow(g(m,"yield_strength"),0.5)/g(m,"density"),                      slope: 2,    cx: "density", cy: "yield_strength" },
-  damage_tolerant:    { name: "Damage tolerant  (KIC / \u03c3y)",                fn: m => g(m,"fracture_toughness")/g(m,"yield_strength"),                              slope: null, cx: "yield_strength", cy: "fracture_toughness" },
-  thermal_distortion: { name: "Thermal distortion  (k / E\u03b1)",              fn: m => g(m,"thermal_conductivity")/(g(m,"youngs_modulus")*g(m,"cte")),                slope: null, cx: "cte", cy: "thermal_conductivity" },
-  heat_spreading_mass:{ name: "Heat spreading / mass  (k / \u03c1)",             fn: m => g(m,"thermal_conductivity")/g(m,"density"),                                   slope: 1,    cx: "density", cy: "thermal_conductivity" },
-  thermal_insulation: { name: "Thermal insulation  (1 / k)",                    fn: m => 1/g(m,"thermal_conductivity"),                                                slope: null, cx: "thermal_conductivity", cy: "density" },
-};
-
-function g(m, p) {
-  const v = ashbyGetValue(m, p);
-  if (v == null || v === 0) throw new Error("missing");
-  return v;
-}
-function safeIdx(fn, m) {
-  try { return fn(m); } catch { return null; }
-}
-
-/* ── Init ─────────────────────────────────────────────────────── */
-async function init() {
-  const resp = await fetch("/data/materials/materials.json");
-  DB = await resp.json();
-  chart = new AshbyPlot("ashby-chart", { onClick: showCard });
-  buildUI();
-  applyPreset(PRESETS[0]);
-}
-
-function buildUI() {
-  const reg = DB.property_registry;
-  const plottable = Object.entries(reg)
-    .filter(([, v]) => v.plottable !== false)
-    .sort((a, b) => a[1].label.localeCompare(b[1].label));
-
-  // Axis dropdowns
-  for (const sel of [document.getElementById("x-prop"), document.getElementById("y-prop")]) {
-    for (const [key, meta] of plottable) {
-      const opt = document.createElement("option");
-      opt.value = key;
-      opt.textContent = meta.label + (meta.unit ? ` (${meta.unit})` : "");
-      sel.appendChild(opt);
-    }
-  }
-
-  // Index dropdown
-  const idxSel = document.getElementById("perf-index");
-  for (const [key, idx] of Object.entries(INDEX_LIB)) {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = idx.name;
-    idxSel.appendChild(opt);
-  }
-
-  // Family toggles
-  const families = [...new Set(DB.materials.map(m => m.family))].sort();
-  const tc = document.getElementById("family-toggles");
-  for (const fam of families) {
-    activeFamilies.add(fam);
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "family-pill active";
-    btn.style.color = FAMILY_COLORS[fam] || "#888";
-    btn.innerHTML = `<span class="dot" style="background:${FAMILY_COLORS[fam] || '#888'}"></span>${fam}`;
-    btn.addEventListener("click", () => {
-      if (activeFamilies.has(fam)) { activeFamilies.delete(fam); } else { activeFamilies.add(fam); }
-      btn.classList.toggle("active");
-      updateChart();
-    });
-    tc.appendChild(btn);
-  }
-
-  // Presets
-  const pc = document.getElementById("preset-chips");
-  PRESETS.forEach((p) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "preset-chip";
-    btn.textContent = p.label;
-    btn.addEventListener("click", () => applyPreset(p));
-    pc.appendChild(btn);
-  });
-
-  // Control event listeners
-  document.getElementById("x-prop").addEventListener("change", updateChart);
-  document.getElementById("y-prop").addEventListener("change", updateChart);
-  document.getElementById("perf-index").addEventListener("change", updateChart);
-  document.getElementById("top-n").addEventListener("change", updateChart);
-  document.getElementById("card-close").addEventListener("click", () => {
-    document.getElementById("detail-card").classList.remove("visible");
-  });
-
-  // Settings toggles that affect chart
-  document.getElementById("setting-ranges").addEventListener("change", updateChart);
-  document.getElementById("setting-isolines").addEventListener("change", updateChart);
-  document.getElementById("setting-labels").addEventListener("change", updateChart);
-  document.getElementById("setting-blobs").addEventListener("change", updateChart);
-  document.getElementById("setting-points").addEventListener("change", updateChart);
-
-  // Settings panel open/close
-  const openSettings = () => {
-    document.getElementById("settings-panel").classList.add("open");
-    document.getElementById("settings-overlay").classList.add("open");
-    document.getElementById("settings-panel").setAttribute("aria-hidden", "false");
-  };
-  const closeSettings = () => {
-    document.getElementById("settings-panel").classList.remove("open");
-    document.getElementById("settings-overlay").classList.remove("open");
-    document.getElementById("settings-panel").setAttribute("aria-hidden", "true");
-  };
-  document.getElementById("settings-button").addEventListener("click", openSettings);
-  document.getElementById("settings-close").addEventListener("click", closeSettings);
-  document.getElementById("settings-overlay").addEventListener("click", closeSettings);
-
-  // Theme control
-  document.querySelectorAll("#theme-control button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.body.dataset.theme = btn.dataset.theme;
-      document.querySelectorAll("#theme-control button").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      updateChart();
-    });
-  });
-
-  // Also re-render chart when system theme changes
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if (document.body.dataset.theme === "system") updateChart();
-  });
-}
-
-function applyPreset(preset) {
-  document.getElementById("x-prop").value = preset.x;
-  document.getElementById("y-prop").value = preset.y;
-  document.getElementById("perf-index").value = preset.index || "";
-  // Highlight active chip
-  document.querySelectorAll(".preset-chip").forEach((btn, i) => {
-    btn.classList.toggle("active", PRESETS[i] === preset);
-  });
-  updateChart();
-}
-
-/* ── Dark mode detection ──────────────────────────────────────── */
-function isDarkMode() {
-  const theme = document.body.dataset.theme;
-  if (theme === "dark") return true;
-  if (theme === "light") return false;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
-/* ── Chart update ─────────────────────────────────────────────── */
-function updateChart() {
-  const xProp = document.getElementById("x-prop").value;
-  const yProp = document.getElementById("y-prop").value;
-  const idxId = document.getElementById("perf-index").value;
-  const topN = parseInt(document.getElementById("top-n").value) || 5;
-  const showRanges = document.getElementById("setting-ranges").checked;
-  const showIsolines = document.getElementById("setting-isolines").checked;
-  const showBlobs = document.getElementById("setting-blobs").checked;
-  const showPoints = document.getElementById("setting-points").checked;
-
-  // Index hint
-  const hintEl = document.getElementById("index-hint");
-  const idx = INDEX_LIB[idxId];
-  if (idx && idx.slope != null) {
-    const match = (xProp === idx.cx && yProp === idx.cy) || (xProp === idx.cy && yProp === idx.cx);
-    hintEl.textContent = match ? "Isolines will appear on chart." : `Tip: switch axes to ${idx.cy} vs ${idx.cx} to see isolines.`;
-  } else {
-    hintEl.textContent = "";
-  }
-
-  // Ranking
-  let highlightIds = [];
-  let ranked = [];
-  if (idx) {
-    const scored = [];
-    for (const m of DB.materials) {
-      if (!activeFamilies.has(m.family)) continue;
-      const val = safeIdx(idx.fn, m);
-      if (val != null && isFinite(val)) scored.push({ m, val });
-    }
-    scored.sort((a, b) => b.val - a.val);
-    ranked = scored.slice(0, topN);
-    highlightIds = ranked.map(s => s.m.id);
-  }
-
-  // Isolines
-  let isolines;
-  if (idx && idx.slope != null && showIsolines) {
-    const match = (xProp === idx.cx && yProp === idx.cy) || (xProp === idx.cy && yProp === idx.cx);
-    if (match && ranked.length > 0) {
-      const vals = [ranked[0]?.val];
-      if (ranked.length > 2) vals.push(ranked[Math.floor(ranked.length / 2)]?.val);
-      if (ranked.length > 1) vals.push(ranked[ranked.length - 1]?.val);
-      isolines = { slope: idx.slope, values: [...new Set(vals.filter(Boolean))] };
-    }
-  }
-
-  chart.update(DB.materials, DB.property_registry, {
-    xProp,
-    yProp,
-    families: [...activeFamilies],
-    highlightIds,
-    showRanges,
-    showBlobs,
-    showPoints,
-    isolines,
-    dark: isDarkMode(),
-  });
-
-  // Ranking table
-  const rs = document.getElementById("ranking-section");
-  const rb = document.getElementById("ranking-body");
-  if (ranked.length > 0 && idx) {
-    document.getElementById("ranking-title").textContent = `Top ${ranked.length} \u2014 ${idx.name}`;
-    rb.innerHTML = "";
-    for (let i = 0; i < ranked.length; i++) {
-      const { m, val } = ranked[i];
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td class="rank-num">${i + 1}</td>
-        <td>${m.name}</td>
-        <td><span class="family-badge"><span class="dot" style="background:${FAMILY_COLORS[m.family] || '#888'}"></span>${m.family}</span></td>
-        <td style="font-family:var(--font-mono);font-size:0.85rem">${val.toExponential(3)}</td>
-      `;
-      tr.addEventListener("click", () => showCard(m));
-      rb.appendChild(tr);
-    }
-    rs.classList.add("visible");
-  } else {
-    rs.classList.remove("visible");
-  }
-}
-
-/* ── Material detail card ─────────────────────────────────────── */
-function showCard(material) {
-  const card = document.getElementById("detail-card");
-  document.getElementById("card-name").textContent = material.name;
-
-  const metaParts = [material.family, material.sub_family];
-  if (material.condition) metaParts.push(material.condition);
-  if (material.designation) metaParts.push(material.designation);
-  document.getElementById("card-meta").textContent = metaParts.join(" \u00b7 ");
-
-  const reg = DB.property_registry;
-  const tbody = document.getElementById("card-props");
-  tbody.innerHTML = "";
-
-  // Group properties
-  const groups = {};
-  for (const [k, v] of Object.entries(reg)) {
-    if (v.computed) continue;
-    const gr = v.group || "other";
-    if (!groups[gr]) groups[gr] = [];
-    groups[gr].push([k, v]);
-  }
-
-  const groupOrder = ["mechanical", "thermal", "electrical", "economic", "environmental"];
-  const groupLabels = {
-    mechanical: "Mechanical", thermal: "Thermal", electrical: "Electrical",
-    economic: "Economic", environmental: "Environmental",
-  };
-
-  for (const grp of groupOrder) {
-    const props = groups[grp];
-    if (!props) continue;
-    const hasAny = props.some(([k]) => ashbyGetValue(material, k) != null);
-    if (!hasAny) continue;
-
-    const hdr = document.createElement("tr");
-    hdr.className = "prop-group-header";
-    hdr.innerHTML = `<td colspan="2">${groupLabels[grp] || grp}</td>`;
-    tbody.appendChild(hdr);
-
-    for (const [key, meta] of props) {
-      const val = ashbyGetValue(material, key);
-      if (val == null) continue;
-
-      const displayed = ashbyDisplayValue(val, meta);
-      const range = ashbyGetRange(material, key);
-      let extra = "";
-      if (range) {
-        extra += ` <span class="range-hint">[${ashbyDisplayValue(range[0], meta)} \u2013 ${ashbyDisplayValue(range[1], meta)}]</span>`;
-      }
-      const raw = material[key];
-      if (typeof raw === "object" && raw != null && raw.basis) {
-        extra += ` <span class="basis-badge">${raw.basis}</span>`;
-      }
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<th>${meta.label}${meta.symbol ? " (" + meta.symbol + ")" : ""}</th><td>${displayed}${extra}</td>`;
-      tbody.appendChild(tr);
-    }
-  }
-
-  // Source
-  const srcId = material.default_source_id;
-  const src = DB.sources[srcId];
-  if (src) {
-    const hdr = document.createElement("tr");
-    hdr.className = "prop-group-header";
-    hdr.innerHTML = `<td colspan="2">Source</td>`;
-    tbody.appendChild(hdr);
-    const sr = document.createElement("tr");
-    sr.innerHTML = `<th>Default source</th><td style="font-family:var(--font-sans);font-size:0.82rem">${src.citation}</td>`;
-    tbody.appendChild(sr);
-  }
-  if (material.notes) {
-    const nr = document.createElement("tr");
-    nr.innerHTML = `<th>Notes</th><td style="font-family:var(--font-sans);font-style:italic;font-size:0.82rem">${material.notes}</td>`;
-    tbody.appendChild(nr);
-  }
-
-  card.classList.add("visible");
-  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-/* ── Boot ──────────────────────────────────────────────────────── */
-init();
-</script>
+<script src="explorer.js?v=1" defer></script>
 </body>
 </html>

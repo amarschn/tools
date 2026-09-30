@@ -21,6 +21,13 @@ from typing import Callable
 
 from pycalcs.material_db import get_value
 
+PROPERTY_SYMBOLS = {
+    "density": "ρ", "youngs_modulus": "E", "yield_strength": "σᵧ",
+    "tensile_strength": "σᵤ", "thermal_conductivity": "k",
+    "specific_heat": "Cₚ", "cte": "α", "fracture_toughness": "K_IC",
+    "price_per_kg": "Cₘ",
+}
+
 
 # ---------------------------------------------------------------------------
 # Data class
@@ -176,7 +183,8 @@ _register(PerformanceIndex(
     derivation=(
         "For an axially loaded tie of fixed length, minimizing mass at "
         "constant axial stiffness yields M = E/\u03c1.  Derived from "
-        "F/\u03b4 = EA/L with m = \u03c1AL."
+        "F/\u03b4 = EA/L with m = \u03c1AL. "
+        "F: axial force; δ: extension; A: area; L: length; m: mass."
     ),
     scope="Fixed length, axial stiffness constraint.",
     source=_ASHBY_2011,
@@ -189,7 +197,7 @@ _register(PerformanceIndex(
 _register(PerformanceIndex(
     id="stiff_light_beam",
     name="Stiff, light beam",
-    expression_display="E\u00b9\u02f2 / \u03c1",
+    expression_display="E^(1/2) / \u03c1",
     expression_latex=r"\frac{E^{1/2}}{\rho}",
     required_properties=("youngs_modulus", "density"),
     compute=_stiff_light_beam,
@@ -209,7 +217,7 @@ _register(PerformanceIndex(
 _register(PerformanceIndex(
     id="stiff_light_plate",
     name="Stiff, light plate",
-    expression_display="E\u00b9\u02f3 / \u03c1",
+    expression_display="E^(1/3) / \u03c1",
     expression_latex=r"\frac{E^{1/3}}{\rho}",
     required_properties=("youngs_modulus", "density"),
     compute=_stiff_light_plate,
@@ -248,7 +256,7 @@ _register(PerformanceIndex(
 _register(PerformanceIndex(
     id="strong_light_beam",
     name="Strong, light beam",
-    expression_display="\u03c3\u1d67\u00b2\u02f3 / \u03c1",
+    expression_display="\u03c3\u1d67^(2/3) / \u03c1",
     expression_latex=r"\frac{\sigma_y^{2/3}}{\rho}",
     required_properties=("yield_strength", "density"),
     compute=_strong_light_beam,
@@ -268,7 +276,7 @@ _register(PerformanceIndex(
 _register(PerformanceIndex(
     id="strong_light_plate",
     name="Strong, light plate",
-    expression_display="\u03c3\u1d67\u00b9\u02f2 / \u03c1",
+    expression_display="\u03c3\u1d67^(1/2) / \u03c1",
     expression_latex=r"\frac{\sigma_y^{1/2}}{\rho}",
     required_properties=("yield_strength", "density"),
     compute=_strong_light_plate,
@@ -413,7 +421,7 @@ _register(PerformanceIndex(
     derivation=(
         "The energy stored per unit volume for a given \u0394T is "
         "\u03c1\u00b7C\u209a\u00b7\u0394T.  Maximizing \u03c1\u00b7C\u209a "
-        "maximizes volumetric thermal storage."
+        "maximizes volumetric thermal storage. ΔT: temperature change."
     ),
     scope=(
         "Thermal mass, passive thermal storage.  NOT heat sink "
@@ -448,7 +456,7 @@ _register(PerformanceIndex(
 _register(PerformanceIndex(
     id="stiff_cheap_beam",
     name="Stiff, cheap beam",
-    expression_display="E\u00b9\u02f2 / (\u03c1\u00b7C\u2098)",
+    expression_display="E^(1/2) / (\u03c1\u00b7C\u2098)",
     expression_latex=r"\frac{E^{1/2}}{\rho \cdot C_m}",
     required_properties=("youngs_modulus", "density", "price_per_kg"),
     compute=_stiff_cheap_beam,

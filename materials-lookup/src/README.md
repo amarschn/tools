@@ -9,8 +9,9 @@ property (`density`, `plastic strength`) to open category-grouped reference
 ranges.
 
 It answers "what is this material's yield strength, and who says so". For
-choosing between materials, use the Ashby Chart Material Selector and Materials
-Explorer instead.
+choosing between materials, use [Materials Explorer](../materials-explorer/).
+Its Ashby charts use a generated projection of this same catalog and link each
+plotted grade back to its datasheet here.
 
 ## What it contains
 
@@ -62,6 +63,7 @@ value, or changing the interface all happen there.
 
 ```sh
 python3 materials-lookup/builder/build_site.py --output ../tools/materials
+python3 scripts/build_material_selection.py
 python3 scripts/inject_seo_meta.py
 python3 scripts/generate_sitemap.py
 python3 scripts/generate_homepage_metadata.py
@@ -71,6 +73,11 @@ See [materials-lookup/README.md](../../materials-lookup/README.md) for the full 
 `release-manifest.json` records the build id, per-file hashes and the counts
 above, so a published copy can always be checked against the build it came
 from.
+
+`scripts/build_material_selection.py` produces the shared
+`data/materials/selection.json` chart projection from this public catalog.
+Edit curated records and rebuild both tools. The chart preserves source
+citations, named states, conditions, intervals, and specified bounds.
 
 ## Where source documents live
 
@@ -107,6 +114,3 @@ immutable for a year, everything else revalidates.
 * Pages for individual materials are redirects, not rendered content, so
   search engines see one page rather than several hundred. Pre-rendering them
   in `materials-lookup/release/compiler.py` is the open opportunity.
-* The dataset is tool-local for now. Promoting it to a shared location, and
-  pointing `pycalcs/materials.py` at it so the Ashby tools rank all 222
-  materials instead of a hardcoded seven, is planned separately.

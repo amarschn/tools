@@ -107,6 +107,12 @@ function isHomepageData(url) {
     pathname.endsWith('/shared/homepage-index.js');
 }
 
+function isMaterialsReleaseData(url) {
+  const pathname = new URL(url).pathname;
+  return pathname.endsWith('/data/materials/selection.json') ||
+    pathname.endsWith('/tools/materials/release-manifest.json');
+}
+
 /**
  * Trim the cache to MAX_CACHE_ENTRIES by removing the oldest entries.
  */
@@ -229,6 +235,13 @@ self.addEventListener('fetch', (event) => {
   // Cached homepage data should never hold up the interactive index.
   if (isHomepageData(url)) {
     respondNetworkFirst(event, HOMEPAGE_DATA_FALLBACK_DELAY_MS);
+    return;
+  }
+
+  // The chart checks these two mutable files for a matching release. Cached
+  // copies are an offline fallback, never a permanent pin to an older build.
+  if (isMaterialsReleaseData(url)) {
+    respondNetworkFirst(event);
     return;
   }
 

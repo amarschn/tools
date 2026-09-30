@@ -185,6 +185,35 @@ function getPlotlyThemeColors(isDark) {
   };
 }
 
+/** Fit an axis to the plotted data, independent of reference lines. */
+function dataAxisRange(values, scale) {
+  const valid = values.filter(v => Number.isFinite(v) && (scale !== "log" || v > 0));
+  if (!valid.length) return [0, 1];
+  const coords = valid.map(v => scale === "log" ? Math.log10(v) : v);
+  const low = Math.min(...coords), high = Math.max(...coords);
+  const padding = Math.max((high - low) * 0.08, scale === "log" ? 0.08 : Math.abs(low) * 0.08 || 1);
+  return [low - padding, high + padding];
+}
+
+/** Clip a reference segment in axis coordinates so it cannot stretch the view. */
+function clipIsoline(points, ranges, scales) {
+  const coords = points.map(point => point.map((v, axis) => scales[axis] === "log" ? Math.log10(v) : v));
+  let start = 0, end = 1;
+  for (let axis = 0; axis < 2; axis++) {
+    const origin = coords[0][axis], delta = coords[1][axis] - origin;
+    const [low, high] = ranges[axis];
+    if (Math.abs(delta) < 1e-12) {
+      if (origin < low || origin > high) return null;
+      continue;
+    }
+    const bounds = [(low - origin) / delta, (high - origin) / delta].sort((a, b) => a - b);
+    start = Math.max(start, bounds[0]);
+    end = Math.min(end, bounds[1]);
+    if (start > end) return null;
+  }
+  return [start, end].map(t => coords[0].map((v, axis) => v + t * (coords[1][axis] - v)));
+}
+
 
 class AshbyPlot {
   /**
@@ -198,6 +227,16 @@ class AshbyPlot {
     this._materials = [];
     this._registry = {};
     this._currentOpts = {};
+    this._size = [];
+    if (typeof ResizeObserver !== "undefined") {
+      this._resizeObserver = new ResizeObserver(() => {
+        const container = document.getElementById(this.divId);
+        if (this._currentOpts.xProp && (container.clientWidth !== this._size[0] || container.clientHeight !== this._size[1])) {
+          this.update(this._materials, this._registry, this._currentOpts);
+        }
+      });
+      this._resizeObserver.observe(document.getElementById(divId));
+    }
   }
 
   /**
@@ -240,7 +279,7 @@ class AshbyPlot {
       if (!showFamilies.has(fam)) continue;
       const xVal = getValue(m, xProp);
       const yVal = getValue(m, yProp);
-      if (xVal == null || yVal == null || xVal <= 0 || yVal <= 0) continue;
+      if (!Number.isFinite(xVal) || !Number.isFinite(yVal) || xVal <= 0 || yVal <= 0) continue;
       if (!familyGroups[fam]) familyGroups[fam] = [];
       familyGroups[fam].push({ material: m, x: xVal, y: yVal });
     }
@@ -253,7 +292,9 @@ class AshbyPlot {
         const blobColors = FAMILY_BLOB_COLORS[fam];
         if (!blobColors) continue;
 
-        const blob = buildBlobEnvelope(pts.map(p => [p.x, p.y]));
+        // A specified lower/upper bound cannot define a finite family extent.
+        const measured = pts.filter(p => !p.material.hasBounds);
+        const blob = buildBlobEnvelope(measured.map(p => [p.x, p.y]));
         if (!blob) continue;
 
         // Close the polygon
@@ -323,11 +364,12 @@ class AshbyPlot {
       );
 
       const hovertemplate = points.map(p => {
-        const xDisp = displayValue(p.x, xMeta);
-        const yDisp = displayValue(p.y, yMeta);
+        const xDisp = p.material[xProp]?.label || displayValue(p.x, xMeta);
+        const yDisp = p.material[yProp]?.label || displayValue(p.y, yMeta);
         return `<b>${p.material.name}</b><br>` +
                `${xMeta.label || xProp}: ${xDisp}<br>` +
                `${yMeta.label || yProp}: ${yDisp}` +
+               (p.material.condition ? `<br>${p.material.condition}` : '') +
                `<extra>${fam}</extra>`;
       });
 
@@ -336,11 +378,13 @@ class AshbyPlot {
         customdata,
         ids,
         type: "scatter",
-        mode: "markers",
+        mode: opts.showLabels ? "markers+text" : "markers",
+        textposition: "top center",
+        textfont: { size: 10, color: theme.fontColor },
         name: fam.charAt(0).toUpperCase() + fam.slice(1),
         marker: {
           color: FAMILY_COLORS[fam] || "#888",
-          symbol: FAMILY_SYMBOLS[fam] || "circle",
+          symbol: points.map(p => (FAMILY_SYMBOLS[fam] || "circle") + (p.material.hasBounds ? "-open" : "")),
           size: sizes,
           opacity: opacities,
           line: { width: 1, color: "#fff" },
@@ -352,9 +396,48 @@ class AshbyPlot {
       });
     }
 
+    const xScale = (xMeta.axis_scale === "linear") ? "linear" : "log";
+    const yScale = (yMeta.axis_scale === "linear") ? "linear" : "log";
+    const axisValues = [[], []];
+    for (const points of Object.values(familyGroups)) {
+      for (const p of points) {
+        axisValues[0].push(p.x, ...(showRanges ? getRange(p.material, xProp) || [] : []));
+        axisValues[1].push(p.y, ...(showRanges ? getRange(p.material, yProp) || [] : []));
+      }
+    }
+    for (const trace of traces) {
+      if (trace.fill === "toself") {
+        axisValues[0].push(...trace.x);
+        axisValues[1].push(...trace.y);
+      }
+    }
+    const ranges = [dataAxisRange(axisValues[0], xScale), dataAxisRange(axisValues[1], yScale)];
+    const scales = [xScale, yScale];
+    const fitToData = Array.isArray(opts.isolines?.lines);
+    const container = document.getElementById(this.divId);
+    this._size = [container.clientWidth, container.clientHeight];
+    const narrow = this._size[0] < 580;
+
     // Isoline shapes
     const shapes = [];
     const annotations = [];
+    // Endpoints supplied by the Python index library also work with reversed
+    // axes. The old slope/value API remains available to retained prototypes.
+    for (const line of opts.isolines?.lines || []) {
+      if (line.points?.length !== 2 || !line.points.flat().every(v => Number.isFinite(v) && v > 0)) continue;
+      const clipped = clipIsoline(line.points, ranges, scales);
+      if (!clipped) continue;
+      const [[x0, y0], [x1, y1]] = clipped.map(point => point.map((v, axis) => scales[axis] === "log" ? Math.pow(10, v) : v));
+      shapes.push({ type: "line", x0, y0, x1, y1, xref: "x", yref: "y",
+        line: { color: isDark ? "rgba(180,180,180,0.4)" : "rgba(100,100,100,0.4)", width: 1.5, dash: "dot" } });
+      const [labelX, labelY] = clipped[1];
+      const crowded = annotations.some(a =>
+        Math.abs(a.x - labelX) / (ranges[0][1] - ranges[0][0]) * Math.max(150, this._size[0] - 200) < 70 &&
+        Math.abs(a.y - labelY) / (ranges[1][1] - ranges[1][0]) * (this._size[1] - 150) < 18);
+      if (!crowded) annotations.push({ x: labelX, y: labelY, xref: "x", yref: "y",
+        text: line.label, showarrow: false, font: { size: 10, color: theme.axisColor },
+        xanchor: "right", yanchor: "top", xshift: -4, yshift: -4 });
+    }
     if (opts.isolines && opts.isolines.slope != null && opts.isolines.values) {
       const slope = opts.isolines.slope;
       // On log-log: log(Y) = slope * log(X) + log(C)
@@ -373,6 +456,7 @@ class AshbyPlot {
       xMax *= 2;
 
       for (const M of opts.isolines.values) {
+        if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || !Number.isFinite(M) || M <= 0) continue;
         const C = Math.pow(M, slope);
         const y0 = C * Math.pow(xMin, slope);
         const y1 = C * Math.pow(xMax, slope);
@@ -398,42 +482,45 @@ class AshbyPlot {
       }
     }
 
-    const xScale = (xMeta.axis_scale === "linear") ? "linear" : "log";
-    const yScale = (yMeta.axis_scale === "linear") ? "linear" : "log";
-
     const layout = {
+      width: this._size[0],
+      height: this._size[1],
       title: {
-        text: `${yMeta.label || yProp} vs ${xMeta.label || xProp}`,
-        font: { size: 16, family: "system-ui, sans-serif", color: theme.fontColor },
-        y: 0.98,
+        text: `${yMeta.label || yProp}${narrow ? "<br>vs " : " vs "}${xMeta.label || xProp}`,
+        font: { size: narrow ? 14 : 16, family: "system-ui, sans-serif", color: theme.fontColor },
+        y: narrow ? 0.92 : 0.98,
         yanchor: "top",
       },
       xaxis: {
         title: { text: `${xMeta.label || xProp}${xMeta.unit ? " (" + xMeta.unit + ")" : ""}`, font: { color: theme.axisColor } },
         type: xScale,
+        ...(fitToData ? { range: ranges[0], autorange: false } : {}),
         gridcolor: theme.gridColor,
         zeroline: false,
+        exponentformat: "SI",
         tickfont: { color: theme.axisColor },
       },
       yaxis: {
         title: { text: `${yMeta.label || yProp}${yMeta.unit ? " (" + yMeta.unit + ")" : ""}`, font: { color: theme.axisColor } },
         type: yScale,
+        ...(fitToData ? { range: ranges[1], autorange: false } : {}),
         gridcolor: theme.gridColor,
         zeroline: false,
+        exponentformat: "SI",
         tickfont: { color: theme.axisColor },
       },
       shapes,
       annotations,
       hovermode: "closest",
       legend: {
-        orientation: "v",
+        orientation: narrow ? "h" : "v",
         yanchor: "top",
-        y: 1,
+        y: narrow ? -0.3 : 1,
         xanchor: "left",
-        x: 1.02,
+        x: narrow ? 0 : 1.02,
         font: { color: theme.fontColor, size: 12 },
       },
-      margin: { t: 50, r: 120, b: 60, l: 80 },
+      margin: { t: narrow ? 84 : 50, r: narrow ? 18 : 120, b: narrow ? 100 : 60, l: narrow ? 62 : 80 },
       plot_bgcolor: theme.plotBg,
       paper_bgcolor: theme.paperBg,
     };
@@ -451,22 +538,24 @@ class AshbyPlot {
       },
     };
 
-    Plotly.react(this.divId, traces, layout, config);
+    const rendered = Plotly.react(this.divId, traces, layout, config);
 
     // Click handler
-    if (this.onClick) {
-      const div = document.getElementById(this.divId);
-      // Remove previous listener
-      div.removeAllListeners && div.removeAllListeners("plotly_click");
-      div.on("plotly_click", (data) => {
-        if (data.points && data.points.length > 0) {
-          const pt = data.points[0];
-          if (pt.customdata) {
-            this.onClick(pt.customdata);
+    return Promise.resolve(rendered).then(() => {
+      if (this.onClick) {
+        const div = document.getElementById(this.divId);
+        // Remove previous listener
+        div.removeAllListeners && div.removeAllListeners("plotly_click");
+        div.on("plotly_click", (data) => {
+          if (data.points && data.points.length > 0) {
+            const pt = data.points[0];
+            if (pt.customdata) {
+              this.onClick(pt.customdata);
+            }
           }
-        }
-      });
-    }
+        });
+      }
+    });
   }
 
   /**

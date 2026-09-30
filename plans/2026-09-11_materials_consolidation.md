@@ -1,6 +1,30 @@
 # Materials data consolidation
 Date: 2026-09-11
-Status: Plan for review; nothing implemented
+Status: Chart consolidation implemented on 2026-09-30; broader data/API migration remains proposed
+
+## Progress on 2026-09-30
+
+Materials Explorer now uses a generated observation projection from the
+Materials lookup catalog. The former Ashby selector URL redirects to it, and
+the catalog lists one chart tool. States, conditions, source citations,
+intervals, and specified limits remain attached to each plotted value.
+`pycalcs/material_indices.py` supplies ranking equations and isolines.
+
+The legacy 60-material dataset, seven-material Python API, ingestion scripts,
+and historical prototypes remain available to their existing callers. They
+no longer supply the public chart. The migration proposed below has not been
+completed; the inventory describes the situation when this plan was written.
+
+The implementation is on `task/ashby-materials-database`. Verification on
+2026-09-30: 1,657 Python tests and 2,611 subtests passed; the Materials release
+verifier checked all 776 generated artifacts; lookup search tests and the site
+build passed. Browser checks covered light/dark themes, mobile sizing,
+source inspection, CSV and shared links, state/condition filters, the old URL
+redirect, data-version mismatch and retry, stale offline caches, and the three
+retained prototypes using the shared chart component. Production release is
+pending the account credit check required by `docs/RELEASE.md`.
+
+## Original proposal
 
 Three materials datasets now live in this repository. This plan reduces them to
 one without changing any tool, using the existing `pycalcs/material_db.py`

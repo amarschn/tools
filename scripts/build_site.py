@@ -20,6 +20,7 @@ def run(script: str, *arguments: str) -> None:
 
 
 def main() -> None:
+    run("build_material_selection.py")
     run("generate_sitemap.py")
     run("inject_seo_meta.py")
     run("version_thread_assets.py")
