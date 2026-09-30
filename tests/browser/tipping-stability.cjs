@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '/opt/homebrew/lib/node_modules/@playwright/test');
-const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tipping-stability/';
+const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.startsWith('http://')) || 'http://127.0.0.1:8157/tools/tipping-stability/';
 
 (async () => {
     const browser = await chromium.launch({ headless: true });
@@ -73,6 +73,57 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
                 });
             }));
             assert.deepEqual(issues, []);
+        };
+        const checkForceGeometry = async () => {
+            const problems = await page.evaluate(() => {
+                const failures = [], near = (a,b) => Math.abs(a-b) < 1e-6;
+                const attribute = (node,key) => Number(node.getAttribute(key));
+                for (const svg of document.querySelectorAll('#model-scene, #fbd-scene')) {
+                    for (const [id,point,end] of [['W','G','1'],['I','G','1'],['N','R','2'],['T','R','2']]) {
+                        const shaft = svg.querySelector(`[data-entity="${id}"] .force-shaft`);
+                        const mark = svg.querySelector(`[data-point="${point}"]`);
+                        if (shaft && (!near(attribute(shaft,'x'+end),attribute(mark,'cx')) || !near(attribute(shaft,'y'+end),attribute(mark,'cy')))) failures.push(`${svg.id}: ${id} detached from ${point}`);
+                    }
+                    const weight = svg.querySelector('[data-entity="W"] .force-shaft');
+                    if (!near(attribute(weight,'x1'),attribute(weight,'x2')) || attribute(weight,'y2') <= attribute(weight,'y1')) failures.push(`${svg.id}: gravity is not vertically down`);
+                }
+                const svg = document.getElementById('fbd-scene');
+                const section = window.TippingTool.getResults().free_body.sections[svg.dataset.edge];
+                const ground = svg.querySelector('.support-line');
+                const origin = [attribute(ground,'x1'),attribute(ground,'y1')];
+                const u = [(attribute(ground,'x2')-origin[0])/section.support_span,(attribute(ground,'y2')-origin[1])/section.support_span];
+                // Recover a physical basis from the drawn support. Heights must be
+                // perpendicular to it, on the same scale as distances along it.
+                const z = [u[1],-u[0]];
+                const position = (point) => origin.map((value,i) => value+point[0]*u[i]+point[1]*z[i]);
+                for (const [name,point] of [['G',section.center],['R',section.reaction]]) {
+                    const mark = svg.querySelector(`[data-point="${name}"]`), expected = position(point);
+                    if (!near(attribute(mark,'cx'),expected[0]) || !near(attribute(mark,'cy'),expected[1])) failures.push(`${name}: geometry lost its scale or orientation`);
+                }
+                for (const force of section.forces) {
+                    if (Math.hypot(...force.vector,force.out_of_plane) < 1e-8) continue;
+                    const expected = position(force.point);
+                    const shaft = svg.querySelector(`[data-entity="${force.id}"] .force-shaft`);
+                    if (Math.hypot(...force.vector) <= 1e-8) {
+                        const mark = svg.querySelector(`[data-entity="${force.id}"] .out-of-plane`);
+                        if (shaft || !mark || !near(attribute(mark,'cx'),expected[0]) || !near(attribute(mark,'cy'),expected[1])) failures.push(`${force.id}: along-edge glyph detached`);
+                        continue;
+                    }
+                    if (!shaft) { failures.push(`${force.id}: missing arrow`); continue; }
+                    const end = ['N','T'].includes(force.id) ? '2' : '1';
+                    if (!near(attribute(shaft,'x'+end),expected[0]) || !near(attribute(shaft,'y'+end),expected[1])) failures.push(`${force.id}: application point changed`);
+                    const actual = [attribute(shaft,'x2')-attribute(shaft,'x1'),attribute(shaft,'y2')-attribute(shaft,'y1')];
+                    const vector = u.map((value,i) => force.vector[0]*value+force.vector[1]*z[i]);
+                    const cosine = actual.reduce((sum,value,i) => sum+value*vector[i],0)/(Math.hypot(...actual)*Math.hypot(...vector));
+                    if (!near(cosine,1)) failures.push(`${force.id}: direction changed`);
+                    for (const side of ['1','2']) {
+                        if (attribute(shaft,'x'+side)<4 || attribute(shaft,'x'+side)>svg.viewBox.baseVal.width-4 || attribute(shaft,'y'+side)<4 || attribute(shaft,'y'+side)>svg.viewBox.baseVal.height-4) failures.push(`${force.id}: clipped arrow`);
+                    }
+                }
+                if (/NaN|Infinity/.test(svg.innerHTML)) failures.push('Nonfinite FBD geometry');
+                return failures;
+            });
+            assert.deepEqual(problems, []);
         };
         await boot();
         near((await result()).threshold.value, 33.690067525979785);
@@ -319,8 +370,50 @@ const base = process.env.TIPPING_TOOL_URL || 'http://127.0.0.1:8157/tools/tippin
         await fill('mass', 200);
         await calc();
         near((await result()).threshold.value, 784.532);
+
+        // Exercise B in the calculator through real input/share URLs, using the
+        // retained gallery's Python references for every case and support edge.
+        const { cases } = JSON.parse(await fs.readFile('tools/tipping-stability/prototypes/cases.json','utf8'));
+        const compareReference = (actual, expected, path) => {
+            if (typeof expected === 'number') {
+                assert.ok(Math.abs(actual-expected) < 1e-9*Math.max(1,Math.abs(expected)),`${path}: ${actual} ≈ ${expected}`);
+            } else if (expected && typeof expected === 'object') {
+                assert.deepEqual(Object.keys(actual),Object.keys(expected),path);
+                for (const key of Object.keys(expected)) compareReference(actual[key],expected[key],`${path}.${key}`);
+            } else assert.equal(actual,expected,path);
+        };
+        let worldViews = 0;
+        for (const item of cases) {
+            const url = new URL(base);
+            for (const [key,value] of Object.entries(item.inputs)) url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+            if (item.inputs.contacts) url.searchParams.set('geometry_mode','custom');
+            await boot(url.href);
+            // Native Python and WebAssembly can differ in the last floating-point bits.
+            compareReference((await result()).free_body,item.result.free_body,item.id);
+            await showFbd();
+            for (const width of [1440,390]) {
+                await page.setViewportSize({width,height:1050});
+                await page.locator('#settings-button').click();
+                await page.locator(`.settings-panel [data-theme="${width===390 ? 'dark' : 'light'}"]`).click();
+                await page.keyboard.press('Escape');
+                for (const edge of item.result.equilibrium.edges) {
+                    await select('diagram-edge',edge.id);
+                    await checkForceGeometry();
+                    await checkDiagramLabels();
+                    worldViews++;
+                }
+                await select('diagram-edge',item.result.equilibrium.governing_edge);
+                if (['slope','crowded','oblique','beyond'].includes(item.id)) await page.locator('#fbd-panel').screenshot({path:`/private/tmp/tipping-world-${item.id}-${width}.png`,animations:'disabled'});
+                await noOverflow();
+            }
+        }
+        await page.locator('.diagram-explanation > summary').click();
+        for (const path of ['prototypes/','prototypes/jsxgraph-lab.html']) {
+            assert.equal(await page.locator(`.diagram-explanation a[href="${path}"]`).isVisible(),true);
+            assert.equal((await context.request.get(new URL(path,base).href)).status(),200);
+        }
         assert.deepEqual(errors, []);
-        console.log(JSON.stringify({ checks: 'Progressive disclosure, linked FBD, real Python, all load modes, charts, derivations, tooltips, keyboard tabs, editable tables, share round-trip, exports, themes, mobile, and invalid input recovery passed.', screenshots: ['/private/tmp/tipping-simple-desktop.png', '/private/tmp/tipping-simple-mobile.png', '/private/tmp/tipping-fbd-disclosed.png'] }));
+        console.log(JSON.stringify({ checks: 'Progressive disclosure, linked FBD, real Python, all load modes, charts, derivations, tooltips, keyboard tabs, editable tables, share round-trip, exports, themes, mobile, and invalid input recovery passed.', worldViews, retainedPrototypes: true, screenshots: ['/private/tmp/tipping-simple-desktop.png', '/private/tmp/tipping-simple-mobile.png', '/private/tmp/tipping-fbd-disclosed.png'] }));
     } finally {
         await browser.close();
     }

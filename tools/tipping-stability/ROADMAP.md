@@ -8,7 +8,7 @@
 - [x] Four-control starting view, optional FBD, and separate disclosure of input customizations, force values, and calculations.
 - [x] Eight FBD rendering studies with shared solver cases and library research: [comparison gallery](prototypes/).
 - [x] Final [JSXGraph interaction lab](prototypes/jsxgraph-lab.html) with constrained handles, live moment-arm construction, automatic labels, and Python reactions.
-- [ ] Select an FBD study and integrate it into the calculator after visual review.
+- [x] Integrate selected study B's world-oriented section using native SVG. Keep all prototype pages and the JSXGraph lab available for future review.
 - [ ] Payload-position sweeps and uncertainty ranges for center of mass.
 - [ ] Worst-case caster orientation search.
 - [ ] Formula-bearing Excel export.

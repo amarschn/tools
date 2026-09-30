@@ -9,8 +9,10 @@ python3 -m http.server 8157 --bind 127.0.0.1
 ```
 
 Visit `http://127.0.0.1:8157/tools/tipping-stability/prototypes/`.
-This is a design experiment on `task/tipping-analysis`. A final diagram style
-has not been selected for the calculator.
+The user selected B on 2026-09-29. The calculator adopts its world-oriented
+layout in native SVG. This gallery preserves the original Canvas experiment
+alongside all seven alternatives and the final JSXGraph lab. Keep these pages,
+their cases, library assets, and research notes for future review.
 
 The [final JSXGraph interaction lab](jsxgraph-lab.html) adds a separate live
 experiment. Drag the round application point along the mast and the square
@@ -49,13 +51,15 @@ along-edge components, and the force table includes every component.
 preserves the case, edge, force, study, arrow scale, and guides. Theme follows the
 device by default and can be changed in Settings.
 
-## What was wrong with the current diagrams
+## What prompted the studies
 
-The current `../visualization.js` shifts W and N sideways in screen coordinates:
-10 px in the isometric model and 12 px in the section. T also moves down by 9 px.
-Dotted leaders connect the shifted arrows to the original positions. This
-separates crowded arrows, but the shafts no longer pass through the displayed
-mass center or reaction point. The displacement changes the apparent moment arm.
+Before B was integrated, `../visualization.js` shifted W and N sideways in screen
+coordinates: 10 px in the isometric model and 12 px in the section. T also moved
+down by 9 px.
+Dotted leaders connected the shifted arrows to the original positions. This
+separated crowded arrows, but the shafts no longer passed through the displayed
+mass center or reaction point. The displacement changed the apparent moment arm.
+The calculator now uses the same exact-anchor convention as these studies.
 
 These studies never translate a force sideways. Applied force arrows start at
 their application points. Reaction arrows end at their contact point, so N can

@@ -39,11 +39,15 @@ and track. A force's positive z component lifts away from the ground.
 
 ## Connecting the model to the FBD
 
-Eight alternative diagram techniques are available in the
-[FBD comparison gallery](prototypes/). They share the same calculated cases and
-include working Three.js and JSXGraph trials. The [research notes](prototypes/README.md)
-describe the arrow anchoring issue and library options. A replacement for the
-calculator's diagrams is pending visual review.
+Study B's world-oriented section was selected for the calculator on 2026-09-29.
+The main tool implements its layout in native SVG, keeping linked force selection
+and adding no diagram dependency. Projected weight points straight down while
+the ground, body outline, and surface axes tilt together.
+
+All eight alternatives remain in the [FBD comparison gallery](prototypes/),
+including the original Canvas version of B and the Three.js and JSXGraph trials.
+Keep these pages, their saved cases, and the [research notes](prototypes/README.md)
+available for future review.
 
 A separate [JSXGraph interaction lab](prototypes/jsxgraph-lab.html) tests
 constrained dragging, live moment arms, and automatic label placement. Its
@@ -80,10 +84,16 @@ equations. Closing these sections leaves the image and primary result visible.
 | T | Required tangential ground reaction |
 
 In the FBD, u points inward from the selected edge and z points away from the
-support plane. h is the mass-center height, dG its distance from the edge, and
-dR the required reaction's distance. Arrow lengths are schematic; the key gives
-force magnitudes in newtons. Dotted leaders identify application points when
-arrows or labels are separated for readability.
+support plane. The whole projected section rotates to keep weight vertical.
+Its apparent incline can differ from the entered slope for an edge running
+obliquely across the hill. h is the mass-center height, dG its distance from the
+edge, and dR the required reaction's distance. These distances are available
+in the mass-center inspector; dR also appears below the diagram.
+
+Arrow lengths are schematic; the key gives force magnitudes in newtons.
+Applied-force arrows start at their application points, and ground-reaction
+arrows end at R. Both views keep every arrow on its physical line of action.
+Only text moves to avoid collisions, with dotted leaders for displaced labels.
 
 Forces along the selected edge lie outside the FBD projection. The inspector
 reports those components, and the model explanation reports the residual ground
@@ -157,8 +167,11 @@ The browser regression uses the real Pyodide engine and checks the initial
 four-control view, keyboard disclosure controls, hidden analysis, diagrams,
 derivations, tables, share-link round trips, downloaded exports, themes,
 mobile layout, and invalid-input recovery. It also checks matching force/edge
-selection, a vertical weight arrow on inclined ground, and diagram persistence
-when inputs are edited or invalid:
+selection and diagram persistence when inputs are edited or invalid. The eight
+saved gallery cases also run through the calculator on desktop and mobile,
+covering all support edges. Checks verify vertical gravity, exact arrow anchors,
+force directions, along-edge symbols, linear geometry, label placement, and
+visible reactions outside the footprint:
 
 ```sh
 python3 -m http.server 8157 --bind 127.0.0.1
@@ -166,7 +179,7 @@ node tests/browser/tipping-stability.cjs
 ```
 
 `PLAYWRIGHT_MODULE` can point to an installed Playwright package.
-`TIPPING_TOOL_URL` can override the default local tool URL.
+`TIPPING_TOOL_URL` or a URL argument can override the default local tool URL.
 
 ## References
 

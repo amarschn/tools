@@ -1,10 +1,10 @@
 # Tipping free-body diagram studies
 
 Date: 2026-09-29
-Status: Eight comparison studies and a final live JSXGraph experiment on task/tipping-analysis
+Status: Study B selected and integrated; all experiments retained on task/tipping-analysis
 
 The user requested several alternatives to the existing free-body diagrams and
-research into reusable diagram libraries. The current renderer shifts weight,
+research into reusable diagram libraries. The original renderer shifted weight,
 normal reaction, and tangential reaction arrows away from their physical points
 to separate them. The studies keep arrow lines through the calculated points.
 
@@ -16,8 +16,7 @@ solver. Research and review instructions live in the gallery's README.
 
 The user can compare cases, select any support edge, isolate a force, switch
 arrow scaling, inspect anchor crosshairs, and copy a review link. The diagrams
-support light/dark/system themes. Production publication remains deferred;
-the next step is selecting a diagram treatment for integration.
+support light/dark/system themes. Production publication remains deferred.
 
 Follow-up: added a crowded case with four forces at the mass center, measured
 text bounds for force label placement, labels with dotted leaders, a view
@@ -51,3 +50,28 @@ outside reactions, themes, mobile layout, and URL restoration have passed.
 The full gallery regression also passes, covering all 62 frozen edge/scale
 combinations alongside the live experiment. The Fit control includes the
 required reaction even when it lies outside the footprint on a narrow screen.
+
+## Selected treatment: B
+
+The user selected B and explicitly asked to retain every prototype for future
+review. The main calculator now uses B's world-oriented section in native SVG,
+so this choice adds no library dependency. The outline, ground, axes, points,
+and vectors share one rotation that puts projected weight vertically downward.
+The apparent incline is labeled separately from the entered ground slope.
+
+Applied arrows start at their exact application points. Normal and tangential
+reaction arrows end at R. The linked isometric view uses that convention too,
+removing the previous sideways offsets. Only labels move for legibility.
+The FBD fits arrow endpoints and outside reaction points within its viewport.
+
+The eight comparison studies and final JSXGraph lab remain intact, with links
+from the calculator's diagram explanation and README. Their geometry code,
+saved solver cases, and library assets remain available for revisiting.
+
+Verification: all 36 solver tests pass. The calculator browser regression passes
+all eight gallery cases through real Pyodide, covering 31 support edges on both
+desktop/light and mobile/dark layouts (62 views). Checks include exact force
+attachment, vertical gravity, arrow directions, one geometry scale, along-edge
+glyph positions, label bounds and collisions, and outside reaction visibility.
+The gallery and lab links return successfully. Screenshots were inspected for
+level ground, a turn, crowded forces, oblique loading, and the mobile layout.

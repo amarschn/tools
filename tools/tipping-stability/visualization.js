@@ -156,17 +156,22 @@ window.TippingDiagram = class TippingDiagram {
         return `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" ${attributes}/>`;
     }
 
-    arrow(origin, vector, force, prefix, labelOffset = [0, 0], offset = [0, 0]) {
+    arrow(origin, vector, force) {
         const magnitude = Math.hypot(...vector);
         if (magnitude < 1e-9) return '';
-        const start = [origin[0] + offset[0], origin[1] + offset[1]];
-        const end = [start[0] + vector[0], start[1] + vector[1]];
-        const labelX = end[0] + (vector[0] >= 0 ? 8 : -8) + labelOffset[0];
-        const labelY = end[1] + (vector[1] > 0 ? 12 : -6) + labelOffset[1];
+        // Applied-force tails and reaction heads meet the exact physical point.
+        // Labels may move; an arrow must never move sideways off its line of action.
+        const reaction = force.kind === 'reaction';
+        const start = reaction ? origin.map((value, i) => value - vector[i]) : origin;
+        const end = reaction ? origin : origin.map((value, i) => value + vector[i]);
+        const labelAnchor = reaction ? start : end;
+        const outward = vector.map((value) => reaction ? -value : value);
+        const labelX = labelAnchor[0] + (outward[0] < -1 ? -8 : 8);
+        const labelY = labelAnchor[1] + (outward[1] > 1 ? 12 : -6);
         const name = this.escape(force.id);
         const unit = vector.map((value) => value / magnitude);
         const head = [end, [end[0]-unit[0]*8-unit[1]*4,end[1]-unit[1]*8+unit[0]*4], [end[0]-unit[0]*8+unit[1]*4,end[1]-unit[1]*8-unit[0]*4]].map((point) => point.join(',')).join(' ');
-        return `<g class="force-arrow ${force.kind}" data-entity="${name}" aria-label="${this.escape(force.name)}"><title>${this.escape(force.name)}: ${this.number(Math.hypot(...force.vector))} N</title>${offset.some(Boolean) ? this.line(origin, start, 'class="leader"') : ''}${this.line(start, end, `class="force-shaft" stroke="currentColor" stroke-width="2" `)}<polygon points="${head}" fill="currentColor"/>${this.line(start, end, 'stroke="transparent" stroke-width="15"')}<text x="${labelX}" y="${labelY}" data-callout-x="${end[0]}" data-callout-y="${end[1]}" text-anchor="${vector[0] < -1 ? 'end' : 'start'}" class="force-label diagram-label">${name}</text></g>`;
+        return `<g class="force-arrow ${force.kind}" data-entity="${name}" aria-label="${this.escape(force.name)}"><title>${this.escape(force.name)}: ${this.number(Math.hypot(...force.vector))} N</title>${this.line(start, end, 'class="force-shaft" stroke="currentColor" stroke-width="2"')}<polygon points="${head}" fill="currentColor"/>${this.line(start, end, 'stroke="transparent" stroke-width="15"')}<text x="${labelX}" y="${labelY}" data-callout-x="${labelAnchor[0]}" data-callout-y="${labelAnchor[1]}" text-anchor="${outward[0] < -1 ? 'end' : 'start'}" class="force-label diagram-label">${name}</text></g>`;
     }
 
     definitions(prefix) {
@@ -278,8 +283,7 @@ window.TippingDiagram = class TippingDiagram {
             const norm = Math.hypot(direction[0],direction[1]);
             if (norm < 1e-8) continue;
             const size = force.id === 'W' || force.id === 'N' ? 45 : 39;
-            const offset = force.id === 'W' ? [-10,0] : force.id === 'N' ? [10,0] : [0,0];
-            svg += this.arrow(project(force.point), [direction[0]/norm*size,direction[1]/norm*size], force, 'model', [0,0], offset);
+            svg += this.arrow(project(force.point), [direction[0]/norm*size,direction[1]/norm*size], force);
         }
         svg += this.centerGlyph(center, this.expanded ? 'G' : 'Center of mass');
         if (this.expanded && components.length > 1 && components.length <= 8) components.forEach((component,index) => {
@@ -287,7 +291,7 @@ window.TippingDiagram = class TippingDiagram {
             svg += `<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="var(--text-color)"/>` + this.label(p[0]+10,p[1]-8,`m${index+1}`);
         });
         const reaction = project([...e.reaction_point,0]);
-        if (this.expanded) svg += `<path d="M${reaction[0]},${reaction[1]-5} l5,5 l-5,5 l-5,-5 z" fill="var(--bg-card)" stroke="var(--text-color)" data-entity="N"/>`;
+        if (this.expanded) svg += this.reactionGlyph(reaction);
         // Camera-independent axis triad. Directions rotate with the inclined surface.
         const origin = [43,height-38];
         for (const [basis,label] of this.expanded ? [[[1,0,0],'x'],[[0,1,0],'y'],[[0,0,1],'z']] : [[[1,0,0],'Forward']]) {
@@ -304,7 +308,11 @@ window.TippingDiagram = class TippingDiagram {
     }
 
     centerGlyph(point, label = 'G') {
-        return `<g data-entity="G"><title>G: combined center of mass</title><circle class="entity-mark" cx="${point[0]}" cy="${point[1]}" r="6" fill="var(--bg-card)" stroke="var(--text-color)" stroke-width="1.8"/><path d="M${point[0]-4},${point[1]} h8 M${point[0]},${point[1]-4} v8" stroke="var(--text-color)"/>${this.label(point[0]+10,point[1]-10,label,'font-weight="700"')}</g>`;
+        return `<g data-entity="G"><title>G: combined center of mass</title><circle class="entity-mark" data-point="G" cx="${point[0]}" cy="${point[1]}" r="6" fill="var(--bg-card)" stroke="var(--text-color)" stroke-width="1.8"/><path d="M${point[0]-4},${point[1]} h8 M${point[0]},${point[1]-4} v8" stroke="var(--text-color)"/>${this.label(point[0]+10,point[1]-10,label,'font-weight="700"')}</g>`;
+    }
+
+    reactionGlyph(point) {
+        return `<g data-entity="N"><title>R: required ground-reaction point</title><circle class="entity-mark" data-point="R" cx="${point[0]}" cy="${point[1]}" r="4" fill="var(--bg-card)" stroke="var(--text-color)" stroke-width="1.5"/>${this.label(point[0]-10,point[1]+18,'R','text-anchor="end" font-weight="700"')}</g>`;
     }
 
     renderFbd() {
@@ -314,54 +322,91 @@ window.TippingDiagram = class TippingDiagram {
         const width = Math.max(280,this.fbd.clientWidth), height = this.fbd.clientHeight || 340;
         this.fbd.setAttribute('viewBox',`0 0 ${width} ${height}`);
         document.getElementById('fbd-subtitle').textContent = `${edge.label} · looking along the edge`;
+        const forces = section.forces.map((force) => ({...this.result.free_body.forces.find((item) => item.id === force.id), ...force}))
+            .filter((force) => Math.hypot(...force.vector, force.out_of_plane) > 1e-8);
+        // Study B: rotate the whole edge-normal section until projected gravity
+        // points down. This apparent incline can differ from the entered slope.
+        const weight = section.forces.find((force) => force.id === 'W');
+        const angle = Math.atan2(weight.vector[0], -weight.vector[1]);
+        const rotate = ([u,z]) => [u*Math.cos(angle)+z*Math.sin(angle), u*Math.sin(angle)-z*Math.cos(angle)];
         const componentPoints = this.result.mass_components.map((component) => [(component.x-edge.start[0])*edge.normal[0]+(component.y-edge.start[1])*edge.normal[1],component.z]);
-        const points = [[0,0],[section.support_span,0],section.center,section.reaction,...componentPoints,...section.forces.filter((f) => Math.hypot(...f.vector, f.out_of_plane)>1e-8).map((f) => f.point)];
-        const min = Math.min(...points.map((p) => p[0])), max = Math.max(...points.map((p) => p[0]));
-        const maxZ = Math.max(...points.map((p) => p[1]), .001);
-        const scale = Math.min((width-145)/Math.max(max-min,.001),(height-155)/maxZ);
-        const originX = (width-(max-min)*scale)/2-min*scale;
-        const groundY = height-91;
-        const project = (point) => [originX+point[0]*scale,groundY-point[1]*scale];
+        const points = [section.center,section.reaction,...componentPoints,...forces.map((force) => force.point)];
+        const minU = Math.min(0,...points.map((point) => point[0]));
+        const maxU = Math.max(section.support_span,...points.map((point) => point[0]));
+        const top = Math.max(section.center[1]+.13,...points.map((point) => point[1]+.04));
+        const shell = [[0,0],[section.support_span,0],[section.support_span,top],[0,top]];
+        const ground = [[minU-section.support_span*.1,0],[maxU+section.support_span*.1,0]];
+        const arrowLength = Math.min(56,width*.18);
+        const direction = (force) => rotate(force.vector).map((value) => value/Math.hypot(...force.vector)*arrowLength);
+
+        // Fit physical geometry and fixed-pixel arrow ends together. In particular,
+        // include reaction tails and reactions outside the footprint after tipping.
+        const fitting = [...shell,...ground,...points].map((point) => ({point:rotate(point), offset:[0,0]}));
+        for (const force of forces) {
+            if (Math.hypot(...force.vector) <= 1e-8) continue;
+            fitting.push({point:rotate(force.point), offset:direction(force).map((value) => force.kind === 'reaction' ? -value : value)});
+        }
+        const bounds = (scale) => {
+            const screen = fitting.map(({point,offset}) => point.map((value,i) => value*scale+offset[i]));
+            return {left:Math.min(...screen.map((point) => point[0])), right:Math.max(...screen.map((point) => point[0])),
+                top:Math.min(...screen.map((point) => point[1])), bottom:Math.max(...screen.map((point) => point[1]))};
+        };
+        const area = {left:30,right:width-30,top:38,bottom:height-78};
+        const rotated = fitting.map(({point}) => point);
+        const range = [0,1].map((axis) => Math.max(...rotated.map((point) => point[axis]))-Math.min(...rotated.map((point) => point[axis])));
+        let lo = 0, hi = Math.min((area.right-area.left)/Math.max(range[0],.001),(area.bottom-area.top)/Math.max(range[1],.001));
+        for (let i=0;i<28;i++) {
+            const trial = (lo+hi)/2, box = bounds(trial);
+            if (box.right-box.left <= area.right-area.left && box.bottom-box.top <= area.bottom-area.top) lo = trial;
+            else hi = trial;
+        }
+        const scale = lo, box = bounds(scale);
+        const offset = [(area.left+area.right-box.left-box.right)/2,(area.top+area.bottom-box.top-box.bottom)/2];
+        const project = (point) => rotate(point).map((value,i) => value*scale+offset[i]);
         const pivot = project([0,0]), center = project(section.center), reaction = project(section.reaction);
         let svg = this.definitions('fbd');
-        const outlineLeft = project([min,0])[0], outlineRight = project([max,0])[0];
-        const bodyTop = Math.max(42,project([0,maxZ])[1]-18);
-        svg += `<rect x="${outlineLeft}" y="${bodyTop}" width="${Math.max(3,outlineRight-outlineLeft)}" height="${Math.max(4,groundY-bodyTop)}" rx="8" fill="var(--model-ground)" stroke="var(--text-light)" stroke-width="1" stroke-dasharray="4 4"/>`;
-        svg += `<text x="${width/2}" y="20" text-anchor="middle" class="small-label">Whole assembly · forces in N · distances in m</text>`;
-        svg += this.line([20,groundY],[width-20,groundY],'class="leader"');
+        svg += `<polygon class="assembly-outline" points="${shell.map((point) => project(point).join(',')).join(' ')}" fill="var(--model-ground)" stroke="var(--text-light)" stroke-width="1"/>`;
+        svg += `<text x="${width/2}" y="18" text-anchor="middle" class="small-label">Weight vertical · schematic arrows</text>`;
+        svg += this.line(...ground.map(project),'class="dimension"');
+        const hatch = rotate([-.022,-.025]).map((value) => value*scale);
+        for (let i=0;i<=18;i++) {
+            const start = project([section.support_span*i/18,0]);
+            svg += this.line(start,start.map((value,axis) => value+hatch[axis]),'class="dimension"');
+        }
+        svg += this.line(pivot,project([section.support_span,0]),'class="support-line" stroke="var(--text-color)" stroke-width="2"');
         svg += this.line(center,project([section.center[0],0]),'class="leader"');
-        // Arrow tails may be separated by a dotted leader; exact points remain marked.
-        for (const force of this.result.free_body.forces) {
-            if (Math.hypot(...force.vector)<1e-8) continue;
-            const projected = section.forces.find((item) => item.id === force.id);
-            const norm = Math.hypot(...projected.vector);
-            const point = project(projected.point);
-            if (norm > 1e-8) {
-                const size = force.id === 'W' || force.id === 'N' ? 48 : 42;
-                const direction = [projected.vector[0]/norm*size,-projected.vector[1]/norm*size];
-                const offset = force.id === 'W' ? [-12,0] : force.id === 'N' ? [12,0] : force.id === 'T' ? [0,9] : [0,0];
-                svg += this.arrow(point,direction,force,'fbd',[0,0],offset);
+        for (const force of forces) {
+            const point = project(force.point);
+            if (Math.hypot(...force.vector) > 1e-8) {
+                const original = this.result.free_body.forces.find((item) => item.id === force.id);
+                svg += this.arrow(point,direction(force),original);
             }
-            if (Math.abs(projected.out_of_plane)>1e-7 && norm<1e-8) {
-                svg += `<g data-entity="${force.id}"><title>${this.escape(force.name)} acts along the edge, outside this projection.</title><circle cx="${point[0]-18}" cy="${point[1]+17}" r="7" fill="var(--bg-card)" stroke="var(--text-color)"/><text x="${point[0]-18}" y="${point[1]+21}" text-anchor="middle">${projected.out_of_plane>0 ? '•' : '×'}</text>${this.label(point[0]-29,point[1]+21,force.id,'text-anchor="end"')}</g>`;
-            }
+            if (force.id.startsWith('P')) svg += `<circle data-point="${force.id}" cx="${point[0]}" cy="${point[1]}" r="3" fill="var(--bg-card)" stroke="var(--text-color)"/>`;
         }
         svg += this.centerGlyph(center);
         if (componentPoints.length > 1 && componentPoints.length <= 8) componentPoints.forEach((point,index) => {
             const p = project(point);
             svg += `<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="var(--text-color)"/>` + this.label(p[0]+10,p[1]-7,`m${index+1}`);
         });
-        svg += `<g data-diagram-edge="${this.edge}"><circle cx="${pivot[0]}" cy="${pivot[1]}" r="5" fill="var(--warning-color)"/>${this.label(pivot[0]-6,pivot[1]-10,this.edge,'text-anchor="end" font-weight="700"')}</g>`;
-        svg += `<path d="M${reaction[0]},${reaction[1]-4} l4,4 l-4,4 l-4,-4 z" fill="var(--bg-card)" stroke="var(--text-color)" data-entity="N"/>`;
-        const dimension = (a,b,text,x,y) => this.line(a,b,'class="dimension" marker-start="url(#fbd-dim)" marker-end="url(#fbd-dim)"') + this.label(x,y,text,'text-anchor="middle"');
-        const dimensionX = Math.max(22,Math.min(pivot[0],center[0])-32);
-        svg += dimension([dimensionX,groundY],[dimensionX,center[1]],`h ${this.number(section.center[1])} m`,dimensionX,center[1]-12);
-        svg += dimension([pivot[0],groundY+25],[center[0],groundY+25],`dG ${this.number(section.center[0])} m`,(pivot[0]+center[0])/2,groundY+42);
-        svg += dimension([pivot[0],groundY+51],[reaction[0],groundY+51],`dR ${this.number(section.reaction[0])} m`,(pivot[0]+reaction[0])/2,groundY+67);
-        svg += this.line([width-54,groundY-20],[width-25,groundY-20],'class="dimension" marker-end="url(#fbd-arrow)"') + this.label(width-15,groundY-17,'u');
-        svg += this.line([width-54,groundY-20],[width-54,groundY-49],'class="dimension" marker-end="url(#fbd-arrow)"') + this.label(width-49,groundY-49,'z');
+        svg += `<g data-diagram-edge="${this.edge}"><circle cx="${pivot[0]}" cy="${pivot[1]}" r="4" fill="var(--warning-color)"/>${this.label(pivot[0]-8,pivot[1]-10,this.edge,'text-anchor="end" font-weight="700"')}</g>`;
+        svg += this.reactionGlyph(reaction);
+        for (const force of forces.filter((item) => Math.hypot(...item.vector) <= 1e-8)) {
+            const point = project(force.point);
+            const mark = force.out_of_plane > 0 ? `<circle cx="${point[0]}" cy="${point[1]}" r="2" fill="currentColor"/>`
+                : `<path d="M${point[0]-3},${point[1]-3} l6,6 M${point[0]-3},${point[1]+3} l6,-6" stroke="currentColor"/>`;
+            svg += `<g class="force-arrow ${force.kind}" data-entity="${force.id}"><title>${this.escape(force.name)} acts along the edge, outside this projection.</title><circle class="out-of-plane" cx="${point[0]}" cy="${point[1]}" r="7" fill="var(--bg-card)" stroke="currentColor"/>${mark}<text x="${point[0]+12}" y="${point[1]+20}" data-callout-x="${point[0]}" data-callout-y="${point[1]}" class="force-label diagram-label">${force.id}</text></g>`;
+        }
+        const axisOrigin = [width-51,height-39];
+        for (const [vector,name] of [[[1,0],'u'],[[0,1],'z']]) {
+            const end = rotate(vector).map((value,i) => axisOrigin[i]+value*25);
+            svg += this.line(axisOrigin,end,'class="dimension" marker-end="url(#fbd-arrow)"') + this.label(end[0]+6,end[1]+3,name);
+        }
         this.fbd.innerHTML = svg;
         this.fbd.dataset.edge = this.edge;
+        document.getElementById('fbd-incline').textContent = `Apparent incline ${this.number(Math.abs(angle*180/Math.PI))}°`;
+        const distance = document.getElementById('fbd-reaction-distance');
+        distance.textContent = `R from edge ${this.number(section.reaction[0])} m`;
+        distance.dataset.outside = String(section.reaction[0] < -1e-8);
         const outOfPlane = section.forces.some((force) => Math.abs(force.out_of_plane) > 1e-7);
         const note = document.getElementById('fbd-projection-note');
         note.hidden = !outOfPlane;
