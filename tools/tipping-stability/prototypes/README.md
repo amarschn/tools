@@ -12,6 +12,13 @@ Visit `http://127.0.0.1:8157/tools/tipping-stability/prototypes/`.
 This is a design experiment on `task/tipping-analysis`. A final diagram style
 has not been selected for the calculator.
 
+The [final JSXGraph interaction lab](jsxgraph-lab.html) adds a separate live
+experiment. Drag the round application point along the mast and the square
+direction handle around its circle. “Crowded case” puts four forces at the
+mass center; “Through edge” gives P₁ zero moment about that edge. Sliders provide
+keyboard alternatives. Automatic label placement can be toggled for comparison.
+The lab has its own load inputs and does not change the gallery's frozen cases.
+
 ## Comparing the studies
 
 | Study | Technique | What to inspect |
@@ -102,7 +109,7 @@ and applying one transform to the body, points, and vectors. It is original
 Canvas code, not a PrairieDraw integration. There is no reason to adopt the
 older runtime for this prototype.
 
-### JSXGraph: working trial in F
+### JSXGraph: fixed scene and live construction
 
 [JSXGraph documentation](https://jsxgraph.org/docs/) covers points, arrows,
 segments, polygons, labels, SVG rendering, and interaction. The library offers
@@ -117,8 +124,26 @@ JSXGraph has [dependent points](https://jsxgraph.org/docs/Point.html),
 [automatic label positioning](https://jsxgraph.org/docs/Label.html#autoPosition),
 and [measurement labels](https://jsxgraph.org/docs/Smartlabel.html). Automatic
 positioning searches nearby locations to reduce overlaps; it is disabled by
-default. These features deserve a separate trial before deciding whether to
-use JSXGraph for diagrams that users can edit by dragging geometry.
+default. The [live lab](jsxgraph-lab.html) exercises these features with
+constrained dragging, an orthogonal projection for the moment arm, and a native
+measurement label. The application point, arrow, and line of action share point
+objects. Moving the application point preserves the direction using the circle
+glider's relative position. The moment label uses an explicit screen-length
+visibility rule because JSXGraph's horizontal smartlabel default hides lines
+shorter than 1.5 user units, which is too large for this meter-based drawing.
+
+The lab runs the production `evaluate_stability` and `free_body_diagram`
+functions in a Pyodide worker. Geometry responds immediately; numerical results
+update after an 80 ms pause or when a pending calculation finishes. Only the
+latest requested case is displayed. Pending reaction arrows and numerical
+moments are hidden, so dragging cannot pair a new force with an old reaction.
+No second equilibrium solver is implemented in JavaScript.
+
+The automatic labels remain a heuristic. The crowded preset deliberately
+includes nearly parallel P₁, P₂, and inertia arrows; label overlaps can remain.
+Compare automatic and fixed placement, then try zooming and changing direction.
+The experiment demonstrates the geometry relationships more clearly than F,
+but does not establish that JSXGraph removes the need for custom FBD layout.
 
 For the current calculator, native SVG gives us direct control over drawing
 order, arrowheads, text, themes, and standalone vector output. It requires us
@@ -171,7 +196,8 @@ comparison; its fixed scene does not show all of JSXGraph's capabilities.
 `generate_cases.py` calls the production `pycalcs.stability.analyze_tipping`
 function and records its source hash. `cases.json` contains its equilibrium,
 free-body, mass, and threshold results. No second stability solver runs in
-JavaScript. Regenerate or verify the fixtures with:
+JavaScript. The live lab uses the same Python equilibrium and FBD functions
+directly. Regenerate or verify the fixtures with:
 
 ```sh
 python3 tools/tipping-stability/prototypes/generate_cases.py
@@ -179,6 +205,14 @@ python3 tools/tipping-stability/prototypes/generate_cases.py --check
 python3 -m pytest tests/test_stability.py -q
 node tests/browser/tipping-fbd-prototypes.cjs
 ```
+
+For just the final experiment, append `--lab-only`. A local preview URL can be
+passed as the next argument, or through `TIPPING_FBD_URL`. The browser checks
+drag both handles, verify the segment/circle constraints, compare displayed
+geometry with the force sent to Python, and compare worker results with native
+Python. They also check the zero-arm case, restoring/tipping directions,
+outside reactions, pending-result handling, automatic labels, keyboard inputs,
+themes, mobile layout, and review-link restoration.
 
 The browser checks compare W's tail against G and N's head against R in the
 rendered SVG. They also check the 3D arrow endpoints against the solver points,

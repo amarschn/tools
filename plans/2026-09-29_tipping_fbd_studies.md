@@ -1,7 +1,7 @@
 # Tipping free-body diagram studies
 
 Date: 2026-09-29
-Status: Eight prototypes available for visual review on task/tipping-analysis
+Status: Eight comparison studies and a final live JSXGraph experiment on task/tipping-analysis
 
 The user requested several alternatives to the existing free-body diagrams and
 research into reusable diagram libraries. The current renderer shifts weight,
@@ -31,3 +31,23 @@ plan-edge selection, focus after redraw, themes, a 390 px viewport, camera
 rotation, board zoom, and review-link state. Screenshots were inspected in
 light/dark themes, with crowded loads and the mobile plan/section layout.
 Fixture regeneration and `git diff --check` pass.
+
+## Final JSXGraph experiment
+
+The user requested one last trial before choosing the lightweight SVG direction.
+`jsxgraph-lab.html` adds constrained application-point and direction handles,
+dependent arrow geometry, an orthogonal projection for the lever arm, and a
+native measurement label. The crowded preset and automatic-label toggle make
+remaining label collisions visible. A through-edge preset demonstrates zero
+moment. Controls also work from the keyboard, and review links preserve inputs.
+
+The production Python equilibrium and FBD functions run in a Pyodide worker.
+Pending results are hidden and stale responses are discarded. Geometry updates
+during dragging. No physics equations were added to JavaScript.
+
+Real browser dragging, circle/segment constraints, direction agreement with
+solver inputs, perpendicularity, Python-reference comparisons, zero moments,
+outside reactions, themes, mobile layout, and URL restoration have passed.
+The full gallery regression also passes, covering all 62 frozen edge/scale
+combinations alongside the live experiment. The Fit control includes the
+required reaction even when it lies outside the footprint on a narrow screen.

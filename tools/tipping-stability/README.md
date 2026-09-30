@@ -45,6 +45,10 @@ include working Three.js and JSXGraph trials. The [research notes](prototypes/RE
 describe the arrow anchoring issue and library options. A replacement for the
 calculator's diagrams is pending visual review.
 
+A separate [JSXGraph interaction lab](prototypes/jsxgraph-lab.html) tests
+constrained dragging, live moment arms, and automatic label placement. Its
+reaction forces and moments come from the same Python equilibrium solver.
+
 A fixed isometric schematic stays visible above the results. Select **Show
 forces & free-body diagram** below the image to add labeled forces and the
 linked FBD. Both views stay outside the analysis tabs. The ground and vehicle

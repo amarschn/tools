@@ -2,7 +2,8 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'/opt/homebrew/lib/node_modules/@playwright/test');
-const base=process.env.TIPPING_FBD_URL||'http://127.0.0.1:8157/tools/tipping-stability/prototypes/';
+const verifyJsxLab=require('./tipping-jsxgraph-lab.cjs');
+const base=process.env.TIPPING_FBD_URL||process.argv.find((arg)=>arg.startsWith('http://'))||'http://127.0.0.1:8157/tools/tipping-stability/prototypes/';
 const output='/private/tmp/tipping-fbd-prototypes';
 
 (async()=>{
@@ -13,6 +14,10 @@ const output='/private/tmp/tipping-fbd-prototypes';
         await context.grantPermissions(['clipboard-read','clipboard-write']);
         await context.route('**/www.googletagmanager.com/**',(route)=>route.fulfill({body:'',contentType:'application/javascript'}));
         await context.route('**/google-analytics.com/**',(route)=>route.fulfill({body:''}));
+        if(process.argv.includes('--lab-only')) {
+            console.log(JSON.stringify({jsxLab:await verifyJsxLab(context,base,output)},null,2));
+            return;
+        }
         const page=await context.newPage(),errors=[];
         page.on('pageerror',(e)=>errors.push(e.message));
         page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
@@ -131,6 +136,7 @@ const output='/private/tmp/tipping-fbd-prototypes';
         assert.equal(await page.locator('[data-study="b"]').isVisible(),false);
         assert.equal(await page.locator('body').getAttribute('data-theme'),'dark');
         assert.deepEqual(errors,[]);
-        console.log(JSON.stringify({passed:true,studies:8,cases:8,edgeCases:31,scaleCombinations:62,engines:['SVG','Canvas 2D','Three.js','JSXGraph'],screenshots:output},null,2));
+        const jsxLab=await verifyJsxLab(context,base,output);
+        console.log(JSON.stringify({passed:true,studies:8,cases:8,edgeCases:31,scaleCombinations:62,jsxLab,engines:['SVG','Canvas 2D','Three.js','JSXGraph'],screenshots:output},null,2));
     }finally{await browser.close();}
 })().catch((error)=>{console.error(error);process.exitCode=1;});
