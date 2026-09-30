@@ -16,7 +16,9 @@ solver. Research and review instructions live in the gallery's README.
 
 The user can compare cases, select any support edge, isolate a force, switch
 arrow scaling, inspect anchor crosshairs, and copy a review link. The diagrams
-support light/dark/system themes. Production publication remains deferred.
+support light/dark/system themes. Publication was deferred during the studies;
+on 2026-09-30 the user requested a plan for the next UI pass and a merge of the
+current work. See the [handoff plan](2026-09-30_tipping_stability_ui_streamlining.md).
 
 Follow-up: added a crowded case with four forces at the mass center, measured
 text bounds for force label placement, labels with dotted leaders, a view

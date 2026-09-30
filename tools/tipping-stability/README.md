@@ -140,6 +140,13 @@ even with all analysis sections closed.
 - Provide keyboard controls, light/dark/automatic themes, compact spacing,
   and selectable result precision.
 
+## Planned layout changes
+
+The [next UI pass](../../plans/2026-09-30_tipping_stability_ui_streamlining.md)
+will put tipping and sliding results together, expose the key results and edge
+table, and reduce scrolling. That layout is planned; this README describes the
+current calculator. The existing prototype pages will remain available.
+
 ## Model boundaries
 
 Stationary cases assume restraint against rolling. Tire friction is not a model

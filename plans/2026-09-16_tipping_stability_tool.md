@@ -1,7 +1,11 @@
 # Tipping and Stability Tool: Specification
 
 Date: 2026-09-16
-Status: Implemented and verified on the task branch; publication deferred by the user
+Status: Implemented and verified; 2026-09-30 release handoff with the next UI pass documented
+
+The 2026-09-30 request supersedes the earlier publication deferral. Preserve the
+current calculator and prototypes, and follow the
+[UI improvement and release handoff plan](2026-09-30_tipping_stability_ui_streamlining.md).
 
 The first application is low-speed vehicles, carts, and mobile robots, as selected
 by the user. Build a reusable rigid-body equilibrium model that can also support

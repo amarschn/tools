@@ -10,6 +10,8 @@
 - [x] Final [JSXGraph interaction lab](prototypes/jsxgraph-lab.html) with constrained handles, live moment-arm construction, automatic labels, and Python reactions.
 - [x] Integrate selected study B's world-oriented section using native SVG. Keep all prototype pages and the JSXGraph lab available for future review.
 - [x] Replace the confusing isometric illustration with a top-down footprint that keeps left/right orientation fixed. Support keyboard edge selection and linked application points.
+- [ ] Make tipping and sliding equally visible, reduce scrolling, and expose the key results and edge table by default. Follow the [2026-09-30 UI plan](../../plans/2026-09-30_tipping_stability_ui_streamlining.md).
+- [ ] Add sliding thresholds along the selected case parameter before comparing which limit occurs first. The current sliding check applies only at the entered operating point.
 - [ ] Payload-position sweeps and uncertainty ranges for center of mass.
 - [ ] Worst-case caster orientation search.
 - [ ] Formula-bearing Excel export.
