@@ -184,9 +184,11 @@ Preflight on 2026-09-30:
   text check.
 - Local and remote main both point to `1087ba0`, which is also the published
   Netlify main revision. The latest public deploy list shows no active deploy.
-- Before merging, the repository's release procedure requires confirmation
-  that the Netlify project is not paused and has enough deployment credits.
-  These account details are unavailable through the public metadata and the
-  current environment has no authenticated Netlify session. Netlify's
+- The production build and generated homepage metadata check pass. Sitemap and
+  SEO scripts ran, documentation links resolve, and the working tree was clean
+  after the handoff commit was pushed.
+- The user confirmed on 2026-09-30 that the Netlify project is active and has
+  at least 15 deployment credits available. This satisfies the account check
+  required before merging. Netlify's
   [current rate](https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/how-credits-work/#credit-usage-for-production-deploys)
   is 15 credits per successful production deployment on credit-based plans.
