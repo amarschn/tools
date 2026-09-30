@@ -37,7 +37,7 @@ the active custom settings. The component table replaces the total mass and
 center fields, so include the base assembly. Custom contacts replace wheelbase
 and track. A force's positive z component lifts away from the ground.
 
-## Connecting the model to the FBD
+## Connecting the footprint to the FBD
 
 Study B's world-oriented section was selected for the calculator on 2026-09-29.
 The main tool implements its layout in native SVG, keeping linked force selection
@@ -53,22 +53,28 @@ A separate [JSXGraph interaction lab](prototypes/jsxgraph-lab.html) tests
 constrained dragging, live moment arms, and automatic label placement. Its
 reaction forces and moments come from the same Python equilibrium solver.
 
-A fixed isometric schematic stays visible above the results. Select **Show
-forces & free-body diagram** below the image to add labeled forces and the
-linked FBD. Both views stay outside the analysis tabs. The ground and vehicle
-tilt with the entered slope, while weight remains vertical. Contact positions,
-mass centers, and load application points use a linear coordinate scale.
-The drawn chassis, wheels, and payload blocks
-are illustrative; their sizes do not define additional mass or support geometry.
+A top-down support footprint and B's section are visible together on loading.
+The footprint keeps front at the top, left on the left, and right on the right.
+Changing slope direction moves the downhill cue and required reaction point;
+it does not rotate or foreshorten the footprint. G₀ is the mass center projected
+onto the support plane, and R is the required ground-reaction location.
+The section shows height and slope, with weight pointing vertically down.
+Both views use a linear geometry scale and stay outside the analysis tabs.
+**Hide forces & free-body diagram** leaves the footprint visible.
 On desktop, long input tables scroll within the input panel so the diagrams
-remain beside the controls. On mobile, Calculate returns to the updated model.
+remain beside the controls. On mobile, Calculate returns to the updated diagrams.
 
-Click a force label in either diagram, or open **Inspect force values &
-components** to use the force key. The same force highlights in both views.
+Click a force label in the section, or open **Inspect force values &
+components** to use the force key. Its application point highlights in the footprint.
 The inspector gives its 3D vector and position, its projected components,
 and its moment about the selected edge. The edge
 selector and clickable support edges update the FBD, footprint, and moment
 table together. **Show force balance** opens the source equations.
+Footprint edges can also be selected with Tab, then Enter or Space.
+
+The isometric illustration was removed from the main tool on 2026-09-30 after
+left/right slopes exposed confusing camera angles and overlapping body faces.
+The gallery's orbitable 3D experiment remains available.
 
 Click the main tipping limit for its derivation, or open **Explore results &
 calculations** for edge margins, plots, moment tables, exports, and background
@@ -77,6 +83,8 @@ equations. Closing these sections leaves the image and primary result visible.
 | Label | Meaning |
 | --- | --- |
 | G | Combined center of mass; m1, m2… locate mass components when supplied |
+| G₀ | Mass-center projection onto the support plane in the footprint |
+| R | Required ground-reaction location |
 | W | Total weight, acting at G |
 | I | Equivalent inertia, opposite to prescribed acceleration |
 | P1, P2… | Applied loads, at their entered positions |
@@ -92,7 +100,7 @@ in the mass-center inspector; dR also appears below the diagram.
 
 Arrow lengths are schematic; the key gives force magnitudes in newtons.
 Applied-force arrows start at their application points, and ground-reaction
-arrows end at R. Both views keep every arrow on its physical line of action.
+arrows end at R. Every force arrow stays on its physical line of action.
 Only text moves to avoid collisions, with dotted leaders for displaced labels.
 
 Forces along the selected edge lie outside the FBD projection. The inspector
@@ -119,11 +127,11 @@ even with all analysis sections closed.
   center-of-mass path, and the speed limit assumes a steady turn.
 - Compare aggregate tangential demand with a uniform Coulomb friction capacity
   when a coefficient is supplied. Report sliding separately from tipping.
-- Show essential inputs, a fixed isometric model, and one primary result first.
-  Disclose the linked FBD, force values, and detailed analysis separately.
-  Keep the model and any open FBD visible across analysis tabs.
-  Draw the support polygon, normal-reaction location, and mass-center projection
-  in a separate plan view. A direction plot shows gravity-only slope limits.
+- Show essential inputs, the top-down footprint and linked FBD, and one primary
+  result first. Disclose force values and detailed analysis separately.
+  Keep the footprint and any open FBD visible across analysis tabs. The footprint
+  shows the support polygon, required reaction, and mass-center projection.
+  A direction plot shows gravity-only slope limits.
 - Expose numbered equations, substituted values, load contributions, and
   references through the result cards and Background tab.
 - Preserve scalar inputs and editable tables in share links. Export the last
@@ -171,7 +179,9 @@ selection and diagram persistence when inputs are edited or invalid. The eight
 saved gallery cases also run through the calculator on desktop and mobile,
 covering all support edges. Checks verify vertical gravity, exact arrow anchors,
 force directions, along-edge symbols, linear geometry, label placement, and
-visible reactions outside the footprint:
+visible reactions outside the footprint. A separate regression checks identical
+footprint geometry across left, right, front, and rear slopes, plus keyboard
+edge selection and focus after redraw:
 
 ```sh
 python3 -m http.server 8157 --bind 127.0.0.1

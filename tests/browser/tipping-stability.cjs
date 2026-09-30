@@ -78,7 +78,7 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
             const problems = await page.evaluate(() => {
                 const failures = [], near = (a,b) => Math.abs(a-b) < 1e-6;
                 const attribute = (node,key) => Number(node.getAttribute(key));
-                for (const svg of document.querySelectorAll('#model-scene, #fbd-scene')) {
+                for (const svg of document.querySelectorAll('#fbd-scene')) {
                     for (const [id,point,end] of [['W','G','1'],['I','G','1'],['N','R','2'],['T','R','2']]) {
                         const shaft = svg.querySelector(`[data-entity="${id}"] .force-shaft`);
                         const mark = svg.querySelector(`[data-point="${point}"]`);
@@ -125,6 +125,33 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
             });
             assert.deepEqual(problems, []);
         };
+        const checkFootprintGeometry = async () => {
+            const problems = await page.evaluate(() => {
+                const failures = [], e = window.TippingTool.getResults().equilibrium;
+                const svg = document.getElementById('model-scene');
+                const outline = svg.querySelector('.support-outline').getAttribute('points').trim().split(/\s+/).map((point) => point.split(',').map(Number));
+                const scale = Math.hypot(outline[1][0]-outline[0][0],outline[1][1]-outline[0][1])/Math.hypot(e.polygon[1][0]-e.polygon[0][0],e.polygon[1][1]-e.polygon[0][1]);
+                const expected = (point) => [outline[0][0]-(point[1]-e.polygon[0][1])*scale,outline[0][1]-(point[0]-e.polygon[0][0])*scale];
+                const check = (actual,point,name) => {
+                    if (Math.hypot(...actual.map((value,i) => value-expected(point)[i])) > 1e-5) failures.push(`${name}: footprint must have front up, left left, and one linear scale`);
+                };
+                e.polygon.forEach((point,i) => check(outline[i],point,`contact ${i}`));
+                for (const [name,point] of [['G',e.center],['R',e.reaction_point]]) {
+                    const mark = svg.querySelector(`[data-point="${name}"]`);
+                    check([Number(mark.getAttribute('cx')),Number(mark.getAttribute('cy'))],point,name);
+                }
+                const downhill = svg.querySelector('.downhill-direction');
+                if (downhill) {
+                    const angle = window.TippingTool.getInputs().downhill_deg*Math.PI/180;
+                    const actual = ['x','y'].map((axis) => Number(downhill.getAttribute(axis+'2'))-Number(downhill.getAttribute(axis+'1')));
+                    const direction = [-Math.sin(angle),-Math.cos(angle)];
+                    if (Math.abs(actual.reduce((sum,value,i) => sum+value*direction[i],0)/Math.hypot(...actual)-1)>1e-8) failures.push('Downhill cue points the wrong way');
+                }
+                if (svg.querySelector('[data-mesh]')) failures.push('Illustrative 3D geometry remains in the main footprint');
+                return failures;
+            });
+            assert.deepEqual(problems,[]);
+        };
         await boot();
         near((await result()).threshold.value, 33.690067525979785);
         assert.equal(await page.locator('#advanced-inputs').getAttribute('open'), null);
@@ -132,14 +159,15 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
         assert.equal(await page.locator('#calc-form input:visible, #calc-form select:visible').count(), 4);
         assert.equal(await page.locator('.url-state-share-btn').isVisible(), true);
         assert.equal(await page.locator('#model-scene').isVisible(), true);
-        assert.equal(await page.locator('#fbd-scene').isVisible(), false);
+        assert.equal(await page.locator('#fbd-scene').isVisible(), true);
         assert.equal(await page.locator('#force-key').isVisible(), false);
         assert.equal(await page.locator('#diagram-inspector').isVisible(), false);
         assert.equal(await page.locator('#plan-plot').isVisible(), false);
         assert.equal(await page.locator('#analysis-details').getAttribute('open'), null);
         assert.equal(await page.locator('#threshold-value').isVisible(), true);
         assert.equal(await page.locator('#model-scene .force-arrow').count(), 0);
-        assert.ok(await page.locator('#model-scene [data-mesh="wheel"]').count() > 20);
+        assert.equal(await page.locator('#model-scene .contact-point').count(), 4);
+        await checkFootprintGeometry();
         await page.screenshot({ path: '/private/tmp/tipping-simple-desktop.png', fullPage: true, animations: 'disabled' });
         await checkDiagramLabels();
         await page.setViewportSize({ width: 390, height: 844 });
@@ -147,6 +175,8 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
         await noOverflow();
         await page.setViewportSize({ width: 1440, height: 1050 });
         await page.locator('#toggle-fbd').focus();
+        await page.keyboard.press('Space');
+        assert.equal(await page.locator('#fbd-scene').isVisible(), false);
         await page.keyboard.press('Space');
         assert.equal(await page.locator('#fbd-scene').isVisible(), true);
         assert.equal(await page.locator('#diagram-inspector').isVisible(), false);
@@ -158,8 +188,9 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
         assert.match(await page.locator('#fbd-subtitle').innerText(), /Right/);
         await page.locator('#force-key [data-entity="W"]').click();
         assert.equal(await page.locator('#force-key [data-entity="W"]').evaluate((el) => el === document.activeElement), true);
-        assert.equal(await page.locator('#model-scene [data-entity="W"]').getAttribute('class'), 'force-arrow external linked-active');
+        assert.equal(await page.locator('#model-scene [data-entity="G"]').getAttribute('class'), 'linked-active');
         assert.equal(await page.locator('#fbd-scene [data-entity="W"]').getAttribute('class'), 'force-arrow external linked-active');
+        assert.equal(await page.locator('#fbd-scene .force-arrow.linked-active').count(),1);
         assert.match(await page.locator('#diagram-inspector').innerText(), /3D force \(0.00, 0.00, -980.66\) N/);
         await page.locator('#fbd-scene [data-entity="N"]').first().click();
         assert.equal(await page.locator('#force-key [data-entity="N"]').getAttribute('aria-pressed'), 'true');
@@ -199,9 +230,9 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
         near((await result()).threshold.value, Math.sqrt(2 * 9.80665 * ((.4 / .6) * Math.cos(radians) - Math.sin(radians))));
         assert.match((await result()).threshold.edge, /Right/);
         assert.equal(await page.locator('#diagram-state').getAttribute('data-state'), 'current');
-        const weightArrow = await page.locator('#model-scene [data-entity="W"] .force-shaft').evaluate((line) => ({x1:Number(line.getAttribute('x1')),x2:Number(line.getAttribute('x2')),y1:Number(line.getAttribute('y1')),y2:Number(line.getAttribute('y2'))}));
+        const weightArrow = await page.locator('#fbd-scene [data-entity="W"] .force-shaft').evaluate((line) => ({x1:Number(line.getAttribute('x1')),x2:Number(line.getAttribute('x2')),y1:Number(line.getAttribute('y1')),y2:Number(line.getAttribute('y2'))}));
         near(weightArrow.x1, weightArrow.x2);
-        assert.ok(weightArrow.y2 > weightArrow.y1, 'Weight stays vertical downward in the inclined isometric view');
+        assert.ok(weightArrow.y2 > weightArrow.y1, 'Weight stays vertical downward in the inclined section');
         await page.locator('#force-key [data-entity="I"]').click();
         assert.match(await page.locator('#diagram-inspector').innerText(), /Equivalent inertia/);
         await page.locator('.model-workspace').screenshot({ path: '/private/tmp/tipping-linked-fbd-turn.png', animations: 'disabled' });
@@ -254,7 +285,7 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
         await boot(shared);
         assert.deepEqual(await result(), before);
         assert.equal(await page.locator('#fbd-scene').getAttribute('data-edge'), 'E1');
-        assert.equal(await page.locator('#fbd-scene').isVisible(), false);
+        assert.equal(await page.locator('#fbd-scene').isVisible(), true);
         assert.equal(await page.locator('#analysis-details').getAttribute('open'), null);
         assert.match(await page.locator('#ground-summary').innerText(), /10° slope/);
         assert.match(await page.locator('#custom-summary').innerText(), /Component masses.*Custom contacts.*Extra loads/);
@@ -399,21 +430,59 @@ const base = process.env.TIPPING_TOOL_URL || process.argv.find((arg) => arg.star
                 for (const edge of item.result.equilibrium.edges) {
                     await select('diagram-edge',edge.id);
                     await checkForceGeometry();
+                    await checkFootprintGeometry();
                     await checkDiagramLabels();
                     worldViews++;
                 }
                 await select('diagram-edge',item.result.equilibrium.governing_edge);
+                if (item.id==='crowded') {
+                    await openDetails('force-details');
+                    await page.locator('#force-key [data-entity="P1"]').click();
+                    const selectedLocation = await page.locator('#model-scene').evaluate((svg) => {
+                        const ring = svg.querySelector('.application-focus');
+                        const point = svg.querySelector('[data-point="P1"]');
+                        return ring===svg.lastElementChild && ['cx','cy'].every((axis) => ring.getAttribute(axis)===point.getAttribute(axis));
+                    });
+                    assert.equal(selectedLocation,true,'A force sharing the mass-center projection must still have a visible selected location');
+                }
                 if (['slope','crowded','oblique','beyond'].includes(item.id)) await page.locator('#fbd-panel').screenshot({path:`/private/tmp/tipping-world-${item.id}-${width}.png`,animations:'disabled'});
                 await noOverflow();
             }
         }
+        // Regression for the confusing left/right camera change: slope direction
+        // must not rotate, foreshorten, or resize a footprint whose reaction is inside.
+        await page.setViewportSize({width:1440,height:1050});
+        await boot();
+        await fill('slope_deg',20);
+        const footprints = [];
+        for (const [name,direction] of [['left',90],['right',270],['front',0],['rear',180]]) {
+            await fill('downhill_deg',direction);
+            await calc();
+            await checkFootprintGeometry();
+            await checkForceGeometry();
+            await checkDiagramLabels();
+            assert.match(await page.locator('#fbd-subtitle').innerText(),new RegExp(name,'i'));
+            footprints.push(await page.locator('#model-scene .support-outline').getAttribute('points'));
+            await page.locator('.model-workspace').screenshot({path:`/private/tmp/tipping-plan-${name}.png`,animations:'disabled'});
+        }
+        assert.ok(footprints.every((outline) => outline===footprints[0]),'All four downhill directions preserve the footprint geometry');
+        await page.locator('#model-scene [data-diagram-edge="E3"]').focus();
+        await page.keyboard.press('Enter');
+        assert.equal(await page.locator('#diagram-edge').inputValue(),'E3');
+        assert.equal(await page.locator('#model-scene [data-diagram-edge="E3"]').evaluate((element) => element===document.activeElement),true);
+        await page.locator('#toggle-fbd').click();
+        await page.locator('#model-scene [data-diagram-edge="E1"]').focus();
+        await page.keyboard.press('Space');
+        assert.equal(await page.locator('#fbd-scene').isVisible(),true);
+        assert.equal(await page.locator('#diagram-edge').inputValue(),'E1');
+        assert.equal(await page.locator('#model-scene [data-diagram-edge="E1"]').evaluate((element) => element===document.activeElement),true);
         await page.locator('.diagram-explanation > summary').click();
         for (const path of ['prototypes/','prototypes/jsxgraph-lab.html']) {
             assert.equal(await page.locator(`.diagram-explanation a[href="${path}"]`).isVisible(),true);
             assert.equal((await context.request.get(new URL(path,base).href)).status(),200);
         }
         assert.deepEqual(errors, []);
-        console.log(JSON.stringify({ checks: 'Progressive disclosure, linked FBD, real Python, all load modes, charts, derivations, tooltips, keyboard tabs, editable tables, share round-trip, exports, themes, mobile, and invalid input recovery passed.', worldViews, retainedPrototypes: true, screenshots: ['/private/tmp/tipping-simple-desktop.png', '/private/tmp/tipping-simple-mobile.png', '/private/tmp/tipping-fbd-disclosed.png'] }));
+        console.log(JSON.stringify({ checks: 'Progressive disclosure, footprint/FBD links, all four slope directions, real Python, all load modes, charts, derivations, tooltips, keyboard tabs and edges, editable tables, share round-trip, exports, themes, mobile, and invalid input recovery passed.', worldViews, retainedPrototypes: true, screenshots: ['/private/tmp/tipping-simple-desktop.png', '/private/tmp/tipping-simple-mobile.png', '/private/tmp/tipping-fbd-disclosed.png'] }));
     } finally {
         await browser.close();
     }

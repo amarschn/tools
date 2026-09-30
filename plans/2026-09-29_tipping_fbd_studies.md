@@ -75,3 +75,26 @@ attachment, vertical gravity, arrow directions, one geometry scale, along-edge
 glyph positions, label bounds and collisions, and outside reaction visibility.
 The gallery and lab links return successfully. Screenshots were inspected for
 level ground, a turn, crowded forces, oblique loading, and the mobile layout.
+
+## Footprint replaces the isometric illustration, 2026-09-30
+
+The user found the left/right slope views confusing and selected B plus a
+top-down footprint. Reproduction at 20° showed that the fixed camera looked
+nearly along one inclined platform and down onto its mirror case. Support
+lines drawn over the body also obscured its depth.
+
+The main tool now opens with the footprint and B visible together. Front is
+always up and left is always left in the footprint. Ground slope changes the
+downhill cue and required reaction point, while the contact geometry keeps its
+shape. G₀ marks the mass-center projection; R marks the required reaction.
+Force selection highlights the corresponding application point. Keyboard users
+can select support edges with Enter or Space, with focus retained after redraw.
+Force values and calculations remain behind disclosure controls, and the FBD
+can still be hidden. The 3D gallery experiment and all other prototypes remain.
+
+Verification: 36 solver tests and the full calculator browser regression pass.
+All 62 case/edge/viewport combinations retain correct section forces and plan
+coordinates. The four cardinal downhill directions produce identical footprint
+outlines for the centered 20° case. Keyboard selection, focus after redraw,
+and visible selection of loads sharing G₀ also pass. Light/dark and mobile
+screenshots were inspected. No prototype files changed.
