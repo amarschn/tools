@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base href="../">
+    <meta name="robots" content="noindex,nofollow">
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+    <title>Materials Explorer, Ashby Charts &amp; Material Selection</title>
+    <meta name="description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
+    <link rel="canonical" href="https://transparent.tools/tools/materials-explorer/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Materials Explorer — Ashby Charts &amp; Material Selection">
+    <meta property="og:description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
+    <meta property="og:url" content="https://transparent.tools/tools/materials-explorer/">
+    <meta property="og:image" content="https://transparent.tools/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Materials Explorer — Ashby Charts &amp; Material Selection">
+    <meta name="twitter:description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
+    <meta name="twitter:image" content="https://transparent.tools/og-image.png">
+    <script src="/shared/analytics-autotrack.js" defer></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="../../shared/ashby-plot.js?v=5"></script>
+    <script src="/shared/json-ld.js"></script>
+    <style>
+        /* ── Design tokens ─────────────────────────────────────── */
+        :root {
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
+            --bg-card: #ffffff;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
+            --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"], body[data-theme="dark"] {
+                --primary-color: #f9fafb; --primary-light: #1f2937;
+                --secondary-color: #9ca3af; --accent-color: #f9fafb;
+                --success-color: #34d399; --warning-color: #fbbf24;
+                --text-color: #f9fafb; --text-light: #9ca3af;
+                --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+            }
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb; --primary-light: #1f2937;
+            --secondary-color: #9ca3af; --accent-color: #f9fafb;
+            --success-color: #34d399; --warning-color: #fbbf24;
+            --text-color: #f9fafb; --text-light: #9ca3af;
+            --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+        }
+
+        /* ── Reset & base ──────────────────────────────────────── */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { min-height: 100%; }
+        body {
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            background: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+        p { color: var(--text-light); }
+        h1 { font-size: 2.25rem; letter-spacing: -0.025em; font-weight: 600; color: var(--primary-color); }
+        h2 { font-size: 1.375rem; font-weight: 600; color: var(--primary-color); }
+        h3 { font-size: 1rem; font-weight: 600; color: var(--secondary-color); }
+
+        /* ── Navbar ─────────────────────────────────────────────── */
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+        }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 56px;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        .nav-brand { font-size: 1.15rem; font-weight: 600; color: var(--text-color); }
+        .nav-actions { display: flex; gap: 8px; }
+        .settings-button {
+            padding: 6px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .settings-button:hover { background: var(--bg-color); }
+
+        /* ── Settings panel ─────────────────────────────────────── */
+        .settings-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.25);
+            z-index: 900; display: none;
+            backdrop-filter: blur(2px);
+        }
+        .settings-overlay.open { display: block; }
+        .settings-panel {
+            position: fixed; top: 0; right: 0;
+            width: min(380px, 100vw); height: 100%;
+            visibility: hidden; transform: translateX(105%);
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            z-index: 901;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+        }
+        .settings-panel.open { visibility: visible; transform: translateX(0); }
+        .settings-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; }
+        .settings-close {
+            background: none; border: none; font-size: 0.9rem;
+            cursor: pointer; color: var(--text-light); padding: 6px 10px;
+            border-radius: 4px;
+        }
+        .settings-close:hover { background: var(--bg-color); color: var(--text-color); }
+        .settings-content { padding: 24px; }
+        .settings-section { margin-bottom: 28px; }
+        .settings-section h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--text-light); margin-bottom: 14px; font-weight: 600;
+        }
+        .setting-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .setting-row:last-child { border-bottom: none; }
+        .setting-label { font-size: 0.9rem; font-weight: 500; }
+        .setting-help { font-size: 0.78rem; color: var(--text-light); margin-top: 2px; max-width: 220px; }
+
+        /* Toggle switch */
+        .switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
+        .switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        .slider-toggle {
+            width: 42px; height: 24px;
+            background: var(--border-color); border-radius: 999px;
+            position: relative; cursor: pointer; transition: background 0.2s;
+        }
+        .slider-toggle::before {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--bg-card); transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .switch input:checked + .slider-toggle { background: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(18px); }
+
+        /* Segmented control */
+        .segmented { display: inline-flex; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; }
+        .segmented button {
+            padding: 5px 14px; border: none; background: var(--bg-card);
+            color: var(--text-color); font-size: 0.8rem; font-weight: 500;
+            cursor: pointer; border-left: 1px solid var(--border-color);
+            transition: all 0.15s;
+        }
+        .segmented button:first-child { border-left: none; }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
+        .segmented button:hover:not(.active) { background: var(--bg-color); }
+
+        /* ── Container ──────────────────────────────────────────── */
+        .container {
+            width: 92%; max-width: 1440px;
+            margin: 0 auto; padding: 24px 0 40px;
+        }
+        .tool-header { margin-bottom: 20px; }
+        .tool-description {
+            margin-top: 8px; font-size: 1.02rem;
+            max-width: 78ch; line-height: 1.55;
+        }
+
+        /* ── Card ───────────────────────────────────────────────── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+        .card h2 { margin-bottom: 14px; }
+
+        /* ── Workspace: left rail + main ────────────────────────── */
+        .workspace-layout {
+            display: grid;
+            grid-template-columns: 320px minmax(0, 1fr);
+            gap: 20px;
+            align-items: start;
+        }
+        .left-rail { display: grid; gap: 16px; position: sticky; top: 20px; }
+        .main-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+        .main-content > * { min-width: 0; }
+
+        /* ── Inputs ─────────────────────────────────────────────── */
+        .input-group { margin-bottom: 14px; }
+        .input-group:last-child { margin-bottom: 0; }
+        .input-group label {
+            display: block; font-size: 0.78rem; font-weight: 600;
+            color: var(--text-light); text-transform: uppercase;
+            letter-spacing: 0.05em; margin-bottom: 5px;
+        }
+        .input-group select,
+        .input-group input[type="text"],
+        .input-group input[type="number"] {
+            width: 100%; padding: 8px 12px;
+            border: 1px solid var(--border-color); border-radius: 6px;
+            font-size: 0.9rem; font-family: var(--font-sans);
+            background: var(--bg-card); color: var(--text-color);
+            transition: border-color 0.15s, box-shadow 0.15s;
+            -webkit-appearance: none; appearance: none;
+        }
+        .input-group select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 30px;
+        }
+        .input-group select:focus,
+        .input-group input:focus {
+            outline: none; border-color: #4e79a7;
+            box-shadow: 0 0 0 3px rgba(78,121,167,0.12);
+        }
+        .input-group .hint { font-size: 0.75rem; color: var(--text-light); margin-top: 4px; line-height: 1.4; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* ── Preset chips ───────────────────────────────────────── */
+        .preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .preset-chip {
+            padding: 5px 13px;
+            border: 1px solid var(--border-color); border-radius: 999px;
+            font-size: 0.78rem; font-weight: 500;
+            background: var(--bg-card); color: var(--text-color);
+            cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .preset-chip:hover { border-color: var(--secondary-color); background: var(--bg-color); }
+        .preset-chip.active {
+            background: var(--accent-color); color: var(--bg-card);
+            border-color: var(--accent-color);
+        }
+
+        /* ── Family toggles ─────────────────────────────────────── */
+        .family-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+        .family-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 12px; border-radius: 999px;
+            border: 1.5px solid var(--border-color);
+            font-size: 0.78rem; font-weight: 500;
+            cursor: pointer; user-select: none;
+            transition: all 0.15s;
+            background: var(--bg-card); color: var(--text-light);
+        }
+        .family-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .family-pill.active {
+            color: var(--text-color); font-weight: 600;
+            border-color: currentColor;
+        }
+        .family-pill:hover { background: var(--bg-color); }
+
+        /* ── Chart area ─────────────────────────────────────────── */
+        #ashby-chart {
+            width: 100%; height: 540px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+
+        /* ── Material detail card ───────────────────────────────── */
+        .detail-card { display: none; }
+        .detail-card.visible { display: block; }
+        .detail-card .card-header {
+            display: flex; justify-content: space-between; align-items: start;
+            margin-bottom: 8px;
+        }
+        .detail-card .card-close {
+            background: none; border: none; font-size: 1.4rem;
+            cursor: pointer; color: var(--text-light); padding: 2px 6px;
+            border-radius: 4px; line-height: 1;
+        }
+        .detail-card .card-close:hover { background: var(--bg-color); color: var(--text-color); }
+        .detail-card .meta {
+            font-size: 0.82rem; color: var(--text-light); margin-top: 2px;
+        }
+        .prop-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 12px; }
+        .prop-table th, .prop-table td {
+            padding: 6px 12px; text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .prop-table th { font-weight: 600; color: var(--secondary-color); width: 40%; }
+        .prop-table td { font-family: var(--font-mono); font-size: 0.82rem; }
+        .prop-group-header td {
+            background: var(--bg-color); font-weight: 600;
+            color: var(--text-color); padding: 8px 12px;
+            font-family: var(--font-sans); font-size: 0.8rem;
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .range-hint {
+            color: var(--text-light); font-size: 0.75em;
+            font-family: var(--font-mono);
+        }
+        .basis-badge {
+            display: inline-block; padding: 1px 6px;
+            border-radius: 3px; font-size: 0.7em;
+            background: var(--bg-color); color: var(--text-light);
+            font-family: var(--font-sans); font-weight: 500;
+            margin-left: 4px; vertical-align: middle;
+        }
+
+        /* ── Ranking table ──────────────────────────────────────── */
+        .ranking-section { display: none; }
+        .ranking-section.visible { display: block; }
+        .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .ranking-table th {
+            padding: 8px 12px; text-align: left;
+            background: var(--bg-color); font-weight: 600;
+            color: var(--secondary-color);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .ranking-table td { padding: 7px 12px; border-bottom: 1px solid var(--border-color); }
+        .ranking-table tbody tr { transition: background 0.1s; }
+        .ranking-table tbody tr:hover { background: rgba(78,121,167,0.06); cursor: pointer; }
+        .rank-num { font-weight: 700; color: var(--text-light); width: 36px; text-align: center; }
+        .family-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 0.82rem;
+        }
+        .family-badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+        /* ── Footer ─────────────────────────────────────────────── */
+        footer {
+            margin-top: 48px; padding: 24px 0;
+            border-top: 1px solid var(--border-color);
+            text-align: center; font-size: 0.82rem; color: var(--text-light);
+        }
+        footer a { font-weight: 600; }
+
+        /* ── Purpose section ────────────────────────────────────── */
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .purpose-section {
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-card);
+        }
+        .purpose-section summary {
+            padding: 14px 22px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+        .purpose-section summary::after {
+            content: '[Expand]';
+            float: right;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+        .purpose-section[open] > summary::after { content: '[Collapse]'; }
+        .purpose-content {
+            padding: 0 22px 22px 22px;
+            border-top: 1px solid var(--border-color);
+        }
+        .purpose-content h3 {
+            margin: 16px 0 8px;
+            font-size: 0.95rem;
+            color: var(--text-color);
+        }
+        .purpose-content p, .purpose-content li {
+            font-size: 0.88rem;
+            line-height: 1.6;
+            color: var(--text-light);
+        }
+        .purpose-content ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .purpose-content li { margin-bottom: 4px; }
+
+        /* ── Tooltip ────────────────────────────────────────────── */
+        .input-group { position: relative; }
+        .tooltip-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px; height: 16px;
+            background: var(--primary-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 50%;
+            font-size: 10px; font-weight: 700;
+            cursor: help;
+            position: absolute; right: 8px; top: 0;
+        }
+        .tooltip-trigger::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            width: 220px;
+            background: var(--bg-card);
+            color: var(--text-color);
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: var(--shadow-lg);
+            font-size: 0.76rem;
+            line-height: 1.4;
+            font-weight: 400;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 30;
+            white-space: normal;
+        }
+        .tooltip-trigger:hover::after, .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
+
+        /* ── Responsive ─────────────────────────────────────────── */
+        @media (max-width: 960px) {
+            .workspace-layout { grid-template-columns: 1fr; }
+            .left-rail { position: static; }
+            #ashby-chart { height: 420px; }
+        }
+        @media (max-width: 600px) {
+            h1 { font-size: 1.6rem; }
+            .container { width: 95%; }
+            #ashby-chart { height: 320px; }
+        }
+        [hidden] { display: none !important; }
+        .loading-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-content: center; gap: 16px; padding: 28px; background: var(--bg-color); text-align: center; }
+        .loading-overlay button, .chart-toolbar button, .data-link { border: 1px solid var(--border-color); border-radius: 6px; padding: 9px 12px; background: var(--bg-card); color: var(--text-color); font: inherit; cursor: pointer; }
+        .chart-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
+        .chart-toolbar .input-group { flex: 1 1 200px; margin: 0; }
+        .chart-toolbar input { width: 100%; }
+        .data-status, .chart-note, .ranking-note { margin: 10px 0; font-size: .8rem; color: var(--text-light); line-height: 1.5; }
+        .data-status { color: var(--text-color); }
+        .empty-state { border: 1px solid var(--border-color); border-radius: 6px; padding: 16px; background: var(--bg-card); }
+        .table-wrap { overflow-x: auto; }
+        .source-detail { display: block; margin-top: 5px; font: .78rem/1.5 var(--font-sans); color: var(--text-light); overflow-wrap: anywhere; }
+        .result-kind { display: inline-block; font: .72rem var(--font-sans); padding: 2px 5px; border: 1px solid var(--border-color); border-radius: 3px; margin-left: 5px; }
+        .material-button { text-align: left; color: var(--text-color); background: none; border: 0; padding: 4px 0; text-decoration: underline; font: inherit; cursor: pointer; }
+        .data-link { display: inline-block; font-size: .82rem; margin-top: 12px; text-decoration: none; }
+        .index-explanation { font-size: .85rem; line-height: 1.55; margin-bottom: 16px; }
+        .index-explanation summary { cursor: pointer; }
+        .index-explanation code { display: block; margin: 10px 0; }
+        .setting-row select { color: var(--text-color); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px; }
+        :focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+        .switch input:focus-visible + .slider-toggle { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+        body[data-density="compact"] .card { padding: 16px; }
+        body[data-density="compact"] .input-group { margin-bottom: 12px; }
+        @media (max-width: 640px) { .nav-actions { gap: 6px; } .settings-button { padding: 7px 10px; } #ashby-chart { height: 430px; } .chart-toolbar { align-items: stretch; } }
+    </style>
+</head>
+
+<body data-theme="system">
+    <script>try { const s = JSON.parse(localStorage.getItem('materials-explorer-settings') || '{}'); if (['light','dark','system'].includes(s.theme)) document.body.dataset.theme = s.theme; if (['compact','comfortable'].includes(s.density)) document.body.dataset.density = s.density; } catch (_) {}</script>
+    <div id="loading-overlay" class="loading-overlay" role="status"><p id="loading-message">Loading material properties…</p><button type="button" id="retry-load" hidden>Retry loading</button></div>
+    <!-- ── Navbar ──────────────────────────────────────────────── -->
+    <header class="navbar">
+        <nav class="nav-container">
+            <a href="/" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+                <button class="settings-button" id="copy-link" type="button" data-track="export">Copy link</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ── Settings panel ──────────────────────────────────────── -->
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Tool settings" inert>
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
+        </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or follow system.</div>
+                    </div>
+                    <div class="segmented" id="theme-control">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system" class="active">System</button>
+                    </div>
+                </div>
+                <div class="setting-row"><label for="setting-density">Density</label><select id="setting-density" title="Spacing of the input and result panels"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
+                <div class="setting-row"><label for="setting-precision">Significant figures</label><select id="setting-precision" title="Display precision; calculations retain full precision"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ── Main ────────────────────────────────────────────────── -->
+    <main class="container" id="explorer-main" data-state="loading">
+        <div class="tool-header">
+            <h1>Materials Explorer</h1>
+            <p class="tool-description">
+                Compare sourced material properties on Ashby charts. Select a point to inspect its
+                grade, condition, and source in the Materials database.
+            </p>
+        </div>
+
+        <details class="purpose-section">
+            <summary>Background &amp; How to Use</summary>
+            <div class="purpose-content">
+                <h3>What is an Ashby Chart?</h3>
+                <p>
+                    Ashby charts (also called material property charts) plot one engineering property
+                    against another on logarithmic axes. They were developed by Professor Michael Ashby
+                    at Cambridge as a systematic way to compare materials and identify optimal candidates
+                    for a given design objective.
+                </p>
+                <h3>Performance Indices</h3>
+                <p>
+                    A performance index is a grouping of material properties that captures how well
+                    a material performs for a specific structural or thermal objective. On log-log
+                    Ashby charts, lines of constant performance index appear as straight isolines.
+                    The preferred side depends on the index and axis order. The ranking equation states the objective.
+                </p>
+                <h3>Using this tool</h3>
+                <ul>
+                    <li>Select <strong>X and Y axes</strong> from the left rail, or click a preset to jump to a classic chart.</li>
+                    <li>Choose a <strong>performance index</strong> to rank materials and overlay isolines.</li>
+                    <li>Toggle <strong>material families</strong> on or off to focus on specific categories.</li>
+                    <li>Use <strong>Display Options</strong> for ranges, envelopes, and labels. Tool Settings controls theme and number formatting.</li>
+                    <li><strong>Click any point</strong> on the chart to inspect its full sourced property data.</li>
+                </ul>
+                <h3>Data</h3>
+                <p>
+                    Values come from the <a href="../materials/">Materials database</a>.
+                    Each point pairs two observations for one grade and compatible state and conditions.
+                    Known temperatures, forms, thickness ranges, and orientations must agree. A grade-level
+                    physical property may accompany a named state; its original scope stays visible.
+                    Missing properties are omitted. No values are filled from a generic material family.
+                </p>
+                <p>Intervals appear at their midpoint with optional range bars. Open symbols mark specified bounds, not measurements. Rankings use the shown reference coordinates; a high score at a specified bound does not establish which material has the highest measured performance. The default temperature filter includes 20–25 °C and observations with no stated temperature.</p>
+            </div>
+        </details>
+
+        <div class="workspace-layout">
+            <!-- Left Rail -->
+            <aside class="left-rail">
+                <section class="card">
+                    <h2>Chart Setup</h2>
+
+                    <div class="input-group">
+                        <label>Preset</label>
+                        <div class="preset-chips" id="preset-chips"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="x-prop">X-Axis</label>
+                        <select id="x-prop"></select>
+                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Material property plotted on the horizontal axis. Log scale by default.">?</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="y-prop">Y-Axis</label>
+                        <select id="y-prop"></select>
+                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Material property plotted on the vertical axis. Log scale by default.">?</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="perf-index">Performance Index</label>
+                        <select id="perf-index">
+                            <option value="">(none)</option>
+                        </select>
+                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Ranks materials by a merit index (e.g. E½/ρ for stiff, light beams). Isolines appear when axes match the index.">?</span>
+                        <div class="hint" id="index-hint"></div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="top-n">Top N Ranked</label>
+                            <input type="number" id="top-n" value="5" min="1" max="20">
+                            <span class="tooltip-trigger" tabindex="0" data-tooltip="Number of top-ranked materials to highlight on the chart and list in the ranking table.">?</span>
+                        </div>
+                        <div></div>
+                    </div>
+                    <div class="input-group"><label for="temperature-filter">Test temperature</label><select id="temperature-filter" title="Filter known test temperatures; unspecified temperatures remain labeled"><option value="ambient">20–25 °C or unspecified</option><option value="all">All temperatures</option></select></div>
+                    <div class="input-group"><label for="basis-filter">Reported values</label><select id="basis-filter" title="Keep specified lower and upper limits distinct from points and intervals"><option value="all">Measurements and specified limits</option><option value="measured">Points and intervals only</option><option value="limits">Pairs containing a specified limit</option></select></div>
+                </section>
+
+                <section class="card">
+                    <h2>Material Families</h2>
+                    <div class="family-toggles" id="family-toggles"></div>
+                </section>
+
+                <section class="card">
+                    <h2>Display Options</h2>
+                    <div class="setting-row">
+                        <div class="setting-label">Family envelopes</div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-blobs" checked aria-label="Show family envelopes" title="Enclose the measured points shown; specified bounds are excluded">
+                            <span class="slider-toggle"></span>
+                        </label>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">Individual points</div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-points" checked aria-label="Show individual points" title="Show each compatible pair of reported property observations">
+                            <span class="slider-toggle"></span>
+                        </label>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">Property ranges</div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-ranges" checked aria-label="Show reported property ranges" title="Draw the endpoints of reported intervals">
+                            <span class="slider-toggle"></span>
+                        </label>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">Isolines</div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-isolines" checked aria-label="Show index isolines" title="Draw constant-index lines for the selected ranking equation">
+                            <span class="slider-toggle"></span>
+                        </label>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">Point labels</div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-labels" aria-label="Show point labels" title="Label plotted grades and states; dense charts are easier to read with labels off">
+                            <span class="slider-toggle"></span>
+                        </label>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Main content -->
+            <div class="main-content">
+                <div class="chart-toolbar"><div class="input-group"><label for="material-search">Find a grade</label><input type="text" id="material-search" placeholder="6061, PEEK, 316L…" title="Filter by grade name, designation, state, or material family"></div><button type="button" id="export-csv" data-track="export">Export CSV</button></div>
+                <p class="data-status" id="data-status" aria-live="polite"></p>
+                <p class="empty-state" id="empty-state" hidden>No compatible property pairs match these filters. Choose different properties or clear the filters.</p>
+                <div id="ashby-chart"></div>
+                <p class="chart-note">Logarithmic axes, SI units. Open symbols mark specified bounds. Envelopes enclose shown measurements, not family limits.</p>
+
+                <!-- Material detail card -->
+                <div class="card detail-card" id="detail-card">
+                    <div class="card-header">
+                        <div>
+                            <h2 id="card-name"></h2>
+                            <div class="meta" id="card-meta"></div>
+                        </div>
+                        <button class="card-close" id="card-close" type="button" aria-label="Close material details">&times;</button>
+                    </div>
+                    <table class="prop-table" id="card-props"></table>
+                    <p id="card-index" class="ranking-note"></p>
+                    <a id="card-datasheet" class="data-link" href="../materials/">Open material datasheet</a>
+                </div>
+
+                <!-- Ranking table -->
+                <section class="card ranking-section" id="ranking-section">
+                    <h2 id="ranking-title">Ranked Materials</h2>
+                    <p class="ranking-note">Ranks use displayed reference values, including interval midpoints and specified bounds. Compare basis and conditions before selecting a material.</p>
+                    <details class="index-explanation"><summary>Ranking equation and scope</summary><code id="index-equation"></code><p id="index-variables"></p><p id="index-derivation"></p><p id="index-scope"></p><p id="index-source"></p></details>
+                    <div class="table-wrap">
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th style="width:36px">#</th>
+                                <th>Material</th>
+                                <th>Family</th>
+                                <th>Reference index</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ranking-body"></tbody>
+                    </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            Property data: <a href="../materials/">Materials database</a>. Index equations: Ashby, Materials Selection in Mechanical Design (2011).
+            For educational and preliminary design screening only.
+            <br><a href="https://ko-fi.com/transparent_tools">Support this project</a>
+        </div>
+    </footer>
+
+<script src="prototypes/before.js" defer></script>
+</body>
+</html>

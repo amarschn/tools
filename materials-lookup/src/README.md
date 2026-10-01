@@ -9,14 +9,14 @@ property (`density`, `plastic strength`) to open category-grouped reference
 ranges.
 
 It answers "what is this material's yield strength, and who says so". For
-choosing between materials, use [Materials Explorer](../materials-explorer/).
+choosing between materials, use [Ashby Chart](../materials-explorer/).
 Its Ashby charts use a generated projection of this same catalog and link each
 plotted grade back to its datasheet here.
 
 ## What it contains
 
-222 material identities, 92 named states, 1,593 observations across 10
-registered properties, citing 28 source documents.
+288 material identities, 92 named states, 1,825 observations across 11
+registered properties, citing 39 sources.
 
 Specified limits stay distinct from measured values, and every observation
 keeps its test conditions and its citation. The toolbar switches metric and

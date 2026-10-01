@@ -26,10 +26,10 @@ class ReleaseTests(unittest.TestCase):
     def test_factual_contract_and_no_artificial_states(self):
         self.assertFalse(self.data['dataset']['synthetic'])
         self.assertEqual([], [str(d) for d in validate(self.data) if d.severity == 'error'])
-        self.assertEqual(222, len(self.data['materials']))
+        self.assertEqual(288, len(self.data['materials']))
         self.assertEqual(92, len(self.data['states']))
-        self.assertEqual(1593, len(self.data['observations']))
-        self.assertEqual(28, len(self.data['sources']))
+        self.assertEqual(1825, len(self.data['observations']))
+        self.assertEqual(39, len(self.data['sources']))
         self.assertFalse(any(s['name'] in ('stock shape', 'supplier reference state') for s in self.data['states']))
 
     def test_every_authored_observation_survives_with_its_source_literal(self):

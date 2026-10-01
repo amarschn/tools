@@ -26,7 +26,12 @@ GRADE_PHYSICAL_PROPERTIES = {
     "density", "youngs_modulus", "thermal_conductivity", "specific_heat",
     "poissons_ratio", "max_service_temperature",
 }
-FAMILIES = {"metals": "metal", "engineering-plastics": "polymer", "ceramics": "ceramic"}
+FAMILIES = {
+    "metals": "metal", "engineering-plastics": "polymer", "ceramics": "ceramic",
+    "composites": "composite", "woods": "wood", "foams": "foam",
+    "elastomers": "elastomer", "glasses": "glass",
+}
+AMBIENT_TEMPERATURE_K = (293.15, 298.15)
 
 
 def observation_value(observation: dict[str, Any]) -> float | None:
@@ -74,8 +79,10 @@ def compatible_observations(left: dict[str, Any], right: dict[str, Any]) -> bool
     ---Returns---
     compatible : bool
         True for the same material and compatible state/condition claims.
-        Known temperatures, product forms, orientations and thickness ranges
-        must agree exactly. An unspecified condition is retained as unspecified.
+        Known product forms, orientations and thickness ranges must agree.
+        Different temperatures may be paired only when both fall in the stated
+        20-25 degrees Celsius reference band. The original temperatures remain
+        attached to both observations; no interpolation is performed.
         Grade-level physical properties may accompany a named state; a
         grade-level strength is never silently assigned to a named temper.
 
@@ -96,7 +103,16 @@ def compatible_observations(left: dict[str, Any], right: dict[str, Any]) -> bool
         if grade["property_id"] not in GRADE_PHYSICAL_PROPERTIES:
             return False
     a, b = left.get("conditions", {}), right.get("conditions", {})
-    return all(a[key] == b[key] for key in a.keys() & b.keys())
+    for key in a.keys() & b.keys():
+        if a[key] == b[key]:
+            continue
+        if key == "temperature_K" and all(
+            AMBIENT_TEMPERATURE_K[0] <= value <= AMBIENT_TEMPERATURE_K[1]
+            for value in (a[key], b[key])
+        ):
+            continue
+        return False
+    return True
 
 
 def build_selection_database(bundle: dict[str, Any]) -> dict[str, Any]:
@@ -135,6 +151,7 @@ def build_selection_database(bundle: dict[str, Any]) -> dict[str, Any]:
             **deepcopy(row),
             "family": FAMILIES.get(root["id"], root["id"]),
             "sub_family": taxon["name"],
+            "classification": deepcopy(bundle["citation_details"].get("classifications", {}).get(row["id"], [])),
         }
     observations = {
         row["id"]: {**deepcopy(row), "plot_value": observation_value(row)}
@@ -150,7 +167,7 @@ def build_selection_database(bundle: dict[str, Any]) -> dict[str, Any]:
         multiplier, display_unit = 1, unit
         if unit == "Pa":
             multiplier, display_unit = (
-                (1e-9, "GPa") if row["id"] == "youngs_modulus" else (1e-6, "MPa")
+                (1e-9, "GPa") if row["id"] in {"youngs_modulus", "flexural_modulus"} else (1e-6, "MPa")
             )
         elif row["id"] == "elongation_at_break":
             multiplier, display_unit = 100, "%"
@@ -201,12 +218,20 @@ def build_selection_database(bundle: dict[str, Any]) -> dict[str, Any]:
                     value = INDICES[key].compute(values)
                     if value is not None and math.isfinite(value) and value > 0:
                         scores[key] = value
+                conditions = {**left.get("conditions", {}),
+                              **right.get("conditions", {})}
+                temperatures = sorted({o["conditions"]["temperature_K"]
+                                       for o in (left, right)
+                                       if "temperature_K" in o["conditions"]})
+                if len(temperatures) > 1:
+                    conditions.pop("temperature_K", None)
                 points.append({
                     "id": left["id"] + ":" + right["id"],
                     "material_id": material_id,
                     "state_id": left.get("state_id") or right.get("state_id"),
                     "observations": [left["id"], right["id"]],
-                    "conditions": {**left.get("conditions", {}), **right.get("conditions", {})},
+                    "conditions": conditions,
+                    "temperatures_K": temperatures,
                     "scores": scores,
                 })
         for key in chart_indices:

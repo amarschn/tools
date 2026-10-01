@@ -26,6 +26,9 @@ const FAMILY_COLORS = {
   foam:      "#9c755f",
   fabric:    "#bab0ac",
   gel:       "#b07aa1",
+  wood:      "#72964b",
+  elastomer: "#bd66a0",
+  glass:     "#8875c4",
 };
 
 const FAMILY_SYMBOLS = {
@@ -37,6 +40,9 @@ const FAMILY_SYMBOLS = {
   foam:      "hexagon",
   fabric:    "cross",
   gel:       "pentagon",
+  wood:      "star",
+  elastomer: "pentagon",
+  glass:     "diamond",
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -195,6 +201,30 @@ function dataAxisRange(values, scale) {
   return [low - padding, high + padding];
 }
 
+/** Label every tick in the displayed unit while retaining SI plot coordinates. */
+function engineeringTicks(range, meta) {
+  const multiplier = meta.display_multiplier || 1;
+  const values = [];
+  const span = range[1] - range[0];
+  if (span < .6) {
+    const low = 10 ** range[0] * multiplier, high = 10 ** range[1] * multiplier;
+    const rawStep = (high - low) / 5;
+    const decade = 10 ** Math.floor(Math.log10(rawStep));
+    const step = [1, 2, 2.5, 5, 10].find(factor => factor * decade >= rawStep) * decade;
+    for (let v = Math.ceil(low / step) * step; v <= high; v += step) values.push(v / multiplier);
+  } else {
+    const factors = span <= 3 ? [1, 2, 5] : [1];
+    for (let exponent = Math.floor(range[0]); exponent <= Math.ceil(range[1]); exponent++) {
+      for (const factor of factors) {
+        const value = factor * 10 ** exponent;
+        if (Math.log10(value) >= range[0] && Math.log10(value) <= range[1]) values.push(value);
+      }
+    }
+  }
+  return {tickmode: 'array', tickvals: values, ticktext: values.map(v =>
+    Number((v * multiplier).toPrecision(6)).toLocaleString('en-US', {maximumSignificantDigits: 6}))};
+}
+
 /** Clip a reference segment in axis coordinates so it cannot stretch the view. */
 function clipIsoline(points, ranges, scales) {
   const coords = points.map(point => point.map((v, axis) => scales[axis] === "log" ? Math.log10(v) : v));
@@ -287,7 +317,7 @@ class AshbyPlot {
     const traces = [];
 
     // Blob traces (family envelopes) — rendered behind points
-    if (showBlobs) {
+    if (showBlobs && !Array.isArray(opts.regions)) {
       for (const [fam, pts] of Object.entries(familyGroups)) {
         const blobColors = FAMILY_BLOB_COLORS[fam];
         if (!blobColors) continue;
@@ -314,6 +344,21 @@ class AshbyPlot {
           hoverinfo: "skip",
         });
       }
+    }
+
+    // The new chart supplies bounded subgroup outlines. Retained prototypes
+    // continue to use the original envelope API above.
+    for (const region of opts.regions || []) {
+      const points = [...region.points, region.points[0]];
+      const color = FAMILY_COLORS[region.family] || '#888888';
+      traces.push({
+        x: points.map(p => p[0]), y: points.map(p => p[1]),
+        type: 'scatter', mode: 'lines', fill: 'toself',
+        fillcolor: color + (isDark ? '22' : '16'),
+        line: {color: color + '88', width: 1.2, shape: 'linear'},
+        name: region.label + ' (plotted grades)', showlegend: false, hoverinfo: 'skip',
+        meta: {region: true, family: region.family},
+      });
     }
 
     // Point traces — one per family
@@ -358,9 +403,9 @@ class AshbyPlot {
       }
 
       // Size: larger for highlighted
-      const sizes = ids.map(id => highlightSet.size > 0 && highlightSet.has(id) ? 14 : 8);
+      const sizes = ids.map(id => highlightSet.size > 0 && highlightSet.has(id) ? 12 : opts.compactChrome ? 6.5 : 8);
       const opacities = ids.map(id =>
-        highlightSet.size > 0 ? (highlightSet.has(id) ? 1.0 : 0.35) : 0.85
+        highlightSet.size > 0 ? (highlightSet.has(id) ? 1.0 : 0.4) : 0.85
       );
 
       const hovertemplate = points.map(p => {
@@ -387,7 +432,7 @@ class AshbyPlot {
           symbol: points.map(p => (FAMILY_SYMBOLS[fam] || "circle") + (p.material.hasBounds ? "-open" : "")),
           size: sizes,
           opacity: opacities,
-          line: { width: 1, color: "#fff" },
+          line: { width: .6, color: theme.paperBg },
         },
         error_x,
         error_y,
@@ -482,28 +527,56 @@ class AshbyPlot {
       }
     }
 
+    if (opts.compactChrome) {
+      // Place group labels in screen space and leave a leader to the measured
+      // group. Reject overlapping labels, including labels outside the plot.
+      const width = Math.max(100, this._size[0] - 98), height = Math.max(100, this._size[1] - 82);
+      const boxes = [], labelNames = new Set();
+      const regions = [...(opts.regions || [])].sort((a, b) => b.count - a.count);
+      for (const region of regions) {
+        if (labelNames.has(region.label)) continue;
+        const log = region.center.map(Math.log10);
+        const px = (log[0] - ranges[0][0]) / (ranges[0][1] - ranges[0][0]) * width;
+        const py = (ranges[1][1] - log[1]) / (ranges[1][1] - ranges[1][0]) * height;
+        const w = Math.min(175, region.label.length * 5.5 + 10), h = 19;
+        for (const [dx, dy] of [[0,-24],[0,26],[-65,-36],[65,36],[-70,22],[70,-24],[0,-62],[0,62]]) {
+          const box = [px + dx - w/2, py + dy - h/2, w, h];
+          if (box[0] < 1 || box[1] < 2 || box[0] + w > width || box[1] + h > height - 2) continue;
+          if (boxes.some(b => box[0] < b[0]+b[2]+5 && box[0]+w+5 > b[0] && box[1] < b[1]+b[3]+5 && box[1]+h+5 > b[1])) continue;
+          boxes.push(box); labelNames.add(region.label);
+          annotations.push({x:log[0], y:log[1], xref:'x', yref:'y', text:region.label,
+            showarrow:true, arrowhead:0, arrowwidth:.6, arrowcolor:theme.axisColor,
+            ax:dx, ay:dy, bgcolor:theme.paperBg, borderpad:2,
+            font:{size:10, color:theme.fontColor}});
+          break;
+        }
+      }
+    }
+
     const layout = {
       width: this._size[0],
       height: this._size[1],
-      title: {
+      title: opts.compactChrome ? undefined : {
         text: `${yMeta.label || yProp}${narrow ? "<br>vs " : " vs "}${xMeta.label || xProp}`,
         font: { size: narrow ? 14 : 16, family: "system-ui, sans-serif", color: theme.fontColor },
         y: narrow ? 0.92 : 0.98,
         yanchor: "top",
       },
       xaxis: {
-        title: { text: `${xMeta.label || xProp}${xMeta.unit ? " (" + xMeta.unit + ")" : ""}`, font: { color: theme.axisColor } },
+        title: { text: `${xMeta.label || xProp}${(opts.compactChrome ? xMeta.display_unit : xMeta.unit) ? " (" + (opts.compactChrome ? xMeta.display_unit : xMeta.unit).replace('kg/m^3','kg/m³') + ")" : ""}`, font: { color: theme.axisColor } },
         type: xScale,
         ...(fitToData ? { range: ranges[0], autorange: false } : {}),
+        ...(opts.compactChrome && xScale === 'log' ? engineeringTicks(ranges[0], xMeta) : {}),
         gridcolor: theme.gridColor,
         zeroline: false,
         exponentformat: "SI",
         tickfont: { color: theme.axisColor },
       },
       yaxis: {
-        title: { text: `${yMeta.label || yProp}${yMeta.unit ? " (" + yMeta.unit + ")" : ""}`, font: { color: theme.axisColor } },
+        title: { text: `${yMeta.label || yProp}${(opts.compactChrome ? yMeta.display_unit : yMeta.unit) ? " (" + (opts.compactChrome ? yMeta.display_unit : yMeta.unit) + ")" : ""}`, font: { color: theme.axisColor } },
         type: yScale,
         ...(fitToData ? { range: ranges[1], autorange: false } : {}),
+        ...(opts.compactChrome && yScale === 'log' ? engineeringTicks(ranges[1], yMeta) : {}),
         gridcolor: theme.gridColor,
         zeroline: false,
         exponentformat: "SI",
@@ -511,6 +584,8 @@ class AshbyPlot {
       },
       shapes,
       annotations,
+      showlegend: !opts.compactChrome,
+      uirevision: opts.compactChrome ? [xProp, yProp, materials.map(m => m.id).join(','), this._viewRevision || 0].join('|') : undefined,
       hovermode: "closest",
       legend: {
         orientation: narrow ? "h" : "v",
@@ -520,14 +595,14 @@ class AshbyPlot {
         x: narrow ? 0 : 1.02,
         font: { color: theme.fontColor, size: 12 },
       },
-      margin: { t: narrow ? 84 : 50, r: narrow ? 18 : 120, b: narrow ? 100 : 60, l: narrow ? 62 : 80 },
+      margin: opts.compactChrome ? {t:22, r:20, b:60, l:narrow ? 63 : 78} : { t: narrow ? 84 : 50, r: narrow ? 18 : 120, b: narrow ? 100 : 60, l: narrow ? 62 : 80 },
       plot_bgcolor: theme.plotBg,
       paper_bgcolor: theme.paperBg,
     };
 
     const config = {
       responsive: true,
-      displayModeBar: true,
+      displayModeBar: opts.compactChrome ? 'hover' : true,
       modeBarButtonsToRemove: ["lasso2d", "select2d"],
       toImageButtonOptions: {
         format: "png",
@@ -542,8 +617,22 @@ class AshbyPlot {
 
     // Click handler
     return Promise.resolve(rendered).then(() => {
+      const div = document.getElementById(this.divId);
+      if (this._tickRelayoutHandler) div.removeListener('plotly_relayout', this._tickRelayoutHandler);
+      if (opts.compactChrome) {
+        this._tickRelayoutHandler = event => {
+          if (!Object.keys(event).some(key => /[xy]axis\.(range|autorange)/.test(key))) return;
+          const ticks = {};
+          for (const [axis, scale, meta] of [['xaxis', xScale, xMeta], ['yaxis', yScale, yMeta]]) {
+            if (scale !== 'log') continue;
+            for (const [key, value] of Object.entries(engineeringTicks(div._fullLayout[axis].range, meta))) ticks[axis + '.' + key] = value;
+          }
+          return Plotly.relayout(div, ticks);
+        };
+        div.on('plotly_relayout', this._tickRelayoutHandler);
+        this._tickRelayoutHandler({'xaxis.range': true, 'yaxis.range': true});
+      }
       if (this.onClick) {
-        const div = document.getElementById(this.divId);
         // Remove previous listener
         div.removeAllListeners && div.removeAllListeners("plotly_click");
         div.on("plotly_click", (data) => {
@@ -570,6 +659,8 @@ class AshbyPlot {
       scale: 2,
     });
   }
+
+  resetView() { this._viewRevision = (this._viewRevision || 0) + 1; }
 }
 
 // Export for use as ES module or global

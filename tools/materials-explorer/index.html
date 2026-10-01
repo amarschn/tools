@@ -11,21 +11,22 @@
       gtag('js', new Date());
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
-    <title>Materials Explorer, Ashby Charts &amp; Material Selection</title>
-    <meta name="description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
-    <link rel="canonical" href="https://transparent.tools/tools/materials-explorer/">
+    <title>Ashby Chart | Material Selection</title>
+    <meta name="description" content="Interactive Ashby charts for material selection. Compare stiffness, strength, density, and thermal properties using sourced material data.">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Materials Explorer — Ashby Charts &amp; Material Selection">
-    <meta property="og:description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
+    <meta property="og:title" content="Ashby Chart | Material Selection">
+    <meta property="og:description" content="Interactive Ashby charts for material selection. Compare stiffness, strength, density, and thermal properties using sourced material data.">
     <meta property="og:url" content="https://transparent.tools/tools/materials-explorer/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Materials Explorer — Ashby Charts &amp; Material Selection">
-    <meta name="twitter:description" content="Compare sourced material properties on Ashby charts. Rank compatible grade and condition records from the Materials database, inspect citations, and exp...">
+    <meta name="twitter:title" content="Ashby Chart | Material Selection">
+    <meta name="twitter:description" content="Interactive Ashby charts for material selection. Compare stiffness, strength, density, and thermal properties using sourced material data.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
+    <link rel="canonical" href="https://transparent.tools/tools/materials-explorer/">
     <script src="/shared/analytics-autotrack.js" defer></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script src="../../shared/ashby-plot.js?v=5"></script>
+    <script src="../../shared/ashby-plot.js?v=6"></script>
+    <script src="envelopes.js?v=1"></script>
     <script src="/shared/json-ld.js"></script>
     <style>
         /* ── Design tokens ─────────────────────────────────────── */
@@ -190,299 +191,111 @@
         .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
         .segmented button:hover:not(.active) { background: var(--bg-color); }
 
-        /* ── Container ──────────────────────────────────────────── */
-        .container {
-            width: 92%; max-width: 1440px;
-            margin: 0 auto; padding: 24px 0 40px;
-        }
-        .tool-header { margin-bottom: 20px; }
-        .tool-description {
-            margin-top: 8px; font-size: 1.02rem;
-            max-width: 78ch; line-height: 1.55;
-        }
 
-        /* ── Card ───────────────────────────────────────────────── */
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-            padding: 22px;
-        }
-        .card h2 { margin-bottom: 14px; }
-
-        /* ── Workspace: left rail + main ────────────────────────── */
-        .workspace-layout {
-            display: grid;
-            grid-template-columns: 320px minmax(0, 1fr);
-            gap: 20px;
-            align-items: start;
-        }
-        .left-rail { display: grid; gap: 16px; position: sticky; top: 20px; }
-        .main-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
-        .main-content > * { min-width: 0; }
-
-        /* ── Inputs ─────────────────────────────────────────────── */
-        .input-group { margin-bottom: 14px; }
-        .input-group:last-child { margin-bottom: 0; }
-        .input-group label {
-            display: block; font-size: 0.78rem; font-weight: 600;
-            color: var(--text-light); text-transform: uppercase;
-            letter-spacing: 0.05em; margin-bottom: 5px;
-        }
-        .input-group select,
-        .input-group input[type="text"],
-        .input-group input[type="number"] {
-            width: 100%; padding: 8px 12px;
-            border: 1px solid var(--border-color); border-radius: 6px;
-            font-size: 0.9rem; font-family: var(--font-sans);
-            background: var(--bg-card); color: var(--text-color);
-            transition: border-color 0.15s, box-shadow 0.15s;
-            -webkit-appearance: none; appearance: none;
-        }
-        .input-group select {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 10px center;
-            padding-right: 30px;
-        }
-        .input-group select:focus,
-        .input-group input:focus {
-            outline: none; border-color: #4e79a7;
-            box-shadow: 0 0 0 3px rgba(78,121,167,0.12);
-        }
-        .input-group .hint { font-size: 0.75rem; color: var(--text-light); margin-top: 4px; line-height: 1.4; }
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-        /* ── Preset chips ───────────────────────────────────────── */
-        .preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-        .preset-chip {
-            padding: 5px 13px;
-            border: 1px solid var(--border-color); border-radius: 999px;
-            font-size: 0.78rem; font-weight: 500;
-            background: var(--bg-card); color: var(--text-color);
-            cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .preset-chip:hover { border-color: var(--secondary-color); background: var(--bg-color); }
-        .preset-chip.active {
-            background: var(--accent-color); color: var(--bg-card);
-            border-color: var(--accent-color);
-        }
-
-        /* ── Family toggles ─────────────────────────────────────── */
-        .family-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
-        .family-pill {
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 4px 12px; border-radius: 999px;
-            border: 1.5px solid var(--border-color);
-            font-size: 0.78rem; font-weight: 500;
-            cursor: pointer; user-select: none;
-            transition: all 0.15s;
-            background: var(--bg-card); color: var(--text-light);
-        }
-        .family-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .family-pill.active {
-            color: var(--text-color); font-weight: 600;
-            border-color: currentColor;
-        }
-        .family-pill:hover { background: var(--bg-color); }
-
-        /* ── Chart area ─────────────────────────────────────────── */
-        #ashby-chart {
-            width: 100%; height: 540px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            background: var(--bg-card);
-        }
-
-        /* ── Material detail card ───────────────────────────────── */
-        .detail-card { display: none; }
-        .detail-card.visible { display: block; }
-        .detail-card .card-header {
-            display: flex; justify-content: space-between; align-items: start;
-            margin-bottom: 8px;
-        }
-        .detail-card .card-close {
-            background: none; border: none; font-size: 1.4rem;
-            cursor: pointer; color: var(--text-light); padding: 2px 6px;
-            border-radius: 4px; line-height: 1;
-        }
-        .detail-card .card-close:hover { background: var(--bg-color); color: var(--text-color); }
-        .detail-card .meta {
-            font-size: 0.82rem; color: var(--text-light); margin-top: 2px;
-        }
-        .prop-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 12px; }
-        .prop-table th, .prop-table td {
-            padding: 6px 12px; text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .prop-table th { font-weight: 600; color: var(--secondary-color); width: 40%; }
-        .prop-table td { font-family: var(--font-mono); font-size: 0.82rem; }
-        .prop-group-header td {
-            background: var(--bg-color); font-weight: 600;
-            color: var(--text-color); padding: 8px 12px;
-            font-family: var(--font-sans); font-size: 0.8rem;
-            text-transform: uppercase; letter-spacing: 0.04em;
-        }
-        .range-hint {
-            color: var(--text-light); font-size: 0.75em;
-            font-family: var(--font-mono);
-        }
-        .basis-badge {
-            display: inline-block; padding: 1px 6px;
-            border-radius: 3px; font-size: 0.7em;
-            background: var(--bg-color); color: var(--text-light);
-            font-family: var(--font-sans); font-weight: 500;
-            margin-left: 4px; vertical-align: middle;
-        }
-
-        /* ── Ranking table ──────────────────────────────────────── */
-        .ranking-section { display: none; }
-        .ranking-section.visible { display: block; }
-        .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        .ranking-table th {
-            padding: 8px 12px; text-align: left;
-            background: var(--bg-color); font-weight: 600;
-            color: var(--secondary-color);
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em;
-        }
-        .ranking-table td { padding: 7px 12px; border-bottom: 1px solid var(--border-color); }
-        .ranking-table tbody tr { transition: background 0.1s; }
-        .ranking-table tbody tr:hover { background: rgba(78,121,167,0.06); cursor: pointer; }
-        .rank-num { font-weight: 700; color: var(--text-light); width: 36px; text-align: center; }
-        .family-badge {
-            display: inline-flex; align-items: center; gap: 4px;
-            font-size: 0.82rem;
-        }
-        .family-badge .dot { width: 7px; height: 7px; border-radius: 50%; }
-
-        /* ── Footer ─────────────────────────────────────────────── */
-        footer {
-            margin-top: 48px; padding: 24px 0;
-            border-top: 1px solid var(--border-color);
-            text-align: center; font-size: 0.82rem; color: var(--text-light);
-        }
-        footer a { font-weight: 600; }
-
-        /* ── Purpose section ────────────────────────────────────── */
-        details > summary { list-style: none; cursor: pointer; }
-        details > summary::-webkit-details-marker { display: none; }
-        .purpose-section {
-            margin-bottom: 1.5rem;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            background: var(--bg-card);
-        }
-        .purpose-section summary {
-            padding: 14px 22px;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--secondary-color);
-        }
-        .purpose-section summary::after {
-            content: '[Expand]';
-            float: right;
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: var(--text-light);
-        }
-        .purpose-section[open] > summary::after { content: '[Collapse]'; }
-        .purpose-content {
-            padding: 0 22px 22px 22px;
-            border-top: 1px solid var(--border-color);
-        }
-        .purpose-content h3 {
-            margin: 16px 0 8px;
-            font-size: 0.95rem;
-            color: var(--text-color);
-        }
-        .purpose-content p, .purpose-content li {
-            font-size: 0.88rem;
-            line-height: 1.6;
-            color: var(--text-light);
-        }
-        .purpose-content ul {
-            margin: 8px 0;
-            padding-left: 20px;
-        }
-        .purpose-content li { margin-bottom: 4px; }
-
-        /* ── Tooltip ────────────────────────────────────────────── */
-        .input-group { position: relative; }
-        .tooltip-trigger {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 16px; height: 16px;
-            background: var(--primary-light);
-            border: 1px solid var(--border-color);
-            color: var(--text-light);
-            border-radius: 50%;
-            font-size: 10px; font-weight: 700;
-            cursor: help;
-            position: absolute; right: 8px; top: 0;
-        }
-        .tooltip-trigger::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            right: 0;
-            top: calc(100% + 6px);
-            width: 220px;
-            background: var(--bg-card);
-            color: var(--text-color);
-            padding: 8px 10px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            box-shadow: var(--shadow-lg);
-            font-size: 0.76rem;
-            line-height: 1.4;
-            font-weight: 400;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            z-index: 30;
-            white-space: normal;
-        }
-        .tooltip-trigger:hover::after, .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
-
-        /* ── Responsive ─────────────────────────────────────────── */
-        @media (max-width: 960px) {
-            .workspace-layout { grid-template-columns: 1fr; }
-            .left-rail { position: static; }
-            #ashby-chart { height: 420px; }
-        }
-        @media (max-width: 600px) {
-            h1 { font-size: 1.6rem; }
-            .container { width: 95%; }
-            #ashby-chart { height: 320px; }
-        }
-        [hidden] { display: none !important; }
-        .loading-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-content: center; gap: 16px; padding: 28px; background: var(--bg-color); text-align: center; }
-        .loading-overlay button, .chart-toolbar button, .data-link { border: 1px solid var(--border-color); border-radius: 6px; padding: 9px 12px; background: var(--bg-card); color: var(--text-color); font: inherit; cursor: pointer; }
-        .chart-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
-        .chart-toolbar .input-group { flex: 1 1 200px; margin: 0; }
-        .chart-toolbar input { width: 100%; }
-        .data-status, .chart-note, .ranking-note { margin: 10px 0; font-size: .8rem; color: var(--text-light); line-height: 1.5; }
-        .data-status { color: var(--text-color); }
-        .empty-state { border: 1px solid var(--border-color); border-radius: 6px; padding: 16px; background: var(--bg-card); }
-        .table-wrap { overflow-x: auto; }
-        .source-detail { display: block; margin-top: 5px; font: .78rem/1.5 var(--font-sans); color: var(--text-light); overflow-wrap: anywhere; }
-        .result-kind { display: inline-block; font: .72rem var(--font-sans); padding: 2px 5px; border: 1px solid var(--border-color); border-radius: 3px; margin-left: 5px; }
-        .material-button { text-align: left; color: var(--text-color); background: none; border: 0; padding: 4px 0; text-decoration: underline; font: inherit; cursor: pointer; }
-        .data-link { display: inline-block; font-size: .82rem; margin-top: 12px; text-decoration: none; }
-        .index-explanation { font-size: .85rem; line-height: 1.55; margin-bottom: 16px; }
-        .index-explanation summary { cursor: pointer; }
-        .index-explanation code { display: block; margin: 10px 0; }
-        .setting-row select { color: var(--text-color); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px; }
-        :focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
-        .switch input:focus-visible + .slider-toggle { outline: 2px solid var(--accent-color); outline-offset: 3px; }
-        body[data-density="compact"] .card { padding: 16px; }
-        body[data-density="compact"] .input-group { margin-bottom: 12px; }
-        @media (max-width: 640px) { .nav-actions { gap: 6px; } .settings-button { padding: 7px 10px; } #ashby-chart { height: 430px; } .chart-toolbar { align-items: stretch; } }
+        :root { --danger-color: #b91c1c; }
+        [hidden] { display:none !important; }
+        button, select, input { font:inherit; }
+        button, select { cursor:pointer; }
+        button, .button-link { min-height:36px; border:1px solid var(--border-color); border-radius:5px; background:var(--bg-card); color:var(--text-color); padding:7px 11px; font-size:.82rem; }
+        button:hover, .button-link:hover { background:var(--primary-light); text-decoration:none; }
+        button:disabled { opacity:.5; cursor:default; }
+        :focus-visible { outline:2px solid var(--accent-color); outline-offset:3px; }
+        .container { width:94%; max-width:1680px; margin:auto; padding:18px 0 26px; }
+        .nav-container { max-width:1680px; height:48px; }
+        .tool-header { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:14px; }
+        h1 { font-size:2rem; line-height:1.2; letter-spacing:-.035em; }
+        .tool-description { font-size:.88rem; margin-top:5px; }
+        .header-links { display:flex; gap:14px; font-size:.8rem; white-space:nowrap; }
+        .presets-row { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+        .eyebrow { font-size:.7rem; text-transform:uppercase; letter-spacing:.075em; color:var(--text-light); font-weight:600; }
+        .preset-chips { display:flex; gap:6px; flex-wrap:wrap; }
+        .preset-chip { border-color:transparent; background:var(--primary-light); }
+        .preset-chip.active { background:var(--accent-color); color:var(--bg-card); }
+        .control-bar { display:grid; grid-template-columns:minmax(160px,1fr) 36px minmax(170px,1fr) minmax(200px,1.15fr) auto; align-items:end; gap:10px; }
+        .input-group label { display:block; font-size:.73rem; font-weight:600; color:var(--text-light); margin-bottom:4px; }
+        .input-group select, .input-group input, .setting-row select { width:100%; height:38px; border:1px solid var(--border-color); border-radius:5px; padding:7px 10px; color:var(--text-color); background:var(--bg-card); min-width:0; font-size:.85rem; }
+        #swap-axes { height:38px; padding:7px; }
+        .filter-menu { position:relative; }
+        summary { cursor:pointer; }
+        .filter-menu>summary { list-style:none; border:1px solid var(--border-color); border-radius:5px; font-size:.82rem; padding:8px 14px; height:38px; }
+        .filter-menu[open]>summary { background:var(--primary-light); }
+        .filter-content { position:absolute; right:0; top:44px; width:300px; padding:18px; background:var(--bg-card); border:1px solid var(--border-color); box-shadow:var(--shadow-lg); border-radius:6px; z-index:50; display:grid; gap:14px; }
+        .check-row { display:flex; align-items:center; gap:9px; font-size:.82rem; cursor:pointer; }
+        .check-row input { accent-color:var(--accent-color); width:16px; height:16px; }
+        .family-bar { display:flex; align-items:center; gap:10px; padding:12px 0; }
+        .family-toggles { display:flex; gap:6px; flex-wrap:wrap; }
+        .family-pill { color:var(--text-light); min-height:32px; padding:5px 9px; display:flex; align-items:center; gap:6px; }
+        .family-pill.active { color:var(--text-color); border-color:var(--text-light); background:var(--bg-card); }
+        .family-dot { width:8px; height:8px; border-radius:50%; background:var(--family-color); flex:none; }
+        .family-pill:not(.active) .family-dot { opacity:.3; }
+        .family-count { font-size:.69rem; font-family:var(--font-mono); color:var(--text-light); }
+        #all-families { border:0; font-size:.75rem; white-space:nowrap; padding:3px 5px; }
+        .workspace-layout { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:14px; align-items:stretch; }
+        .chart-panel, .inspector { border:1px solid var(--border-color); border-radius:7px; background:var(--bg-card); min-width:0; }
+        .plot-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 15px 0; }
+        .plot-heading h2 { font-size:.9rem; border:0; }
+        .plot-actions { display:flex; align-items:center; gap:5px; }
+        .plot-actions button { font-size:.73rem; min-height:30px; padding:4px 8px; }
+        #ashby-chart { width:100%; height:clamp(360px,calc(100dvh - 465px),740px); }
+        .data-status { font-size:.73rem; color:var(--text-light); margin-top:2px; }
+        .chart-note { padding:0 16px 10px; font-size:.72rem; color:var(--text-light); line-height:1.5; }
+        .chart-note span { white-space:nowrap; margin-right:10px; }
+        .coverage-note { padding:9px 16px; border-top:1px solid var(--border-color); font-size:.75rem; line-height:1.5; color:var(--text-light); }
+        .coverage-note button { border:0; min-height:26px; padding:2px 5px; text-decoration:underline; font-size:inherit; }
+        .empty-state { padding:15px; font-size:.86rem; color:var(--text-color); background:var(--primary-light); }
+        .inspector { display:flex; flex-direction:column; max-height:calc(clamp(360px,calc(100dvh - 465px),740px) + 133px); }
+        .inspector-tabs { display:grid; grid-template-columns:1fr 1fr 1fr; border-bottom:1px solid var(--border-color); padding:5px 8px 0; gap:4px; }
+        .inspector-tabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:none; padding:11px 4px; color:var(--text-light); }
+        .inspector-tabs button[aria-selected="true"] { color:var(--text-color); border-bottom-color:var(--text-color); font-weight:600; }
+        .inspector-pane { overflow-y:auto; padding:16px; flex:1; scrollbar-width:thin; }
+        .pane-heading { font-size:.72rem; color:var(--text-light); margin:0 0 9px; }
+        .material-list { list-style:none; }
+        .material-list button { display:block; width:100%; border:0; border-radius:0; border-bottom:1px solid var(--border-color); padding:11px 0; text-align:left; }
+        .material-list button strong { font-size:.81rem; font-weight:500; display:block; }
+        .material-list button small { color:var(--text-light); font-size:.69rem; display:block; margin-top:3px; }
+        .material-list button:hover { background:var(--primary-light); }
+        .material-list .selected strong { font-weight:650; }
+        .card-header { display:flex; justify-content:space-between; align-items:start; gap:8px; }
+        .card-header h2 { font-size:1.08rem; line-height:1.4; overflow-wrap:anywhere; }
+        .card-close { border:0; padding:0; min-width:28px; font-size:1.35rem; }
+        .meta { font-size:.74rem; color:var(--text-light); margin:6px 0 18px; }
+        .prop-table { width:100%; border-collapse:collapse; }
+        .prop-table tr { display:block; padding:13px 0; border-top:1px solid var(--border-color); }
+        .prop-table th, .prop-table td { display:block; text-align:left; }
+        .prop-table th { font-size:.76rem; color:var(--text-light); font-weight:500; }
+        .prop-table td>.property-value { display:block; font:500 1.4rem/1.5 var(--font-mono); margin:3px 0 8px; }
+        .source-detail { display:block; font:.73rem/1.55 var(--font-sans); color:var(--text-light); overflow-wrap:anywhere; margin-top:6px; }
+        .result-kind { font-size:.67rem; color:var(--text-light); border:1px solid var(--border-color); border-radius:3px; padding:2px 5px; }
+        .source-citation { margin-top:8px; font-size:.72rem; }
+        .data-link { display:block; font-size:.8rem; margin-top:12px; text-decoration:underline; }
+        .ranking-note { margin:12px 0; color:var(--text-light); font-size:.74rem; line-height:1.55; }
+        .ranking-table { border-collapse:collapse; width:100%; font-size:.76rem; }
+        .ranking-table td { border-top:1px solid var(--border-color); padding:10px 3px; vertical-align:top; }
+        .ranking-table td:last-child { font-family:var(--font-mono); white-space:nowrap; }
+        .material-button { border:0; padding:0; text-align:left; font-size:.76rem; min-height:0; text-decoration:underline; }
+        .ranking-table .source-detail { font-size:.68rem; }
+        #ranking-title { font-size:.9rem; margin:14px 0 7px; }
+        .index-explanation { margin:13px 0; font-size:.76rem; line-height:1.5; }
+        .index-explanation p, .index-explanation code { display:block; margin:9px 0; overflow-wrap:anywhere; }
+        .rank-controls { display:grid; gap:12px; }
+        .rank-controls .input-row { display:grid; grid-template-columns:1fr 70px; gap:8px; }
+        .hint { font-size:.72rem; color:var(--text-light); margin-top:4px; }
+        .inspector-empty { padding:18px 0; font-size:.86rem; line-height:1.7; }
+        .purpose-section { margin:20px 0; border-top:1px solid var(--border-color); padding-top:14px; font-size:.83rem; }
+        .purpose-content { max-width:1000px; padding:15px 0; display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+        .purpose-content h3 { margin-bottom:7px; }
+        .purpose-content p { margin:6px 0 14px; }
+        footer { font-size:.74rem; color:var(--text-light); }
+        footer .container { padding-top:0; }
+        .loading-overlay { position:fixed; inset:0; z-index:2000; display:grid; place-content:center; gap:16px; padding:28px; background:var(--bg-color); text-align:center; }
+        body[data-density="compact"] .inspector-pane { padding:12px; }
+        body[data-density="compact"] .material-list button { padding:7px 0; }
+        body[data-density="compact"] .prop-table tr { padding:8px 0; }
+        @media(max-width:1150px) { .workspace-layout { grid-template-columns:minmax(0,1fr) 290px; } .header-links { display:none; } .family-pill { font-size:.72rem; } }
+        @media(max-width:900px) { .workspace-layout { grid-template-columns:1fr; } .inspector { max-height:480px; min-height:250px; } .control-bar { grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr); } .search-group { grid-column:1/3; } .filter-menu { grid-column:3; } .filter-content { width:min(300px,88vw); } .family-bar { align-items:start; } #ashby-chart { height:470px; } }
+        @media(max-width:600px) { .container { width:95%; padding-top:14px; } .nav-container { padding:0 10px; } .nav-brand { font-size:.86rem; } .settings-button { padding:6px 8px; font-size:.75rem; } h1 { font-size:1.6rem; } .tool-description { font-size:.78rem; } .presets-row .eyebrow { display:none; } .preset-chip { font-size:.75rem; padding:7px 9px; min-height:38px; } .family-pill { min-height:36px; padding:6px; } .family-bar { gap:4px; } .family-toggles { gap:4px; } #ashby-chart { height:440px; } .plot-heading { align-items:start; padding:12px 10px 0; } .plot-heading h2 { font-size:.8rem; } .plot-actions { flex-direction:column; gap:3px; } .chart-note { font-size:.68rem; padding:0 10px 9px; } .purpose-content { grid-template-columns:1fr; gap:10px; } }
     </style>
 </head>
-
 <body data-theme="system">
     <script>try { const s = JSON.parse(localStorage.getItem('materials-explorer-settings') || '{}'); if (['light','dark','system'].includes(s.theme)) document.body.dataset.theme = s.theme; if (['compact','comfortable'].includes(s.density)) document.body.dataset.density = s.density; } catch (_) {}</script>
     <div id="loading-overlay" class="loading-overlay" role="status"><p id="loading-message">Loading material properties…</p><button type="button" id="retry-load" hidden>Retry loading</button></div>
@@ -524,195 +337,54 @@
         </div>
     </aside>
 
-    <!-- ── Main ────────────────────────────────────────────────── -->
     <main class="container" id="explorer-main" data-state="loading">
         <div class="tool-header">
-            <h1>Materials Explorer</h1>
-            <p class="tool-description">
-                Compare sourced material properties on Ashby charts. Select a point to inspect its
-                grade, condition, and source in the Materials database.
-            </p>
+            <div><h1>Ashby Chart</h1><p class="tool-description">Compare material stiffness, strength, density, and thermal properties on interactive Ashby charts.</p></div>
+            <div class="header-links"><a href="../materials/">Materials database ↗</a><a href="prototypes/">Design experiments ↗</a><a href="#background">How to read the chart ↓</a></div>
         </div>
-
-        <details class="purpose-section">
-            <summary>Background &amp; How to Use</summary>
-            <div class="purpose-content">
-                <h3>What is an Ashby Chart?</h3>
-                <p>
-                    Ashby charts (also called material property charts) plot one engineering property
-                    against another on logarithmic axes. They were developed by Professor Michael Ashby
-                    at Cambridge as a systematic way to compare materials and identify optimal candidates
-                    for a given design objective.
-                </p>
-                <h3>Performance Indices</h3>
-                <p>
-                    A performance index is a grouping of material properties that captures how well
-                    a material performs for a specific structural or thermal objective. On log-log
-                    Ashby charts, lines of constant performance index appear as straight isolines.
-                    The preferred side depends on the index and axis order. The ranking equation states the objective.
-                </p>
-                <h3>Using this tool</h3>
-                <ul>
-                    <li>Select <strong>X and Y axes</strong> from the left rail, or click a preset to jump to a classic chart.</li>
-                    <li>Choose a <strong>performance index</strong> to rank materials and overlay isolines.</li>
-                    <li>Toggle <strong>material families</strong> on or off to focus on specific categories.</li>
-                    <li>Use <strong>Display Options</strong> for ranges, envelopes, and labels. Tool Settings controls theme and number formatting.</li>
-                    <li><strong>Click any point</strong> on the chart to inspect its full sourced property data.</li>
-                </ul>
-                <h3>Data</h3>
-                <p>
-                    Values come from the <a href="../materials/">Materials database</a>.
-                    Each point pairs two observations for one grade and compatible state and conditions.
-                    Known temperatures, forms, thickness ranges, and orientations must agree. A grade-level
-                    physical property may accompany a named state; its original scope stays visible.
-                    Missing properties are omitted. No values are filled from a generic material family.
-                </p>
-                <p>Intervals appear at their midpoint with optional range bars. Open symbols mark specified bounds, not measurements. Rankings use the shown reference coordinates; a high score at a specified bound does not establish which material has the highest measured performance. The default temperature filter includes 20–25 °C and observations with no stated temperature.</p>
-            </div>
-        </details>
-
+        <div class="presets-row"><span class="eyebrow">Charts</span><div class="preset-chips" id="preset-chips" aria-label="Chart presets"></div></div>
+        <div class="control-bar">
+            <div class="input-group"><label for="x-prop">Horizontal axis</label><select id="x-prop" title="Material property on the horizontal logarithmic axis"></select></div>
+            <button id="swap-axes" type="button" title="Swap horizontal and vertical properties" aria-label="Swap axes">⇄</button>
+            <div class="input-group"><label for="y-prop">Vertical axis</label><select id="y-prop" title="Material property on the vertical logarithmic axis"></select></div>
+            <div class="input-group search-group"><label for="material-search">Find a material</label><input type="search" id="material-search" placeholder="Titanium, PEEK, wood…" title="Search grades, names, designations, and families across the database"></div>
+            <details class="filter-menu" id="filter-menu"><summary>Filters &amp; display</summary><div class="filter-content">
+                <div class="input-group"><label for="temperature-filter">Test temperature</label><select id="temperature-filter" title="Room-temperature comparisons allow 20–25 °C; unspecified temperatures remain labeled"><option value="ambient">20–25 °C or unspecified</option><option value="all">All temperatures</option></select></div>
+                <div class="input-group"><label for="basis-filter">Reported values</label><select id="basis-filter" title="Filter by the source's result type"><option value="all">All reported values</option><option value="measured">Points and intervals</option><option value="limits">Reported bounds</option></select></div>
+                <div class="input-group"><label for="envelope-mode">Group shapes</label><select id="envelope-mode" title="Shapes group plotted grades; they are not measured family limits"><option value="hulls">Rounded outlines</option><option value="ellipses">Enclosing ellipses</option><option value="points">Points only</option></select></div>
+                <label class="check-row"><input type="checkbox" id="setting-blobs" checked title="Show the chosen group outlines">Show group shapes</label>
+                <label class="check-row"><input type="checkbox" id="setting-points" checked title="Show individual reported property pairs">Individual points</label>
+                <label class="check-row"><input type="checkbox" id="setting-ranges" checked title="Draw the endpoints of reported intervals">Reported ranges</label>
+                <label class="check-row"><input type="checkbox" id="setting-isolines" checked title="Lines of equal value for the selected performance index">Index lines</label>
+                <label class="check-row"><input type="checkbox" id="setting-labels" title="Show grade names next to points; use for small selections">Point labels</label>
+                <button id="reset-filters" type="button">Reset filters</button>
+            </div></details>
+        </div>
+        <div class="family-bar"><div class="family-toggles" id="family-toggles" aria-label="Material families"></div><button id="all-families" type="button" title="Show all families and clear the search">Show all</button></div>
         <div class="workspace-layout">
-            <!-- Left Rail -->
-            <aside class="left-rail">
-                <section class="card">
-                    <h2>Chart Setup</h2>
-
-                    <div class="input-group">
-                        <label>Preset</label>
-                        <div class="preset-chips" id="preset-chips"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="x-prop">X-Axis</label>
-                        <select id="x-prop"></select>
-                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Material property plotted on the horizontal axis. Log scale by default.">?</span>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="y-prop">Y-Axis</label>
-                        <select id="y-prop"></select>
-                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Material property plotted on the vertical axis. Log scale by default.">?</span>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="perf-index">Performance Index</label>
-                        <select id="perf-index">
-                            <option value="">(none)</option>
-                        </select>
-                        <span class="tooltip-trigger" tabindex="0" data-tooltip="Ranks materials by a merit index (e.g. E½/ρ for stiff, light beams). Isolines appear when axes match the index.">?</span>
-                        <div class="hint" id="index-hint"></div>
-                    </div>
-
-                    <div class="input-row">
-                        <div class="input-group">
-                            <label for="top-n">Top N Ranked</label>
-                            <input type="number" id="top-n" value="5" min="1" max="20">
-                            <span class="tooltip-trigger" tabindex="0" data-tooltip="Number of top-ranked materials to highlight on the chart and list in the ranking table.">?</span>
-                        </div>
-                        <div></div>
-                    </div>
-                    <div class="input-group"><label for="temperature-filter">Test temperature</label><select id="temperature-filter" title="Filter known test temperatures; unspecified temperatures remain labeled"><option value="ambient">20–25 °C or unspecified</option><option value="all">All temperatures</option></select></div>
-                    <div class="input-group"><label for="basis-filter">Reported values</label><select id="basis-filter" title="Keep specified lower and upper limits distinct from points and intervals"><option value="all">Measurements and specified limits</option><option value="measured">Points and intervals only</option><option value="limits">Pairs containing a specified limit</option></select></div>
+            <section class="chart-panel" aria-label="Ashby material property chart">
+                <div class="plot-heading"><div><h2 id="plot-title">Stiffness and density</h2><p class="data-status" id="data-status" aria-live="polite"></p></div><div class="plot-actions"><button id="reset-view" type="button" title="Fit the plot to all visible points">Fit view</button><button id="export-csv" type="button" data-track="export" title="Download plotted observations with values, conditions, and citations">Export CSV</button></div></div>
+                <p class="empty-state" id="empty-state" hidden>No compatible pairs match these filters. Select a material at right to see which properties are available.</p>
+                <div id="ashby-chart" role="img" aria-label="Interactive Ashby chart. The Materials tab also lists plotted grades for keyboard access."></div>
+                <p class="chart-note"><span>● Reference value</span><span>○ Reported bound</span><span>↔ Reported interval</span> · Logarithmic axes. Shapes group plotted grades, not whole-family limits.</p>
+                <div class="coverage-note" id="coverage-note"></div>
+            </section>
+            <aside class="inspector" aria-label="Material browser and inspector">
+                <div class="inspector-tabs" role="tablist" aria-label="Material information"><button type="button" role="tab" id="tab-browse" aria-controls="browse-pane" aria-selected="true">Materials</button><button type="button" role="tab" id="tab-inspect" aria-controls="inspect-pane" aria-selected="false">Inspect</button><button type="button" role="tab" id="tab-rank" aria-controls="rank-pane" aria-selected="false">Rank</button></div>
+                <section class="inspector-pane" id="browse-pane" role="tabpanel" aria-labelledby="tab-browse"><p class="pane-heading" id="browse-count"></p><ul class="material-list" id="material-list"></ul></section>
+                <section class="inspector-pane" id="inspect-pane" role="tabpanel" aria-labelledby="tab-inspect" hidden>
+                    <p class="inspector-empty" id="inspector-empty">Select a point or a material to see its values, test conditions, and sources here.</p>
+                    <div id="detail-card" hidden><div class="card-header"><h2 id="card-name"></h2><button id="card-close" class="card-close" type="button" aria-label="Clear selected material">×</button></div><p class="meta" id="card-meta"></p><table class="prop-table" id="card-props"></table><p class="ranking-note" id="card-index"></p><a id="card-datasheet" class="data-link" href="../materials/">Open full material datasheet ↗</a></div>
                 </section>
-
-                <section class="card">
-                    <h2>Material Families</h2>
-                    <div class="family-toggles" id="family-toggles"></div>
-                </section>
-
-                <section class="card">
-                    <h2>Display Options</h2>
-                    <div class="setting-row">
-                        <div class="setting-label">Family envelopes</div>
-                        <label class="switch">
-                            <input type="checkbox" id="setting-blobs" checked aria-label="Show family envelopes" title="Enclose the measured points shown; specified bounds are excluded">
-                            <span class="slider-toggle"></span>
-                        </label>
-                    </div>
-                    <div class="setting-row">
-                        <div class="setting-label">Individual points</div>
-                        <label class="switch">
-                            <input type="checkbox" id="setting-points" checked aria-label="Show individual points" title="Show each compatible pair of reported property observations">
-                            <span class="slider-toggle"></span>
-                        </label>
-                    </div>
-                    <div class="setting-row">
-                        <div class="setting-label">Property ranges</div>
-                        <label class="switch">
-                            <input type="checkbox" id="setting-ranges" checked aria-label="Show reported property ranges" title="Draw the endpoints of reported intervals">
-                            <span class="slider-toggle"></span>
-                        </label>
-                    </div>
-                    <div class="setting-row">
-                        <div class="setting-label">Isolines</div>
-                        <label class="switch">
-                            <input type="checkbox" id="setting-isolines" checked aria-label="Show index isolines" title="Draw constant-index lines for the selected ranking equation">
-                            <span class="slider-toggle"></span>
-                        </label>
-                    </div>
-                    <div class="setting-row">
-                        <div class="setting-label">Point labels</div>
-                        <label class="switch">
-                            <input type="checkbox" id="setting-labels" aria-label="Show point labels" title="Label plotted grades and states; dense charts are easier to read with labels off">
-                            <span class="slider-toggle"></span>
-                        </label>
-                    </div>
+                <section class="inspector-pane" id="rank-pane" role="tabpanel" aria-labelledby="tab-rank" hidden>
+                    <div class="rank-controls"><div class="input-group"><label for="perf-index">Design objective</label><select id="perf-index" title="Rank the displayed reference coordinates using a performance index"></select><p class="hint" id="index-hint"></p></div><div class="input-group"><label for="top-n">Number to compare</label><input type="number" id="top-n" min="1" max="20" value="5" title="Number of top reference scores to show"></div></div>
+                    <section id="ranking-section"><h2 id="ranking-title">Reference ranking</h2><p class="ranking-note">Scores use reported values, interval midpoints, or reported bounds. Compare each value's basis and conditions.</p><table class="ranking-table"><tbody id="ranking-body"></tbody></table><details class="index-explanation"><summary>Equation, assumptions &amp; source</summary><code id="index-equation"></code><p id="index-variables"></p><p id="index-derivation"></p><p id="index-scope"></p><p id="index-source"></p></details></section>
                 </section>
             </aside>
-
-            <!-- Main content -->
-            <div class="main-content">
-                <div class="chart-toolbar"><div class="input-group"><label for="material-search">Find a grade</label><input type="text" id="material-search" placeholder="6061, PEEK, 316L…" title="Filter by grade name, designation, state, or material family"></div><button type="button" id="export-csv" data-track="export">Export CSV</button></div>
-                <p class="data-status" id="data-status" aria-live="polite"></p>
-                <p class="empty-state" id="empty-state" hidden>No compatible property pairs match these filters. Choose different properties or clear the filters.</p>
-                <div id="ashby-chart"></div>
-                <p class="chart-note">Logarithmic axes, SI units. Open symbols mark specified bounds. Envelopes enclose shown measurements, not family limits.</p>
-
-                <!-- Material detail card -->
-                <div class="card detail-card" id="detail-card">
-                    <div class="card-header">
-                        <div>
-                            <h2 id="card-name"></h2>
-                            <div class="meta" id="card-meta"></div>
-                        </div>
-                        <button class="card-close" id="card-close" type="button" aria-label="Close material details">&times;</button>
-                    </div>
-                    <table class="prop-table" id="card-props"></table>
-                    <p id="card-index" class="ranking-note"></p>
-                    <a id="card-datasheet" class="data-link" href="../materials/">Open material datasheet</a>
-                </div>
-
-                <!-- Ranking table -->
-                <section class="card ranking-section" id="ranking-section">
-                    <h2 id="ranking-title">Ranked Materials</h2>
-                    <p class="ranking-note">Ranks use displayed reference values, including interval midpoints and specified bounds. Compare basis and conditions before selecting a material.</p>
-                    <details class="index-explanation"><summary>Ranking equation and scope</summary><code id="index-equation"></code><p id="index-variables"></p><p id="index-derivation"></p><p id="index-scope"></p><p id="index-source"></p></details>
-                    <div class="table-wrap">
-                    <table class="ranking-table">
-                        <thead>
-                            <tr>
-                                <th style="width:36px">#</th>
-                                <th>Material</th>
-                                <th>Family</th>
-                                <th>Reference index</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ranking-body"></tbody>
-                    </table>
-                    </div>
-                </section>
-            </div>
         </div>
+        <details class="purpose-section" id="background"><summary>Reading an Ashby chart: properties, group shapes, and performance indices</summary><div class="purpose-content"><div><h3>Compare properties across orders of magnitude</h3><p>An Ashby chart places two material properties on logarithmic axes. Select a chart preset, choose a family, or search for a grade. Select any point to inspect the observations behind it. Drag to zoom and use Fit view to return.</p><h3>What the shapes mean</h3><p>Rounded outlines group nearby grades of the same material class. They include reported interval endpoints and a small drawing margin. Reported bounds are excluded from the shapes. The ellipse alternative encloses the same observations; neither method estimates a population distribution or the full range of a family.</p><p><a href="prototypes/">Compare the retained design experiments</a>.</p></div><div><h3>Keep the test conditions in view</h3><p>Each point pairs observations for one material and compatible conditions. Different temperatures within 20–25 °C can be compared at room temperature; both original temperatures remain visible. Elevated-temperature properties are not paired with room-temperature measurements. Unspecified conditions stay unspecified.</p><p>Wood bending modulus is kept separate from tensile Young's modulus. The rubber sources report tensile strength and elongation, but no small-strain Young's modulus. The chart suggests another property pair when the current axes cannot show a material.</p><h3>Rank a design objective</h3><p>The Rank tab provides a performance index, its equation, variable definitions, and derivation. Lines on the plot connect equal index values. These compare source reference values and are not design allowables.</p></div></div></details>
     </main>
-
-    <footer>
-        <div class="container">
-            Property data: <a href="../materials/">Materials database</a>. Index equations: Ashby, Materials Selection in Mechanical Design (2011).
-            For educational and preliminary design screening only.
-            <br><a href="https://ko-fi.com/transparent_tools">Support this project</a>
-        </div>
-    </footer>
-
-<script src="explorer.js?v=1" defer></script>
+    <footer><div class="container">Values and citations: <a href="../materials/">Materials database</a>. Index equations: Ashby, <em>Materials Selection in Mechanical Design</em> (2011). <a href="https://ko-fi.com/transparent_tools">Support this project</a></div></footer>
+    <script src="explorer.js?v=2" defer></script>
 </body>
 </html>

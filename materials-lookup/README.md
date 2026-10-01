@@ -8,8 +8,8 @@ any other tool.
 Adding a material happens here, not anywhere else. The project this came from
 is closed; nothing upstream is maintained.
 
-Current contents: **222 material identities, 92 named states, 1,593
-observations, 10 registered properties and references to 28 source documents**.
+Current contents: **288 material identities, 92 named states, 1,825
+observations, 11 registered properties and references to 39 sources**.
 The generated site has no runtime dependencies, backend, accounts, or network
 search service.
 
@@ -139,6 +139,18 @@ python3 materials-lookup/builder/import_reference_tables.py --pdf-dir private-so
 
 Omit `--check` to regenerate the reviewed authoring files. The importer rejects
 changed PDF snapshots and never downloads or redistributes documents.
+
+The September 2026 Ashby chart batch adds 66 identities across composites,
+wood, ceramics, foams, elastomers, and glasses. Its importer can reconstruct
+just those additions while preserving the earlier records:
+
+```sh
+python3.13 materials-lookup/builder/import_ashby_families.py --pdf-dir private-sources --check
+```
+
+See [the batch review](docs/ashby-families-review.md) for source selection,
+conversions, and property coverage. The complete reference-table importer
+requires the archived originals for every earlier batch too.
 
 ## Layout
 

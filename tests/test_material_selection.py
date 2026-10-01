@@ -54,7 +54,7 @@ def test_missing_modulus_is_not_filled_from_old_aluminium_entry(selection):
     """The older 60-material store has 6061 modulus; this source does not."""
     assert "al-6061" in selection["materials"]
     assert not any(p["material_id"] == "al-6061" for p in selection["charts"]["density|youngs_modulus"]["points"])
-    assert len(selection["materials"]) == 222
+    assert len(selection["materials"]) == 288
 
 
 @pytest.mark.parametrize("key,left,right", [
@@ -76,6 +76,23 @@ def test_named_states_and_unspecified_strength_stay_separate():
     other = observation("youngs_modulus", 69e9)
     other["material_id"] = "another-grade"
     assert not compatible_observations(observation(), other)
+
+
+def test_titanium_room_temperature_reference_pair_keeps_both_temperatures(selection):
+    points = [p for p in selection["charts"]["density|youngs_modulus"]["points"]
+              if p["material_id"] in {"ti-6al-4v", "ti-6al-2sn-4zr-6mo"}]
+    assert {p["material_id"] for p in points} == {
+        "ti-6al-4v", "ti-6al-2sn-4zr-6mo"}
+    for point in points:
+        assert point["temperatures_K"] == [293.15, 295.15]
+        assert "temperature_K" not in point["conditions"]
+        assert {selection["observations"][oid]["conditions"]["temperature_K"]
+                for oid in point["observations"]} == {293.15, 295.15}
+    assert not compatible_observations(
+        observation(conditions={"temperature_K": 295.15}),
+        observation("youngs_modulus", 100e9,
+                    conditions={"temperature_K": 303.15}),
+    )
 
 
 def test_missing_condition_is_preserved_without_mutating_source():

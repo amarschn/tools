@@ -5,17 +5,19 @@
   const $ = id => document.getElementById(id);
   const h = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
   const PRESETS = [
-    { label: 'E vs ρ', x: 'density', y: 'youngs_modulus', index: 'stiff_light_beam' },
-    { label: 'Yield vs ρ', x: 'density', y: 'tensile_yield_strength', index: 'strong_light_tie' },
-    { label: 'UTS vs ρ', x: 'density', y: 'ultimate_tensile_strength', index: '' },
-    { label: 'k vs ρ', x: 'density', y: 'thermal_conductivity', index: 'heat_spreading_mass' },
-    { label: 'Heat capacity', x: 'density', y: 'specific_heat', index: 'thermal_storage_vol' },
+    { label: 'Stiffness', x: 'density', y: 'youngs_modulus', index: '' },
+    { label: 'Tensile strength', x: 'density', y: 'ultimate_tensile_strength', index: '' },
+    { label: 'Bending stiffness', x: 'density', y: 'flexural_modulus', index: '' },
+    { label: 'Yield strength', x: 'density', y: 'tensile_yield_strength', index: '' },
+    { label: 'Thermal conductivity', x: 'density', y: 'thermal_conductivity', index: '' },
   ];
-  const FAMILY_NAMES = { metal: 'Metals', polymer: 'Polymers', ceramic: 'Ceramics' };
+  const FAMILY_NAMES = { metal: 'Metals', polymer: 'Polymers', ceramic: 'Ceramics', composite: 'Composites', wood: 'Wood', foam: 'Foams', elastomer: 'Elastomers', glass: 'Glasses' };
   const VIEW_IDS = ['x-prop', 'y-prop', 'perf-index', 'top-n', 'temperature-filter', 'basis-filter', 'material-search'];
   const DISPLAY_IDS = ['setting-blobs', 'setting-points', 'setting-ranges', 'setting-isolines', 'setting-labels'];
   const initialParams = new URLSearchParams(location.search);
   let DB, chart, rows = [], families = new Set(), selected = null, rendering = 0;
+  let activePane = 'browse';
+  const materialObservations = new Map();
   let settings = { theme: 'system', density: 'comfortable', precision: 3 };
   try { settings = { ...settings, ...JSON.parse(localStorage.getItem('materials-explorer-settings') || '{}') }; } catch { /* Session settings remain usable. */ }
   if (!['light', 'dark', 'system'].includes(settings.theme)) settings.theme = 'system';
@@ -54,6 +56,8 @@
         const hi = value.maximum == null ? 'unspecified' : precise(value.maximum * 1000);
         return `thickness ${lo} to ${hi} mm`;
       }
+      if (key === 'moisture_content_1') return precise(value * 100) + '% moisture';
+      if (key === 'orientation') return ({L: 'longitudinal (0°)', LT: 'transverse (90°)', ST: 'through thickness', isotropic: 'isotropic'})[value] || value;
       return String(value).replaceAll('_', ' ');
     }).join(' · ') || 'Conditions not stated';
   }
@@ -62,7 +66,7 @@
     return [source?.organization, source?.title, source?.revision, observation.source_locator.label].filter(Boolean).join('. ');
   }
   function scoreBasis(row) {
-    if (row.hasBounds) return 'uses a specified bound';
+    if (row.hasBounds) return 'uses a reported bound; check each source basis';
     if (row.observations.some(o => o.result.kind === 'interval')) return 'uses an interval midpoint';
     return row.observations.map(o => o.basis).filter((value, i, all) => all.indexOf(value) === i).join(' / ');
   }
@@ -88,7 +92,8 @@
     const row = {
       ...material, id: point.id, material_id: material.id, state_id: point.state_id,
       name: material.name + (state ? ' · ' + state.name : ''),
-      conditions: point.conditions, condition: conditionText(point.conditions),
+      conditions: point.conditions, temperatures_K: point.temperatures_K || [],
+      condition: point.temperatures_K?.length > 1 ? 'Room-temperature comparison: ' + point.temperatures_K.map(t => precise(t - 273.15) + ' °C').join(' / ') + (Object.keys(point.conditions).length ? ' · ' + conditionText(point.conditions) : '') : conditionText(point.conditions),
       observations, scores: point.scores, isolines: point.isolines || {},
       hasBounds: observations.some(o => ['lower_bound', 'upper_bound'].includes(o.result.kind)),
     };
@@ -99,13 +104,94 @@
     const query = $('material-search').value.trim().toLocaleLowerCase();
     return chartData().points.map(toRow).filter(row => {
       if (!families.has(row.family)) return false;
-      const temperature = row.conditions.temperature_K;
-      if ($('temperature-filter').value === 'ambient' && temperature != null && (temperature < 293.15 || temperature > 298.15)) return false;
+      if ($('temperature-filter').value === 'ambient' && row.temperatures_K.some(temperature => temperature < 293.15 || temperature > 298.15)) return false;
       if ($('basis-filter').value === 'measured' && row.hasBounds) return false;
       if ($('basis-filter').value === 'limits' && !row.hasBounds) return false;
-      const searchable = [row.name, row.family, row.sub_family, ...row.aliases, ...row.designations.map(d => d.value)].join(' ').toLocaleLowerCase();
-      return !query || searchable.includes(query);
+      return matches(row, query);
     });
+  }
+  function matches(material, query) {
+    const searchable = [material.name, material.family, material.sub_family, ...material.aliases, ...(material.classification || []), ...material.designations.map(d => d.value)].join(' ').toLocaleLowerCase();
+    return !query || searchable.includes(query);
+  }
+  function setPane(name) {
+    activePane = name;
+    for (const pane of ['browse', 'inspect', 'rank']) {
+      $(pane + '-pane').hidden = pane !== name;
+      $('tab-' + pane).setAttribute('aria-selected', String(pane === name));
+      $('tab-' + pane).tabIndex = pane === name ? 0 : -1;
+    }
+  }
+  function compatiblePreset(material) {
+    return PRESETS.find(preset => DB.charts[[preset.x, preset.y].sort().join('|')].points.some(p => p.material_id === material.id)) || null;
+  }
+  function showMissing(material) {
+    selected = null;
+    setPane('inspect');
+    $('detail-card').hidden = false;
+    $('inspector-empty').hidden = true;
+    $('card-name').textContent = material.name;
+    $('card-meta').textContent = 'No compatible pair for the current axes and filters.';
+    $('card-props').replaceChildren();
+    const props = [...new Set((materialObservations.get(material.id) || []).map(o => o.property_id))];
+    $('card-index').textContent = 'Available properties: ' + props.map(p => DB.property_registry[p].label).join(', ') + '.';
+    const preset = compatiblePreset(material);
+    if (preset) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.textContent = 'Show ' + preset.label.toLowerCase() + ' chart';
+      button.addEventListener('click', () => (async () => {
+        $('temperature-filter').value = 'all'; $('basis-filter').value = 'all';
+        await applyPreset(preset);
+        const row = rows.find(r => r.material_id === material.id);
+        if (row) showCard(row);
+      })().catch(showError));
+      $('card-props').appendChild(document.createElement('caption')).appendChild(button);
+    }
+    $('card-datasheet').href = '../materials/?material=' + encodeURIComponent(material.id);
+    redraw();
+  }
+  function renderBrowser() {
+    const query = $('material-search').value.trim().toLocaleLowerCase();
+    const byMaterial = new Map();
+    rows.forEach(row => { if (!byMaterial.has(row.material_id)) byMaterial.set(row.material_id, row); });
+    const materials = Object.values(DB.materials).filter(m => families.has(m.family) && (byMaterial.has(m.id) || matches(m, query)))
+      .sort((a, b) => Number(byMaterial.has(b.id)) - Number(byMaterial.has(a.id)) || a.name.localeCompare(b.name));
+    $('browse-count').textContent = `${byMaterial.size} plotted · ${materials.length - byMaterial.size} need other axes or filters`;
+    $('material-list').replaceChildren();
+    for (const material of materials) {
+      const row = byMaterial.get(material.id), li = document.createElement('li'), button = document.createElement('button');
+      button.type = 'button'; button.className = selected?.material_id === material.id ? 'selected' : '';
+      button.innerHTML = `<strong>${h(material.name)}</strong><small>${h(FAMILY_NAMES[material.family])} · ${row ? h(display(row[$('y-prop').value].value, $('y-prop').value)) : 'View available properties →'}</small>`;
+      button.addEventListener('click', () => row ? showCard(row) : showMissing(material));
+      li.appendChild(button); $('material-list').appendChild(li);
+    }
+    if (!materials.length) $('browse-count').textContent = 'No matching materials. Clear the search or show all families.';
+    const available = new Set(chartData().points.map(p => p.material_id));
+    const counts = {};
+    for (const material of Object.values(DB.materials)) {
+      counts[material.family] ||= {all: 0, plotted: 0}; counts[material.family].all++;
+      if (available.has(material.id)) counts[material.family].plotted++;
+    }
+    document.querySelectorAll('.family-pill').forEach(button => {
+      const count = counts[button.dataset.family];
+      button.querySelector('.family-count').textContent = count.plotted;
+      button.title = `${count.plotted} of ${count.all} grades have this property pair. Toggle ${FAMILY_NAMES[button.dataset.family]}.`;
+      button.classList.toggle('active', families.has(button.dataset.family));
+      button.setAttribute('aria-pressed', String(families.has(button.dataset.family)));
+    });
+    $('coverage-note').replaceChildren();
+    const absent = Object.entries(counts).filter(([family, count]) => families.has(family) && count.plotted === 0);
+    if (!absent.length) $('coverage-note').textContent = 'Family counts show grades with a compatible property pair. Inspect any point for its original conditions and sources.';
+    for (const [family] of absent) {
+      const material = Object.values(DB.materials).find(m => m.family === family);
+      const preset = compatiblePreset(material);
+      if (preset) {
+        const button = document.createElement('button'); button.type = 'button';
+        button.textContent = `${FAMILY_NAMES[family]}: view ${preset.label.toLowerCase()} →`;
+        button.addEventListener('click', () => { families = new Set([family]); $('material-search').value = ''; applyPreset(preset).catch(showError); });
+        $('coverage-note').appendChild(button);
+      }
+    }
   }
   function shareUrl() {
     const url = new URL(location.href);
@@ -115,21 +201,25 @@
     url.searchParams.set('perf-index', $('perf-index').value);
     for (const id of DISPLAY_IDS) url.searchParams.set(id, $(id).checked ? '1' : '0');
     url.searchParams.set('families', [...families].sort().join(','));
+    url.searchParams.set('envelope-mode', $('envelope-mode').value);
     if (selected) url.searchParams.set('point', selected.id);
     return url;
   }
   function syncUrl() {
     try { history.replaceState(null, '', shareUrl()); } catch { /* File previews may restrict history. */ }
   }
-  function showCard(row) {
+  function showCard(row, refresh = true) {
     selected = row;
+    $('detail-card').hidden = false;
+    $('inspector-empty').hidden = true;
+    if (refresh) setPane('inspect');
     $('card-name').textContent = row.name;
     $('card-meta').textContent = row.sub_family + ' · ' + row.condition;
     const observations = [...new Map(row.observations.map(o => [o.id, o])).values()];
     $('card-props').innerHTML = observations.map(observation => {
       const scope = observation.state_id ? DB.states[observation.state_id].name : 'Grade-level value';
       const kind = observation.result.kind.replaceAll('_', ' ');
-      return `<tr><th>${h(DB.property_registry[observation.property_id].label)}</th><td>${h(resultText(observation))}<span class="result-kind">${h(kind)} · ${h(observation.basis)}</span><span class="source-detail">${h(scope)}. ${h(conditionText(observation.conditions))}. ${h(observation.test_method.reported_label)}</span><span class="source-detail">${h(sourceText(observation))}</span></td></tr>`;
+      return `<tr><th>${h(DB.property_registry[observation.property_id].label)}</th><td><span class="property-value">${h(resultText(observation))}</span><span class="result-kind">${h(kind)} · ${h(observation.basis)}</span><span class="source-detail">${h(scope)}. ${h(conditionText(observation.conditions))}.</span><span class="source-detail">${h(observation.notes)}</span><details class="source-citation"><summary>Test method &amp; source</summary><span class="source-detail">${h(observation.test_method.reported_label)}</span><span class="source-detail">${h(sourceText(observation))}</span></details></td></tr>`;
     }).join('');
     const indexId = $('perf-index').value;
     $('card-index').textContent = '';
@@ -145,6 +235,7 @@
     $('card-datasheet').href = target.href;
     $('detail-card').classList.add('visible');
     syncUrl();
+    if (refresh) redraw();
   }
   async function updateChart() {
     if (!DB) return;
@@ -156,14 +247,15 @@
     $('top-n').value = count;
     rows = filteredRows();
     const ranked = index ? rows.filter(row => Number.isFinite(row.scores[indexId])).sort((a, b) => (index.maximize ? -1 : 1) * (a.scores[indexId] - b.scores[indexId]) || a.name.localeCompare(b.name)).slice(0, count) : [];
-    const available = new Set(chartData().points.map(p => p.material_id)).size;
     const shown = new Set(rows.map(row => row.material_id)).size;
-    $('data-status').textContent = `Materials database: ${shown} of ${DB.counts.materials} grades shown · ${rows.length} property pairs. ${DB.counts.materials - available} grades lack a compatible pair for these axes.`;
+    $('data-status').textContent = `${shown} of ${DB.counts.materials} materials · ${rows.length} property pairs`;
+    $('plot-title').textContent = DB.property_registry[y].label + ' vs ' + DB.property_registry[x].label.toLowerCase();
     $('empty-state').hidden = rows.length > 0;
     $('export-csv').disabled = rows.length === 0;
     $('index-hint').textContent = chartData().indices.length ? 'Available indices use these two properties.' : 'No ranking index is defined for this property pair.';
-    document.querySelectorAll('.preset-chip').forEach((button, i) => button.classList.toggle('active', PRESETS[i].x === x && PRESETS[i].y === y && PRESETS[i].index === indexId));
+    document.querySelectorAll('.preset-chip').forEach((button, i) => button.classList.toggle('active', PRESETS[i].x === x && PRESETS[i].y === y));
     $('ranking-section').classList.toggle('visible', ranked.length > 0);
+    $('ranking-section').hidden = ranked.length === 0;
     $('ranking-body').replaceChildren();
     if (index) {
       $('ranking-title').textContent = `Top ${ranked.length}: ${index.name}`;
@@ -177,7 +269,7 @@
       $('index-source').textContent = index.source;
       ranked.forEach((row, i) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td class="rank-num">${i + 1}</td><td><button type="button" class="material-button">${h(row.name)}</button><span class="source-detail">${h(row.condition)}</span></td><td>${h(FAMILY_NAMES[row.family] || row.family)}</td><td>${h(precise(row.scores[indexId]))}<span class="source-detail">${h(scoreBasis(row))}</span></td>`;
+        tr.innerHTML = `<td class="rank-num">${i + 1}</td><td><button type="button" class="material-button">${h(row.name)}</button><span class="source-detail">${h(scoreBasis(row))}</span></td><td>${h(precise(row.scores[indexId]))}</td>`;
         tr.querySelector('button').addEventListener('click', () => showCard(row));
         $('ranking-body').appendChild(tr);
       });
@@ -193,35 +285,39 @@
     }
     if (selected) {
       const fresh = rows.find(row => row.id === selected.id);
-      if (fresh) showCard(fresh);
-      else { selected = null; $('detail-card').classList.remove('visible'); }
+      if (fresh) showCard(fresh, false);
+      else { selected = null; $('detail-card').hidden = true; $('inspector-empty').hidden = false; }
     }
+    renderBrowser();
     syncUrl();
     await chart.update(rows, DB.property_registry, {
-      xProp: x, yProp: y, families: [...families], highlightIds: ranked.map(row => row.id),
+      xProp: x, yProp: y, families: [...families], highlightIds: selected ? [selected.id] : activePane === 'rank' ? ranked.map(row => row.id) : [],
       showRanges: $('setting-ranges').checked, showBlobs: $('setting-blobs').checked,
       showPoints: $('setting-points').checked, showLabels: $('setting-labels').checked,
+      regions: $('setting-blobs').checked ? AshbyRegions.build(rows, x, y, $('envelope-mode').value) : [],
+      compactChrome: true,
       isolines: { lines }, dark: dark(),
     });
     if (version === rendering) $('explorer-main').dataset.state = 'ready';
   }
   function redraw() { updateChart().catch(showError); }
-  function applyPreset(preset) {
+  async function applyPreset(preset) {
     $('x-prop').value = preset.x;
     $('y-prop').value = preset.y;
     populateIndices(preset.index);
-    redraw();
+    await updateChart();
   }
   function buildControls() {
     const properties = Object.entries(DB.property_registry).sort((a, b) => a[1].label.localeCompare(b[1].label));
     for (const id of ['x-prop', 'y-prop']) {
       $(id).replaceChildren();
-      for (const [key, meta] of properties) $(id).appendChild(new Option(meta.label + (meta.unit ? ` (${meta.unit})` : ''), key));
+      for (const [key, meta] of properties) $(id).appendChild(new Option(meta.label + (meta.display_unit ? ` (${meta.display_unit.replace('kg/m^3', 'kg/m³')})` : ''), key));
     }
     $('x-prop').value = 'density';
     $('y-prop').value = 'youngs_modulus';
     for (const id of ['x-prop', 'y-prop']) if (DB.property_registry[initialParams.get(id)]) $(id).value = initialParams.get(id);
-    populateIndices(initialParams.has('perf-index') ? initialParams.get('perf-index') : 'stiff_light_beam');
+    populateIndices(initialParams.has('perf-index') ? initialParams.get('perf-index') : '');
+    if (['hulls', 'ellipses', 'points'].includes(initialParams.get('envelope-mode'))) $('envelope-mode').value = initialParams.get('envelope-mode');
     for (const id of ['top-n', 'temperature-filter', 'basis-filter', 'material-search']) {
       const value = initialParams.get(id);
       if (value == null) continue;
@@ -237,7 +333,8 @@
       button.type = 'button';
       button.className = 'family-pill';
       button.dataset.family = family;
-      button.textContent = FAMILY_NAMES[family] || family;
+      button.innerHTML = `<span class="family-dot"></span>${h(FAMILY_NAMES[family] || family)}<span class="family-count"></span>`;
+      button.style.setProperty('--family-color', FAMILY_COLORS[family]);
       const reflect = () => { button.classList.toggle('active', families.has(family)); button.setAttribute('aria-pressed', String(families.has(family))); };
       reflect();
       button.addEventListener('click', () => { if (families.has(family)) families.delete(family); else families.add(family); reflect(); redraw(); });
@@ -247,7 +344,7 @@
     PRESETS.forEach(preset => {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'preset-chip'; button.textContent = preset.label;
-      button.addEventListener('click', () => applyPreset(preset));
+      button.addEventListener('click', () => applyPreset(preset).catch(showError));
       $('preset-chips').appendChild(button);
     });
   }
@@ -270,8 +367,14 @@
       const [data, manifest] = await Promise.all([json('../../data/materials/selection.json'), json('../materials/release-manifest.json')]);
       if (data.schema_version !== 1 || data.source_build_id !== manifest.build_id) throw new Error('The material data versions differ. Reload to update.');
       DB = data;
+      materialObservations.clear();
+      for (const observation of Object.values(DB.observations)) {
+        if (!materialObservations.has(observation.material_id)) materialObservations.set(observation.material_id, []);
+        materialObservations.get(observation.material_id).push(observation);
+      }
       chart ||= new AshbyPlot('ashby-chart', { onClick: showCard });
       buildControls();
+      setPane('browse');
       await updateChart();
       const restored = rows.find(row => row.id === initialParams.get('point'));
       if (restored) showCard(restored);
@@ -304,7 +407,26 @@
   for (const id of ['x-prop', 'y-prop']) $(id).addEventListener('change', () => { if (DB) { populateIndices(); redraw(); } });
   for (const id of [...VIEW_IDS.slice(2, -1), ...DISPLAY_IDS]) $(id).addEventListener('change', redraw);
   $('material-search').addEventListener('input', redraw);
-  $('card-close').addEventListener('click', () => { selected = null; $('detail-card').classList.remove('visible'); $('material-search').focus(); syncUrl(); });
+  $('card-close').addEventListener('click', () => { selected = null; $('detail-card').hidden = true; $('inspector-empty').hidden = false; setPane('browse'); redraw(); });
+  for (const pane of ['browse', 'inspect', 'rank']) $('tab-' + pane).addEventListener('click', () => { setPane(pane); redraw(); });
+  document.querySelector('.inspector-tabs').addEventListener('keydown', event => {
+    const panes = ['browse', 'inspect', 'rank'];
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (panes.indexOf(activePane) + (event.key === 'ArrowRight' ? 1 : 2)) % 3;
+    setPane(panes[next]); $('tab-' + panes[next]).focus(); redraw();
+  });
+  $('envelope-mode').addEventListener('change', redraw);
+  $('swap-axes').addEventListener('click', () => { const x = $('x-prop').value; $('x-prop').value = $('y-prop').value; $('y-prop').value = x; populateIndices(); redraw(); });
+  $('reset-view').addEventListener('click', () => { if (chart) { chart.resetView?.(); redraw(); } });
+  const resetFamilies = () => { families = new Set(Object.values(DB.materials).map(m => m.family)); $('material-search').value = ''; };
+  $('all-families').addEventListener('click', () => { if (DB) { resetFamilies(); redraw(); } });
+  $('reset-filters').addEventListener('click', () => {
+    if (!DB) return;
+    resetFamilies(); $('temperature-filter').value = 'ambient'; $('basis-filter').value = 'all'; $('filter-menu').open = false; redraw();
+  });
+  document.addEventListener('click', event => { if (!$('filter-menu').contains(event.target)) $('filter-menu').open = false; });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') $('filter-menu').open = false; });
   $('retry-load').addEventListener('click', init);
   $('copy-link').addEventListener('click', async () => {
     if (!DB) return;
@@ -315,10 +437,10 @@
   $('export-csv').addEventListener('click', () => {
     if (!rows.length) return;
     const x = $('x-prop').value, y = $('y-prop').value, indexId = $('perf-index').value;
-    const columns = ['observation', 'property', 'value (SI)', 'unit', 'kind', 'minimum', 'maximum', 'basis', 'state', 'conditions', 'test method', 'source'];
+    const columns = ['observation', 'property', 'value (SI)', 'unit', 'kind', 'minimum', 'maximum', 'basis', 'state', 'conditions', 'test method', 'notes', 'source'];
     const header = ['Material', 'State', 'Conditions', ...columns.map(name => 'X ' + name), ...columns.map(name => 'Y ' + name), 'Index', 'Reference score', 'Materials build'];
-    const fields = observation => [observation.id, observation.property_id, observation.plot_value, observation.result.canonical.unit, observation.result.kind, observation.result.canonical.minimum ?? '', observation.result.canonical.maximum ?? '', observation.basis, DB.states[observation.state_id]?.name || 'Grade-level value', conditionText(observation.conditions), observation.test_method.reported_label, sourceText(observation)];
-    const records = rows.map(row => [DB.materials[row.material_id].name, DB.states[row.state_id]?.name || '', conditionText(row.conditions), ...fields(row.observations.find(o => o.property_id === x)), ...fields(row.observations.find(o => o.property_id === y)), indexId, row.scores[indexId] ?? '', DB.source_build_id]);
+    const fields = observation => [observation.id, observation.property_id, observation.plot_value, observation.result.canonical.unit, observation.result.kind, observation.result.canonical.minimum ?? '', observation.result.canonical.maximum ?? '', observation.basis, DB.states[observation.state_id]?.name || 'Grade-level value', conditionText(observation.conditions), observation.test_method.reported_label, observation.notes || '', sourceText(observation)];
+    const records = rows.map(row => [DB.materials[row.material_id].name, DB.states[row.state_id]?.name || '', row.condition, ...fields(row.observations.find(o => o.property_id === x)), ...fields(row.observations.find(o => o.property_id === y)), indexId, row.scores[indexId] ?? '', DB.source_build_id]);
     const csv = [header, ...records].map(record => record.map(value => '"' + String(value).replaceAll('"', '""') + '"').join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'materials-ashby.csv'; anchor.click();
