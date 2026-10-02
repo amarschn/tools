@@ -346,7 +346,7 @@ class AshbyPlot {
       }
     }
 
-    // The new chart supplies bounded subgroup outlines. Retained prototypes
+    // The new chart supplies family or subgroup outlines. Retained prototypes
     // continue to use the original envelope API above.
     for (const region of opts.regions || []) {
       const points = [...region.points, region.points[0]];
@@ -354,10 +354,10 @@ class AshbyPlot {
       traces.push({
         x: points.map(p => p[0]), y: points.map(p => p[1]),
         type: 'scatter', mode: 'lines', fill: 'toself',
-        fillcolor: color + (isDark ? '22' : '16'),
+        fillcolor: color + (region.grouping === 'family' ? (isDark ? '1c' : '10') : (isDark ? '22' : '16')),
         line: {color: color + '88', width: 1.2, shape: 'linear'},
         name: region.label + ' (plotted grades)', showlegend: false, hoverinfo: 'skip',
-        meta: {region: true, family: region.family},
+        meta: {region: true, family: region.family, grouping: region.grouping},
       });
     }
 
@@ -456,7 +456,10 @@ class AshbyPlot {
         axisValues[1].push(...trace.y);
       }
     }
-    const ranges = [dataAxisRange(axisValues[0], xScale), dataAxisRange(axisValues[1], yScale)];
+    const viewKey = opts.compactChrome ? [xProp, yProp, materials.map(m => m.id).join(','), this._viewRevision || 0].join('|') : undefined;
+    if (viewKey !== this._viewKey) this._zoomedRanges = null;
+    this._viewKey = viewKey;
+    const ranges = this._zoomedRanges || [dataAxisRange(axisValues[0], xScale), dataAxisRange(axisValues[1], yScale)];
     const scales = [xScale, yScale];
     const fitToData = Array.isArray(opts.isolines?.lines);
     const container = document.getElementById(this.divId);
@@ -538,7 +541,8 @@ class AshbyPlot {
         const log = region.center.map(Math.log10);
         const px = (log[0] - ranges[0][0]) / (ranges[0][1] - ranges[0][0]) * width;
         const py = (ranges[1][1] - log[1]) / (ranges[1][1] - ranges[1][0]) * height;
-        const w = Math.min(175, region.label.length * 5.5 + 10), h = 19;
+        const familyLabel = region.grouping === 'family';
+        const w = Math.min(175, region.label.length * (familyLabel ? 6.5 : 5.5) + 10), h = familyLabel ? 22 : 19;
         for (const [dx, dy] of [[0,-24],[0,26],[-65,-36],[65,36],[-70,22],[70,-24],[0,-62],[0,62]]) {
           const box = [px + dx - w/2, py + dy - h/2, w, h];
           if (box[0] < 1 || box[1] < 2 || box[0] + w > width || box[1] + h > height - 2) continue;
@@ -547,7 +551,7 @@ class AshbyPlot {
           annotations.push({x:log[0], y:log[1], xref:'x', yref:'y', text:region.label,
             showarrow:true, arrowhead:0, arrowwidth:.6, arrowcolor:theme.axisColor,
             ax:dx, ay:dy, bgcolor:theme.paperBg, borderpad:2,
-            font:{size:10, color:theme.fontColor}});
+            font:{size:familyLabel ? 12 : 10, color:theme.fontColor}});
           break;
         }
       }
@@ -585,7 +589,7 @@ class AshbyPlot {
       shapes,
       annotations,
       showlegend: !opts.compactChrome,
-      uirevision: opts.compactChrome ? [xProp, yProp, materials.map(m => m.id).join(','), this._viewRevision || 0].join('|') : undefined,
+      uirevision: viewKey,
       hovermode: "closest",
       legend: {
         orientation: narrow ? "h" : "v",
@@ -616,12 +620,11 @@ class AshbyPlot {
     const rendered = Plotly.react(this.divId, traces, layout, config);
 
     // Click handler
-    return Promise.resolve(rendered).then(() => {
+    return Promise.resolve(rendered).then(async () => {
       const div = document.getElementById(this.divId);
       if (this._tickRelayoutHandler) div.removeListener('plotly_relayout', this._tickRelayoutHandler);
       if (opts.compactChrome) {
-        this._tickRelayoutHandler = event => {
-          if (!Object.keys(event).some(key => /[xy]axis\.(range|autorange)/.test(key))) return;
+        const updateTicks = () => {
           const ticks = {};
           for (const [axis, scale, meta] of [['xaxis', xScale, xMeta], ['yaxis', yScale, yMeta]]) {
             if (scale !== 'log') continue;
@@ -629,8 +632,14 @@ class AshbyPlot {
           }
           return Plotly.relayout(div, ticks);
         };
+        this._tickRelayoutHandler = event => {
+          if (!Object.keys(event).some(key => /[xy]axis\.(range|autorange)/.test(key))) return;
+          this._zoomedRanges = event['xaxis.autorange'] || event['yaxis.autorange'] ? null :
+            [div._fullLayout.xaxis.range.slice(), div._fullLayout.yaxis.range.slice()];
+          return updateTicks();
+        };
         div.on('plotly_relayout', this._tickRelayoutHandler);
-        this._tickRelayoutHandler({'xaxis.range': true, 'yaxis.range': true});
+        await updateTicks();
       }
       if (this.onClick) {
         // Remove previous listener

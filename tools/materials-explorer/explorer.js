@@ -11,12 +11,13 @@
     { label: 'Yield strength', x: 'density', y: 'tensile_yield_strength', index: '' },
     { label: 'Thermal conductivity', x: 'density', y: 'thermal_conductivity', index: '' },
   ];
-  const FAMILY_NAMES = { metal: 'Metals', polymer: 'Polymers', ceramic: 'Ceramics', composite: 'Composites', wood: 'Wood', foam: 'Foams', elastomer: 'Elastomers', glass: 'Glasses' };
+  const FAMILY_NAMES = AshbyRegions.FAMILY_NAMES;
   const VIEW_IDS = ['x-prop', 'y-prop', 'perf-index', 'top-n', 'temperature-filter', 'basis-filter', 'material-search'];
-  const DISPLAY_IDS = ['setting-blobs', 'setting-points', 'setting-ranges', 'setting-isolines', 'setting-labels'];
+  const DISPLAY_IDS = ['setting-points', 'setting-ranges', 'setting-isolines', 'setting-labels'];
   const initialParams = new URLSearchParams(location.search);
   let DB, chart, rows = [], families = new Set(), selected = null, rendering = 0;
   let activePane = 'browse';
+  let grouping = 'family';
   const materialObservations = new Map();
   let settings = { theme: 'system', density: 'comfortable', precision: 3 };
   try { settings = { ...settings, ...JSON.parse(localStorage.getItem('materials-explorer-settings') || '{}') }; } catch { /* Session settings remain usable. */ }
@@ -122,6 +123,20 @@
       $('tab-' + pane).tabIndex = pane === name ? 0 : -1;
     }
   }
+  function setGrouping(value) {
+    grouping = value;
+    document.querySelectorAll('[data-grouping]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.grouping === value));
+    });
+    $('envelope-mode').disabled = value === 'points';
+    $('setting-points').disabled = value === 'points';
+    if (value === 'points') $('setting-points').checked = true;
+    $('grouping-note').textContent = {
+      family: 'One outline per family, covering the plotted reference values.',
+      subgroup: 'Outlines group material types, such as PEEK and PA6, within each family.',
+      points: 'Individual reference values and reported ranges.'
+    }[value];
+  }
   function compatiblePreset(material) {
     return PRESETS.find(preset => DB.charts[[preset.x, preset.y].sort().join('|')].points.some(p => p.material_id === material.id)) || null;
   }
@@ -202,6 +217,7 @@
     for (const id of DISPLAY_IDS) url.searchParams.set(id, $(id).checked ? '1' : '0');
     url.searchParams.set('families', [...families].sort().join(','));
     url.searchParams.set('envelope-mode', $('envelope-mode').value);
+    url.searchParams.set('grouping', grouping);
     if (selected) url.searchParams.set('point', selected.id);
     return url;
   }
@@ -292,9 +308,9 @@
     syncUrl();
     await chart.update(rows, DB.property_registry, {
       xProp: x, yProp: y, families: [...families], highlightIds: selected ? [selected.id] : activePane === 'rank' ? ranked.map(row => row.id) : [],
-      showRanges: $('setting-ranges').checked, showBlobs: $('setting-blobs').checked,
+      showRanges: $('setting-ranges').checked, showBlobs: grouping !== 'points',
       showPoints: $('setting-points').checked, showLabels: $('setting-labels').checked,
-      regions: $('setting-blobs').checked ? AshbyRegions.build(rows, x, y, $('envelope-mode').value) : [],
+      regions: AshbyRegions.build(rows, x, y, $('envelope-mode').value, grouping),
       compactChrome: true,
       isolines: { lines }, dark: dark(),
     });
@@ -317,7 +333,7 @@
     $('y-prop').value = 'youngs_modulus';
     for (const id of ['x-prop', 'y-prop']) if (DB.property_registry[initialParams.get(id)]) $(id).value = initialParams.get(id);
     populateIndices(initialParams.has('perf-index') ? initialParams.get('perf-index') : '');
-    if (['hulls', 'ellipses', 'points'].includes(initialParams.get('envelope-mode'))) $('envelope-mode').value = initialParams.get('envelope-mode');
+    $('envelope-mode').value = initialParams.get('envelope-mode') === 'ellipses' ? 'ellipses' : 'hulls';
     for (const id of ['top-n', 'temperature-filter', 'basis-filter', 'material-search']) {
       const value = initialParams.get(id);
       if (value == null) continue;
@@ -325,6 +341,10 @@
       $(id).value = value;
     }
     for (const id of DISPLAY_IDS) if (initialParams.has(id)) $(id).checked = initialParams.get(id) === '1';
+    const requestedGrouping = initialParams.get('grouping');
+    // Old points-only links remain usable after separating grouping from shape.
+    setGrouping(['family', 'subgroup', 'points'].includes(requestedGrouping) ? requestedGrouping :
+      initialParams.get('envelope-mode') === 'points' || initialParams.get('setting-blobs') === '0' ? 'points' : 'family');
     families = new Set(Object.values(DB.materials).map(material => material.family));
     if (initialParams.has('families')) families = new Set(initialParams.get('families').split(',').filter(family => families.has(family)));
     $('family-toggles').replaceChildren();
@@ -417,6 +437,9 @@
     setPane(panes[next]); $('tab-' + panes[next]).focus(); redraw();
   });
   $('envelope-mode').addEventListener('change', redraw);
+  document.querySelectorAll('[data-grouping]').forEach(button => button.addEventListener('click', () => {
+    setGrouping(button.dataset.grouping); redraw();
+  }));
   $('swap-axes').addEventListener('click', () => { const x = $('x-prop').value; $('x-prop').value = $('y-prop').value; $('y-prop').value = x; populateIndices(); redraw(); });
   $('reset-view').addEventListener('click', () => { if (chart) { chart.resetView?.(); redraw(); } });
   const resetFamilies = () => { families = new Set(Object.values(DB.materials).map(m => m.family)); $('material-search').value = ''; };

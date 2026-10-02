@@ -2,6 +2,7 @@
    population distribution or a material family's engineering limits. */
 (() => {
   'use strict';
+  const FAMILY_NAMES = { metal: 'Metals', polymer: 'Polymers', ceramic: 'Ceramics', composite: 'Composites', wood: 'Wood', foam: 'Foams', elastomer: 'Elastomers', glass: 'Glasses' };
   const LABELS = {
     'ud-carbon-epoxy': 'Carbon / epoxy · UD', 'woven-carbon-epoxy': 'Carbon / epoxy · woven',
     'optical-glass': 'Optical glasses', 'pvc-foam': 'PVC foams', 'pes-foam': 'PES foams',
@@ -65,12 +66,12 @@
       return [center[0] + c * x - s * y, center[1] + s * x + c * y];
     });
   }
-  function build(rows, x, y, mode = 'hulls') {
-    if (mode === 'points') return [];
+  function build(rows, x, y, mode = 'hulls', grouping = 'family') {
+    if (grouping === 'points' || mode === 'points') return [];
     const groups = new Map();
     for (const row of rows) {
       if (row.hasBounds) continue;
-      const group = row.classification?.at(-1) || row.sub_family;
+      const group = grouping === 'family' ? row.family : row.classification?.at(-1) || row.sub_family;
       const key = row.family + '|' + group;
       if (!groups.has(key)) groups.set(key, {family: row.family, group, points: [], ids: new Set()});
       const entry = groups.get(key);
@@ -80,16 +81,18 @@
         if (px > 0 && py > 0) entry.points.push([Math.log10(px), Math.log10(py)]);
       }
     }
-    return [...groups.values()].flatMap(group => splitClusters(group.points).map(points => {
+    // Family view deliberately encloses all displayed subgroups in one region.
+    // Distance-based splitting belongs only to the detailed subgroup view.
+    return [...groups.values()].flatMap(group => (grouping === 'family' ? [group.points] : splitClusters(group.points)).map(points => {
       if (points.length < 2) return null;
       const perimeter = (mode === 'ellipses' ? ellipse : roundedHull)(points);
       const center = [0, 1].map(axis => points.reduce((sum, p) => sum + p[axis], 0) / points.length);
-      const label = LABELS[group.group] || group.group.replaceAll('-', ' ').replace(/^./, c => c.toUpperCase());
-      return {family: group.family, label, count: group.ids.size,
+      const label = grouping === 'family' ? FAMILY_NAMES[group.family] || group.family : LABELS[group.group] || group.group.replaceAll('-', ' ').replace(/^./, c => c.toUpperCase());
+      return {family: group.family, grouping, label, count: group.ids.size,
         center: center.map(v => 10 ** v), points: perimeter.map(p => p.map(v => 10 ** v))};
     }).filter(Boolean));
   }
-  const api = { build, hull, roundedHull, ellipse, splitClusters };
+  const api = { build, hull, roundedHull, ellipse, splitClusters, FAMILY_NAMES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else window.AshbyRegions = api;
 })();

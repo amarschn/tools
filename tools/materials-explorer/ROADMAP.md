@@ -1,5 +1,12 @@
 # Ashby Chart roadmap
 
+## October 2 grouping review
+
+- [x] Default to one outline per broad family, with individual grades visible.
+- [x] Add a visible Family / Subgroup / Points only control and keep the
+      outline-shape choice separate.
+- [x] Retain the subgroup prototypes and support earlier points-only links.
+
 ## September 30 review
 
 - [x] Rename the public tool and metadata to lead with Ashby Chart.

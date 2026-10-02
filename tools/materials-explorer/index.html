@@ -25,8 +25,8 @@
     <link rel="canonical" href="https://transparent.tools/tools/materials-explorer/">
     <script src="/shared/analytics-autotrack.js" defer></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script src="../../shared/ashby-plot.js?v=6"></script>
-    <script src="envelopes.js?v=1"></script>
+    <script src="../../shared/ashby-plot.js?v=7"></script>
+    <script src="envelopes.js?v=2"></script>
     <script src="/shared/json-ld.js"></script>
     <style>
         /* ── Design tokens ─────────────────────────────────────── */
@@ -236,10 +236,16 @@
         .plot-heading h2 { font-size:.9rem; border:0; }
         .plot-actions { display:flex; align-items:center; gap:5px; }
         .plot-actions button { font-size:.73rem; min-height:30px; padding:4px 8px; }
-        #ashby-chart { width:100%; height:clamp(360px,calc(100dvh - 465px),740px); }
+        .grouping-row { display:flex; align-items:center; gap:10px; padding:8px 16px 0; }
+        .grouping-label { color:var(--text-light); font-size:.73rem; }
+        .grouping-control { display:flex; gap:2px; }
+        .grouping-control button { min-height:28px; padding:3px 10px; font-size:.75rem; border-color:transparent; }
+        .grouping-control button[aria-pressed="true"] { background:var(--primary-light); border-color:var(--border-color); color:var(--text-color); font-weight:600; }
+        #ashby-chart { width:100%; height:clamp(324px,calc(100dvh - 501px),704px); }
         .data-status { font-size:.73rem; color:var(--text-light); margin-top:2px; }
         .chart-note { padding:0 16px 10px; font-size:.72rem; color:var(--text-light); line-height:1.5; }
         .chart-note span { white-space:nowrap; margin-right:10px; }
+        #grouping-note { white-space:normal; margin-right:0; }
         .coverage-note { padding:9px 16px; border-top:1px solid var(--border-color); font-size:.75rem; line-height:1.5; color:var(--text-light); }
         .coverage-note button { border:0; min-height:26px; padding:2px 5px; text-decoration:underline; font-size:inherit; }
         .empty-state { padding:15px; font-size:.86rem; color:var(--text-color); background:var(--primary-light); }
@@ -351,8 +357,7 @@
             <details class="filter-menu" id="filter-menu"><summary>Filters &amp; display</summary><div class="filter-content">
                 <div class="input-group"><label for="temperature-filter">Test temperature</label><select id="temperature-filter" title="Room-temperature comparisons allow 20–25 °C; unspecified temperatures remain labeled"><option value="ambient">20–25 °C or unspecified</option><option value="all">All temperatures</option></select></div>
                 <div class="input-group"><label for="basis-filter">Reported values</label><select id="basis-filter" title="Filter by the source's result type"><option value="all">All reported values</option><option value="measured">Points and intervals</option><option value="limits">Reported bounds</option></select></div>
-                <div class="input-group"><label for="envelope-mode">Group shapes</label><select id="envelope-mode" title="Shapes group plotted grades; they are not measured family limits"><option value="hulls">Rounded outlines</option><option value="ellipses">Enclosing ellipses</option><option value="points">Points only</option></select></div>
-                <label class="check-row"><input type="checkbox" id="setting-blobs" checked title="Show the chosen group outlines">Show group shapes</label>
+                <div class="input-group"><label for="envelope-mode">Outline shape</label><select id="envelope-mode" title="Choose the outline shape for the selected family or subgroup view"><option value="hulls">Rounded outlines</option><option value="ellipses">Enclosing ellipses</option></select></div>
                 <label class="check-row"><input type="checkbox" id="setting-points" checked title="Show individual reported property pairs">Individual points</label>
                 <label class="check-row"><input type="checkbox" id="setting-ranges" checked title="Draw the endpoints of reported intervals">Reported ranges</label>
                 <label class="check-row"><input type="checkbox" id="setting-isolines" checked title="Lines of equal value for the selected performance index">Index lines</label>
@@ -364,9 +369,10 @@
         <div class="workspace-layout">
             <section class="chart-panel" aria-label="Ashby material property chart">
                 <div class="plot-heading"><div><h2 id="plot-title">Stiffness and density</h2><p class="data-status" id="data-status" aria-live="polite"></p></div><div class="plot-actions"><button id="reset-view" type="button" title="Fit the plot to all visible points">Fit view</button><button id="export-csv" type="button" data-track="export" title="Download plotted observations with values, conditions, and citations">Export CSV</button></div></div>
+                <div class="grouping-row"><span class="grouping-label">Group</span><div class="grouping-control" role="group" aria-label="Chart grouping"><button type="button" data-grouping="family" aria-pressed="true" title="One outline for each broad family, such as Polymers or Metals">Family</button><button type="button" data-grouping="subgroup" aria-pressed="false" title="Separate outlines for material types within a family, such as PEEK and PA6">Subgroup</button><button type="button" data-grouping="points" aria-pressed="false" title="Show individual observations and reported ranges without outlines">Points only</button></div></div>
                 <p class="empty-state" id="empty-state" hidden>No compatible pairs match these filters. Select a material at right to see which properties are available.</p>
                 <div id="ashby-chart" role="img" aria-label="Interactive Ashby chart. The Materials tab also lists plotted grades for keyboard access."></div>
-                <p class="chart-note"><span>● Reference value</span><span>○ Reported bound</span><span>↔ Reported interval</span> · Logarithmic axes. Shapes group plotted grades, not whole-family limits.</p>
+                <p class="chart-note"><span>● Reference value</span><span>○ Reported bound</span><span>↔ Reported interval</span> · Logarithmic axes. <span id="grouping-note">One outline per family, covering the plotted reference values.</span></p>
                 <div class="coverage-note" id="coverage-note"></div>
             </section>
             <aside class="inspector" aria-label="Material browser and inspector">
@@ -382,9 +388,9 @@
                 </section>
             </aside>
         </div>
-        <details class="purpose-section" id="background"><summary>Reading an Ashby chart: properties, group shapes, and performance indices</summary><div class="purpose-content"><div><h3>Compare properties across orders of magnitude</h3><p>An Ashby chart places two material properties on logarithmic axes. Select a chart preset, choose a family, or search for a grade. Select any point to inspect the observations behind it. Drag to zoom and use Fit view to return.</p><h3>What the shapes mean</h3><p>Rounded outlines group nearby grades of the same material class. They include reported interval endpoints and a small drawing margin. Reported bounds are excluded from the shapes. The ellipse alternative encloses the same observations; neither method estimates a population distribution or the full range of a family.</p><p><a href="prototypes/">Compare the retained design experiments</a>.</p></div><div><h3>Keep the test conditions in view</h3><p>Each point pairs observations for one material and compatible conditions. Different temperatures within 20–25 °C can be compared at room temperature; both original temperatures remain visible. Elevated-temperature properties are not paired with room-temperature measurements. Unspecified conditions stay unspecified.</p><p>Wood bending modulus is kept separate from tensile Young's modulus. The rubber sources report tensile strength and elongation, but no small-strain Young's modulus. The chart suggests another property pair when the current axes cannot show a material.</p><h3>Rank a design objective</h3><p>The Rank tab provides a performance index, its equation, variable definitions, and derivation. Lines on the plot connect equal index values. These compare source reference values and are not design allowables.</p></div></div></details>
+        <details class="purpose-section" id="background"><summary>Reading an Ashby chart: properties, group shapes, and performance indices</summary><div class="purpose-content"><div><h3>Compare properties across orders of magnitude</h3><p>An Ashby chart places two material properties on logarithmic axes. Select a chart preset, choose a family, or search for a grade. Select any point to inspect the observations behind it. Drag to zoom and use Fit view to return.</p><h3>What the shapes mean</h3><p>Family view draws one outline per broad family, such as Polymers or Metals. Subgroup view separates material types such as PEEK and PA6, and may split distant clusters. Points only keeps individual observations and range bars. Rounded outlines include reported interval endpoints and a small drawing margin. Reported bounds are excluded from the shapes. The ellipse alternative encloses the same observations; neither method estimates a population distribution or the full range of a family.</p><p><a href="prototypes/">Compare the retained design experiments</a>.</p></div><div><h3>Keep the test conditions in view</h3><p>Each point pairs observations for one material and compatible conditions. Different temperatures within 20–25 °C can be compared at room temperature; both original temperatures remain visible. Elevated-temperature properties are not paired with room-temperature measurements. Unspecified conditions stay unspecified.</p><p>Wood bending modulus is kept separate from tensile Young's modulus. The rubber sources report tensile strength and elongation, but no small-strain Young's modulus. The chart suggests another property pair when the current axes cannot show a material.</p><h3>Rank a design objective</h3><p>The Rank tab provides a performance index, its equation, variable definitions, and derivation. Lines on the plot connect equal index values. These compare source reference values and are not design allowables.</p></div></div></details>
     </main>
     <footer><div class="container">Values and citations: <a href="../materials/">Materials database</a>. Index equations: Ashby, <em>Materials Selection in Mechanical Design</em> (2011). <a href="https://ko-fi.com/transparent_tools">Support this project</a></div></footer>
-    <script src="explorer.js?v=2" defer></script>
+    <script src="explorer.js?v=3" defer></script>
 </body>
 </html>

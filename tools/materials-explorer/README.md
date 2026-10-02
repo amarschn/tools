@@ -54,7 +54,9 @@ grades, including those that need different axes or filters. Selecting one of
 those grades shows its available properties and a suitable chart preset.
 The default temperature filter includes 20–25 °C and values with no stated
 temperature. Filters & display holds temperature, result type, and drawing
-options. The Rank tab offers indices supported by the chosen property pair.
+options. The visible Family / Subgroup / Points only control sets the outline
+grouping independently of its shape. The Rank tab offers indices supported by
+the chosen property pair.
 
 Click a point or a ranked row to see both source citations, each observation's
 conditions, and a link to the full Materials datasheet. CSV exports retain
@@ -66,17 +68,25 @@ arrow keys.
 
 ## Group shapes and retained experiments
 
-The [comparison gallery](prototypes/) keeps three methods available:
+Family view is the default: one lightly shaded outline for each broad family,
+labeled Polymers, Metals, Ceramics, and so on. Individual grade points remain
+visible. Subgroup view draws separate outlines for material types such as PEEK
+and PA6. Points only removes the outlines and retains the observations and
+reported ranges. Grouping is saved in shared links.
+
+The outline shape is a separate control under Filters & display. The
+[comparison gallery](prototypes/) preserves the earlier subgroup studies:
 
 | Method | Construction |
 | --- | --- |
-| A: rounded outlines (default) | Convex hull of interval endpoints and points, padded by a 0.055-decade disk in log space. |
+| A: rounded subgroup outlines | Convex hull of interval endpoints and points, padded by a 0.055-decade disk in log space. |
 | B: enclosing ellipses | Principal-axis ellipse enlarged to enclose the same observations. |
 | C: points only | Individual observations and interval bars without filled regions. |
 
-Groups use the source classification and split when their nearest connecting
-points are more than 0.48 decades apart in the two-dimensional log plane.
-Padding stays fixed as groups grow. A lone point has no group shape. These
+Family view encloses all eligible plotted observations in one outline per
+family. Subgroups use the source classification and split when their nearest
+connecting points are more than 0.48 decades apart in the two-dimensional log
+plane. Padding stays fixed as groups grow. A lone point has no group shape. These
 regions are drawing aids, not confidence regions or family-wide property
 limits. Labels are placed around the regions with overlap checks and leader
 lines. Axes display engineering units while coordinates and exports remain SI.
