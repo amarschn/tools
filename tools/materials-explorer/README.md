@@ -8,8 +8,8 @@ here.
 ## Data and calculations
 
 The source of truth is `materials-lookup/curated/`, also used by the Materials
-lookup tool. Its published catalog contains 288 materials, 92 named states, and
-1,825 observations from 39 sources. The chart reports how many materials have compatible values
+lookup tool. Its published catalog contains 1,360 materials, 92 named states, and
+5,858 observations from 537 sources. The chart reports how many materials have compatible values
 for the selected axes and filters. Properties without positive observations
 are not offered on the logarithmic axes.
 
@@ -38,6 +38,13 @@ without a small-strain Young's modulus, so those grades appear in the tensile
 strength chart. Divinycell F likewise has no reported tensile modulus in the
 selected sheet. Missing properties stay missing. Source decisions are recorded
 in [the batch review](../../materials-lookup/docs/ashby-families-review.md).
+
+The October expansion adds 1,072 grades and species: 486 copper alloys, 249
+optical glasses, 106 polymers, 97 woods, 97 elastomers, 17 foams, 16 ceramics,
+and four woven composites. All have density and at least one other plotted
+property; availability still depends on the selected axes. See the
+[October source review](../../materials-lookup/docs/catalog-expansion-2026-10-batch-review.md)
+for source scope, rejected cells, and duplicate handling.
 
 `pycalcs/material_indices.py` is the single source for performance indices,
 derivations, scope, and isolines. The build computes the scores and line

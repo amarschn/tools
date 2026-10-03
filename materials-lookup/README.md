@@ -8,8 +8,8 @@ any other tool.
 Adding a material happens here, not anywhere else. The project this came from
 is closed; nothing upstream is maintained.
 
-Current contents: **288 material identities, 92 named states, 1,825
-observations, 11 registered properties and references to 39 sources**.
+Current contents: **1,360 material identities, 92 named states, 5,858
+observations, 11 registered properties and references to 537 sources**.
 The generated site has no runtime dependencies, backend, accounts, or network
 search service.
 
@@ -151,6 +151,22 @@ python3.13 materials-lookup/builder/import_ashby_families.py --pdf-dir private-s
 See [the batch review](docs/ashby-families-review.md) for source selection,
 conversions, and property coverage. The complete reference-table importer
 requires the archived originals for every earlier batch too.
+
+The October 2026 catalog batch adds **1,072 identities and 4,033 observations**
+across eight classes. It uses manufacturer datasheets, manufacturer comparison
+tables, CDA alloy references, and the USDA Wood Handbook. No aliases, taxonomy
+nodes, or named test states count toward those additions. See the
+[source review and exclusions](docs/catalog-expansion-2026-10-batch-review.md).
+
+Reconstruct this batch from the private snapshots with:
+
+```sh
+python3.13 materials-lookup/builder/import_catalog_expansion.py --source-dir private-sources --check
+```
+
+The default command writes a candidate outside the repository. Use `--apply`
+only after reviewing it. The full reference-table importer also includes this
+batch; it needs all earlier source archives plus the October snapshots.
 
 ## Layout
 

@@ -159,11 +159,30 @@ try {
     await page.locator('#state-al-6061-t6[open] .citation details[open]').waitFor();
     assert.match(await page.locator('#state-al-6061-t6 .value').innerText(), /≥ 35 ksi/);
     await page.getByRole('link',{name:'Sources',exact:true}).click(); await settled();
-    assert.equal(await page.locator('.source-card').count(),39);
+    assert.equal(await page.locator('.source-card').count(),537);
     assert.equal(await page.locator('.source-card a, iframe, embed, object').count(),0);
-    for (const file of ['hydro-6061.pdf','hydro-6063.pdf','copper-alloys-guide.pdf','timet-6-4.pdf','atlas-engineering-bar.pdf','uddeholm-arne.pdf','private-sources/index.html']) {
+    for (const file of ['hydro-6061.pdf','hydro-6063.pdf','copper-alloys-guide.pdf','timet-6-4.pdf','atlas-engineering-bar.pdf','uddeholm-arne.pdf','ohara-optical-glass.pdf','cda-C67600.html','private-sources/index.html']) {
       const response = await context.request.get(base+file);
       assert.equal(response.status(),404,'public document access must be absent');
+    }
+    if (mount === '/tools/materials/') {
+      // New source families must resolve through search, not merely appear in
+      // a generated count. Every result still opens its lazy cited record.
+      for (const [query, id, property] of [
+        ['C67600','cda-c67600','youngs_modulus'],
+        ['OHARA S-BSL7','ohara-s-bsl7','youngs_modulus'],
+        ['Black ash','wood-black-ash','flexural_modulus'],
+        ['Mold Max 10','smooth-on-mold-max-10','ultimate_tensile_strength'],
+        ['Ketron GF30 PEEK','mcg-ketron-gf30-peek','youngs_modulus'],
+        ['KYOCERA AO201B','kyocera-ao201b','flexural_strength'],
+        ['Divinycell HT61','diab-divinycell-ht61','ultimate_tensile_strength'],
+        ['HexPly 8552 SPG196-PW','hexcel-8552-spg196-pw','youngs_modulus'],
+      ]) {
+        await search(query);
+        await page.locator('#property-' + property + ' .citation').first().waitFor();
+        assert.ok((await page.locator('#view').getByRole('link',{name:'JSON',exact:true}).getAttribute('href')).endsWith(`/records/${id}.json`),query);
+        assert.equal(await page.locator('.citation a, iframe, embed, object').count(),0);
+      }
     }
     await search('2205');
     await page.getByRole('heading',{name:'Stainless steel Forta DX 2205',exact:true}).waitFor();

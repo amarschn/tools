@@ -1,5 +1,6 @@
 """Coverage and source semantics for the six-family September 2026 batch."""
 from collections import Counter
+import json
 from pathlib import Path
 
 import pytest
@@ -20,8 +21,9 @@ def batch():
 
 def test_ten_distinct_new_identities_per_requested_family(batch):
     database, data, _, _ = batch
-    source_ids = {s[0] for s in DOCUMENTS}
-    new_ids = {o["material_id"] for o in data["observations"] if o["source_id"] in source_ids}
+    # Later batches extend the same source tables. Keep the original batch's
+    # identity boundary instead of treating every reuse of a source as new.
+    new_ids = set(json.loads((ROOT / "tests/fixtures/ashby-families-2026-09-ids.json").read_text()))
     families = Counter(r["family"][0] for r in database.materials if r["id"] in new_ids)
     assert families == {"composite": 11, "wood": 10, "ceramic": 13,
                         "foam": 12, "elastomer": 10, "glass": 10}

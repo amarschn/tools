@@ -293,10 +293,12 @@ def main() -> None:
                                      ("reference-manifest", "documents", documents)]:
         path = root / "curated" / (filename + ".json")
         data = json.loads(path.read_text())
-        ids = {row["id"] for row in additions}
-        data[key] = [row for row in data[key] if row["id"] not in ids] + additions
+        # Replace in place so rechecking an earlier batch does not reorder
+        # records around later additions or roll back the manifest date.
+        remaining = {row["id"]: row for row in additions}
+        data[key] = [remaining.pop(row["id"], row) for row in data[key]] + list(remaining.values())
         if key == "documents":
-            data["retrieved_date"] = DATE
+            data["retrieved_date"] = max(data.get("retrieved_date", DATE), DATE)
         text = json.dumps(data, ensure_ascii=key == "documents", indent=2) + "\n"
         if args.check:
             if path.read_text() != text:

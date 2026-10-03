@@ -54,7 +54,15 @@ def test_missing_modulus_is_not_filled_from_old_aluminium_entry(selection):
     """The older 60-material store has 6061 modulus; this source does not."""
     assert "al-6061" in selection["materials"]
     assert not any(p["material_id"] == "al-6061" for p in selection["charts"]["density|youngs_modulus"]["points"])
-    assert len(selection["materials"]) == 288
+    assert len(selection["materials"]) == 1360
+
+
+def test_every_october_addition_has_a_plottable_density_property_pair(selection):
+    report = json.loads((ROOT / "materials-lookup/curated/catalog-expansion-2026-10.json").read_text())
+    plotted = {p["material_id"] for key, chart in selection["charts"].items()
+               if key.startswith("density|") and key != "density|density"
+               for p in chart["points"]}
+    assert set(report["material_ids"]) <= plotted
 
 
 @pytest.mark.parametrize("key,left,right", [

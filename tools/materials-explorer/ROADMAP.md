@@ -1,5 +1,16 @@
 # Ashby Chart roadmap
 
+## October 3 catalog expansion
+
+- [x] Add at least 1,000 distinct, sourced materials across multiple classes.
+- [x] Preserve source literals, conditions, citations, and earlier records.
+- [x] Exclude duplicate variants and ambiguous source cells before publication.
+- [x] Verify the expanded catalog in the lookup, chart, and export flows.
+
+Added 1,072 materials and 4,033 observations, bringing the catalog to 1,360
+materials. Sources and exclusions are recorded in the
+[October batch review](../../materials-lookup/docs/catalog-expansion-2026-10-batch-review.md).
+
 ## October 2 grouping review
 
 - [x] Default to one outline per broad family, with individual grades visible.

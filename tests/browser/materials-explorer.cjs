@@ -34,11 +34,11 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     await ready();
     assert.equal(await page.locator('#loading-overlay').isVisible(), false);
     const baseline = await page.evaluate(() => ({ counts: MaterialsExplorer.getData().counts, rows: MaterialsExplorer.getRows().length, indices: [...document.querySelector('#perf-index').options].map(o => o.value), properties: [...document.querySelector('#x-prop').options].map(o => o.value) }));
-    assert.equal(baseline.counts.materials, 288);
+    assert.equal(baseline.counts.materials, 1360);
     assert.ok(baseline.rows > 150, JSON.stringify(baseline));
     assert.ok(!baseline.properties.includes('price_per_kg'));
     assert.ok(!baseline.properties.includes('max_service_temperature'));
-    assert.match(await page.locator('#data-status').innerText(), /288 materials/);
+    assert.match(await page.locator('#data-status').innerText(), /1,?360 materials/);
     assert.equal(await page.locator('#perf-index').inputValue(), '');
     assert.equal(await page.locator('h1').innerText(), 'Ashby Chart');
     assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /Ashby charts/);
@@ -53,6 +53,7 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     if (process.argv.includes('--preview')) { console.log(JSON.stringify({baseline, errors})); return; }
 
     // Grouping and outline shape are independent, with unchanged observations.
+    let polymerSubgroups;
     for (const mode of ['ellipses', 'hulls']) {
       await select('envelope-mode', mode);
       for (const grouping of ['subgroup','points','family']) {
@@ -64,7 +65,13 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
           assert.ok(await page.locator('#envelope-mode').isDisabled());
           assert.equal(await page.locator('#ashby-chart').evaluate(el=>el.data.filter(t=>t.customdata).reduce((sum,t)=>sum+t.customdata.length,0)),baseline.rows);
         } else {
-          assert.equal(outlines.filter(r=>r.family==='polymer').length,grouping==='family'?1:12);
+          const count = outlines.filter(r=>r.family==='polymer').length;
+          if (grouping === 'family') assert.equal(count,1);
+          else {
+            assert.ok(count > 1, 'Polymer chemistry subgroups remain distinct');
+            polymerSubgroups ??= count;
+            assert.equal(count,polymerSubgroups);
+          }
           assert.ok(await page.locator('#envelope-mode').isEnabled());
         }
         assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, baseline.rows);
@@ -77,7 +84,7 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     await groupBy('subgroup');
     await page.goto(await page.evaluate(() => MaterialsExplorer.getShareUrl())); await ready();
     assert.equal(await page.locator('[data-grouping="subgroup"]').getAttribute('aria-pressed'),'true');
-    assert.equal((await regions()).filter(r=>r.family==='polymer').length,12);
+    assert.equal((await regions()).filter(r=>r.family==='polymer').length,polymerSubgroups);
     for (const oldQuery of ['envelope-mode=points&setting-points=0','setting-blobs=0']) {
       await page.goto(base+'?'+oldQuery); await ready();
       assert.equal(await page.locator('[data-grouping="points"]').getAttribute('aria-pressed'),'true');
@@ -114,21 +121,21 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     await page.locator('#tab-browse').click();
     await page.locator('#material-search').fill('wood'); await ready();
     assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 0);
-    assert.equal(await page.locator('#material-list button').count(), 10);
+    assert.equal(await page.locator('#material-list button').count(), 107);
     await page.locator('#material-list button').filter({hasText: 'Red alder'}).click(); await ready();
     await page.getByRole('button', {name: 'Show bending stiffness chart', exact: true}).click(); await ready();
     assert.equal(await page.locator('#y-prop').inputValue(), 'flexural_modulus');
-    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 10);
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 107);
     assert.match(await page.locator('#card-props').innerText(), /12.0% moisture/);
     assert.match(await page.locator('#card-props').innerText(), /9.50 GPa/);
 
     await page.getByRole('button', {name: 'Tensile strength', exact: true}).click(); await ready();
     await page.locator('#material-search').fill('elastomer'); await ready();
-    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 10);
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 107);
     await page.locator('#material-search').fill('foam'); await ready();
-    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 12);
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 29);
     await page.getByRole('button', {name: 'Stiffness', exact: true}).click(); await ready();
-    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 8);
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 15);
     await page.locator('#material-search').fill(''); await ready();
     await select('temperature-filter', 'ambient');
     await select('perf-index', 'stiff_light_beam');
@@ -332,7 +339,7 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     await offlinePage.reload();
     await offlinePage.locator('#explorer-main[data-state="ready"]').waitFor();
     assert.equal(await offlinePage.evaluate(() => MaterialsExplorer.getData().source_build_id), freshBuild);
-    assert.equal(await offlinePage.evaluate(() => MaterialsExplorer.getData().counts.materials), 288);
+    assert.equal(await offlinePage.evaluate(() => MaterialsExplorer.getData().counts.materials), 1360);
     await offlineContext.close();
 
     console.log(JSON.stringify({ passed: true, grades: baseline.counts.materials, defaultPairs: baseline.rows, checks: ['Ashby title and metadata', 'family/subgroup/points grouping independent of shape', 'grouping preserves zoom and selection', 'legacy points-only links and retained experiments', 'titanium with both source temperatures', 'wood, elastomer and foam coverage', 'alternate chart suggestions', 'Python-backed indices and substituted values', 'axis reversal, zoom units and fit', '6061 T4/T6 separation and state search', 'reported-bound markers', 'source citations and lookup link', 'CSV', 'share restoration', 'temperature/basis/family filters', 'empty state', 'labels', 'settings and keyboard controls', 'dark/mobile', 'old URL redirect', 'data mismatch and retry', 'retained prototype API', 'stale service-worker cache refresh'], screenshots: ['/private/tmp/ashby-materials-desktop.png', '/private/tmp/ashby-materials-sourced.png', '/private/tmp/ashby-materials-dark-mobile.png'] }, null, 2));

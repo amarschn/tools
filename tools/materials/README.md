@@ -15,8 +15,8 @@ plotted grade back to its datasheet here.
 
 ## What it contains
 
-288 material identities, 92 named states, 1,825 observations across 11
-registered properties, citing 39 sources.
+1,360 material identities, 92 named states, 5,858 observations across 11
+registered properties, citing 537 sources.
 
 Specified limits stay distinct from measured values, and every observation
 keeps its test conditions and its citation. The toolbar switches metric and

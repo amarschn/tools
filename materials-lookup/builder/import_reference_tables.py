@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Rebuild factual records from pinned manufacturer PDFs (development only).
+"""Rebuild factual records from pinned reference documents (development only).
 
 Usage: python3 materials/builder/import_reference_tables.py --pdf-dir /path/to/downloads
-Requires pypdf and pdfplumber. Normal site builds use curated JSON, not PDFs or
-the network. Download URLs and SHA-256 hashes live in reference-manifest.json.
+Requires the optional requirements-ingest.txt dependencies. Normal site builds
+use curated JSON without source documents or network access. Download URLs
+and SHA-256 hashes live in reference-manifest.json.
 Only selected numerical facts are extracted; source documents are not bundled.
 """
 from __future__ import annotations
@@ -20,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 from builder.import_specialty_metals import DOCUMENTS as SPECIALTY_DOCUMENTS, DATE as SPECIALTY_DATE, import_specialty_metals
 from builder.import_nonferrous_metals import DOCUMENTS as NONFERROUS_DOCUMENTS, DATE as NONFERROUS_DATE, SOURCE_TYPES as NONFERROUS_SOURCE_TYPES, import_nonferrous_metals
 from builder.import_steel_grades import DOCUMENTS as STEEL_DOCUMENTS, DATE as STEEL_DATE, SOURCE_TYPES as STEEL_SOURCE_TYPES, import_steel_grades
-from builder.import_ashby_families import DATE as ASHBY_DATE, import_ashby_families
+from builder.import_ashby_families import import_ashby_families
 DATE = "2026-09-07"
 PROPERTIES = {
     "density": ("kg/m^3", "g/cm³", 1000),
@@ -309,9 +310,18 @@ def main():
     import_steel_grades(all_pages,records,obs=obs,record=record,pair=pair,slug=slug)
     import_ashby_families(args.pdf_dir, records, sources, manifest,
                          obs=obs, record=record, pair=pair, slug=slug)
+    # Full reconstruction must include later batches; never replace the
+    # expanded catalog with this importer's earlier 288-material baseline.
+    from builder.import_catalog_expansion import run as import_catalog, DATE as CATALOG_DATE
+    expansion = import_catalog(args.pdf_dir)
+    if records != expansion.baseline:
+        raise ValueError("Earlier batches differ from the October expansion baseline; review before replacing records")
+    records.extend(expansion.records)
+    sources.extend(expansion.sources.values())
+    manifest.extend(expansion.documents.values())
     outputs = {ROOT/f"curated/{name}.json": json.dumps({"schema_version":"0.1.0",key:data},ensure_ascii=False,indent=2)+"\n"
                for name,key,data in [("materials","materials",records),("sources","sources",sources)]}
-    outputs[manifest_path] = json.dumps({"retrieved_date":ASHBY_DATE,"documents":manifest},indent=2)+"\n"
+    outputs[manifest_path] = json.dumps({"retrieved_date":CATALOG_DATE,"documents":manifest},indent=2)+"\n"
     for path, text in outputs.items():
         if args.check:
             if path.read_text() != text: raise ValueError(f"{path.name} differs from a fresh import")
