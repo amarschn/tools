@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Follower Workbench — Cam Prototype B</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    #cam { min-height: 420px; }
+    .heat-legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 0.75rem; color: var(--text-light); align-items: center; }
+    .heat-legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+    .ftype { margin-bottom: 14px; }
+    .slider-field { margin-bottom: 10px; }
+    .slider-field label { display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 500; }
+    .slider-field label .val { font-family: var(--font-mono); color: var(--text-light); }
+    .from-sketch { font-size: 0.85rem; }
+    .charts-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+    @media (max-width: 900px) { .charts-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype B · See the mechanism, not just the curve</div>
+      <h1>Follower Workbench</h1>
+      <p class="lede">The cam turns and the follower rides it. Swap between translating roller, flat-faced and swinging-arm followers, then drag the sliders. The profile turns amber where the pressure angle nears its limit and red where it passes the limit or the roller can't fit the curve (undercut). Auto-size finds the smallest cam that passes every check.</p>
+    </div>
+
+    <div class="layout-3">
+      <aside class="stack">
+        <section class="card">
+          <h3>Follower</h3>
+          <div class="seg-control full ftype" id="ftype" role="group" aria-label="Follower type">
+            <button data-v="roller">Roller</button><button data-v="flat">Flat face</button><button data-v="oscillating">Swing arm</button>
+          </div>
+          <div id="sliders"></div>
+          <div class="btn-row" style="margin-top:6px">
+            <button class="btn primary" id="autosize" type="button">Auto-size cam</button>
+            <span class="small muted" id="autosize-msg"></span>
+          </div>
+        </section>
+        <section class="card">
+          <h3>Motion</h3>
+          <div id="motion-host"></div>
+          <div class="field" style="margin-top:12px"><label for="rpm">Cam speed <span class="val">rpm</span></label><input type="number" id="rpm" value="120" min="1" step="10"></div>
+        </section>
+      </aside>
+
+      <section class="card">
+        <div class="card-title">
+          <h2>Mechanism</h2>
+          <div class="btn-row">
+            <label class="small muted"><input type="checkbox" id="show-pitch" checked> Pitch curve</label>
+            <label class="small muted"><input type="checkbox" id="show-heat" checked> Check colors</label>
+          </div>
+        </div>
+        <div id="cam"></div>
+        <div class="player">
+          <button class="btn small" id="play" type="button">Pause</button>
+          <input type="range" id="scrub" min="0" max="359" value="0" aria-label="Cam angle">
+          <div class="field" style="margin:0;width:120px"><select id="speed" aria-label="Playback speed"><option value="30">Slow</option><option value="90" selected>Normal</option><option value="240">Fast</option></select></div>
+          <span class="readout" id="angle-readout">0°</span>
+        </div>
+        <div class="heat-legend">
+          <span><i style="background:var(--series-2)"></i>Force line (common normal)</span>
+          <span><i style="background:var(--series-1)"></i>Follower motion</span>
+          <span class="pill warn">Near limit</span>
+          <span class="pill bad">Past limit or undercut</span>
+        </div>
+      </section>
+
+      <aside class="stack">
+        <section class="card">
+          <div class="card-title"><h3>Checks</h3><span id="overall"></span></div>
+          <ul class="check-list" id="checks"></ul>
+        </section>
+        <section class="card">
+          <h3>Size and speed</h3>
+          <div class="metrics" id="metrics"></div>
+          <div id="handoff" style="margin-top:12px"></div>
+        </section>
+      </aside>
+    </div>
+
+    <section class="card" style="margin-top:20px">
+      <div class="card-title"><h2>Through one revolution</h2><span class="muted small">Hover to scrub the mechanism</span></div>
+      <div class="charts-2">
+        <div><div id="c-s"></div></div>
+        <div><div id="c-phi"></div></div>
+        <div><div id="c-a"></div></div>
+        <div><div id="c-rho"></div></div>
+      </div>
+      <p class="chart-caption" id="rho-caption"></p>
+    </section>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('bench');
+    const C = CamCore;
+    const design = CamUI.loadDesign();
+    document.getElementById('rpm').value = design.rpm || 120;
+    const F = design.follower;
+    F.type = F.type || 'roller';
+
+    const SLIDERS = {
+      roller: [
+        ['rb', 'Base circle radius', 'mm', 5, 150, 0.5],
+        ['rr', 'Roller radius', 'mm', 2, 40, 0.5],
+        ['e', 'Follower offset', 'mm', -40, 40, 0.5],
+      ],
+      flat: [['rb', 'Base circle radius', 'mm', 5, 150, 0.5]],
+      oscillating: [
+        ['rb', 'Base circle radius', 'mm', 5, 150, 0.5],
+        ['rr', 'Roller radius', 'mm', 2, 40, 0.5],
+        ['arm', 'Arm length', 'mm', 20, 250, 1],
+        ['pivot', 'Cam centre to pivot', 'mm', 20, 300, 1],
+      ],
+    };
+
+    let motion;
+    let prof;
+    let chk;
+    const cam = new CamUI.CamView('cam');
+    const player = new CamUI.Player({ n: 720, speed: 90, onFrame: (deg) => setAngle(deg) });
+
+    function setAngle(deg) {
+      if (!motion) return;
+      const i = Math.round((deg / 360) * (motion.theta.length - 1));
+      cam.setIndex(i);
+      charts.forEach((c) => c.setCursor(deg));
+      document.getElementById('scrub').value = Math.floor(deg);
+      document.getElementById('angle-readout').textContent = `${Math.floor(deg)}°`;
+    }
+    function scrub(x) {
+      if (x === null) {
+        player.hold = false;
+        return;
+      }
+      player.hold = true;
+      player.pos = x;
+      setAngle(x);
+    }
+
+    const opt = { height: 150, onHover: scrub };
+    const cS = new CamUI.LineChart('c-s', { ...opt, yLabel: 'Displacement (mm)' });
+    const cPhi = new CamUI.LineChart('c-phi', { ...opt, yLabel: 'Pressure angle (°)', yFormat: (v) => `${v.toFixed(1)}°` });
+    const cA = new CamUI.LineChart('c-a', { ...opt, yLabel: 'Accel. (m/s²)' });
+    const cRho = new CamUI.LineChart('c-rho', { ...opt, yLabel: 'Radius of curv. (mm)', includeZero: true });
+    const charts = [cS, cPhi, cA, cRho];
+
+
+    function renderSliders() {
+      const host = document.getElementById('sliders');
+      host.innerHTML = SLIDERS[F.type]
+        .map(([k, label, unit, lo, hi, step]) => `
+          <div class="slider-field">
+            <label for="sl-${k}">${label} <span class="val" id="val-${k}">${F[k]} ${unit}</span></label>
+            <input type="range" id="sl-${k}" min="${lo}" max="${hi}" step="${step}" value="${F[k]}">
+          </div>`)
+        .join('');
+      SLIDERS[F.type].forEach(([k, , unit]) => {
+        const el = document.getElementById(`sl-${k}`);
+        el.addEventListener('input', () => {
+          F[k] = Number(el.value);
+          document.getElementById(`val-${k}`).textContent = `${F[k]} ${unit}`;
+          document.getElementById('autosize-msg').textContent = '';
+          update();
+        });
+      });
+    }
+
+    function update() {
+      const rpm = Number(document.getElementById('rpm').value) || 120;
+      motion = CamUI.buildMotion(design.motion);
+      prof = C.profile(motion, F);
+      chk = C.checks(motion, F, prof);
+      cam.o.pitch = document.getElementById('show-pitch').checked;
+      cam.o.heat = document.getElementById('show-heat').checked;
+      cam.setDesign(motion, F, prof, chk);
+      const st = C.stats(motion, rpm);
+      const x = motion.theta;
+      const w = st.omega;
+
+      // Bands where each check fails, for the charts
+      const bandsFor = (test, fill) => {
+        const out = [];
+        let start = null;
+        for (let i = 0; i < x.length; i++) {
+          const bad = test(i);
+          if (bad && start === null) start = x[i];
+          if ((!bad || i === x.length - 1) && start !== null) {
+            out.push({ x0: start, x1: x[i], fill, opacity: 0.15 });
+            start = null;
+          }
+        }
+        return out;
+      };
+      const phiBands = bandsFor((i) => Math.abs(prof.pressure[i]) > chk.phiLimit, 'var(--status-critical)');
+      const isUnder = (i) => (F.type === 'flat' ? prof.rhoSurf[i] <= 0 : prof.rhoPitch[i] > 0 && prof.rhoPitch[i] < F.rr);
+      const rhoBands = bandsFor(isUnder, 'var(--status-critical)');
+
+      cS.setData({ series: [{ x, y: motion.s, name: 's', fill: 'var(--series-1)', fillOpacity: 0.07 }] });
+      cPhi.setData({
+        series: [{ x, y: prof.pressure, name: 'φ' }],
+        bands: phiBands,
+        hlines: [
+          { y: chk.phiLimit, label: `+${chk.phiLimit}° limit`, color: 'var(--status-critical)' },
+          { y: -chk.phiLimit, label: `−${chk.phiLimit}°`, color: 'var(--status-critical)' },
+        ],
+      });
+      cA.setData({ series: [{ x, y: Array.from(motion.a, (a) => (a * w * w) / 1000), name: 'a' }] });
+      // Radius of curvature blows up on flats/dwell arcs; clip the view to a useful window.
+      const rhoArr = F.type === 'flat' ? prof.rhoSurf : prof.rhoPitch;
+      const cap = 4 * (F.rb + (F.rr || 0));
+      const rhoClip = Array.from(rhoArr, (r) => Math.max(-cap, Math.min(cap, r)));
+      const minAllowed = F.type === 'flat' ? 0 : chk.rhoFactor * F.rr;
+      cRho.setData({
+        series: [{ x, y: rhoClip, name: F.type === 'flat' ? 'ρ cam' : 'ρ pitch' }],
+        bands: rhoBands,
+        hlines: F.type === 'flat' ? [] : [{ y: minAllowed, label: `${chk.rhoFactor}× roller`, color: 'var(--status-warning)' }],
+        yDomain: [-cap, cap],
+      });
+      document.getElementById('rho-caption').textContent =
+        F.type === 'flat'
+          ? 'Flat-faced follower: the cam radius of curvature ρ = Rb + s + s″ must stay positive or the face cannot touch the cam.'
+          : `Pitch-curve radius of curvature, clipped to ±${cap.toFixed(0)} mm. Negative means concave. A convex value smaller than the roller radius makes a cusp (undercut).`;
+
+      renderChecks(st);
+      setAngle(player.pos);
+    }
+
+    function item(ok, title, value, detail, warn) {
+      const cls = ok ? (warn ? 'warn' : 'good') : 'bad';
+      const lab = ok ? (warn ? 'Close' : 'Pass') : 'Fail';
+      return `<li><span>${title}<br><b class="mono">${value}</b></span><span class="pill ${cls}">${lab}</span>${detail ? `<span class="detail">${detail}</span>` : ''}</li>`;
+    }
+
+    function renderChecks(st) {
+      const L = [];
+      if (!chk.geometryOk) L.push(item(false, 'Geometry', 'Linkage cannot reach', F.type === 'oscillating' ? 'Prime circle must lie between |pivot − arm| and pivot + arm.' : 'Offset is larger than the prime circle.'));
+      if (F.type !== 'flat') {
+        L.push(item(chk.phiOk, 'Max pressure angle', `${chk.phiMax.toFixed(1)}° at ${chk.phiAt.toFixed(0)}°`, `Limit ${chk.phiLimit}°. Above it the sideways push on the follower grows fast; a guided stem can jam and a swing arm loses mechanical advantage.`, chk.phiMax > 0.8 * chk.phiLimit));
+        L.push(item(!chk.undercut && chk.rhoOk, 'Min convex pitch radius', `${CamUI.fmt(chk.rhoMin)} mm at ${chk.rhoAt.toFixed(0)}°`, chk.undercut ? 'Smaller than the roller: the cam surface folds over itself and the follower will not follow the motion.' : `Should be at least ${chk.rhoFactor} × roller radius (${(chk.rhoFactor * F.rr).toFixed(1)} mm) to limit contact stress.`, chk.rhoOk && chk.rhoMin < 2.5 * F.rr));
+        if (Number.isFinite(chk.concaveMin)) L.push(item(true, 'Min concave cam radius', `${CamUI.fmt(chk.concaveMin)} mm`, 'Largest end mill that can cut the hollows: diameter ≤ 2× this.'));
+      } else {
+        L.push(item(!chk.undercut, 'Cam radius of curvature', `${CamUI.fmt(Math.min(...prof.rhoSurf))} mm minimum`, 'Must be positive everywhere (ρ = Rb + s + s″).'));
+        L.push(item(true, 'Face width needed', `${chk.faceWidth.toFixed(1)} mm`, `Contact moves from ${chk.faceMin.toFixed(1)} to ${chk.faceMax.toFixed(1)} mm off the axis. Add margin on both sides.`));
+      }
+      document.getElementById('checks').innerHTML = L.join('');
+      const ok = chk.ok;
+      document.getElementById('overall').innerHTML = `<span class="pill ${ok ? 'good' : 'bad'}">${ok ? 'Passes' : 'Needs work'}</span>`;
+      document.getElementById('metrics').innerHTML = `
+        <div class="metric hero"><div class="k">Cam outside dia.</div><div class="v">${(2 * chk.rMax).toFixed(1)}<span class="u">mm</span></div></div>
+        <div class="metric"><div class="k">Lift</div><div class="v">${st.lift.toFixed(1)}<span class="u">mm</span></div></div>
+        <div class="metric"><div class="k">Peak velocity</div><div class="v">${CamUI.fmt(st.vPeak / 1000)}<span class="u">m/s</span></div></div>
+        <div class="metric"><div class="k">Peak accel.</div><div class="v">${CamUI.fmt(st.aPeak / 1000)}<span class="u">m/s²</span></div></div>`;
+    }
+
+    // Smallest base circle (and best offset for a translating roller) that passes every check.
+    function autosize() {
+      const msg = document.getElementById('autosize-msg');
+      const m = CamUI.buildMotion(design.motion);
+      if (F.type === 'flat') {
+        let need = 0;
+        for (let i = 0; i < m.s.length; i++) need = Math.max(need, -(m.s[i] + m.a[i]));
+        F.rb = Math.ceil(need + Math.max(5, 0.15 * m.lift));
+        msg.textContent = `Rb = ${F.rb} mm keeps ρ ≥ ${(F.rb - need).toFixed(1)} mm.`;
+      } else if (F.type === 'roller') {
+        let found = null;
+        for (let rb = 5; rb <= 300 && !found; rb += 0.5) {
+          const rp = rb + F.rr;
+          let best = null;
+          for (let k = -20; k <= 20; k++) {
+            const e = (k / 20) * 0.6 * rp;
+            const q = C.quickScan(m, rb, F.rr, e);
+            if (q.valid && q.phiMax <= 30 && q.rhoMin >= 1.5 * F.rr && (!best || q.phiMax < best.phi)) best = { e, phi: q.phiMax };
+          }
+          if (best) found = { rb, e: Math.round(best.e * 2) / 2 };
+        }
+        if (!found) return (msg.textContent = 'No size up to 300 mm passes. Lengthen the rise angles.');
+        F.rb = found.rb;
+        F.e = found.e;
+        msg.textContent = `Smallest passing: Rb ${F.rb} mm, offset ${F.e} mm.`;
+      } else {
+        let found = null;
+        for (let rb = 5; rb <= 300 && !found; rb += 0.5) {
+          const f = { ...F, rb };
+          const p = C.profile(m, f);
+          if (C.checks(m, f, p).ok) found = rb;
+        }
+        if (!found) return (msg.textContent = 'No base circle passes with this arm and pivot. Try a longer arm.');
+        F.rb = found;
+        msg.textContent = `Smallest passing: Rb ${F.rb} mm.`;
+      }
+      renderSliders();
+      update();
+    }
+
+    document.querySelectorAll('#ftype button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.v === F.type);
+      b.addEventListener('click', () => {
+        F.type = b.dataset.v;
+        document.querySelectorAll('#ftype button').forEach((x) => x.classList.toggle('active', x === b));
+        document.getElementById('autosize-msg').textContent = '';
+        renderSliders();
+        update();
+      });
+    });
+    document.getElementById('autosize').addEventListener('click', autosize);
+    document.getElementById('rpm').addEventListener('input', update);
+    document.getElementById('show-pitch').addEventListener('change', update);
+    document.getElementById('show-heat').addEventListener('change', update);
+    document.getElementById('play').addEventListener('click', (e) => {
+      e.target.textContent = player.toggle() ? 'Pause' : 'Play';
+    });
+    document.getElementById('speed').addEventListener('change', (e) => (player.speed = Number(e.target.value)));
+    document.getElementById('scrub').addEventListener('input', (e) => {
+      player.pause();
+      document.getElementById('play').textContent = 'Play';
+      player.seekDeg(Number(e.target.value));
+    });
+
+    CamUI.handoffButtons('handoff', () => ({ ...design, rpm: Number(document.getElementById('rpm').value) || 120 }), ['space', 'dyn', 'make']);
+    CamUI.motionHost('motion-host', design, update);
+    renderSliders();
+    update();
+    player.play();
+  </script>
+</body>
+</html>

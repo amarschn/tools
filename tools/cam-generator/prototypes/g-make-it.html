@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Make It — Cam Prototype G</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    #drawing svg { width: 100%; height: auto; display: block; }
+    #drawing { background: var(--bg-card); }
+    .dim { stroke: var(--text-light); stroke-width: 0.8; fill: none; vector-effect: non-scaling-stroke; }
+    .dim-text { fill: var(--text-light); font-family: var(--font-mono); }
+    .layer-toggles { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.8rem; }
+    .layer-toggles label { display: inline-flex; gap: 6px; align-items: center; }
+    .layer-toggles i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+    #print-sheet { display: none; }
+    @media print {
+      body > *:not(#print-sheet) { display: none !important; }
+      #print-sheet { display: block; }
+      @page { margin: 10mm; }
+    }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype G · From profile to part</div>
+      <h1>Make It</h1>
+      <p class="lede">Turn the design into something a shop can cut. Choose an open plate cam, a grooved (positive-drive) cam or a barrel cam, add the bore and keyway, and export the outline at the chord tolerance your machine needs. The cutter check tells you the largest end mill that fits the hollows.</p>
+    </div>
+
+    <div class="layout">
+      <aside class="stack sticky">
+        <section class="card">
+          <h3>Cam type</h3>
+          <div class="seg-control full" id="kind" role="group" aria-label="Cam type">
+            <button data-v="plate" class="active">Plate</button><button data-v="groove">Grooved</button><button data-v="barrel">Barrel</button>
+          </div>
+          <p class="small muted" id="kind-note" style="margin:8px 0 0"></p>
+        </section>
+        <section class="card">
+          <h3>Geometry</h3>
+          <div id="geo"></div>
+        </section>
+        <section class="card">
+          <h3>Machining</h3>
+          <div class="row2">
+            <div class="field"><label for="tool">End mill Ø <span class="val">mm</span></label><input type="number" id="tool" value="16" min="1" step="1"></div>
+            <div class="field"><label for="tol">Chord tol. <span class="val">mm</span></label><select id="tol"><option value="0.05">0.05</option><option value="0.01" selected>0.01</option><option value="0.002">0.002</option></select></div>
+          </div>
+          <ul class="check-list" id="mchecks"></ul>
+        </section>
+        <section class="card">
+          <h3>Motion and follower</h3>
+          <p class="small muted" id="src" style="margin:0 0 8px"></p>
+          <div class="btn-row"><a class="btn small" href="b-workbench.html">Change in Workbench</a><a class="btn small" href="c-design-space.html">Resize in Sizing map</a></div>
+        </section>
+      </aside>
+
+      <div class="stack">
+        <section class="card">
+          <div class="card-title">
+            <h2 id="draw-title">Drawing</h2>
+            <div class="layer-toggles" id="layers"></div>
+          </div>
+          <div id="drawing"></div>
+          <div id="barrel3d" hidden style="margin-top:12px"></div>
+        </section>
+        <section class="card">
+          <div class="card-title"><h2>Export</h2><span class="small muted" id="pt-count"></span></div>
+          <div class="btn-row">
+            <button class="btn primary" id="dxf" type="button" data-track="export">DXF (mm)</button>
+            <button class="btn" id="svg" type="button" data-track="export">SVG 1:1</button>
+            <button class="btn" id="csv" type="button" data-track="export">Point table CSV</button>
+            <button class="btn" id="print" type="button" data-track="export">Print 1:1 template</button>
+          </div>
+          <p class="chart-caption">DXF uses plain LINE entities on separate layers (CAM, PITCH, TOOLPATH, BORE), which every CAD and CAM package reads. Check the 50 mm scale bar on printed templates before cutting anything.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div id="print-sheet"></div>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('make');
+    const C = CamCore;
+    const $ = (id) => document.getElementById(id);
+    const design = CamUI.loadDesign();
+    const F = { ...design.follower };
+    const st = {
+      kind: 'plate',
+      bore: Math.max(8, Math.round((F.rb * 0.5) / 2) * 2),
+      key: true,
+      clear: 0.1,
+      rim: 8,
+      barrelR: 50,
+      layers: { cam: true, pitch: true, tool: true, dims: true },
+    };
+    let geom = null;
+
+    const KIND_NOTE = {
+      plate: 'Open cam. A spring or gravity holds the follower on. Simplest to make; limited by jump speed.',
+      groove: 'The roller runs in a slot, so the cam drives it both ways and it cannot jump. The roller changes sides at every reversal of force, so the slot needs a small clearance.',
+      barrel: 'The groove is cut around a cylinder and the follower moves parallel to the shaft. Use it when the motion must run along the shaft axis.',
+    };
+
+    function geoFields() {
+      const rows = {
+        plate: [['bore', 'Bore Ø', 'mm', 1]],
+        groove: [['bore', 'Bore Ø', 'mm', 1], ['clear', 'Slot clearance', 'mm', 0.05], ['rim', 'Outer rim', 'mm', 1]],
+        barrel: [['barrelR', 'Barrel pitch radius', 'mm', 1], ['clear', 'Slot clearance', 'mm', 0.05], ['bore', 'Bore Ø', 'mm', 1]],
+      }[st.kind];
+      $('geo').innerHTML =
+        rows.map(([k, l, u, step]) => `<div class="field"><label for="g-${k}">${l} <span class="val">${u}</span></label><input type="number" id="g-${k}" value="${st[k]}" step="${step}" min="0"></div>`).join('') +
+        (st.kind !== 'barrel' ? `<label class="small"><input type="checkbox" id="g-key" ${st.key ? 'checked' : ''}> Keyway (DIN 6885 width for the bore)</label>` : '');
+      rows.forEach(([k]) => $(`g-${k}`).addEventListener('input', (e) => {
+        st[k] = Number(e.target.value) || 0;
+        update();
+      }));
+      const key = $('g-key');
+      if (key) key.addEventListener('change', () => {
+        st.key = key.checked;
+        update();
+      });
+    }
+
+    // Approximate DIN 6885 key width for a bore (mm).
+    function keyWidth(d) {
+      const table = [[8, 2], [10, 3], [12, 4], [17, 5], [22, 6], [30, 8], [38, 10], [44, 12], [50, 14], [58, 16], [65, 18], [75, 20], [85, 22], [95, 25], [110, 28]];
+      let w = 2;
+      table.forEach(([dd, ww]) => d > dd && (w = ww));
+      return w;
+    }
+
+    function offsetCurve(px, py, nx, ny, dist) {
+      return [Array.from(px, (x, i) => x + dist * nx[i]), Array.from(py, (y, i) => y + dist * ny[i])];
+    }
+
+    function compute() {
+      const m = CamUI.buildMotion(design.motion, 1440);
+      const f = F.type === 'flat' ? F : { ...F };
+      const prof = C.profile(m, f);
+      const chk = C.checks(m, f, prof);
+      const n = m.s.length;
+      // Inward unit normal from pitch to surface (roller followers).
+      const nx = new Float64Array(n);
+      const ny = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        const dx = prof.surfX[i] - prof.pitchX[i];
+        const dy = prof.surfY[i] - prof.pitchY[i];
+        const L = Math.hypot(dx, dy) || 1;
+        nx[i] = dx / L;
+        ny[i] = dy / L;
+      }
+      const rt = (Number($('tool').value) || 0) / 2;
+      const g = { m, f, prof, chk, nx, ny, rt, curves: [] };
+      if (st.kind === 'plate') {
+        g.curves.push({ layer: 'CAM', x: prof.surfX, y: prof.surfY, cls: 'cam' });
+        if (f.type !== 'flat') g.curves.push({ layer: 'PITCH', x: prof.pitchX, y: prof.pitchY, cls: 'pitch' });
+        // Cutter centre path: surface pushed outward by the tool radius.
+        const tp = f.type === 'flat' ? null : offsetCurve(prof.pitchX, prof.pitchY, nx, ny, f.rr - rt);
+        if (tp) g.curves.push({ layer: 'TOOLPATH', x: tp[0], y: tp[1], cls: 'tool' });
+      } else if (st.kind === 'groove') {
+        const half = f.rr + st.clear / 2;
+        const inner = offsetCurve(prof.pitchX, prof.pitchY, nx, ny, half);
+        const outer = offsetCurve(prof.pitchX, prof.pitchY, nx, ny, -half);
+        g.curves.push({ layer: 'CAM', x: inner[0], y: inner[1], cls: 'cam' });
+        g.curves.push({ layer: 'CAM', x: outer[0], y: outer[1], cls: 'cam' });
+        g.curves.push({ layer: 'PITCH', x: prof.pitchX, y: prof.pitchY, cls: 'pitch' });
+        // A cutter as wide as the slot runs on the pitch curve; a smaller one takes two passes.
+        if (rt * 2 >= 2 * half - 1e-9) g.curves.push({ layer: 'TOOLPATH', x: prof.pitchX, y: prof.pitchY, cls: 'tool' });
+        else {
+          const a = offsetCurve(prof.pitchX, prof.pitchY, nx, ny, half - rt);
+          const b = offsetCurve(prof.pitchX, prof.pitchY, nx, ny, -(half - rt));
+          g.curves.push({ layer: 'TOOLPATH', x: a[0], y: a[1], cls: 'tool' }, { layer: 'TOOLPATH', x: b[0], y: b[1], cls: 'tool' });
+        }
+        g.outerR = Math.max(...outer[0].map((x, i) => Math.hypot(x, outer[1][i]))) + st.rim;
+      } else {
+        // Barrel: develop the groove centreline on the pitch cylinder, x = R·θ, y = s.
+        const R = st.barrelR;
+        const half = f.rr + st.clear / 2;
+        const cx = Array.from(m.theta, (t) => (R * t * Math.PI) / 180);
+        const cy = Array.from(m.s);
+        const wl = [[], []];
+        const wr = [[], []];
+        let phiMax = 0;
+        for (let i = 0; i < n; i++) {
+          const slope = m.v[i] / R; // dy/dx in the development
+          const L = Math.hypot(1, slope);
+          const ox = -slope / L;
+          const oy = 1 / L;
+          wl[0].push(cx[i] + half * ox);
+          wl[1].push(cy[i] + half * oy);
+          wr[0].push(cx[i] - half * ox);
+          wr[1].push(cy[i] - half * oy);
+          phiMax = Math.max(phiMax, Math.abs(Math.atan(slope)) * (180 / Math.PI));
+        }
+        g.barrel = { R, cx, cy, wl, wr, half, phiMax, len: Math.max(...cy) - Math.min(...cy) + 2 * half + 2 * Math.max(6, f.rr) };
+        g.curves.push({ layer: 'CAM', x: wl[0], y: wl[1], cls: 'cam', open: true }, { layer: 'CAM', x: wr[0], y: wr[1], cls: 'cam', open: true }, { layer: 'PITCH', x: cx, y: cy, cls: 'pitch', open: true });
+      }
+      return g;
+    }
+
+    function update() {
+      geom = compute();
+      renderChecks();
+      renderLayers();
+      draw();
+      if (st.kind === 'barrel') draw3d();
+      $('barrel3d').hidden = st.kind !== 'barrel';
+      const tol = Number($('tol').value);
+      const pts = geom.curves.filter((c) => c.layer === 'CAM').reduce((acc, c) => acc + C.resample(c.x, c.y, tol, !c.open).length, 0);
+      $('pt-count').textContent = `${pts} outline points at ${tol} mm chord tolerance`;
+      const mot = design.motion.kind === 'keyframes' ? `Motion Sketch, ${design.motion.keys.length} points` : `${design.motion.segments.length} segments`;
+      const fol = { roller: `translating roller, Rb ${F.rb} mm, Rr ${F.rr} mm, e ${F.e || 0} mm`, flat: `flat-faced, Rb ${F.rb} mm`, oscillating: `swing arm, Rb ${F.rb} mm, Rr ${F.rr} mm` }[F.type];
+      $('src').textContent = `${mot}; ${fol}.`;
+    }
+
+    function item(ok, title, value, detail, warn) {
+      const cls = ok ? (warn ? 'warn' : 'good') : 'bad';
+      return `<li><span>${title}<br><b class="mono">${value}</b></span><span class="pill ${cls}">${ok ? (warn ? 'Close' : 'OK') : 'Problem'}</span>${detail ? `<span class="detail">${detail}</span>` : ''}</li>`;
+    }
+
+    function renderChecks() {
+      const g = geom;
+      const L = [];
+      const rt = g.rt;
+      if (st.kind === 'plate') {
+        const conc = g.chk.concaveMin;
+        const ok = !Number.isFinite(conc) || conc >= rt;
+        L.push(item(ok, 'Largest end mill for the hollows', Number.isFinite(conc) ? `Ø ${(2 * conc).toFixed(1)} mm` : 'no hollows', ok ? 'The profile has no concave region tighter than the cutter.' : 'The cutter is too big for the tightest hollow and will gouge it.'));
+        if (F.type !== 'flat') L.push(item(true, 'Cutter the size of the roller', `Ø ${(2 * F.rr).toFixed(1)} mm`, 'With this cutter the toolpath is the pitch curve itself, which removes one offset step from CAM.'));
+      } else if (st.kind === 'groove') {
+        const w = 2 * (F.rr + st.clear / 2);
+        L.push(item(2 * rt <= w + 1e-9, 'Slot width', `${w.toFixed(2)} mm`, 2 * rt <= w ? (2 * rt >= w - 1e-9 ? 'Cutter equals the slot: one pass along the pitch curve.' : 'Cutter is narrower than the slot: two passes, one per wall.') : 'Cutter is wider than the slot.'));
+        L.push(item(true, 'Blank diameter', `Ø ${(2 * g.outerR).toFixed(0)} mm`, `Outer wall plus a ${st.rim} mm rim.`));
+        L.push(item(!g.chk.undercut, 'Inner wall', g.chk.undercut ? 'undercut' : 'clean', 'The inner wall is the plate-cam surface; it inherits the undercut check.'));
+      } else {
+        const b = g.barrel;
+        L.push(item(b.phiMax <= 30, 'Pressure angle at pitch radius', `${b.phiMax.toFixed(1)}°`, 'tan φ = (ds/dθ) / R. A larger barrel radius lowers it.', b.phiMax > 24));
+        L.push(item(true, 'Barrel length', `${b.len.toFixed(0)} mm`, 'Groove travel plus the slot width and a shoulder each side.'));
+        L.push(item(2 * rt <= 2 * b.half + 1e-9, 'Slot width', `${(2 * b.half).toFixed(2)} mm`, 'Cut on a 4th axis with a cutter equal to the roller and the path is the developed centreline.'));
+      }
+      $('mchecks').innerHTML = L.join('');
+    }
+
+    function renderLayers() {
+      const defs = [
+        ['cam', 'Cam', 'var(--cam-stroke)'],
+        ['pitch', 'Pitch curve', 'var(--series-1)'],
+        ['tool', 'Cutter centre path', 'var(--series-2)'],
+        ['dims', 'Dimensions', 'var(--text-light)'],
+      ];
+      $('layers').innerHTML = defs.map(([k, l, c]) => `<label><input type="checkbox" data-k="${k}" ${st.layers[k] ? 'checked' : ''}><i style="background:${c}"></i>${l}</label>`).join('');
+      $('layers').querySelectorAll('input').forEach((el) =>
+        el.addEventListener('change', () => {
+          st.layers[el.dataset.k] = el.checked;
+          draw();
+        }),
+      );
+    }
+
+    // Drawing in mm. forPrint: absolute mm size, no theme colors.
+    function drawingSVG(forPrint = false) {
+      const g = geom;
+      const ink = forPrint ? '#000' : 'var(--cam-stroke)';
+      const pitchC = forPrint ? '#555' : 'var(--series-1)';
+      const toolC = forPrint ? '#999' : 'var(--series-2)';
+      const dimC = forPrint ? '#333' : 'var(--text-light)';
+      const fill = forPrint ? 'none' : 'var(--cam-fill)';
+      const show = forPrint ? { cam: true, pitch: true, tool: false, dims: true } : st.layers;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      g.curves.forEach((c) => {
+        for (let i = 0; i < c.x.length; i++) {
+          minX = Math.min(minX, c.x[i]);
+          maxX = Math.max(maxX, c.x[i]);
+          minY = Math.min(minY, c.y[i]);
+          maxY = Math.max(maxY, c.y[i]);
+        }
+      });
+      if (st.kind === 'groove') [minX, minY, maxX, maxY] = [-g.outerR, -g.outerR, g.outerR, g.outerR];
+      const span = Math.max(maxX - minX, maxY - minY);
+      const pad = span * 0.12 + 10;
+      const W = maxX - minX + 2 * pad;
+      const H = maxY - minY + 2 * pad + (forPrint ? 20 : 0);
+      const fs = Math.max(3, span / 40);
+      const path = (x, y, open) => CamUI.polyPath(x, y, !open, x.length > 3000 ? 2 : 1);
+      const sw = (w) => (forPrint ? `stroke-width:${w * 0.25}` : `stroke-width:${w};vector-effect:non-scaling-stroke`);
+      let body = '';
+      // Text sits inside the y-flipped group, so flip it back around its own baseline.
+      const label = (x, y, txt, anchor = 'middle') => `<text x="${x}" y="${-y}" text-anchor="${anchor}" transform="scale(1,-1)" style="fill:${dimC};font-size:${fs}px;font-family:monospace">${txt}</text>`;
+      if (st.kind === 'barrel') {
+        const b = g.barrel;
+        const top = Math.max(...b.cy) + b.half + Math.max(6, F.rr);
+        const bot = Math.min(...b.cy) - b.half - Math.max(6, F.rr);
+        const C2 = 2 * Math.PI * b.R;
+        body += `<rect x="0" y="${bot}" width="${C2}" height="${top - bot}" style="fill:${fill};stroke:${ink};${sw(1.2)}"></rect>`;
+        body += `<path d="${CamUI.polyPath(b.wl[0], b.wl[1], false)}L${b.wr[0].slice().reverse().map((x, i) => `${x},${b.wr[1][b.wr[1].length - 1 - i]}`).join('L')}Z" style="fill:${forPrint ? '#eee' : 'var(--bg-card)'};stroke:${ink};${sw(1.4)}"></path>`;
+        if (show.pitch) body += `<path d="${path(b.cx, b.cy, true)}" style="fill:none;stroke:${pitchC};stroke-dasharray:4 3;${sw(1)}"></path>`;
+        if (show.dims) {
+          body += label(C2 / 2, bot - fs * 1.8, `developed length 2πR = ${C2.toFixed(1)} mm`);
+          [0, 90, 180, 270, 360].forEach((d) => (body += label((C2 * d) / 360, top + fs * 0.6, `${d}°`)));
+        }
+        minX = 0;
+        maxX = C2;
+        minY = bot;
+        maxY = top;
+      } else {
+        const camCurves = g.curves.filter((c) => c.cls === 'cam');
+        if (st.kind === 'plate') body += `<path d="${path(camCurves[0].x, camCurves[0].y)}" style="fill:${fill};stroke:${ink};${sw(1.4)}"></path>`;
+        else {
+          body += `<circle r="${g.outerR}" style="fill:${fill};stroke:${ink};${sw(1.4)}"></circle>`;
+          body += `<path d="${path(camCurves[1].x, camCurves[1].y)} ${path(camCurves[0].x, camCurves[0].y)}" style="fill:${forPrint ? '#fff' : 'var(--bg-card)'};fill-rule:evenodd;stroke:${ink};${sw(1.4)}"></path>`;
+          body += `<path d="${path(camCurves[0].x, camCurves[0].y)}" style="fill:${fill};stroke:${ink};${sw(1.4)}"></path>`;
+        }
+        // Bore, keyway, timing mark at 0°
+        const rB = st.bore / 2;
+        body += `<circle r="${rB}" style="fill:${forPrint ? '#fff' : 'var(--bg-card)'};stroke:${ink};${sw(1.2)}"></circle>`;
+        if (st.key) {
+          const kw = keyWidth(st.bore);
+          const kd = kw * 0.4;
+          body += `<rect x="${-kw / 2}" y="${rB - 0.5}" width="${kw}" height="${kd + 0.5}" style="fill:${forPrint ? '#fff' : 'var(--bg-card)'};stroke:${ink};${sw(1.2)}"></rect>`;
+        }
+        const tm = Math.min(F.rb * 0.8, rB + (F.rb - rB) * 0.6);
+        body += `<circle cx="${tm}" cy="0" r="${Math.max(1, fs * 0.35)}" style="fill:${ink}"></circle>`;
+        if (show.pitch) g.curves.filter((c) => c.cls === 'pitch').forEach((c) => (body += `<path d="${path(c.x, c.y)}" style="fill:none;stroke:${pitchC};stroke-dasharray:4 3;${sw(1)}"></path>`));
+        if (show.tool) g.curves.filter((c) => c.cls === 'tool').forEach((c) => (body += `<path d="${path(c.x, c.y)}" style="fill:none;stroke:${toolC};${sw(1.4)}"></path>`));
+        if (show.dims) {
+          const R = st.kind === 'groove' ? g.outerR : g.chk.rMax;
+          const yd = Math.min(-R, minY) - pad * 0.45; // below everything drawn, toolpath included
+          body += `<line x1="${-R}" y1="${yd}" x2="${R}" y2="${yd}" style="stroke:${dimC};${sw(0.8)}"></line><line x1="${-R}" y1="${yd - fs * 0.6}" x2="${-R}" y2="${yd + fs * 0.6}" style="stroke:${dimC};${sw(0.8)}"></line><line x1="${R}" y1="${yd - fs * 0.6}" x2="${R}" y2="${yd + fs * 0.6}" style="stroke:${dimC};${sw(0.8)}"></line>`;
+          body += label(0, yd + fs * 0.5, `Ø ${(2 * R).toFixed(1)}`);
+          body += label(tm + fs, fs * 0.3, '0°', 'start');
+          body += label(0, -rB - fs * 1.4, `bore Ø ${st.bore}${st.key ? `, key ${keyWidth(st.bore)} mm` : ''}`);
+          // Rotation arrow (CCW)
+          const ra = R + pad * 0.25;
+          const a0 = (100 * Math.PI) / 180;
+          const a1 = (60 * Math.PI) / 180;
+          body += `<path d="M${ra * Math.cos(a1)},${ra * Math.sin(a1)}A${ra},${ra} 0 0 1 ${ra * Math.cos(a0)},${ra * Math.sin(a0)}" style="fill:none;stroke:${dimC};${sw(1)}"></path>`;
+          body += `<path d="M${ra * Math.cos(a0)},${ra * Math.sin(a0)}l${fs * 0.9},${fs * 0.6}l${-fs * 0.2},${-fs * 1.1}Z" style="fill:${dimC}"></path>`;
+          body += label(ra * Math.cos(1.4) - fs, ra * Math.sin(1.4) + fs * 0.6, 'rotation', 'end');
+        }
+      }
+      let scale = '';
+      if (forPrint) {
+        const sx = minX - pad * 0.5;
+        const sy = minY - pad * 0.8;
+        scale = `<g><rect x="${sx}" y="${sy}" width="50" height="2" style="fill:#000"></rect><text x="${sx}" y="${-(sy - 4)}" transform="scale(1,-1)" style="font-size:4px;font-family:monospace">50 mm scale bar. Measure before use.</text></g>`;
+      }
+      const vb = `${minX - pad} ${-(maxY + pad)} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad + (forPrint ? 10 : 0)}`;
+      const size = forPrint ? `width="${(maxX - minX + 2 * pad).toFixed(2)}mm" height="${(maxY - minY + 2 * pad + 10).toFixed(2)}mm"` : '';
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" ${size}><g transform="scale(1,-1)">${body}${scale}</g></svg>`;
+    }
+
+    function draw() {
+      $('drawing').innerHTML = drawingSVG(false);
+      $('draw-title').textContent = { plate: 'Plate cam', groove: 'Grooved cam', barrel: 'Barrel cam, developed (unrolled) view' }[st.kind];
+    }
+
+    // Barrel cam in rotating 3D (orthographic, slight tilt). Back half drawn faint.
+    let spin = 0;
+    function draw3d() {
+      const b = geom.barrel;
+      if (!b) return;
+      const tilt = 0.32;
+      const R = b.R;
+      const yMid = (Math.max(...b.cy) + Math.min(...b.cy)) / 2;
+      const hh = b.len / 2;
+      const proj = (phi, y) => {
+        const x = R * Math.cos(phi + spin);
+        const z = R * Math.sin(phi + spin);
+        return [x, -(y - yMid) * Math.cos(tilt) + z * Math.sin(tilt), z];
+      };
+      const segs = (ys) => {
+        let front = '';
+        let back = '';
+        for (let i = 0; i < b.cx.length - 1; i += 2) {
+          const phi0 = b.cx[i] / R;
+          const phi1 = b.cx[Math.min(i + 2, b.cx.length - 1)] / R;
+          const p0 = proj(phi0, ys[i]);
+          const p1 = proj(phi1, ys[Math.min(i + 2, ys.length - 1)]);
+          const seg = `M${p0[0].toFixed(2)},${p0[1].toFixed(2)}L${p1[0].toFixed(2)},${p1[1].toFixed(2)}`;
+          if (p0[2] + p1[2] > 0) front += seg;
+          else back += seg;
+        }
+        return { front, back };
+      };
+      const l = segs(b.wl[1]);
+      const r = segs(b.wr[1]);
+      const ry = R * Math.sin(tilt);
+      const topY = -hh * Math.cos(tilt);
+      const botY = hh * Math.cos(tilt);
+      const W = 2 * R + 20;
+      const H = 2 * hh * Math.cos(tilt) + 2 * ry + 20;
+      $('barrel3d').innerHTML = `<div class="small muted" style="margin-bottom:4px">Wrapped onto the cylinder</div>
+        <svg viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="max-height:300px;width:100%">
+          <path d="M${-R},${topY}L${-R},${botY}A${R},${ry} 0 0 0 ${R},${botY}L${R},${topY}" style="fill:var(--cam-fill);stroke:var(--cam-stroke);stroke-width:1.2;vector-effect:non-scaling-stroke"></path>
+          <ellipse cx="0" cy="${topY}" rx="${R}" ry="${ry}" style="fill:var(--primary-light);stroke:var(--cam-stroke);stroke-width:1.2;vector-effect:non-scaling-stroke"></ellipse>
+          <ellipse cx="0" cy="${topY}" rx="${st.bore / 2}" ry="${(st.bore / 2) * Math.sin(tilt)}" style="fill:var(--bg-card);stroke:var(--cam-stroke);stroke-width:1;vector-effect:non-scaling-stroke"></ellipse>
+          <path d="${l.back}${r.back}" style="fill:none;stroke:var(--text-light);stroke-width:1;opacity:.35;vector-effect:non-scaling-stroke"></path>
+          <path d="${l.front}${r.front}" style="fill:none;stroke:var(--cam-stroke);stroke-width:1.6;vector-effect:non-scaling-stroke"></path>
+        </svg>`;
+    }
+    (function loop() {
+      if (st.kind === 'barrel' && geom) {
+        spin += 0.01;
+        draw3d();
+      }
+      requestAnimationFrame(loop);
+    })();
+
+    // Exports
+    function exportDXF() {
+      const tol = Number($('tol').value);
+      const polys = geom.curves
+        .filter((c) => c.layer !== 'TOOLPATH' || st.layers.tool)
+        .map((c) => ({ layer: c.layer, points: C.resample(c.x, c.y, tol, !c.open), closed: !c.open }));
+      const extra = [];
+      if (st.kind !== 'barrel') {
+        extra.push(C.dxfCircle(0, 0, st.bore / 2, 'BORE'));
+        if (st.kind === 'groove') extra.push(C.dxfCircle(0, 0, geom.outerR, 'CAM'));
+        if (st.key) {
+          const kw = keyWidth(st.bore);
+          const rB = st.bore / 2;
+          polys.push({ layer: 'BORE', closed: false, points: [[-kw / 2, rB - 0.5], [-kw / 2, rB + kw * 0.4], [kw / 2, rB + kw * 0.4], [kw / 2, rB - 0.5]] });
+        }
+      }
+      CamUI.download(`cam-${st.kind}.dxf`, C.toDXF(polys, extra), 'application/dxf');
+    }
+    function exportCSV() {
+      const g = geom;
+      const lines = ['theta_deg,s_mm,ds_dtheta_mm_per_rad,pitch_x_mm,pitch_y_mm,surface_x_mm,surface_y_mm,pressure_angle_deg'];
+      for (let i = 0; i < g.m.theta.length; i++) lines.push([g.m.theta[i].toFixed(3), g.m.s[i].toFixed(5), g.m.v[i].toFixed(5), g.prof.pitchX[i].toFixed(5), g.prof.pitchY[i].toFixed(5), g.prof.surfX[i].toFixed(5), g.prof.surfY[i].toFixed(5), g.prof.pressure[i].toFixed(3)].join(','));
+      CamUI.download('cam-points.csv', lines.join('\n'), 'text/csv');
+    }
+
+    // A flat-faced follower has no pitch curve to run a slot along, so only the plate cam applies.
+    if (F.type === 'flat') {
+      document.querySelectorAll('#kind button').forEach((b) => {
+        if (b.dataset.v !== 'plate') {
+          b.disabled = true;
+          b.title = 'Needs a roller follower';
+        }
+      });
+    }
+    document.querySelectorAll('#kind button').forEach((b) =>
+      b.addEventListener('click', () => {
+        st.kind = b.dataset.v;
+        document.querySelectorAll('#kind button').forEach((x) => x.classList.toggle('active', x === b));
+        $('kind-note').textContent = KIND_NOTE[st.kind];
+        geoFields();
+        update();
+      }),
+    );
+    $('tool').addEventListener('input', update);
+    $('tol').addEventListener('change', update);
+    $('dxf').addEventListener('click', exportDXF);
+    $('csv').addEventListener('click', exportCSV);
+    $('svg').addEventListener('click', () => CamUI.download(`cam-${st.kind}.svg`, drawingSVG(true), 'image/svg+xml'));
+    $('print').addEventListener('click', () => {
+      $('print-sheet').innerHTML = drawingSVG(true);
+      window.print();
+    });
+    document.addEventListener('themechange', draw);
+
+    if (F.type !== 'roller' && F.type !== 'flat' && F.type !== 'oscillating') F.type = 'roller';
+    st.barrelR = Math.max(30, Math.round(F.rb + F.rr));
+    $('tool').value = F.type === 'flat' ? 16 : 2 * F.rr;
+    $('kind-note').textContent = KIND_NOTE[st.kind];
+    geoFields();
+    update();
+  </script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Spring & Torque — Cam Prototype E</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    .charts-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
+    @media (max-width: 1000px) { .charts-2 { grid-template-columns: 1fr; } }
+    .chart-block h3 { margin-bottom: 2px; }
+    .rpm-big { display: flex; align-items: baseline; gap: 8px; }
+    .rpm-big output { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; }
+    .verdict { font-size: 1rem; }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype E · Will it stay on the cam?</div>
+      <h1>Spring &amp; Torque</h1>
+      <p class="lede">Kinematics says where the follower should be. A spring has to keep it there. When the follower decelerates harder than the spring can pull it back, it leaves the cam (jump) and slams back down. This page finds the speed where that starts, sizes the lightest spring that prevents it, and shows the torque the camshaft motor has to supply.</p>
+    </div>
+
+    <div class="layout">
+      <aside class="stack sticky">
+        <section class="card">
+          <div class="rpm-big"><h3 style="margin:0">Cam speed</h3><output id="rpm-out"></output><span class="muted">rpm</span></div>
+          <input type="range" id="rpm" min="10" max="1500" step="5" value="300" aria-label="Cam speed">
+          <div class="verdict" id="verdict" style="margin-top:10px"></div>
+        </section>
+        <section class="card">
+          <h3>Follower and load</h3>
+          <div class="row2">
+            <div class="field"><label for="mass">Moving mass <span class="val">kg</span></label><input type="number" id="mass" value="0.8" min="0.01" step="0.1"></div>
+            <div class="field"><label for="ext">Process load <span class="val">N</span></label><input type="number" id="ext" value="0" step="5" title="Constant force pushing the follower toward the cam (gravity, process force)"></div>
+          </div>
+          <div class="field"><label for="damp">Damping <span class="val">N·s/m</span></label><input type="number" id="damp" value="0" min="0" step="5"></div>
+          <h3 style="margin-top:12px">Return spring</h3>
+          <div class="row2">
+            <div class="field"><label for="k">Rate <span class="val">N/mm</span></label><input type="number" id="k" value="1.5" min="0" step="0.1"></div>
+            <div class="field"><label for="pre">Preload <span class="val">N</span></label><input type="number" id="pre" value="40" min="0" step="5"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="size" type="button">Size spring for this speed</button>
+            <div class="field" style="margin:0;width:90px"><select id="sf" aria-label="Safety factor"><option value="1.25">SF 1.25</option><option value="1.5" selected>SF 1.5</option><option value="2">SF 2</option></select></div>
+          </div>
+          <p class="small muted" id="size-msg" style="margin:8px 0 0"></p>
+        </section>
+        <section class="card">
+          <h3>Motion</h3>
+          <div id="motion-host"></div>
+        </section>
+      </aside>
+
+      <div class="stack">
+        <section class="card">
+          <div class="metrics" id="metrics"></div>
+        </section>
+        <section class="card">
+          <div class="charts-2">
+            <div class="chart-block">
+              <h3>Spring force versus what the follower needs</h3>
+              <div class="legend"><span><i style="background:var(--series-2)"></i>Spring + load</span><span><i style="background:var(--series-1)"></i>Force to decelerate the follower (−m·a)</span></div>
+              <div id="c-force"></div>
+              <p class="chart-caption">The orange line must stay above the blue one everywhere. Red: the follower leaves the cam.</p>
+            </div>
+            <div class="chart-block">
+              <h3>Contact force between roller and cam</h3>
+              <div class="legend"><span><i style="background:var(--series-1)"></i>F<sub>c</sub> = m·a + c·v + spring + load</span></div>
+              <div id="c-contact"></div>
+              <p class="chart-caption">Peak contact force sets the Hertz stress on the roller and cam surface.</p>
+            </div>
+            <div class="chart-block">
+              <h3>Minimum contact force across speeds</h3>
+              <div class="legend"><span><i style="background:var(--series-1)"></i>min F<sub>c</sub> over one turn</span></div>
+              <div id="c-sweep"></div>
+              <p class="chart-caption">Acceleration grows with speed squared, so the margin shrinks quickly. Where the curve crosses zero is the jump speed.</p>
+            </div>
+            <div class="chart-block">
+              <h3>Camshaft torque</h3>
+              <div class="legend"><span><i style="background:var(--series-1)"></i>T = F<sub>c</sub> · ds/dθ</span><span><i style="background:var(--text-light)"></i>Mean</span></div>
+              <div id="c-torque"></div>
+              <p class="chart-caption">Negative torque means the follower drives the shaft. A flywheel smooths the swing.</p>
+            </div>
+          </div>
+        </section>
+        <section class="card">
+          <details class="more" open>
+            <summary>Assumptions</summary>
+            <ul class="small" style="margin:0;padding-left:18px">
+              <li>Translating follower, rigid links, single moving mass. Spring surge and follower stiffness are ignored; prototype F shows when that matters.</li>
+              <li>Spring force F<sub>s</sub> = F<sub>0</sub> + k·s, with s the lift above the base circle. Process load is constant and pushes the follower toward the cam.</li>
+              <li>Torque comes from a power balance, T·ω = F<sub>c</sub>·v, which neglects friction and the side force from the pressure angle.</li>
+              <li>Spring sizing picks the rate and preload that keep F<sub>s</sub> ≥ SF·(−m·a) at every angle while giving the smallest peak spring force. A small rate floor keeps the answer buildable.</li>
+              <li>Flywheel inertia uses I = ΔE / (C<sub>s</sub>·ω²) with speed fluctuation C<sub>s</sub> = 0.05.</li>
+            </ul>
+          </details>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('dyn');
+    const C = CamCore;
+    const design = CamUI.loadDesign();
+    const $ = (id) => document.getElementById(id);
+    if (design.rpm) $('rpm').value = Math.max(10, design.rpm);
+    const G = 9.80665;
+
+    const opts = { height: 170 };
+    const cForce = new CamUI.LineChart('c-force', { ...opts, yLabel: 'Force (N)', tooltip: (x) => tipAt(x, ['Spring + load', 'spring'], ['−m·a', 'demand']) });
+    const cContact = new CamUI.LineChart('c-contact', { ...opts, yLabel: 'Force (N)' });
+    const cTorque = new CamUI.LineChart('c-torque', { ...opts, yLabel: 'Torque (N·m)' });
+    const cSweep = new CamUI.LineChart('c-sweep', { ...opts, yLabel: 'min Fc (N)', xLabel: 'rpm', xFormat: (x) => `${x.toFixed(0)} rpm`, xTickFormat: (x) => `${x}` });
+    let last = null;
+
+    function tipAt(x, ...pairs) {
+      if (!last) return '';
+      const i = CamUI.nearestIndex(last.m.theta, x);
+      return `<div class="muted">${x.toFixed(1)}°</div>` + pairs.map(([lab, key]) => `<div>${lab} <b>${last[key][i].toFixed(1)} N</b></div>`).join('');
+    }
+
+    function params() {
+      return {
+        rpm: Number($('rpm').value),
+        mass: Number($('mass').value) || 0.01,
+        k: Number($('k').value) || 0,
+        preload: Number($('pre').value) || 0,
+        damping: Number($('damp').value) || 0,
+        external: Number($('ext').value) || 0,
+      };
+    }
+
+    function bandsWhere(x, test, fill) {
+      const out = [];
+      let s0 = null;
+      for (let i = 0; i < x.length; i++) {
+        const b = test(i);
+        if (b && s0 === null) s0 = x[i];
+        if ((!b || i === x.length - 1) && s0 !== null) {
+          out.push({ x0: s0, x1: x[i], fill, opacity: 0.16 });
+          s0 = null;
+        }
+      }
+      return out;
+    }
+
+    function update() {
+      const p = params();
+      $('rpm-out').textContent = p.rpm.toFixed(0);
+      const m = CamUI.buildMotion(design.motion);
+      const d = C.dynamics(m, p);
+      const x = m.theta;
+      const demand = Array.from(d.inertia, (f) => -f);
+      last = { m, spring: d.spring, demand };
+      const sep = bandsWhere(x, (i) => d.force[i] < 0, 'var(--status-critical)');
+      cForce.setData({
+        series: [
+          { x, y: d.spring, name: 'Spring + load', color: 'var(--series-2)' },
+          { x, y: demand, name: '−m·a', color: 'var(--series-1)' },
+        ],
+        bands: sep,
+      });
+      cContact.setData({ series: [{ x, y: d.force, name: 'Fc', fill: 'var(--series-1)', fillOpacity: 0.08 }], bands: sep });
+      let tMean = 0;
+      for (let i = 0; i < d.torque.length - 1; i++) tMean += d.torque[i];
+      tMean /= d.torque.length - 1;
+      cTorque.setData({ series: [{ x, y: d.torque, name: 'T' }], hlines: [{ y: tMean, label: `mean ${tMean.toFixed(2)} N·m`, color: 'var(--text-light)' }] });
+
+      // Speed sweep
+      const top = Math.max(p.rpm * 1.6, Number.isFinite(d.jumpRpm) ? d.jumpRpm * 1.3 : p.rpm * 2, 100);
+      const rpmMax = CamUI.niceTicks(0, top, 5).hi;
+      const xs = [];
+      const ys = [];
+      for (let r = 0; r <= rpmMax; r += rpmMax / 120) {
+        xs.push(r);
+        ys.push(C.dynamics(m, { ...p, rpm: Math.max(r, 1e-6) }).fMin);
+      }
+      const ticks = CamUI.niceTicks(0, rpmMax, 6).ticks;
+      cSweep.o.xDomain = [0, rpmMax];
+      cSweep.o.xTicks = ticks;
+      const pts = [{ x: p.rpm, y: d.fMin, r: 5, fill: 'var(--text-color)', cursor: 'default' }];
+      if (Number.isFinite(d.jumpRpm) && d.jumpRpm <= rpmMax) pts.push({ x: d.jumpRpm, y: 0, r: 5, fill: 'var(--status-critical)', stroke: 'var(--status-critical)', cursor: 'default', label: `jump ${d.jumpRpm.toFixed(0)} rpm` });
+      cSweep.setData({
+        series: [{ x: xs, y: ys, name: 'min Fc' }],
+        bands: Number.isFinite(d.jumpRpm) ? [{ x0: Math.min(d.jumpRpm, rpmMax), x1: rpmMax, fill: 'var(--status-critical)', opacity: 0.1 }] : [],
+        points: pts,
+      });
+      cSweep.setCursor(p.rpm);
+
+      // Metrics
+      const w = d.omega;
+      const flyI = d.deltaE / (0.05 * w * w);
+      const margin = Number.isFinite(d.jumpRpm) ? d.jumpRpm / p.rpm : Infinity;
+      $('metrics').innerHTML = `
+        <div class="metric hero"><div class="k">Jump speed</div><div class="v">${Number.isFinite(d.jumpRpm) ? d.jumpRpm.toFixed(0) : '∞'}<span class="u">rpm</span></div><div class="sub">${Number.isFinite(margin) ? `${margin.toFixed(2)}× current speed` : 'never leaves the cam'}</div></div>
+        <div class="metric"><div class="k">Min contact force</div><div class="v">${d.fMin.toFixed(1)}<span class="u">N</span></div><div class="sub">at ${d.fMinAt.toFixed(0)}°</div></div>
+        <div class="metric"><div class="k">Peak contact force</div><div class="v">${d.fMax.toFixed(0)}<span class="u">N</span></div></div>
+        <div class="metric"><div class="k">Peak torque</div><div class="v">${CamUI.fmt(d.tPeak)}<span class="u">N·m</span></div><div class="sub">RMS ${CamUI.fmt(d.tRms)} N·m</div></div>
+        <div class="metric"><div class="k">Peak power</div><div class="v">${CamUI.fmt(d.powerPeak)}<span class="u">W</span></div></div>
+        <div class="metric"><div class="k">Flywheel for ±2.5%</div><div class="v">${CamUI.fmt(flyI * 1e4)}<span class="u">kg·cm²</span></div><div class="sub">ΔE ${CamUI.fmt(d.deltaE)} J</div></div>`;
+      const st = C.stats(m, p.rpm);
+      const verdict = $('verdict');
+      if (d.fMin < 0) verdict.innerHTML = `<div class="callout bad"><span class="pill bad">Jumps</span> The follower leaves the cam for ${sep.reduce((a, b) => a + b.x1 - b.x0, 0).toFixed(0)}° of each turn. Stiffen the spring, add preload, lighten the follower or slow down.</div>`;
+      else if (margin < 1.25) verdict.innerHTML = `<div class="callout warn"><span class="pill warn">Marginal</span> Contact holds, but only ${((margin - 1) * 100).toFixed(0)}% speed margin before jump. Spring surge and tolerances eat this quickly.</div>`;
+      else verdict.innerHTML = `<div class="callout good"><span class="pill good">Holds</span> Contact is kept with at least ${d.fMin.toFixed(0)} N. Peak follower acceleration ${(st.aPeak / 1000 / G).toFixed(2)} g.</div>`;
+    }
+
+    $('size').addEventListener('click', () => {
+      const p = params();
+      const m = CamUI.buildMotion(design.motion);
+      const sf = Number($('sf').value);
+      const sp = C.sizeSpring(m, p.mass, p.rpm, sf, p.external);
+      $('k').value = (Math.ceil(sp.k * 100) / 100).toFixed(2);
+      $('pre').value = Math.ceil(sp.preload);
+      $('size-msg').textContent = `Rate ${Number($('k').value).toFixed(2)} N/mm with ${Math.ceil(sp.preload)} N preload holds to ${(p.rpm * Math.sqrt(sf)).toFixed(0)} rpm (SF ${sf} on force). Peak spring force ${sp.peak.toFixed(0)} N.`;
+      update();
+    });
+    ['rpm', 'mass', 'ext', 'damp', 'k', 'pre'].forEach((id) => $(id).addEventListener('input', update));
+
+    CamUI.motionHost('motion-host', design, update);
+    update();
+  </script>
+</body>
+</html>

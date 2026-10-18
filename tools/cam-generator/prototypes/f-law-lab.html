@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Law Lab — Cam Prototype F</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    .lab-grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 1000px) { .lab-grid { grid-template-columns: 1fr; } }
+    .quad { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+    @media (max-width: 800px) { .quad { grid-template-columns: 1fr; } }
+    .quad h3 { margin: 4px 0 0; font-size: 0.8rem; }
+    table.data td.best { font-weight: 700; }
+    table.data td .bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--series-1); vertical-align: middle; margin-left: 6px; opacity: 0.6; }
+    .rank-1 { background: var(--primary-light); }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype F · Pick the motion law with evidence</div>
+      <h1>Law Lab</h1>
+      <p class="lede">Every rise can use a different motion law, and the choice changes peak acceleration, cam torque and how hard the follower rings afterwards. Enter one rise and the follower's natural frequency; the lab ranks the laws on the numbers that matter for your machine.</p>
+    </div>
+
+    <div class="lab-grid">
+      <aside class="stack sticky">
+        <section class="card">
+          <h3>One rise</h3>
+          <div class="row2">
+            <div class="field"><label for="L">Lift <span class="val">mm</span></label><input type="number" id="L" value="20" min="0.1" step="1"></div>
+            <div class="field"><label for="beta">Rise angle <span class="val">°</span></label><input type="number" id="beta" value="90" min="5" max="360" step="5"></div>
+          </div>
+          <div class="field"><label for="rpm">Cam speed <span class="val">rpm</span></label><input type="number" id="rpm" value="300" min="1" step="10"></div>
+          <h3 style="margin-top:12px">Follower train</h3>
+          <div class="row2">
+            <div class="field"><label for="fn">Natural freq. <span class="val">Hz</span></label><input type="number" id="fn" value="60" min="1" step="5" title="First natural frequency of the follower, spring and linkage"></div>
+            <div class="field"><label for="zeta">Damping ratio</label><input type="number" id="zeta" value="0.03" min="0" max="0.5" step="0.01"></div>
+          </div>
+          <p class="small muted" id="ratio-note" style="margin:0"></p>
+        </section>
+        <section class="card">
+          <h3>Rank by</h3>
+          <div class="seg-control full" id="rank-ctl" role="group" aria-label="Ranking criterion" style="flex-wrap:wrap">
+            <button data-v="ca" class="active">Peak accel.</button><button data-v="cv">Peak velocity</button><button data-v="cj">Jerk</button><button data-v="res">Ringing</button>
+          </div>
+          <div id="advice" class="small" style="margin-top:12px"></div>
+        </section>
+      </aside>
+
+      <div class="stack">
+        <section class="card">
+          <div class="card-title"><h2>Your rise, by law</h2><span class="small muted">Click a row to highlight it on the charts</span></div>
+          <div class="table-wrap"><table class="data" id="table"></table></div>
+        </section>
+
+        <section class="card">
+          <div class="card-title"><h2>Shapes</h2><span class="small muted">Normalized: lift 1, rise duration 1</span></div>
+          <div class="legend" id="legend"></div>
+          <div class="quad">
+            <div><h3>Displacement</h3><div id="q-s"></div></div>
+            <div><h3>Velocity</h3><div id="q-v"></div></div>
+            <div><h3>Acceleration</h3><div id="q-a"></div></div>
+            <div><h3>Jerk</h3><div id="q-j"></div></div>
+          </div>
+          <p class="chart-caption">Simple harmonic and constant acceleration have steps in acceleration, so their jerk is infinite at those instants (not drawn). Constant velocity has infinite acceleration at both ends and is left out of the charts.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-title"><h2>Residual vibration after the rise</h2><span class="small muted" id="res-time"></span></div>
+          <div class="legend" id="legend-res"></div>
+          <div id="c-res"></div>
+          <p class="chart-caption">The follower train is a spring-mass system. A rise lasting t<sub>r</sub> excites it, and it keeps ringing during the dwell that follows. Amplitude is shown as a percentage of lift, against t<sub>r</sub>·f<sub>n</sub> (rise time in units of the natural period). The vertical line is your rise. Smoother laws need fewer periods to settle; cycloidal has exact zeros at whole numbers of periods when undamped.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('laws');
+    const C = CamCore;
+    const $ = (id) => document.getElementById(id);
+    const LAWS = ['cycloidal', 'modified_sine', 'modified_trapezoid', 'poly345', 'poly4567', 'harmonic', 'parabolic'];
+    // Fixed slot per law so a law keeps its color however the list is filtered.
+    const COLOR = {
+      cycloidal: 'var(--series-1)',
+      modified_sine: 'var(--series-2)',
+      modified_trapezoid: 'var(--series-3)',
+      poly345: 'var(--series-4)',
+      poly4567: 'var(--series-5)',
+      harmonic: 'var(--series-6)',
+      parabolic: 'var(--series-7)',
+    };
+    const visible = new Set(['cycloidal', 'modified_sine', 'modified_trapezoid', 'poly4567']);
+    let focus = null;
+    let rankBy = 'ca';
+    const coef = Object.fromEntries(LAWS.map((k) => [k, C.lawCoefficients(k)]));
+
+    const U = Array.from({ length: 401 }, (_, i) => i / 400);
+    const shapes = Object.fromEntries(LAWS.map((k) => [k, U.map((u) => C.LAWS[k].fn(u))]));
+    const qopt = { height: 150, xDomain: [0, 1], xTicks: [0, 0.25, 0.5, 0.75, 1], xFormat: (x) => `u = ${x.toFixed(2)}`, xTickFormat: (x) => x.toString() };
+    const Q = ['s', 'v', 'a', 'j'].map((k, idx) => new CamUI.LineChart(`q-${k}`, { ...qopt, yFormat: (v) => v.toFixed(2) }));
+
+    // Residual vibration curves depend only on damping; cache per zeta.
+    const RATIOS = Array.from({ length: 141 }, (_, i) => 0.5 + i * 0.05);
+    let resCache = { zeta: null, data: null };
+    function residuals(zeta) {
+      if (resCache.zeta === zeta) return resCache.data;
+      const t0 = performance.now();
+      const data = Object.fromEntries(LAWS.map((k) => [k, RATIOS.map((r) => 100 * C.residual(k, r, zeta))]));
+      resCache = { zeta, data };
+      $('res-time').textContent = `${LAWS.length * RATIOS.length} simulations in ${Math.round(performance.now() - t0)} ms`;
+      return data;
+    }
+    const cRes = new CamUI.LineChart('c-res', {
+      height: 240,
+      xDomain: [0.5, 7.5],
+      xTicks: [1, 2, 3, 4, 5, 6, 7],
+      xFormat: (x) => `tr·fn = ${x.toFixed(2)}`,
+      xTickFormat: (x) => `${x}`,
+      yFormat: (v) => `${v.toFixed(2)}%`,
+      yLabel: 'Residual (% of lift)',
+    });
+
+    function inputs() {
+      const L = Number($('L').value) || 1;
+      const beta = Number($('beta').value) || 90;
+      const rpm = Number($('rpm').value) || 1;
+      const fn = Number($('fn').value) || 1;
+      const zeta = Math.max(0, Math.min(0.5, Number($('zeta').value) || 0));
+      const w = (rpm * 2 * Math.PI) / 60;
+      const br = (beta * Math.PI) / 180;
+      const tr = br / w;
+      return { L, beta, rpm, fn, zeta, w, br, tr, ratio: tr * fn };
+    }
+
+    function interp(xs, ys, x) {
+      if (x <= xs[0]) return ys[0];
+      if (x >= xs[xs.length - 1]) return null;
+      const i = Math.floor((x - xs[0]) / (xs[1] - xs[0]));
+      const f = (x - xs[i]) / (xs[i + 1] - xs[i]);
+      return ys[i] + f * (ys[i + 1] - ys[i]);
+    }
+
+    function update() {
+      const p = inputs();
+      const res = residuals(p.zeta);
+      $('ratio-note').innerHTML = `The rise takes <b>${(p.tr * 1000).toFixed(1)} ms</b>, which is <b>${p.ratio.toFixed(2)}</b> natural periods.`;
+
+      const rows = LAWS.map((k) => {
+        const c = coef[k];
+        const vPk = (c.cv * p.L * p.w) / p.br / 1000; // m/s
+        const aPk = (c.ca * p.L * p.w * p.w) / (p.br * p.br) / 1000; // m/s^2
+        const jPk = (c.cj * p.L * p.w ** 3) / p.br ** 3 / 1000;
+        const r = p.ratio <= 7.5 ? interp(RATIOS, res[k], p.ratio) ?? 100 * C.residual(k, p.ratio, p.zeta) : 100 * C.residual(k, p.ratio, p.zeta);
+        return { k, c, vPk, aPk, jPk, res: r };
+      });
+      const key = { ca: 'aPk', cv: 'vPk', cj: 'jPk', res: 'res' }[rankBy];
+      const sorted = [...rows].sort((a, b) => a[key] - b[key]);
+      const best = Object.fromEntries(['vPk', 'aPk', 'jPk', 'res'].map((f) => [f, Math.min(...rows.map((r) => r[f]))]));
+      const maxA = Math.max(...rows.filter((r) => Number.isFinite(r.aPk)).map((r) => r.aPk));
+      const cell = (r, f, txt) => `<td class="mono ${Math.abs(r[f] - best[f]) < 1e-12 ? 'best' : ''}">${txt}</td>`;
+      $('table').innerHTML = `<thead><tr><th>Law</th><th>C<sub>v</sub></th><th>C<sub>a</sub></th><th>C<sub>j</sub></th><th>Peak velocity</th><th>Peak acceleration</th><th>Peak jerk</th><th>Ringing after rise</th></tr></thead><tbody>
+        ${sorted
+          .map(
+            (r, i) => `<tr data-k="${r.k}" class="${i === 0 ? 'rank-1' : ''} ${focus === r.k ? 'sel' : ''}" style="cursor:pointer">
+              <td><span class="lane-swatch" style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${COLOR[r.k]};margin-right:8px"></span>${C.LAWS[r.k].name}</td>
+              <td class="mono">${r.c.cv.toFixed(3)}</td><td class="mono">${Number.isFinite(r.c.ca) ? r.c.ca.toFixed(3) : '∞'}</td><td class="mono">${Number.isFinite(r.c.cj) ? r.c.cj.toFixed(1) : '∞'}</td>
+              ${cell(r, 'vPk', `${r.vPk.toFixed(3)} m/s`)}
+              ${cell(r, 'aPk', `${r.aPk.toFixed(1)} m/s² <span class="bar" style="width:${(40 * r.aPk) / maxA}px"></span>`)}
+              ${cell(r, 'jPk', Number.isFinite(r.jPk) ? `${CamUI.fmt(r.jPk)} m/s³` : '∞')}
+              ${cell(r, 'res', `${r.res.toFixed(2)} %`)}
+            </tr>`,
+          )
+          .join('')}</tbody>`;
+      $('table').querySelectorAll('tr[data-k]').forEach((tr) =>
+        tr.addEventListener('click', () => {
+          focus = focus === tr.dataset.k ? null : tr.dataset.k;
+          visible.add(tr.dataset.k);
+          update();
+        }),
+      );
+
+      // Advice: concrete, from the numbers
+      const top = sorted[0];
+      const cyc = rows.find((r) => r.k === 'cycloidal');
+      const tips = {
+        ca:
+          `<b>${C.LAWS[top.k].name}</b> gives the lowest peak acceleration here, ${top.aPk.toFixed(1)} m/s² against ${cyc.aPk.toFixed(1)} for cycloidal. Lower acceleration means smaller inertia forces and a lighter return spring.` +
+          (Number.isFinite(top.c.cj)
+            ? ''
+            : (() => {
+                const smooth = sorted.find((r) => Number.isFinite(r.c.cj));
+                return ` But its acceleration steps (infinite jerk) excite vibration. The best law with finite jerk is <b>${C.LAWS[smooth.k].name}</b> at ${smooth.aPk.toFixed(1)} m/s².`;
+              })()),
+        cv: `<b>${C.LAWS[top.k].name}</b> has the lowest peak velocity (${top.vPk.toFixed(3)} m/s). Peak velocity sets the kinetic energy at impact if something stops the follower, and with it the peak power the cam must deliver.`,
+        cj: `<b>${C.LAWS[top.k].name}</b> has the lowest finite jerk. Laws with infinite jerk (harmonic, constant acceleration) hit the follower with a force step at every transition.`,
+        res: `At ${p.ratio.toFixed(2)} periods, <b>${C.LAWS[top.k].name}</b> leaves the least ringing (${top.res.toFixed(2)}% of lift, about ${((top.res / 100) * p.L * 1000).toFixed(0)} µm). ${p.ratio < 2 ? 'Below about 2 periods every law rings hard: lengthen the rise or stiffen the follower train.' : ''}`,
+      };
+      $('advice').innerHTML = `<div class="callout good">${tips[rankBy]}</div>`;
+
+      // Shape charts
+      const plotted = LAWS.filter((k) => visible.has(k));
+      [0, 1, 2, 3].forEach((d) => {
+        Q[d].setData({
+          series: plotted.map((k) => ({
+            x: U,
+            y: shapes[k].map((v) => (d === 3 && !Number.isFinite(coef[k].cj) ? NaN : v[d])),
+            name: C.LAWS[k].name,
+            color: COLOR[k],
+            width: focus === k ? 3 : 2,
+            opacity: focus && focus !== k ? 0.3 : 1,
+          })),
+        });
+      });
+      const legend = (id) => {
+        $(id).innerHTML = LAWS.map((k) => `<button type="button" data-k="${k}" class="${visible.has(k) ? '' : 'off'}" aria-pressed="${visible.has(k)}"><i style="background:${COLOR[k]}"></i>${C.LAWS[k].name}</button>`).join('');
+        $(id).querySelectorAll('button').forEach((b) =>
+          b.addEventListener('click', () => {
+            visible.has(b.dataset.k) ? visible.delete(b.dataset.k) : visible.add(b.dataset.k);
+            update();
+          }),
+        );
+      };
+      legend('legend');
+      legend('legend-res');
+
+      // Zoom the y-axis to the neighbourhood of the user's rise so small residuals stay readable.
+      const focusX = Math.max(1.5, Math.min(7, p.ratio * 0.8));
+      const yTop = Math.min(40, Math.max(2, 1.6 * Math.max(0, ...plotted.map((k) => interp(RATIOS, res[k], focusX) || 0))));
+      cRes.setData({
+        series: plotted.map((k) => ({ x: RATIOS, y: res[k], name: C.LAWS[k].name, color: COLOR[k], width: focus === k ? 3 : 2, opacity: focus && focus !== k ? 0.3 : 1 })),
+        yDomain: [0, yTop],
+      });
+      cRes.setCursor(Math.max(0.5, Math.min(7.5, p.ratio)));
+    }
+
+    document.querySelectorAll('#rank-ctl button').forEach((b) =>
+      b.addEventListener('click', () => {
+        rankBy = b.dataset.v;
+        document.querySelectorAll('#rank-ctl button').forEach((x) => x.classList.toggle('active', x === b));
+        update();
+      }),
+    );
+    ['L', 'beta', 'rpm', 'fn', 'zeta'].forEach((id) => $(id).addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

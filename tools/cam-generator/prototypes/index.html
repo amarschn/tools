@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Cam Generator Prototypes</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    .hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: center; margin: 8px 0 28px; }
+    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+    .hero h1 { font-size: 2.25rem; }
+    .hero p { color: var(--text-light); font-size: 1.02rem; max-width: 640px; }
+    #hero-cam { max-width: 420px; margin: 0 auto; width: 100%; }
+    .gallery .card + .card { margin-top: 0; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+    .proto-card { display: flex; flex-direction: column; text-decoration: none; color: inherit; transition: border-color 0.15s, box-shadow 0.15s; padding: 0; overflow: hidden; }
+    .proto-card:hover { border-color: var(--text-light); box-shadow: var(--shadow-lg); }
+    .proto-card .preview { height: 170px; background: var(--primary-light); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; padding: 10px 14px; overflow: hidden; }
+    .proto-card .preview > div { width: 100%; }
+    .proto-card .body { padding: 16px 18px 18px; }
+    .proto-card .tag { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-light); text-transform: uppercase; }
+    .proto-card h2 { margin: 4px 0 6px; font-size: 1.1rem; border: 0; padding: 0; }
+    .proto-card p { margin: 0 0 10px; font-size: 0.85rem; color: var(--text-light); }
+    .proto-card ul { margin: 0; padding-left: 16px; font-size: 0.8rem; }
+    .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.85rem; }
+    .flow .step { border: 1px solid var(--border-color); border-radius: 999px; padding: 4px 12px; background: var(--bg-card); text-decoration: none; color: var(--text-color); }
+    .flow .arrow { color: var(--text-light); }
+    .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .twocol { grid-template-columns: 1fr; } }
+    .twocol ul { padding-left: 18px; margin: 0; font-size: 0.88rem; }
+    .twocol li { margin-bottom: 6px; }
+    .mini-lanes > div + div { margin-top: 4px; }
+    #mini-map { width: 100%; height: 150px; image-rendering: auto; border-radius: 4px; }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <section class="hero">
+      <div>
+        <div class="page-head" style="margin:0"><div class="eyebrow">Cam generator v2 · prototype gallery</div></div>
+        <h1>Seven ways to design a better cam</h1>
+        <p>The current tool turns a rise/fall/dwell table into a profile. These prototypes ask what an engineer actually needs: say the motion the way the machine needs it, see whether the follower will push, jam, jump or ring, find the smallest cam that works, and leave with a file a shop can cut.</p>
+        <p class="small">Every prototype runs on one shared engine (<span class="mono">cam-core.js</span>) and recomputes on every drag. A design made in one page carries to the next through the "Open in…" buttons.</p>
+        <div class="flow" style="margin-top:16px">
+          <a class="step" href="a-motion-sketch.html">A · Sketch the motion</a><span class="arrow">→</span>
+          <a class="step" href="c-design-space.html">C · Size it</a><span class="arrow">→</span>
+          <a class="step" href="b-workbench.html">B · Check the mechanism</a><span class="arrow">→</span>
+          <a class="step" href="e-dynamics.html">E · Spring and torque</a><span class="arrow">→</span>
+          <a class="step" href="g-make-it.html">G · Make it</a>
+        </div>
+        <p class="small muted" style="margin-top:8px">Side tools: <a href="f-law-lab.html">F · Law lab</a> for choosing a motion law, <a href="d-timing.html">D · Machine timing</a> for several cams on one shaft. <a href="../">The current tool</a> is unchanged.</p>
+      </div>
+      <div id="hero-cam"></div>
+    </section>
+
+    <div class="gallery" id="gallery"></div>
+
+    <section class="card" style="margin-top:28px">
+      <h2>What the current tool is missing, and which prototype answers it</h2>
+      <div class="twocol">
+        <ul>
+          <li><b>No pressure angle or undercut check.</b> The README lists both as out of scope, yet they decide whether a cam works at all. → B, C</li>
+          <li><b>No way to size the cam.</b> Base circle is a guess; nothing says it is too small or wastefully large. → C (map), B (auto-size)</li>
+          <li><b>Only translating in-line rollers.</b> Offset, flat-faced and swing-arm followers are the common cases in real machines. → B</li>
+          <li><b>Only rest-to-rest segments.</b> Constant-velocity passes and via points can't be described. → A</li>
+        </ul>
+        <ul>
+          <li><b>Four motion laws, no guidance.</b> Modified sine and modified trapezoid are the industry workhorses and are missing. → F</li>
+          <li><b>No forces.</b> Kinematics alone can't tell you the follower will jump at 400 rpm. → E</li>
+          <li><b>No output.</b> A plot is not a part. → G (DXF, SVG, CSV, 1:1 print)</li>
+          <li><b>One cam at a time.</b> Machines coordinate several. → D</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('index');
+    const C = CamCore;
+
+    const CARDS = [
+      {
+        key: 'sketch', href: 'a-motion-sketch.html', tag: 'Prototype A', title: 'Motion Sketch',
+        text: 'Drag points on the displacement curve; boundary-condition polynomials fill the gaps.',
+        bullets: ['Stops, pass-through points and constant-velocity spans', 'Smooth acceleration or smooth jerk joins', 'Live velocity, acceleration and jerk while you drag'],
+      },
+      {
+        key: 'bench', href: 'b-workbench.html', tag: 'Prototype B', title: 'Follower Workbench',
+        text: 'Watch the cam drive the follower, with the force line and pressure angle drawn on.',
+        bullets: ['Roller (with offset), flat-faced and swing-arm followers', 'Profile colored where checks fail', 'Auto-size to the smallest passing cam'],
+      },
+      {
+        key: 'space', href: 'c-design-space.html', tag: 'Prototype C', title: 'Sizing Map',
+        text: 'Thousands of cams at once: base circle against offset or roller size.',
+        bullets: ['Worst pressure angle as a heat map', 'Undercut and pressure-angle limits hatched', '"Smallest passing cam" recommendation'],
+      },
+      {
+        key: 'timing', href: 'd-timing.html', tag: 'Prototype D', title: 'Machine Timing',
+        text: 'Several followers on one camshaft, laid out on a shared timing diagram.',
+        bullets: ['Drag strokes in time and height', 'Interlocks flag collisions in degrees and ms', 'Machine speed limited by the hardest-working axis'],
+      },
+      {
+        key: 'dyn', href: 'e-dynamics.html', tag: 'Prototype E', title: 'Spring & Torque',
+        text: 'Will the follower stay on the cam, and what does the motor see?',
+        bullets: ['Jump speed and contact force', 'Lightest spring that holds at speed', 'Camshaft torque, power and flywheel size'],
+      },
+      {
+        key: 'laws', href: 'f-law-lab.html', tag: 'Prototype F', title: 'Law Lab',
+        text: 'Seven motion laws ranked on your actual rise and follower stiffness.',
+        bullets: ['Peak velocity, acceleration and jerk in real units', 'Residual vibration after the rise', 'Modified sine and modified trapezoid included'],
+      },
+      {
+        key: 'make', href: 'g-make-it.html', tag: 'Prototype G', title: 'Make It',
+        text: 'From profile to part: plate, grooved and barrel cams.',
+        bullets: ['Bore, keyway and timing mark', 'Cutter-size check and toolpath', 'DXF, SVG, CSV and 1:1 printable template'],
+      },
+    ];
+
+    const host = document.getElementById('gallery');
+    CARDS.forEach((c) => {
+      const a = document.createElement('a');
+      a.className = 'card proto-card';
+      a.href = c.href;
+      a.innerHTML = `<div class="preview"><div id="pv-${c.key}"></div></div>
+        <div class="body"><div class="tag">${c.tag}</div><h2>${c.title}</h2><p>${c.text}</p><ul>${c.bullets.map((b) => `<li>${b}</li>`).join('')}</ul></div>`;
+      host.appendChild(a);
+    });
+
+    // Live previews ----------------------------------------------------------
+    const bare = { pad: { l: 4, r: 4, t: 6, b: 4 }, showXAxis: false, tooltip: false, yTickFormat: () => '' };
+
+    // Hero: offset translating roller on a modified-sine rise and return.
+    const heroMotion = C.fromSegments(C.presetSegments('rrr'));
+    const heroF = { type: 'roller', rb: 30, rr: 9, e: 6 };
+    const heroP = C.profile(heroMotion, heroF);
+    const hero = new CamUI.CamView('hero-cam', { labels: true });
+    hero.setDesign(heroMotion, heroF, heroP, C.checks(heroMotion, heroF, heroP));
+
+    // A: keyframe curve
+    const kf = [{ theta: 0, s: 0, mode: 'stop' }, { theta: 70, s: 5, mode: 'pass' }, { theta: 190, s: 25, mode: 'pass' }, { theta: 235, s: 28, mode: 'stop' }, { theta: 255, s: 28, mode: 'stop' }, { theta: 340, s: 0, mode: 'stop' }];
+    const mA = C.fromKeyframes(kf, [{ kind: 'auto' }, { kind: 'linear' }]);
+    new CamUI.LineChart('pv-sketch', { ...bare, height: 140 }).setData({
+      series: [{ x: mA.theta, y: mA.s, fill: 'var(--series-1)', fillOpacity: 0.1 }],
+      bands: [{ x0: 70, x1: 190, fill: 'var(--series-3)', opacity: 0.14 }],
+      points: kf.map((k) => ({ x: k.theta, y: k.s, r: 4.5, shape: k.mode === 'stop' ? 'square' : 'circle', cursor: 'pointer' })),
+    });
+
+    // B: swing-arm follower
+    const mB = C.fromSegments(C.presetSegments('drdr'));
+    const fB = { type: 'oscillating', rb: 34, rr: 8, arm: 70, pivot: 90 };
+    const pB = C.profile(mB, fB);
+    const camB = new CamUI.CamView('pv-bench', { labels: false, pitch: false });
+    camB.setDesign(mB, fB, pB, C.checks(mB, fB, pB));
+    document.getElementById('pv-bench').style.height = '150px';
+
+    // C: mini sizing map
+    (function () {
+      const el = document.getElementById('pv-space');
+      el.innerHTML = '<canvas id="mini-map" width="96" height="60"></canvas>';
+      const cv = el.querySelector('canvas');
+      const ctx = cv.getContext('2d');
+      const img = ctx.createImageData(96, 60);
+      const ramp = [[205, 226, 251], [109, 167, 236], [42, 120, 214], [24, 79, 149], [13, 54, 107]];
+      for (let j = 0; j < 60; j++)
+        for (let i = 0; i < 96; i++) {
+          const rb = 4 + (i / 95) * 116;
+          const e = 70 - (j / 59) * 140;
+          const q = C.quickScan(mB, rb, 10, e);
+          const ph = q.valid ? q.phiMax : 90;
+          const t = Math.min(1, ph / 45) * 4;
+          const k = Math.min(3, Math.floor(t));
+          const f = t - k;
+          let rgb = ramp[k].map((v, n) => v + (ramp[k + 1][n] - v) * f);
+          const bad = ph > 30 || q.rhoMin < 15;
+          if (bad) rgb = rgb.map((v) => v * 0.45 + 255 * 0.55 * (((i + j) % 4 === 0) ? 0.6 : 1));
+          const p = (j * 96 + i) * 4;
+          img.data.set([...rgb.map(Math.round), 255], p);
+        }
+      ctx.putImageData(img, 0, 0);
+    })();
+
+    // D: three lanes
+    (function () {
+      const el = document.getElementById('pv-timing');
+      el.className = 'mini-lanes';
+      const lanes = [
+        [{ type: 'dwell', duration: 20 }, { type: 'rise', duration: 90, lift: 40, law: 'modified_trapezoid' }, { type: 'dwell', duration: 90 }, { type: 'fall', duration: 90, lift: 40, law: 'modified_trapezoid' }, { type: 'dwell', duration: 70 }],
+        [{ type: 'dwell', duration: 30 }, { type: 'rise', duration: 50, lift: 15, law: 'cycloidal' }, { type: 'dwell', duration: 220 }, { type: 'fall', duration: 40, lift: 15, law: 'cycloidal' }, { type: 'dwell', duration: 20 }],
+        [{ type: 'dwell', duration: 120 }, { type: 'rise', duration: 30, lift: 8, law: 'modified_sine' }, { type: 'dwell', duration: 20 }, { type: 'fall', duration: 25, lift: 8, law: 'modified_sine' }, { type: 'dwell', duration: 165 }],
+      ];
+      lanes.forEach((segs, i) => {
+        const d = document.createElement('div');
+        el.appendChild(d);
+        const m = C.fromSegments(segs);
+        const col = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'][i];
+        new CamUI.LineChart(d, { ...bare, height: 44 }).setData({ series: [{ x: m.theta, y: m.s, color: col, fill: col, fillOpacity: 0.12 }], bands: i < 2 ? [{ x0: 47, x1: 64, fill: 'var(--status-critical)', opacity: 0.2 }] : [] });
+      });
+    })();
+
+    // E: spring versus demand at a speed where it jumps
+    (function () {
+      const d = C.dynamics(mB, { rpm: 620, mass: 0.8, k: 1.5, preload: 40 });
+      const demand = Array.from(d.inertia, (f) => -f);
+      const bands = [];
+      let s0 = null;
+      for (let i = 0; i < d.force.length; i++) {
+        if (d.force[i] < 0 && s0 === null) s0 = mB.theta[i];
+        if (d.force[i] >= 0 && s0 !== null) {
+          bands.push({ x0: s0, x1: mB.theta[i], fill: 'var(--status-critical)', opacity: 0.18 });
+          s0 = null;
+        }
+      }
+      new CamUI.LineChart('pv-dyn', { ...bare, height: 140, includeZero: true }).setData({
+        series: [{ x: mB.theta, y: d.spring, color: 'var(--series-2)' }, { x: mB.theta, y: demand, color: 'var(--series-1)' }],
+        bands,
+      });
+    })();
+
+    // F: acceleration of four laws
+    (function () {
+      const U = Array.from({ length: 201 }, (_, i) => i / 200);
+      const laws = [['cycloidal', 'var(--series-1)'], ['modified_sine', 'var(--series-2)'], ['modified_trapezoid', 'var(--series-3)'], ['poly4567', 'var(--series-5)']];
+      new CamUI.LineChart('pv-laws', { ...bare, height: 140, xDomain: [0, 1], xTicks: [0, 0.5, 1] }).setData({
+        series: laws.map(([k, col]) => ({ x: U, y: U.map((u) => C.LAWS[k].fn(u)[2]), color: col })),
+      });
+    })();
+
+    // G: grooved cam outline
+    (function () {
+      const f = { type: 'roller', rb: 40, rr: 10, e: 0 };
+      const p = C.profile(mB, f);
+      const n = p.pitchX.length;
+      const off = (d) => {
+        const xs = [];
+        const ys = [];
+        for (let i = 0; i < n; i++) {
+          const dx = (p.surfX[i] - p.pitchX[i]) / f.rr;
+          const dy = (p.surfY[i] - p.pitchY[i]) / f.rr;
+          xs.push(p.pitchX[i] + d * dx);
+          ys.push(p.pitchY[i] + d * dy);
+        }
+        return CamUI.polyPath(xs, ys, true, 2);
+      };
+      const R = 86;
+      document.getElementById('pv-make').innerHTML = `<svg viewBox="${-R - 4} ${-R - 4} ${2 * R + 8} ${2 * R + 8}" style="height:150px;width:100%">
+        <g transform="scale(1,-1)">
+          <circle r="${R}" class="cam-body"></circle>
+          <path d="${off(-10.5)} ${off(10.5)}" style="fill:var(--primary-light);fill-rule:evenodd;stroke:var(--cam-stroke);stroke-width:1.2;vector-effect:non-scaling-stroke"></path>
+          <path d="${off(0)}" style="fill:none;stroke:var(--series-2);stroke-width:1.2;stroke-dasharray:4 3;vector-effect:non-scaling-stroke"></path>
+          <circle r="10" class="cam-hub"></circle>
+        </g></svg>`;
+    })();
+
+    // One clock for the animated previews
+    new CamUI.Player({
+      n: 720,
+      speed: 70,
+      onFrame: (deg) => {
+        hero.setIndex((deg / 360) * (heroMotion.theta.length - 1));
+        camB.setIndex((deg / 360) * (mB.theta.length - 1));
+      },
+    }).play();
+  </script>
+</body>
+</html>

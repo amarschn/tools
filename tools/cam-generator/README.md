@@ -18,3 +18,6 @@
 
 ## References
 - TBD.
+
+## v2 prototypes
+- `prototypes/` holds seven working prototypes for the next version (motion sketching, follower checks, sizing, machine timing, dynamics, law comparison and manufacturing export). See `prototypes/README.md` and `plans/2026-10-17_cam_generator_v2.md`.

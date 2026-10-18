@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Machine Timing — Cam Prototype D</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    .timing-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .timing-grid { grid-template-columns: 1fr; } }
+    .lane { border-top: 1px solid var(--border-color); padding: 10px 0 4px; }
+    .lane:first-of-type { border-top: 0; }
+    .lane-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+    .lane-head input[type='text'] { width: 160px; font-weight: 600; padding: 4px 8px; }
+    .lane-head select { width: auto; padding: 4px 8px; font-size: 0.78rem; }
+    .lane-swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+    .lane-stat { font-size: 0.75rem; color: var(--text-light); font-family: var(--font-mono); }
+    .lane-head .spacer { flex: 1; }
+    .rule { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 0.8rem; }
+    .rule-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .rule select, .rule input { width: auto; padding: 3px 6px; font-size: 0.78rem; }
+    .rule input { width: 64px; }
+    .machine { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .machine figure { margin: 0; text-align: center; }
+    .machine figcaption { font-size: 0.75rem; color: var(--text-light); }
+    .ruler { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-light); padding-left: 54px; padding-right: 14px; font-family: var(--font-mono); }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype D · Many cams, one camshaft</div>
+      <h1>Machine Timing</h1>
+      <p class="lede">Real cam machines (packaging, assembly, presses) run several followers off one shaft. Lay out each station's moves on a shared timing diagram, write down which positions must never overlap, and the tool flags collisions in degrees and milliseconds. Drag the round handles to move a stroke; drag the square handles to change where and how far it ends.</p>
+    </div>
+
+    <div class="timing-grid">
+      <section class="card">
+        <div class="card-title">
+          <h2>Timing diagram</h2>
+          <div class="btn-row">
+            <button class="btn small" id="add-axis" type="button">+ Axis</button>
+            <button class="btn small" id="export" type="button">Export timing CSV</button>
+            <button class="btn small ghost" id="reset" type="button">Reset example</button>
+          </div>
+        </div>
+        <div id="lanes"></div>
+        <p class="chart-caption">Double-click empty space in a lane to add a stroke there; double-click a handle to delete that stroke. Shaded red: an interlock is violated.</p>
+      </section>
+
+      <aside class="stack">
+        <section class="card">
+          <div class="card-title"><h3>Interlocks</h3><span id="rules-pill"></span></div>
+          <div id="rules"></div>
+          <button class="btn small" id="add-rule" type="button" style="margin-top:8px">+ Interlock</button>
+        </section>
+        <section class="card">
+          <div class="card-title"><h3>Machine speed</h3></div>
+          <div class="row2">
+            <div class="field"><label for="rpm">Shaft speed <span class="val">rpm</span></label><input type="number" id="rpm" value="120" min="1" step="10"></div>
+            <div class="field"><label for="alim">Accel. limit <span class="val">g</span></label><input type="number" id="alim" value="3" min="0.1" step="0.5"></div>
+          </div>
+          <div id="speed"></div>
+        </section>
+        <section class="card">
+          <div class="card-title"><h3>The camshaft</h3><button class="btn small" id="play" type="button">Pause</button></div>
+          <div class="machine" id="machine"></div>
+          <p class="chart-caption">Each cam is auto-sized for an 8 mm roller and a 30° pressure angle limit, and all are drawn to the same scale.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('timing');
+    const C = CamCore;
+    const SLOTS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-7)', 'var(--series-5)', 'var(--series-6)'];
+    const STORE = 'cam-prototypes-timing';
+
+    const DEFAULT = {
+      axes: [
+        { name: 'Pusher', law: 'modified_trapezoid', moves: [{ start: 20, end: 110, to: 40 }, { start: 200, end: 290, to: 0 }] },
+        { name: 'Gate lift', law: 'cycloidal', moves: [{ start: 30, end: 80, to: 15 }, { start: 300, end: 340, to: 0 }] },
+        { name: 'Clamp', law: 'modified_sine', moves: [{ start: 120, end: 150, to: 8 }, { start: 170, end: 195, to: 0 }] },
+      ],
+      rules: [
+        { a: 0, aOp: '>', aVal: 5, b: 1, bOp: '<', bVal: 12, note: 'Product hits a closed gate' },
+        { a: 2, aOp: '>', aVal: 1, b: 0, bOp: '<', bVal: 38, note: 'Clamp closes before product arrives' },
+      ],
+    };
+    let machine = CamUI.readJSON(STORE, null) || JSON.parse(JSON.stringify(DEFAULT));
+    let built = [];
+    let conflicts = [];
+    const charts = [];
+    const views = [];
+
+    // Moves -> rise/fall/dwell segments. The level before the first move equals the level after the last.
+    function buildAxis(ax) {
+      const moves = [...ax.moves].sort((p, q) => p.start - q.start);
+      const L0 = moves.length ? moves[moves.length - 1].to : 0;
+      const segs = [];
+      let t = 0;
+      let level = L0;
+      moves.forEach((mv) => {
+        if (mv.start > t + 1e-9) segs.push({ type: 'dwell', duration: mv.start - t });
+        const d = mv.to - level;
+        if (Math.abs(d) < 1e-9) segs.push({ type: 'dwell', duration: mv.end - mv.start });
+        else segs.push({ type: d > 0 ? 'rise' : 'fall', duration: mv.end - mv.start, lift: Math.abs(d), law: ax.law });
+        t = mv.end;
+        level = mv.to;
+      });
+      if (t < 360 - 1e-9) segs.push({ type: 'dwell', duration: 360 - t });
+      const m = C.fromSegments(segs, { samples: 720 });
+      for (let i = 0; i < m.s.length; i++) m.s[i] += L0;
+      return { m, moves, L0 };
+    }
+
+    function evalRules() {
+      conflicts = machine.rules.map((r) => {
+        const A = built[r.a];
+        const B = built[r.b];
+        if (!A || !B) return { rule: r, mask: null, ranges: [] };
+        const n = A.m.s.length;
+        const test = (v, op, x) => (op === '>' ? v > x : v < x);
+        const mask = new Uint8Array(n);
+        for (let i = 0; i < n; i++) mask[i] = test(A.m.s[i], r.aOp, r.aVal) && test(B.m.s[i], r.bOp, r.bVal) ? 1 : 0;
+        const ranges = [];
+        let s0 = null;
+        for (let i = 0; i < n; i++) {
+          if (mask[i] && s0 === null) s0 = A.m.theta[i];
+          if ((!mask[i] || i === n - 1) && s0 !== null) {
+            ranges.push([s0, A.m.theta[i]]);
+            s0 = null;
+          }
+        }
+        // Margin: smallest angular gap between "A in zone" and "B in zone" when there is no overlap.
+        let margin = Infinity;
+        if (!ranges.length) {
+          const inA = [];
+          const inB = [];
+          for (let i = 0; i < n - 1; i++) {
+            if (test(A.m.s[i], r.aOp, r.aVal)) inA.push(A.m.theta[i]);
+            if (test(B.m.s[i], r.bOp, r.bVal)) inB.push(B.m.theta[i]);
+          }
+          if (inA.length && inB.length) {
+            let j = 0;
+            inA.forEach((x) => {
+              while (j < inB.length - 1 && inB[j + 1] <= x) j++;
+              [inB[j], inB[Math.min(j + 1, inB.length - 1)]].forEach((y) => {
+                const d = Math.abs(x - y);
+                margin = Math.min(margin, d, 360 - d);
+              });
+            });
+          }
+        }
+        return { rule: r, mask, ranges, margin };
+      });
+    }
+
+    function save() {
+      CamUI.writeJSON(STORE, machine);
+    }
+
+    function renderLanes() {
+      const host = document.getElementById('lanes');
+      host.innerHTML = '';
+      charts.length = 0;
+      const lawOpts = Object.entries(C.LAWS).filter(([k]) => k !== 'linear').map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+      machine.axes.forEach((ax, idx) => {
+        const lane = document.createElement('div');
+        lane.className = 'lane';
+        lane.innerHTML = `
+          <div class="lane-head">
+            <span class="lane-swatch" style="background:${SLOTS[idx % SLOTS.length]}"></span>
+            <input type="text" value="${ax.name}" aria-label="Axis name">
+            <select aria-label="Motion law">${lawOpts}</select>
+            <span class="spacer"></span>
+            <span class="lane-stat" data-stat></span>
+            <button class="btn small ghost" data-del title="Remove axis" type="button">Remove</button>
+          </div>
+          <div class="lane-chart"></div>`;
+        lane.querySelector('select').value = ax.law;
+        lane.querySelector('input').addEventListener('input', (e) => {
+          ax.name = e.target.value;
+          renderRules();
+          renderMachine();
+          save();
+        });
+        lane.querySelector('select').addEventListener('change', (e) => {
+          ax.law = e.target.value;
+          update();
+        });
+        lane.querySelector('[data-del]').addEventListener('click', () => {
+          if (machine.axes.length <= 1) return;
+          machine.axes.splice(idx, 1);
+          machine.rules = machine.rules.filter((r) => r.a !== idx && r.b !== idx).map((r) => ({ ...r, a: r.a > idx ? r.a - 1 : r.a, b: r.b > idx ? r.b - 1 : r.b }));
+          renderLanes();
+          renderRules();
+          update();
+        });
+        host.appendChild(lane);
+        const chart = new CamUI.LineChart(lane.querySelector('.lane-chart'), {
+          height: 120,
+          xTicks: [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360],
+          yLabel: 'mm',
+          tooltip: (x) => {
+            const B = built[idx];
+            const i = CamUI.nearestIndex(B.m.theta, x);
+            const rpm = Number(document.getElementById('rpm').value) || 120;
+            return `<div class="muted">${x.toFixed(1)}° · ${((x / 360) * (60000 / rpm)).toFixed(0)} ms</div><div>${ax.name} <b>${B.m.s[i].toFixed(2)} mm</b></div>`;
+          },
+          onHover: (x) => scrub(x),
+          onDragStart: () => (player.hold = true),
+          onDrag: (id, x, y, evt) => dragHandle(ax, id, x, y, evt),
+          onDragEnd: () => {
+            player.hold = false;
+            save();
+          },
+          onDblClick: (x, y, id) => {
+            if (id) {
+              const k = Number(id.split(':')[0]);
+              const sorted = [...ax.moves].sort((p, q) => p.start - q.start);
+              const mv = sorted[k];
+              if (ax.moves.length > 1) ax.moves.splice(ax.moves.indexOf(mv), 1);
+              // Keep the cycle closed: the last move must return to where the first starts.
+              update();
+              return;
+            }
+            const sorted = [...ax.moves].sort((p, q) => p.start - q.start);
+            const prevEnd = Math.max(0, ...sorted.filter((mv) => mv.end <= x).map((mv) => mv.end));
+            const nextStart = Math.min(360, ...sorted.filter((mv) => mv.start >= x).map((mv) => mv.start));
+            if (nextStart - prevEnd < 12) return;
+            const half = Math.min(25, (nextStart - prevEnd) / 2 - 2);
+            ax.moves.push({ start: Math.round(Math.max(prevEnd + 1, x - half)), end: Math.round(Math.min(nextStart - 1, x + half)), to: Math.max(0, Math.round(y)) });
+            update();
+          },
+        });
+        charts.push(chart);
+      });
+    }
+
+    function dragHandle(ax, id, x, y, evt) {
+      const [kStr, which] = id.split(':');
+      const sorted = [...ax.moves].sort((p, q) => p.start - q.start);
+      const k = Number(kStr);
+      const mv = sorted[k];
+      const prevEnd = k > 0 ? sorted[k - 1].end : 0;
+      const nextStart = k < sorted.length - 1 ? sorted[k + 1].start : 360;
+      const snap = (v) => (evt.shiftKey ? v : Math.round(v));
+      if (which === 's') mv.start = Math.max(prevEnd, Math.min(mv.end - 4, snap(x)));
+      else {
+        mv.end = Math.min(nextStart, Math.max(mv.start + 4, snap(x)));
+        mv.to = Math.max(0, evt.shiftKey ? y : Math.round(y * 2) / 2);
+      }
+      update();
+    }
+
+    function update() {
+      built = machine.axes.map(buildAxis);
+      evalRules();
+      const rpm = Number(document.getElementById('rpm').value) || 120;
+      const w = (rpm * 2 * Math.PI) / 60;
+      machine.axes.forEach((ax, idx) => {
+        const B = built[idx];
+        const bands = [];
+        conflicts.forEach((c) => {
+          if (c.rule.a === idx || c.rule.b === idx) c.ranges.forEach(([x0, x1]) => bands.push({ x0, x1, fill: 'var(--status-critical)', opacity: 0.18 }));
+        });
+        const hl = [];
+        machine.rules.forEach((r) => {
+          if (r.a === idx) hl.push({ y: r.aVal, color: 'var(--text-light)', dash: '2 3', label: `${r.aOp} ${r.aVal}`, fit: true });
+          if (r.b === idx) hl.push({ y: r.bVal, color: 'var(--text-light)', dash: '2 3', label: `${r.bOp} ${r.bVal}`, fit: true });
+        });
+        let level = B.L0;
+        const pts = [];
+        B.moves.forEach((mv, k) => {
+          pts.push({ id: `${k}:s`, x: mv.start, y: level, r: 5.5, cursor: 'ew-resize', stroke: SLOTS[idx % SLOTS.length] });
+          pts.push({ id: `${k}:e`, x: mv.end, y: mv.to, r: 5.5, shape: 'square', cursor: 'move', stroke: SLOTS[idx % SLOTS.length] });
+          level = mv.to;
+        });
+        charts[idx].setData({ series: [{ x: B.m.theta, y: B.m.s, color: SLOTS[idx % SLOTS.length], fill: SLOTS[idx % SLOTS.length], fillOpacity: 0.08 }], bands, hlines: hl, points: pts });
+        const st = C.stats(B.m, rpm);
+        document.querySelectorAll('.lane')[idx].querySelector('[data-stat]').textContent = `stroke ${st.lift.toFixed(1)} mm · peak ${(st.aPeak / 9806.65).toFixed(2)} g`;
+      });
+      renderRuleStatus();
+      renderSpeed();
+      renderMachine();
+      save();
+    }
+
+    function renderRules() {
+      const host = document.getElementById('rules');
+      const axisOpts = machine.axes.map((ax, i) => `<option value="${i}">${ax.name}</option>`).join('');
+      host.innerHTML = machine.rules
+        .map(
+          (r, i) => `<div class="rule" data-i="${i}">
+            <div class="rule-line">Collision if <select data-f="a">${axisOpts}</select> <select data-f="aOp"><option>&gt;</option><option>&lt;</option></select> <input type="number" data-f="aVal" value="${r.aVal}" step="0.5"> mm</div>
+            <div class="rule-line">while <select data-f="b">${axisOpts}</select> <select data-f="bOp"><option>&gt;</option><option>&lt;</option></select> <input type="number" data-f="bVal" value="${r.bVal}" step="0.5"> mm</div>
+            <div class="rule-line"><span class="muted" style="flex:1">${r.note || ''}</span><span data-status></span><button class="btn small ghost" data-del type="button">Remove</button></div>
+          </div>`,
+        )
+        .join('');
+      host.querySelectorAll('.rule').forEach((el) => {
+        const r = machine.rules[Number(el.dataset.i)];
+        el.querySelectorAll('[data-f]').forEach((inp) => {
+          inp.value = r[inp.dataset.f];
+          inp.addEventListener('change', () => {
+            const f = inp.dataset.f;
+            r[f] = f === 'aOp' || f === 'bOp' ? inp.value : Number(inp.value);
+            update();
+          });
+        });
+        el.querySelector('[data-del]').addEventListener('click', () => {
+          machine.rules.splice(Number(el.dataset.i), 1);
+          renderRules();
+          update();
+        });
+      });
+    }
+
+    function renderRuleStatus() {
+      const rpm = Number(document.getElementById('rpm').value) || 120;
+      const msPerDeg = 60000 / rpm / 360;
+      let bad = 0;
+      document.querySelectorAll('.rule').forEach((el, i) => {
+        const c = conflicts[i];
+        if (!c) return;
+        let html;
+        if (c.ranges.length) {
+          bad++;
+          const span = c.ranges.reduce((acc, [a, b]) => acc + (b - a), 0);
+          html = `<span class="pill bad">Collides ${c.ranges.map(([a, b]) => `${a.toFixed(0)}–${b.toFixed(0)}°`).join(', ')}</span>`;
+        } else if (Number.isFinite(c.margin)) {
+          html = `<span class="pill ${c.margin < 10 ? 'warn' : 'good'}">Clear by ${c.margin.toFixed(0)}° · ${(c.margin * msPerDeg).toFixed(0)} ms</span>`;
+        } else html = '<span class="pill good">Never both</span>';
+        el.querySelector('[data-status]').innerHTML = html;
+      });
+      document.getElementById('rules-pill').innerHTML = bad ? `<span class="pill bad">${bad} collision${bad > 1 ? 's' : ''}</span>` : '<span class="pill good">All clear</span>';
+    }
+
+    function renderSpeed() {
+      const rpm = Number(document.getElementById('rpm').value) || 120;
+      const alim = (Number(document.getElementById('alim').value) || 3) * 9806.65;
+      const rows = built.map((B, i) => {
+        const st = C.stats(B.m, rpm);
+        const maxRpm = st.aPeak > 0 ? rpm * Math.sqrt(alim / st.aPeak) : Infinity;
+        return { name: machine.axes[i].name, slot: SLOTS[i % SLOTS.length], g: st.aPeak / 9806.65, maxRpm };
+      });
+      const limiter = rows.reduce((a, b) => (b.maxRpm < a.maxRpm ? b : a), rows[0]);
+      document.getElementById('speed').innerHTML = `
+        <div class="metric hero" style="margin-bottom:10px"><div class="k">Fastest shaft speed within the limit</div><div class="v">${Number.isFinite(limiter.maxRpm) ? limiter.maxRpm.toFixed(0) : '∞'}<span class="u">rpm</span></div><div class="sub">Set by ${limiter.name}. ${(limiter.maxRpm * 60).toFixed(0)} cycles per hour.</div></div>
+        <table class="data"><thead><tr><th>Axis</th><th>Peak g</th><th>Max rpm</th></tr></thead><tbody>
+        ${rows.map((r) => `<tr><td><span class="lane-swatch" style="display:inline-block;background:${r.slot};margin-right:6px;vertical-align:-1px"></span>${r.name}</td><td class="mono">${r.g.toFixed(2)}</td><td class="mono">${Number.isFinite(r.maxRpm) ? r.maxRpm.toFixed(0) : '∞'}</td></tr>`).join('')}
+        </tbody></table>
+        <p class="chart-caption">Acceleration grows with the square of speed, so max rpm = rpm × √(limit / peak).</p>`;
+    }
+
+    function renderMachine() {
+      const host = document.getElementById('machine');
+      if (host.children.length !== built.length) {
+        host.innerHTML = built.map((_, i) => `<figure><div id="mc-${i}"></div><figcaption></figcaption></figure>`).join('');
+        views.length = 0;
+        built.forEach((_, i) => views.push(new CamUI.CamView(`mc-${i}`, { labels: false, pitch: false })));
+      }
+      built.forEach((B, i) => {
+        const rr = 8;
+        let rb = 10;
+        for (; rb < 300; rb += 1) {
+          const q = C.quickScan(B.m, rb, rr, 0);
+          if (q.phiMax <= 30 && q.rhoMin >= 1.5 * rr) break;
+        }
+        const f = { type: 'roller', rb, rr, e: 0 };
+        const p = C.profile(B.m, f);
+        views[i].o.bounds = null;
+        views[i].setDesign(B.m, f, p, C.checks(B.m, f, p));
+        host.children[i].querySelector('figcaption').textContent = `${machine.axes[i].name} · Ø${(2 * Math.max(...p.radius)).toFixed(0)} mm`;
+      });
+      // Redraw every cam at one shared scale so their sizes compare honestly.
+      const all = views.map((v) => v._bounds());
+      const union = [0, 1, 2, 3].map((k) => (k < 2 ? Math.min(...all.map((b) => b[k])) : Math.max(...all.map((b) => b[k]))));
+      views.forEach((v) => {
+        v.o.bounds = union;
+        v.setDesign(v.m, v.f, v.prof, v.chk);
+      });
+      setAngle(player.pos);
+    }
+
+    const player = new CamUI.Player({ n: 720, speed: 60, onFrame: (deg) => setAngle(deg) });
+    function setAngle(deg) {
+      charts.forEach((c) => c.setCursor(deg));
+      views.forEach((v) => v.m && v.setIndex((deg / 360) * (v.m.theta.length - 1)));
+    }
+    function scrub(x) {
+      if (x === null) return (player.hold = false);
+      player.hold = true;
+      player.pos = x;
+      setAngle(x);
+    }
+
+    document.getElementById('add-axis').addEventListener('click', () => {
+      const n = machine.axes.length + 1;
+      machine.axes.push({ name: `Axis ${n}`, law: 'cycloidal', moves: [{ start: 60, end: 140, to: 10 }, { start: 220, end: 300, to: 0 }] });
+      renderLanes();
+      renderRules();
+      update();
+    });
+    document.getElementById('add-rule').addEventListener('click', () => {
+      machine.rules.push({ a: 0, aOp: '>', aVal: 5, b: Math.min(1, machine.axes.length - 1), bOp: '>', bVal: 5, note: '' });
+      renderRules();
+      update();
+    });
+    document.getElementById('reset').addEventListener('click', () => {
+      machine = JSON.parse(JSON.stringify(DEFAULT));
+      renderLanes();
+      renderRules();
+      update();
+    });
+    document.getElementById('rpm').addEventListener('input', update);
+    document.getElementById('alim').addEventListener('input', update);
+    document.getElementById('play').addEventListener('click', (e) => (e.target.textContent = player.toggle() ? 'Pause' : 'Play'));
+    document.getElementById('export').addEventListener('click', () => {
+      const head = ['theta_deg', ...machine.axes.map((a) => `${a.name.replace(/,/g, ' ')}_mm`)];
+      const lines = [head.join(',')];
+      for (let i = 0; i < built[0].m.theta.length; i++) lines.push([built[0].m.theta[i].toFixed(2), ...built.map((B) => B.m.s[i].toFixed(4))].join(','));
+      CamUI.download('machine-timing.csv', lines.join('\n'), 'text/csv');
+    });
+
+    renderLanes();
+    renderRules();
+    update();
+    player.play();
+  </script>
+</body>
+</html>

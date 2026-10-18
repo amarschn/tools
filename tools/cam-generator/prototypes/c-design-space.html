@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Sizing Map — Cam Prototype C</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    .map-wrap { position: relative; width: 100%; }
+    .map-wrap canvas, .map-wrap svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+    .map-wrap svg { overflow: visible; }
+    .map-wrap .axis text { fill: var(--text-light); font-size: 11px; }
+    .map-wrap .axis-title { fill: var(--text-light); font-size: 11px; font-weight: 600; }
+    .contour { fill: none; stroke-width: 2; }
+    .ramp { height: 10px; border-radius: 3px; margin: 4px 0 2px; }
+    .ramp-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-light); }
+    .swatch { display: inline-block; width: 22px; height: 12px; border: 1px solid var(--border-color); vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+    .map-legend { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: end; margin-top: 10px; font-size: 0.75rem; }
+    @media (max-width: 700px) { .map-legend { grid-template-columns: 1fr; } }
+    .finding { font-size: 0.95rem; }
+    .finding b { font-family: var(--font-mono); }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype C · Answer "how big does it have to be?"</div>
+      <h1>Sizing Map</h1>
+      <p class="lede">Every pixel is a complete cam. The map sweeps base circle radius against follower offset (or roller size) and colors each design by its worst pressure angle. Hatched areas fail a check. The star marks the smallest cam that passes; click anywhere to inspect that design.</p>
+    </div>
+
+    <div class="layout-3">
+      <aside class="stack">
+        <section class="card">
+          <h3>Map</h3>
+          <div class="seg-control full" id="axis-ctl" role="group" aria-label="Vertical axis">
+            <button data-v="e" class="active">Rb × offset</button><button data-v="rr">Rb × roller</button>
+          </div>
+          <div class="slider-field field" style="margin-top:14px" id="rr-field">
+            <label for="rr">Roller radius <span class="val" id="rr-val"></span></label>
+            <input type="range" id="rr" min="2" max="40" step="0.5">
+          </div>
+          <div class="slider-field field" id="e-field" hidden>
+            <label for="e">Follower offset <span class="val" id="e-val"></span></label>
+            <input type="range" id="e" min="-40" max="40" step="0.5">
+          </div>
+          <div class="field">
+            <label for="phi">Pressure angle limit <span class="val" id="phi-val"></span></label>
+            <input type="range" id="phi" min="15" max="45" step="1" value="30">
+          </div>
+          <div class="field">
+            <label for="rho">Min convex radius / roller <span class="val" id="rho-val"></span></label>
+            <input type="range" id="rho" min="1" max="4" step="0.1" value="1.5">
+          </div>
+        </section>
+        <section class="card">
+          <h3>Motion</h3>
+          <div id="motion-host"></div>
+        </section>
+      </aside>
+
+      <section class="card">
+        <div class="card-title"><h2 id="map-title">Worst pressure angle</h2><span class="small muted" id="map-time"></span></div>
+        <div class="map-wrap" id="map"><canvas id="cv"></canvas><svg id="ov"></svg><div class="chart-tip" id="tip" hidden></div></div>
+        <div class="map-legend">
+          <div>
+            <div class="small">Worst pressure angle |φ|max</div>
+            <div class="ramp" id="ramp"></div>
+            <div class="ramp-labels" id="ramp-labels"></div>
+          </div>
+          <div><span class="swatch" id="sw-phi"></span>φ over limit</div>
+          <div><span class="swatch" id="sw-rho"></span>Curvature too tight</div>
+        </div>
+      </section>
+
+      <aside class="stack">
+        <section class="card">
+          <h3>Recommendation</h3>
+          <div class="finding" id="finding"></div>
+        </section>
+        <section class="card">
+          <div class="card-title"><h3>Selected design</h3><span id="sel-pill"></span></div>
+          <div id="cam" style="max-width:260px;margin:0 auto"></div>
+          <div class="metrics" id="sel-metrics" style="margin-top:10px"></div>
+          <div id="handoff" style="margin-top:12px"></div>
+        </section>
+      </aside>
+    </div>
+
+    <section class="card" style="margin-top:20px">
+      <h2>Reading the map</h2>
+      <div class="small" style="columns: 2 320px; column-gap: 32px">
+        <p><b>Bigger cams push more gently.</b> The pressure angle φ is the angle between the force the cam applies (along the common normal) and the direction the follower can move. For an in-line translating roller, tan φ = (ds/dθ − e) / (√(Rp² − e²) + s), where Rp = Rb + Rr is the prime circle radius, e is the offset, s the lift and ds/dθ the lift per radian. Growing Rb grows the denominator, so φ falls.</p>
+        <p><b>Offset trades the rise against the return.</b> Moving the follower axis sideways by e lowers φ on the stroke whose ds/dθ has the same sign as e and raises it on the other stroke. It pays off when the rise is faster than the return, or when only the loaded stroke matters.</p>
+        <p><b>Small cams also get sharp.</b> The pitch curve's convex radius of curvature ρ shrinks with the cam. When ρ drops below the roller radius the cam surface folds over itself (undercut) and the follower cannot reproduce the motion. Designers keep ρ comfortably larger than the roller, often 1.5 to 3 times, to keep the Hertz contact stress down.</p>
+        <p><b>What this replaces.</b> Textbooks size cams with nomograms that assume one motion law and a symmetric rise. This map is computed from your actual motion, so mixed laws, unequal rise and return angles and multiple strokes are all handled.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('space');
+    const C = CamCore;
+    const design = CamUI.loadDesign();
+    const F = design.follower;
+    if (F.type !== 'roller') F.type = 'roller';
+    const st = { axis: 'e', rr: F.rr || 10, e: F.e || 0, phi: 30, rho: 1.5, sel: { rb: F.rb, y: F.e || 0 } };
+    const NX = 110;
+    const NY = 81; // odd, so zero offset is a sample
+    let grid = null;
+    let motion = null;
+
+    const LIGHT_RAMP = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
+    const DARK_RAMP = ['#0d2440', '#104281', '#1c5cab', '#2a78d6', '#5598e7', '#86b6ef', '#b7d3f6'];
+    const isDark = () => getComputedStyle(document.body).getPropertyValue('color-scheme').includes('dark');
+    const hex = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+    function rampColor(t) {
+      const R = isDark() ? DARK_RAMP : LIGHT_RAMP;
+      const x = Math.max(0, Math.min(1, t)) * (R.length - 1);
+      const i = Math.min(R.length - 2, Math.floor(x));
+      const f = x - i;
+      const a = hex(R[i]);
+      const b = hex(R[i + 1]);
+      return a.map((v, k) => Math.round(v + (b[k] - v) * f));
+    }
+
+    function ranges() {
+      const lift = Math.max(1, motion.lift);
+      const rbMax = Math.max(40, Math.ceil((lift * 6) / 10) * 10);
+      const rbMin = 4;
+      if (st.axis === 'e') {
+        const eMax = Math.ceil((rbMax * 0.6) / 5) * 5;
+        return { x: [rbMin, rbMax], y: [-eMax, eMax], yName: 'Follower offset e (mm)' };
+      }
+      return { x: [rbMin, rbMax], y: [2, Math.max(20, Math.ceil(rbMax / 3))], yName: 'Roller radius Rr (mm)' };
+    }
+
+    function compute() {
+      const t0 = performance.now();
+      motion = CamUI.buildMotion(design.motion, 360);
+      const R = ranges();
+      const phi = new Float64Array(NX * NY);
+      const rhoOk = new Uint8Array(NX * NY);
+      const rhoMargin = new Float64Array(NX * NY);
+      let best = null;
+      for (let j = 0; j < NY; j++) {
+        const y = R.y[0] + ((j + 0.5) / NY) * (R.y[1] - R.y[0]);
+        for (let i = 0; i < NX; i++) {
+          const rb = R.x[0] + ((i + 0.5) / NX) * (R.x[1] - R.x[0]);
+          const rr = st.axis === 'e' ? st.rr : y;
+          const e = st.axis === 'e' ? y : st.e;
+          const q = C.quickScan(motion, rb, rr, e);
+          const k = j * NX + i;
+          phi[k] = q.valid ? q.phiMax : 90;
+          const need = st.rho * rr;
+          rhoMargin[k] = q.valid ? q.rhoMin - need : -1;
+          rhoOk[k] = q.valid && q.rhoMin >= need ? 1 : 0;
+          const ok = q.valid && q.phiMax <= st.phi && rhoOk[k];
+          // Smallest mechanism: prime circle Rb + Rr (the roller counts too); tie-break on lower φ.
+          const size = rb + rr;
+          if (ok && (!best || size < best.size - 1e-9 || (Math.abs(size - best.size) < 1e-9 && q.phiMax < best.phi))) best = { rb, y, size, phi: q.phiMax, i, j };
+        }
+      }
+      grid = { phi, rhoOk, rhoMargin, R, best };
+      document.getElementById('map-time').textContent = `${NX * NY} cams in ${Math.round(performance.now() - t0)} ms`;
+    }
+
+    function size() {
+      const host = document.getElementById('map');
+      const W = host.clientWidth;
+      const H = Math.round(Math.min(560, Math.max(320, W * 0.68)));
+      host.style.height = `${H}px`;
+      return { W, H, pad: { l: 56, r: 14, t: 10, b: 40 } };
+    }
+
+    // Marching squares on a scalar field, threshold 0. Returns SVG path data.
+    function contour(field, sx, sy) {
+      let d = '';
+      const v = (i, j) => field[j * NX + i];
+      for (let j = 0; j < NY - 1; j++) {
+        for (let i = 0; i < NX - 1; i++) {
+          const a = v(i, j), b = v(i + 1, j), c = v(i + 1, j + 1), e = v(i, j + 1);
+          const code = (a > 0 ? 8 : 0) | (b > 0 ? 4 : 0) | (c > 0 ? 2 : 0) | (e > 0 ? 1 : 0);
+          if (code === 0 || code === 15) continue;
+          const lerp = (p, q) => p / (p - q);
+          const top = [i + lerp(a, b), j];
+          const right = [i + 1, j + lerp(b, c)];
+          const bottom = [i + lerp(e, c), j + 1];
+          const left = [i, j + lerp(a, e)];
+          const segs = {
+            1: [[left, bottom]], 2: [[bottom, right]], 3: [[left, right]], 4: [[top, right]], 5: [[left, top], [bottom, right]],
+            6: [[top, bottom]], 7: [[left, top]], 8: [[left, top]], 9: [[top, bottom]], 10: [[top, right], [left, bottom]],
+            11: [[top, right]], 12: [[left, right]], 13: [[bottom, right]], 14: [[left, bottom]],
+          }[code];
+          segs.forEach(([p, q]) => (d += `M${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}L${sx(q[0]).toFixed(1)},${sy(q[1]).toFixed(1)}`));
+        }
+      }
+      return d;
+    }
+
+    function draw() {
+      const { W, H, pad } = size();
+      const cv = document.getElementById('cv');
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = W * dpr;
+      cv.height = H * dpr;
+      const ctx = cv.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const pw = W - pad.l - pad.r;
+      const ph = H - pad.t - pad.b;
+      const cw = pw / NX;
+      const ch = ph / NY;
+      const img = ctx.createImageData(NX, NY);
+      for (let j = 0; j < NY; j++) {
+        for (let i = 0; i < NX; i++) {
+          const k = j * NX + i;
+          const [r, g, b] = rampColor(grid.phi[k] / 45);
+          const row = NY - 1 - j; // y grows upward
+          const p = (row * NX + i) * 4;
+          img.data[p] = r;
+          img.data[p + 1] = g;
+          img.data[p + 2] = b;
+          img.data[p + 3] = 255;
+        }
+      }
+      const off = document.createElement('canvas');
+      off.width = NX;
+      off.height = NY;
+      off.getContext('2d').putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, pad.l, pad.t, pw, ph);
+
+      // Hatching for failing regions, drawn per cell with clip so stripes stay continuous.
+      const hatch = (test, angle, color) => {
+        ctx.save();
+        ctx.beginPath();
+        for (let j = 0; j < NY; j++)
+          for (let i = 0; i < NX; i++) if (test(j * NX + i)) ctx.rect(pad.l + i * cw - 0.3, pad.t + (NY - 1 - j) * ch - 0.3, cw + 0.6, ch + 0.6);
+        ctx.clip();
+        ctx.fillStyle = isDark() ? 'rgba(11,13,18,0.55)' : 'rgba(255,255,255,0.55)';
+        ctx.fillRect(pad.l, pad.t, pw, ph);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const step = 7;
+        for (let x = -ph; x < pw + ph; x += step) {
+          if (angle > 0) {
+            ctx.moveTo(pad.l + x, pad.t + ph);
+            ctx.lineTo(pad.l + x + ph, pad.t);
+          } else {
+            ctx.moveTo(pad.l + x, pad.t);
+            ctx.lineTo(pad.l + x + ph, pad.t + ph);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+      };
+      const crit = CamUI.cssVar('--status-critical');
+      const warn = CamUI.cssVar('--status-warning');
+      hatch((k) => grid.phi[k] > st.phi, 1, crit);
+      hatch((k) => !grid.rhoOk[k], -1, warn);
+
+      // Overlay: axes, contours, markers
+      const R = grid.R;
+      const X = (v) => pad.l + ((v - R.x[0]) / (R.x[1] - R.x[0])) * pw;
+      const Y = (v) => pad.t + (1 - (v - R.y[0]) / (R.y[1] - R.y[0])) * ph;
+      const gx = (i) => pad.l + (i + 0.5) * cw;
+      const gy = (j) => pad.t + (NY - 1 - j + 0.5) * ch;
+      const xt = CamUI.niceTicks(R.x[0], R.x[1], 7).ticks.filter((v) => v >= R.x[0] && v <= R.x[1]);
+      const yt = CamUI.niceTicks(R.y[0], R.y[1], 6).ticks.filter((v) => v >= R.y[0] && v <= R.y[1]);
+      const phiField = Float64Array.from(grid.phi, (p) => p - st.phi);
+      const rhoField = grid.rhoMargin;
+      let svg = `<g class="axis">${xt.map((v) => `<text x="${X(v)}" y="${H - pad.b + 16}" text-anchor="middle">${v}</text>`).join('')}${yt
+        .map((v) => `<text x="${pad.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`)
+        .join('')}</g>
+        <text class="axis-title" x="${pad.l + pw / 2}" y="${H - 6}" text-anchor="middle">Base circle radius Rb (mm)</text>
+        <text class="axis-title" transform="translate(12 ${pad.t + ph / 2}) rotate(-90)" text-anchor="middle">${R.yName}</text>
+        <rect x="${pad.l}" y="${pad.t}" width="${pw}" height="${ph}" style="fill:none;stroke:var(--border-color)"></rect>
+        <path class="contour" d="${contour(phiField, gx, gy)}" style="stroke:var(--status-critical)"></path>
+        <path class="contour" d="${contour(rhoField, gx, gy)}" style="stroke:var(--status-warning);stroke-dasharray:5 3"></path>`;
+      if (st.axis === 'e' && R.y[0] < 0) svg += `<line x1="${pad.l}" x2="${pad.l + pw}" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--text-light);stroke-dasharray:2 4;opacity:.7"></line>`;
+      if (grid.best) {
+        const bx = X(grid.best.rb);
+        const by = Y(grid.best.y);
+        const star = (cx, cy, r) =>
+          Array.from({ length: 10 }, (_, k) => {
+            const a = -Math.PI / 2 + (k * Math.PI) / 5;
+            const rr = k % 2 ? r * 0.45 : r;
+            return `${k ? 'L' : 'M'}${cx + rr * Math.cos(a)},${cy + rr * Math.sin(a)}`;
+          }).join('') + 'Z';
+        svg += `<path d="${star(bx, by, 10)}" style="fill:var(--series-4);stroke:var(--bg-card);stroke-width:2"></path>`;
+        svg += `<text x="${bx - 4}" y="${by - 16}" text-anchor="middle" style="fill:var(--text-color);font-size:12px;font-weight:600;paint-order:stroke;stroke:var(--bg-card);stroke-width:3px">smallest passing</text>`;
+      }
+      const sx = X(st.sel.rb);
+      const sy = Y(st.sel.y);
+      svg += `<circle cx="${sx}" cy="${sy}" r="7" style="fill:none;stroke:var(--text-color);stroke-width:2"></circle><circle cx="${sx}" cy="${sy}" r="9" style="fill:none;stroke:var(--bg-card);stroke-width:1.5"></circle>`;
+      const ov = document.getElementById('ov');
+      ov.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      ov.innerHTML = svg;
+      ov._geom = { X, Y, pad, pw, ph, R };
+
+      // Legend ramp
+      const stops = Array.from({ length: 10 }, (_, k) => `rgb(${rampColor(k / 9).join(',')})`);
+      document.getElementById('ramp').style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+      document.getElementById('ramp-labels').innerHTML = [0, 15, 30, 45].map((v) => `<span>${v}°</span>`).join('');
+      document.getElementById('sw-phi').style.background = `repeating-linear-gradient(-45deg, ${crit} 0 1.5px, transparent 1.5px 6px)`;
+      document.getElementById('sw-rho').style.background = `repeating-linear-gradient(45deg, ${warn} 0 1.5px, transparent 1.5px 6px)`;
+    }
+
+    function valueAt(rb, y) {
+      const R = grid.R;
+      const rr = st.axis === 'e' ? st.rr : y;
+      const e = st.axis === 'e' ? y : st.e;
+      return { rb, rr, e, q: C.quickScan(motion, rb, rr, e) };
+    }
+
+    const cam = new CamUI.CamView('cam', { labels: false });
+    const player = new CamUI.Player({ n: 720, speed: 90, onFrame: (deg) => cam.m && cam.setIndex((deg / 360) * (cam.m.theta.length - 1)) });
+
+    function renderSelection() {
+      const v = valueAt(st.sel.rb, st.sel.y);
+      const f = { type: 'roller', rb: v.rb, rr: v.rr, e: v.e };
+      const m = CamUI.buildMotion(design.motion);
+      if (!v.q.valid) {
+        document.getElementById('sel-pill').innerHTML = '<span class="pill bad">Invalid</span>';
+        return;
+      }
+      const p = C.profile(m, f);
+      const ch = C.checks(m, f, p, { phi: st.phi, rhoFactor: st.rho });
+      cam.setDesign(m, f, p, ch);
+      Object.assign(F, f);
+      document.getElementById('sel-pill').innerHTML = `<span class="pill ${ch.ok ? 'good' : 'bad'}">${ch.ok ? 'Passes' : 'Fails'}</span>`;
+      document.getElementById('sel-metrics').innerHTML = `
+        <div class="metric"><div class="k">Rb</div><div class="v">${v.rb.toFixed(1)}<span class="u">mm</span></div></div>
+        <div class="metric"><div class="k">${st.axis === 'e' ? 'Offset' : 'Roller'}</div><div class="v">${(st.axis === 'e' ? v.e : v.rr).toFixed(1)}<span class="u">mm</span></div></div>
+        <div class="metric"><div class="k">|φ|max</div><div class="v">${ch.phiMax.toFixed(1)}<span class="u">°</span></div></div>
+        <div class="metric"><div class="k">Outside dia.</div><div class="v">${(2 * ch.rMax).toFixed(0)}<span class="u">mm</span></div></div>`;
+    }
+
+    function renderFinding() {
+      const b = grid.best;
+      const el = document.getElementById('finding');
+      if (!b) {
+        el.innerHTML = `<div class="callout bad">Nothing on this map passes. Lengthen the rise and fall angles, allow a larger pressure angle or extend the map with a smaller roller.</div>`;
+        return;
+      }
+      const v = valueAt(b.rb, b.y);
+      const m = CamUI.buildMotion(design.motion);
+      const p = C.profile(m, { type: 'roller', rb: v.rb, rr: v.rr, e: v.e });
+      const ch = C.checks(m, { type: 'roller', rb: v.rb, rr: v.rr, e: v.e }, p);
+      const centered = C.quickScan(motion, b.rb, v.rr, st.axis === 'e' ? 0 : v.e);
+      el.innerHTML = `<p style="margin:0 0 8px">Smallest prime circle (Rb + Rr) that passes: <b>Rb ≈ ${Math.ceil(b.rb)} mm</b>${st.axis === 'e' ? ` with offset <b>${b.y.toFixed(1)} mm</b>` : ` with roller <b>${b.y.toFixed(1)} mm</b>`}, about <b>${Math.ceil(2 * ch.rMax)} mm</b> across.</p>
+        ${st.axis === 'e' && Math.abs(b.y) > 0.5 ? `<p class="small muted" style="margin:0 0 8px">Without offset the same base circle reaches φ ${centered.phiMax.toFixed(1)}°.</p>` : ''}
+        <button class="btn small" id="use-best" type="button">Select this design</button>`;
+      document.getElementById('use-best').addEventListener('click', () => {
+        st.sel = { rb: Math.ceil(b.rb * 2) / 2, y: Math.round(b.y * 2) / 2 };
+        draw();
+        renderSelection();
+      });
+    }
+
+    let pending = false;
+    function refresh() {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        compute();
+        draw();
+        renderFinding();
+        renderSelection();
+      });
+    }
+
+    // Map interaction
+    const mapEl = document.getElementById('map');
+    const tip = document.getElementById('tip');
+    function eventToDesign(evt) {
+      const g = document.getElementById('ov')._geom;
+      const rect = mapEl.getBoundingClientRect();
+      const px = evt.clientX - rect.left;
+      const py = evt.clientY - rect.top;
+      if (px < g.pad.l || px > g.pad.l + g.pw || py < g.pad.t || py > g.pad.t + g.ph) return null;
+      const rb = g.R.x[0] + ((px - g.pad.l) / g.pw) * (g.R.x[1] - g.R.x[0]);
+      const y = g.R.y[0] + (1 - (py - g.pad.t) / g.ph) * (g.R.y[1] - g.R.y[0]);
+      return { rb, y, px, py };
+    }
+    mapEl.addEventListener('pointermove', (evt) => {
+      const d = eventToDesign(evt);
+      if (!d) return (tip.hidden = true);
+      const v = valueAt(d.rb, d.y);
+      const need = st.rho * v.rr;
+      const ok = v.q.valid && v.q.phiMax <= st.phi && v.q.rhoMin >= need;
+      tip.innerHTML = `<div class="muted">Rb ${d.rb.toFixed(1)} mm · ${st.axis === 'e' ? `e ${d.y.toFixed(1)}` : `Rr ${d.y.toFixed(1)}`} mm</div>
+        <div>|φ|max <b>${v.q.valid ? v.q.phiMax.toFixed(1) + '°' : '–'}</b></div>
+        <div>ρ min <b>${v.q.valid ? CamUI.fmt(v.q.rhoMin) + ' mm' : '–'}</b> (need ${need.toFixed(1)})</div>
+        <div><span class="pill ${ok ? 'good' : 'bad'}" style="margin-top:4px">${ok ? 'Passes' : 'Fails'}</span></div>`;
+      tip.hidden = false;
+      let left = d.px + 14;
+      if (left + tip.offsetWidth > mapEl.clientWidth) left = d.px - tip.offsetWidth - 14;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${Math.max(0, d.py - 40)}px`;
+    });
+    mapEl.addEventListener('pointerleave', () => (tip.hidden = true));
+    mapEl.addEventListener('click', (evt) => {
+      const d = eventToDesign(evt);
+      if (!d) return;
+      st.sel = { rb: Math.round(d.rb * 2) / 2, y: Math.round(d.y * 2) / 2 };
+      draw();
+      renderSelection();
+    });
+
+    // Controls
+    function bindRange(id, key, unit, digits = 1) {
+      const el = document.getElementById(id);
+      const val = document.getElementById(`${id}-val`);
+      el.value = st[key];
+      const show = () => (val.textContent = `${Number(st[key]).toFixed(digits)} ${unit}`);
+      show();
+      el.addEventListener('input', () => {
+        st[key] = Number(el.value);
+        show();
+        refresh();
+      });
+    }
+    bindRange('rr', 'rr', 'mm');
+    bindRange('e', 'e', 'mm');
+    bindRange('phi', 'phi', '°', 0);
+    bindRange('rho', 'rho', '×');
+    document.querySelectorAll('#axis-ctl button').forEach((b) =>
+      b.addEventListener('click', () => {
+        st.axis = b.dataset.v;
+        document.querySelectorAll('#axis-ctl button').forEach((x) => x.classList.toggle('active', x === b));
+        document.getElementById('rr-field').hidden = st.axis !== 'e';
+        document.getElementById('e-field').hidden = st.axis === 'e';
+        st.sel = { rb: st.sel.rb, y: st.axis === 'e' ? st.e : st.rr };
+        refresh();
+      }),
+    );
+
+
+    window.addEventListener('resize', () => grid && draw());
+    document.addEventListener('themechange', () => grid && draw());
+    CamUI.handoffButtons('handoff', () => ({ ...design, follower: { ...F, type: 'roller' } }), ['bench', 'make']);
+    CamUI.motionHost('motion-host', design, refresh);
+    compute();
+    draw();
+    renderFinding();
+    renderSelection();
+    player.play();
+  </script>
+</body>
+</html>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Motion Sketch — Cam Prototype A</title>
+  <link rel="stylesheet" href="proto.css">
+  <style>
+    .sketch-grid { display: grid; grid-template-columns: 1fr 330px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .sketch-grid { grid-template-columns: 1fr; } }
+    .hint { font-size: 0.78rem; color: var(--text-light); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+    .key-table td input { width: 70px; padding: 3px 5px; font-size: 0.78rem; }
+    .key-table td select { padding: 3px 5px; font-size: 0.78rem; width: auto; }
+    .key-table tr { cursor: pointer; }
+    .scenario { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .scenario button { display: block; text-align: left; white-space: normal; line-height: 1.25; padding: 8px 10px; justify-content: flex-start; }
+    .scenario button small { display: block; color: var(--text-light); font-weight: 400; }
+    .panel-label { font-size: 0.72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.06em; margin: 14px 0 6px; }
+  </style>
+</head>
+<body data-theme="system">
+  <header id="nav"></header>
+  <main class="container">
+    <div class="page-head">
+      <div class="eyebrow">Prototype A · Design the motion, not the segments</div>
+      <h1>Motion Sketch</h1>
+      <p class="lede">Drag points on the displacement curve to say where the follower must be and when. The tool fits boundary-condition polynomials between the points, so you can mix stops, pass-through points and constant-velocity spans that the rise/fall/dwell table can't express. Velocity, acceleration and jerk update while you drag.</p>
+    </div>
+
+    <div class="sketch-grid">
+      <section class="card">
+        <div class="card-title">
+          <h2>Follower displacement</h2>
+          <div class="seg-control" id="order-ctl" role="group" aria-label="Continuity">
+            <button data-v="quintic" class="active" title="Match position, velocity and acceleration at every point">Smooth acceleration</button>
+            <button data-v="septic" title="Also force jerk to zero at every point">Smooth jerk</button>
+          </div>
+        </div>
+        <div id="chart-s"></div>
+        <div class="hint">
+          <span><b>Drag</b> a point to move it</span>
+          <span><b>Double-click</b> empty space to add a point</span>
+          <span><b>Double-click</b> a point to delete it</span>
+          <span><b>Click</b> between points to select a span</span>
+        </div>
+        <div class="chart-stack" style="margin-top:12px">
+          <div id="chart-v"></div>
+          <div id="chart-a"></div>
+          <div id="chart-j"></div>
+        </div>
+        <p class="chart-caption">Derivatives are per radian of cam rotation, scaled to time at the speed set on the right. Hover any chart to scrub the cam.</p>
+      </section>
+
+      <aside class="stack">
+        <section class="card">
+          <h3>Start from a job</h3>
+          <div class="scenario" id="scenarios"></div>
+        </section>
+        <section class="card" id="sel-card">
+          <h3 id="sel-title">Selected point</h3>
+          <div id="sel-body"></div>
+        </section>
+        <section class="card">
+          <div class="card-title"><h3>Cam preview</h3><button class="btn small" id="play">Pause</button></div>
+          <div id="cam" style="max-width:280px;margin:0 auto"></div>
+          <p class="chart-caption">Translating roller, base circle 40 mm, roller 10 mm. Size it properly in B or C.</p>
+          <div id="handoff" style="margin-top:10px"></div>
+        </section>
+        <section class="card">
+          <div class="card-title"><h3>At speed</h3>
+            <div class="field" style="margin:0;width:110px"><input type="number" id="rpm" value="120" min="1" step="10" aria-label="Cam speed in rpm"></div>
+          </div>
+          <div class="metrics" id="metrics"></div>
+          <div id="issues" style="margin-top:10px"></div>
+        </section>
+      </aside>
+    </div>
+
+    <section class="card" style="margin-top:20px">
+      <div class="card-title"><h2>Points</h2><span class="muted small">Every value is editable. Angles in degrees, positions in mm.</span></div>
+      <div class="table-wrap"><table class="data key-table" id="key-table"></table></div>
+      <details class="more">
+        <summary>How the curve is built</summary>
+        <div class="small" style="max-width:860px">
+          <p>Each span between two points is one polynomial in the normalized angle u = (θ − θ₀)/β, where β is the span width. It is solved so that position, velocity and acceleration match at both ends (degree 5). With "Smooth jerk" selected, jerk must also be zero at both ends (degree 7). This is the boundary-condition method from Norton's <i>Cam Design and Manufacturing Handbook</i>.</p>
+          <p><b>Stop</b> points force velocity to zero. <b>Pass</b> points take the harmonic mean of the slopes on either side, which keeps the curve from overshooting between monotone points. <b>Set v</b> lets you type the velocity in mm per radian. A <b>constant velocity</b> span is a straight line; its neighbours inherit its velocity and zero acceleration, so the joins are smooth. A span between two stops can instead use a classic law (cycloidal, modified sine and so on).</p>
+          <p>Acceleration is forced to zero at every point. That keeps the joins smooth but costs some peak acceleration compared with a global spline; the production version could offer both.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <script src="cam-core.js"></script>
+  <script src="cam-ui.js"></script>
+  <script>
+    CamUI.initPage('sketch');
+    const C = CamCore;
+    const D2R = Math.PI / 180;
+
+    const SCENARIOS = {
+      drdr: {
+        name: 'Dwell, rise, dwell, return',
+        sub: 'Four stops. The classic.',
+        keys: [[0, 0, 'stop'], [100, 20, 'stop'], [180, 20, 'stop'], [280, 0, 'stop']],
+        spans: {},
+      },
+      glue: {
+        name: 'Constant-speed pass',
+        sub: 'Glue or cut at steady speed mid-stroke',
+        keys: [[0, 0, 'stop'], [70, 5, 'pass'], [190, 25, 'pass'], [235, 28, 'stop'], [255, 28, 'stop'], [340, 0, 'stop']],
+        spans: { 1: { kind: 'linear' } },
+      },
+      via: {
+        name: 'Through a via point',
+        sub: 'Clear an obstacle without stopping',
+        keys: [[0, 0, 'stop'], [55, 9, 'pass'], [120, 22, 'stop'], [200, 22, 'stop'], [250, 9, 'pass'], [300, 0, 'stop']],
+        spans: {},
+      },
+      double: {
+        name: 'Two strokes per turn',
+        sub: 'Short and long lift on one cam',
+        keys: [[0, 0, 'stop'], [60, 8, 'stop'], [100, 8, 'stop'], [150, 0, 'stop'], [200, 0, 'stop'], [260, 22, 'stop'], [290, 22, 'stop']],
+        spans: { 0: { kind: 'law', law: 'modified_sine' }, 5: { kind: 'law', law: 'modified_sine' } },
+      },
+    };
+
+    let state = loadState();
+    let selected = { kind: 'key', i: 1 };
+    let motion = null;
+    let followerDesign = { type: 'roller', rb: 40, rr: 10, e: 0 };
+    let ready = false; // only persist after the user changes something
+
+    function loadState() {
+      const d = CamUI.loadDesign();
+      if (d.motion.kind === 'keyframes' && d.motion.keys && d.motion.keys.length >= 2) return { keys: d.motion.keys, spans: d.motion.spans || [], order: d.motion.order || 'quintic' };
+      return scenarioState('drdr');
+    }
+    function scenarioState(key) {
+      const sc = SCENARIOS[key];
+      const keys = sc.keys.map(([theta, s, mode]) => ({ theta, s, mode }));
+      const spans = keys.map((_, i) => sc.spans[i] || { kind: 'auto' });
+      return { keys, spans, order: 'quintic' };
+    }
+
+    const sChart = new CamUI.LineChart('chart-s', {
+      height: 300,
+      yLabel: 'Displacement (mm)',
+      yFormat: (v) => CamUI.fmt(v, 2),
+      tooltip: (x) => {
+        const i = CamUI.nearestIndex(motion.theta, x);
+        return `<div class="muted">θ ${x.toFixed(1)}°</div><div>s <b>${motion.s[i].toFixed(3)} mm</b></div>`;
+      },
+      onHover: (x) => scrub(x),
+      onDragStart: (id) => {
+        selected = { kind: 'key', i: Number(id) };
+        renderSelection();
+        player.hold = true;
+      },
+      onDrag: (id, x, y, evt) => {
+        const i = Number(id);
+        const k = state.keys[i];
+        if (i > 0) {
+          const lo = state.keys[i - 1].theta + 3;
+          const hi = (i + 1 < state.keys.length ? state.keys[i + 1].theta : 360) - 3;
+          k.theta = Math.max(lo, Math.min(hi, evt.shiftKey ? x : Math.round(x)));
+        }
+        k.s = Math.max(0, evt.shiftKey ? y : Math.round(y * 10) / 10);
+        update();
+      },
+      onDragEnd: () => {
+        player.hold = false;
+        renderTable();
+      },
+      onClick: (x, y) => {
+        // Click near a key selects it; otherwise select the span containing x.
+        let i = state.keys.length - 1;
+        while (i > 0 && state.keys[i].theta > x) i--;
+        selected = { kind: 'span', i };
+        renderSelection();
+        update();
+      },
+      onDblClick: (x, y, id) => {
+        if (id !== null && id !== undefined && id !== '') {
+          const i = Number(id);
+          if (i > 0 && state.keys.length > 2) {
+            state.keys.splice(i, 1);
+            state.spans.splice(i, 1);
+            selected = { kind: 'key', i: Math.min(i, state.keys.length - 1) };
+          }
+        } else {
+          const t = Math.round(x);
+          if (t <= 0 || t >= 360 || state.keys.some((k) => Math.abs(k.theta - t) < 4)) return;
+          let i = state.keys.length - 1;
+          while (i > 0 && state.keys[i].theta > t) i--;
+          state.keys.splice(i + 1, 0, { theta: t, s: Math.max(0, Math.round(y * 10) / 10), mode: 'pass' });
+          state.spans.splice(i + 1, 0, { kind: 'auto' });
+          selected = { kind: 'key', i: i + 1 };
+        }
+        update();
+        renderTable();
+        renderSelection();
+      },
+    });
+    const small = { height: 120, onHover: (x) => scrub(x) };
+    const vChart = new CamUI.LineChart('chart-v', { ...small, yLabel: 'Velocity (m/s)' });
+    const aChart = new CamUI.LineChart('chart-a', { ...small, yLabel: 'Accel. (m/s²)' });
+    const jChart = new CamUI.LineChart('chart-j', { ...small, yLabel: 'Jerk (m/s³)' });
+
+    const cam = new CamUI.CamView('cam', { labels: false });
+    const player = new CamUI.Player({ n: 720, speed: 90, onFrame: (deg) => setAngle(deg) });
+
+    function setAngle(deg) {
+      if (!motion) return;
+      const i = Math.round((deg / 360) * (motion.theta.length - 1));
+      cam.setIndex(i);
+      [sChart, vChart, aChart, jChart].forEach((c) => c.setCursor(deg));
+    }
+    function scrub(x) {
+      if (x === null) {
+        player.hold = false;
+        return;
+      }
+      player.hold = true;
+      player.pos = x;
+      setAngle(x);
+    }
+
+    function spanBands() {
+      const bands = [];
+      state.keys.forEach((k, i) => {
+        const th1 = i + 1 < state.keys.length ? state.keys[i + 1].theta : 360;
+        const sp = state.spans[i] || { kind: 'auto' };
+        const s1 = state.keys[(i + 1) % state.keys.length].s;
+        const sel = selected.kind === 'span' && selected.i === i;
+        if (sp.kind === 'linear') bands.push({ x0: k.theta, x1: th1, fill: 'var(--series-3)', opacity: sel ? 0.22 : 0.12, label: 'constant v' });
+        else if (Math.abs(s1 - k.s) < 1e-9) bands.push({ x0: k.theta, x1: th1, fill: 'var(--text-light)', opacity: sel ? 0.16 : 0.06, label: 'dwell' });
+        else if (sp.kind === 'law') bands.push({ x0: k.theta, x1: th1, fill: 'var(--series-7)', opacity: sel ? 0.18 : 0.08, label: C.LAWS[sp.law].name.toLowerCase() });
+        else if (sel) bands.push({ x0: k.theta, x1: th1, fill: 'var(--series-1)', opacity: 0.1 });
+      });
+      return bands;
+    }
+
+    function update() {
+      const rpm = Number(document.getElementById('rpm').value) || 120;
+      motion = C.fromKeyframes(state.keys, state.spans, { order: state.order });
+      const st = C.stats(motion, rpm);
+      const w = st.omega;
+      const x = motion.theta;
+      const vT = Array.from(motion.v, (v) => (v * w) / 1000);
+      const aT = Array.from(motion.a, (a) => (a * w * w) / 1000);
+      const jT = Array.from(motion.j, (j) => (j * w ** 3) / 1000);
+      const bands = spanBands().map((b) => ({ ...b, label: undefined }));
+
+      sChart.setData({
+        series: [{ x, y: motion.s, name: 's', color: 'var(--series-1)', width: 2.5, fill: 'var(--series-1)', fillOpacity: 0.07 }],
+        bands: spanBands(),
+        points: state.keys.map((k, i) => ({
+          id: i,
+          x: k.theta,
+          y: k.s,
+          r: 6.5,
+          shape: k.mode === 'stop' ? 'square' : k.mode === 'free' ? 'diamond' : 'circle',
+          fill: selected.kind === 'key' && selected.i === i ? 'var(--text-color)' : 'var(--bg-card)',
+          cursor: i === 0 ? 'ns-resize' : 'grab',
+        })),
+      });
+      vChart.setData({ series: [{ x, y: vT, name: 'v', color: 'var(--series-1)' }], bands });
+      aChart.setData({ series: [{ x, y: aT, name: 'a', color: 'var(--series-1)' }], bands });
+      jChart.setData({ series: [{ x, y: jT, name: 'j', color: 'var(--series-1)' }], bands });
+
+      const g = 9806.65;
+      document.getElementById('metrics').innerHTML = `
+        <div class="metric hero"><div class="k">Peak acceleration</div><div class="v">${CamUI.fmt(st.aPeak / 1000)}<span class="u">m/s²</span></div><div class="sub">${CamUI.fmt(st.aPeak / g, 2)} g</div></div>
+        <div class="metric"><div class="k">Peak velocity</div><div class="v">${CamUI.fmt(st.vPeak / 1000)}<span class="u">m/s</span></div></div>
+        <div class="metric"><div class="k">Peak jerk</div><div class="v">${CamUI.fmt(st.jPeak / 1000)}<span class="u">m/s³</span></div></div>
+        <div class="metric"><div class="k">Total lift</div><div class="v">${CamUI.fmt(st.lift)}<span class="u">mm</span></div></div>`;
+      const issues = [...motion.issues];
+      document.getElementById('issues').innerHTML = issues.length
+        ? issues.map((s) => `<div class="callout warn small">${s}</div>`).join('')
+        : '<span class="pill good">Motion stays above the base circle</span>';
+
+      const prof = C.profile(motion, followerDesign);
+      const chk = C.checks(motion, followerDesign, prof);
+      cam.setDesign(motion, followerDesign, prof, chk);
+      setAngle(player.pos);
+      if (ready) CamUI.saveDesign(currentDesign());
+    }
+
+    function currentDesign() {
+      const d = CamUI.loadDesign();
+      return { ...d, motion: { kind: 'keyframes', keys: state.keys, spans: state.spans, order: state.order }, rpm: Number(document.getElementById('rpm').value) || 120 };
+    }
+
+    function renderTable() {
+      const lawOpts = Object.entries(C.LAWS)
+        .filter(([k]) => k !== 'linear')
+        .map(([k, v]) => `<option value="law:${k}">${v.name}</option>`)
+        .join('');
+      const rows = state.keys
+        .map((k, i) => {
+          const sp = state.spans[i] || { kind: 'auto' };
+          const th1 = i + 1 < state.keys.length ? state.keys[i + 1].theta : 360;
+          const spanVal = sp.kind === 'law' ? `law:${sp.law}` : sp.kind;
+          const vel = motion ? motion.keyVelocity[i] : 0;
+          return `<tr data-i="${i}" class="${selected.kind === 'key' && selected.i === i ? 'sel' : ''}">
+            <td>${i + 1}</td>
+            <td><input type="number" data-f="theta" value="${k.theta}" ${i === 0 ? 'disabled' : ''} step="1"></td>
+            <td><input type="number" data-f="s" value="${k.s}" step="0.1" min="0"></td>
+            <td><select data-f="mode"><option value="stop">Stop</option><option value="pass">Pass</option><option value="free">Set v</option></select></td>
+            <td class="mono">${CamUI.fmt(vel, 2)}</td>
+            <td>${k.theta}° → ${th1}°</td>
+            <td><select data-f="span"><option value="auto">Polynomial</option><option value="linear">Constant velocity</option>${lawOpts}</select></td>
+          </tr>`;
+        })
+        .join('');
+      const tbl = document.getElementById('key-table');
+      tbl.innerHTML = `<thead><tr><th>#</th><th>Angle °</th><th>Position mm</th><th>Type</th><th>v mm/rad</th><th>Span to next</th><th>Span shape</th></tr></thead><tbody>${rows}</tbody>`;
+      tbl.querySelectorAll('tr[data-i]').forEach((tr) => {
+        const i = Number(tr.dataset.i);
+        const sp = state.spans[i] || { kind: 'auto' };
+        tr.querySelector('[data-f=mode]').value = state.keys[i].mode;
+        tr.querySelector('[data-f=span]').value = sp.kind === 'law' ? `law:${sp.law}` : sp.kind;
+        tr.addEventListener('click', (e) => {
+          if (e.target.closest('input,select')) return;
+          selected = { kind: 'key', i };
+          renderSelection();
+          renderTable();
+          update();
+        });
+        tr.querySelectorAll('[data-f]').forEach((inp) =>
+          inp.addEventListener('change', () => {
+            const f = inp.dataset.f;
+            if (f === 'theta') {
+              const lo = state.keys[i - 1].theta + 3;
+              const hi = (i + 1 < state.keys.length ? state.keys[i + 1].theta : 360) - 3;
+              state.keys[i].theta = Math.max(lo, Math.min(hi, Number(inp.value)));
+            } else if (f === 's') state.keys[i].s = Math.max(0, Number(inp.value));
+            else if (f === 'mode') state.keys[i].mode = inp.value;
+            else if (f === 'span') state.spans[i] = inp.value.startsWith('law:') ? { kind: 'law', law: inp.value.slice(4) } : { kind: inp.value };
+            update();
+            renderTable();
+            renderSelection();
+          }),
+        );
+      });
+    }
+
+    function renderSelection() {
+      const body = document.getElementById('sel-body');
+      const title = document.getElementById('sel-title');
+      if (selected.kind === 'key') {
+        const i = Math.min(selected.i, state.keys.length - 1);
+        const k = state.keys[i];
+        title.textContent = `Point ${i + 1} at ${k.theta.toFixed(0)}°`;
+        body.innerHTML = `
+          <div class="seg-control full" id="mode-ctl" role="group" aria-label="Point type">
+            <button data-v="stop">Stop</button><button data-v="pass">Pass through</button><button data-v="free">Set velocity</button>
+          </div>
+          <p class="small muted" style="margin:8px 0">${
+            k.mode === 'stop' ? 'The follower comes to rest here. Use stops at the ends of dwells.' : k.mode === 'pass' ? 'The follower keeps moving through this point at a velocity matched to its neighbours.' : 'Type the velocity the follower must have here.'
+          }</p>
+          ${k.mode === 'free' ? `<div class="field"><label>Velocity <span class="val">mm/rad</span></label><input type="number" id="free-v" step="1" value="${Number.isFinite(k.v) ? k.v : 0}"></div>` : ''}`;
+        body.querySelectorAll('#mode-ctl button').forEach((b) => {
+          b.classList.toggle('active', b.dataset.v === k.mode);
+          b.addEventListener('click', () => {
+            k.mode = b.dataset.v;
+            if (k.mode === 'free' && !Number.isFinite(k.v)) k.v = motion ? Math.round(motion.keyVelocity[i]) : 0;
+            update();
+            renderSelection();
+            renderTable();
+          });
+        });
+        const fv = body.querySelector('#free-v');
+        if (fv) fv.addEventListener('input', () => {
+          k.v = Number(fv.value);
+          update();
+        });
+      } else {
+        const i = selected.i;
+        const k = state.keys[i];
+        const th1 = i + 1 < state.keys.length ? state.keys[i + 1].theta : 360;
+        const sp = state.spans[i] || { kind: 'auto' };
+        title.textContent = `Span ${k.theta.toFixed(0)}° → ${th1.toFixed(0)}°`;
+        const restToRest = k.mode === 'stop' && state.keys[(i + 1) % state.keys.length].mode === 'stop';
+        body.innerHTML = `
+          <div class="field"><label>Shape</label>
+            <select id="span-kind">
+              <option value="auto">Polynomial (fit to neighbours)</option>
+              <option value="linear">Constant velocity</option>
+              ${Object.entries(C.LAWS).filter(([kk]) => kk !== 'linear').map(([kk, v]) => `<option value="law:${kk}" ${restToRest ? '' : 'disabled'}>${v.name}${restToRest ? '' : ' (needs stops)'}</option>`).join('')}
+            </select></div>
+          <p class="small muted" style="margin:0">${sp.kind === 'law' ? C.LAWS[sp.law].note : sp.kind === 'linear' ? 'A straight line in displacement. Neighbouring spans blend into and out of it.' : 'A polynomial matching position, velocity and acceleration at both ends.'}</p>`;
+        const sel = body.querySelector('#span-kind');
+        sel.value = sp.kind === 'law' ? `law:${sp.law}` : sp.kind;
+        sel.addEventListener('change', () => {
+          state.spans[i] = sel.value.startsWith('law:') ? { kind: 'law', law: sel.value.slice(4) } : { kind: sel.value };
+          update();
+          renderTable();
+          renderSelection();
+        });
+      }
+    }
+
+    // Scenario buttons
+    const scHost = document.getElementById('scenarios');
+    Object.entries(SCENARIOS).forEach(([key, sc]) => {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.innerHTML = `${sc.name}<small>${sc.sub}</small>`;
+      b.addEventListener('click', () => {
+        const order = state.order;
+        state = scenarioState(key);
+        state.order = order;
+        selected = { kind: 'key', i: 1 };
+        update();
+        renderTable();
+        renderSelection();
+      });
+      scHost.appendChild(b);
+    });
+
+    document.querySelectorAll('#order-ctl button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.v === state.order);
+      b.addEventListener('click', () => {
+        state.order = b.dataset.v;
+        document.querySelectorAll('#order-ctl button').forEach((x) => x.classList.toggle('active', x === b));
+        update();
+      });
+    });
+    document.getElementById('rpm').addEventListener('input', update);
+    document.getElementById('play').addEventListener('click', (e) => {
+      e.target.textContent = player.toggle() ? 'Pause' : 'Play';
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.target.closest('input,select')) return;
+      if (selected.kind !== 'key') return;
+      const k = state.keys[selected.i];
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected.i > 0 && state.keys.length > 2) {
+        state.keys.splice(selected.i, 1);
+        state.spans.splice(selected.i, 1);
+        selected.i = Math.min(selected.i, state.keys.length - 1);
+      } else if (e.key === 'ArrowUp') k.s = Math.round((k.s + 0.5) * 10) / 10;
+      else if (e.key === 'ArrowDown') k.s = Math.max(0, Math.round((k.s - 0.5) * 10) / 10);
+      else if (e.key === 'ArrowLeft' && selected.i > 0) k.theta = Math.max(state.keys[selected.i - 1].theta + 3, k.theta - 1);
+      else if (e.key === 'ArrowRight' && selected.i > 0) k.theta = Math.min((selected.i + 1 < state.keys.length ? state.keys[selected.i + 1].theta : 360) - 3, k.theta + 1);
+      else return;
+      e.preventDefault();
+      update();
+      renderTable();
+      renderSelection();
+    });
+
+    CamUI.handoffButtons('handoff', currentDesign, ['bench', 'space', 'dyn', 'make']);
+    update();
+    renderTable();
+    renderSelection();
+    ready = true;
+    player.play();
+  </script>
+</body>
+</html>
