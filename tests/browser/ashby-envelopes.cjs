@@ -1,6 +1,6 @@
 /* Numerical drawing invariants; no browser or charting dependency required. */
 const assert = require('node:assert/strict');
-const { roundedHull, splitClusters, build } = require('../../tools/materials-explorer/envelopes.js');
+const { roundedHull, splitClusters, build } = require('../../tools/ashby-chart/envelopes.js');
 const input = [[0,0], [1,.2], [.4,1], [.5,.4]];
 const padding = .055;
 const outline = roundedHull(input, padding);
