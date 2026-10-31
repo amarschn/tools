@@ -29,7 +29,7 @@ GRADE_PHYSICAL_PROPERTIES = {
 FAMILIES = {
     "metals": "metal", "engineering-plastics": "polymer", "ceramics": "ceramic",
     "composites": "composite", "woods": "wood", "foams": "foam",
-    "elastomers": "elastomer", "glasses": "glass", "concretes": "concrete",
+    "elastomers": "elastomer", "glasses": "glass", "concretes": "concrete", "fibers": "fiber",
 }
 AMBIENT_TEMPERATURE_K = (293.15, 298.15)
 

@@ -53,9 +53,9 @@ def test_grade_density_is_shared_without_merging_6061_tempers(selection):
 def test_missing_modulus_is_not_filled_from_old_aluminium_entry(selection):
     """The older 60-material store has these moduli; the curated sources do not."""
     plotted = {p["material_id"] for p in selection["charts"]["density|youngs_modulus"]["points"]}
-    assert {"al-1060", "al-6105"} <= set(selection["materials"])
-    assert not {"al-1060", "al-6105"} & plotted
-    assert len(selection["materials"]) == 1387
+    assert {"al-6042", "al-6105"} <= set(selection["materials"])
+    assert not {"al-6042", "al-6105"} & plotted
+    assert len(selection["materials"]) == 1453
 
 
 def test_6061_modulus_comes_from_the_pinned_handbook(selection):

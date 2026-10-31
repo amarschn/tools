@@ -37,15 +37,11 @@ published Materials data.
 
 ## Layout
 
-Organise however suits review. One workable shape:
-
-```
-private-sources/
-  README.md            <- the only tracked file
-  uddeholm/            <- by publisher
-  outokumpu/
-  ensinger/
-```
+Keep every document directly in this folder, in lowercase kebab-case, with the
+publisher first (`sikaemaco-488-ci.pdf`). The review tool below rejects filenames
+that contain a directory, and importers look documents up by filename. Do not
+nest documents by publisher. Non-document intake material, such as a download
+index, goes in a dated `intake-YYYY-MM-DD/` folder.
 
 The materials project can populate a private review index for you, with each
 file checked against the SHA-256 recorded when it was reviewed:

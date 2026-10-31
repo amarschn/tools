@@ -8,8 +8,8 @@ any other tool.
 Adding a material happens here, not anywhere else. The project this came from
 is closed; nothing upstream is maintained.
 
-Current contents: **1,387 material identities, 101 named states, 5,977
-observations, 12 registered properties and references to 560 sources**.
+Current contents: **1,453 material identities, 101 named states, 6,175
+observations, 12 registered properties and references to 585 sources**.
 The generated site has no runtime dependencies, backend, accounts, or network
 search service.
 
@@ -186,6 +186,14 @@ python3 materials-lookup/builder/import_concrete.py --source-dir private-sources
 ```
 
 See [the batch review](docs/concrete-2026-10-batch-review.md).
+
+The gathered documents batch adds **66 identities and 198 observations**. Reconstruct it with:
+
+```sh
+python3 materials-lookup/builder/import_gathered.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/gathered-2026-10-batch-review.md).
 
 ## Layout
 

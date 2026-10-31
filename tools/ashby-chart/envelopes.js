@@ -2,7 +2,7 @@
    population distribution or a material family's engineering limits. */
 (() => {
   'use strict';
-  const FAMILY_NAMES = { metal: 'Metals', polymer: 'Polymers', ceramic: 'Ceramics', composite: 'Composites', wood: 'Wood', foam: 'Foams', elastomer: 'Elastomers', glass: 'Glasses', concrete: 'Concrete' };
+  const FAMILY_NAMES = { metal: 'Metals', polymer: 'Polymers', ceramic: 'Ceramics', composite: 'Composites', wood: 'Wood', foam: 'Foams', elastomer: 'Elastomers', glass: 'Glasses', concrete: 'Concrete', fiber: 'Fibers' };
   const LABELS = {
     'ud-carbon-epoxy': 'Carbon / epoxy · UD', 'woven-carbon-epoxy': 'Carbon / epoxy · woven',
     'optical-glass': 'Optical glasses', 'pvc-foam': 'PVC foams', 'pes-foam': 'PES foams',

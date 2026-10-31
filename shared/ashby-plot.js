@@ -30,6 +30,7 @@ const FAMILY_COLORS = {
   elastomer: "#bd66a0",
   glass:     "#8875c4",
   concrete:  "#6f7782",
+  fiber:     "#c9a227",
 };
 
 const FAMILY_SYMBOLS = {
@@ -45,6 +46,7 @@ const FAMILY_SYMBOLS = {
   elastomer: "pentagon",
   glass:     "diamond",
   concrete:  "square",
+  fiber:     "triangle-up",
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -170,6 +172,7 @@ const FAMILY_BLOB_COLORS = {
   fabric:    { fill: "rgba(186,176,172,0.13)", line: "rgba(186,176,172,0.5)" },
   gel:       { fill: "rgba(176,122,161,0.13)", line: "rgba(176,122,161,0.5)" },
   concrete:  { fill: "rgba(111,119,130,0.13)", line: "rgba(111,119,130,0.5)" },
+  fiber:     { fill: "rgba(201,162,39,0.13)", line: "rgba(201,162,39,0.5)" },
 };
 
 // ── Theme helper ────────────────────────────────────────────────

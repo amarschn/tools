@@ -159,7 +159,7 @@ try {
     await page.locator('#state-al-6061-t6[open] .citation details[open]').waitFor();
     assert.match(await page.locator('#state-al-6061-t6 .value').innerText(), /≥ 35 ksi/);
     await page.getByRole('link',{name:'Sources',exact:true}).click(); await settled();
-    assert.equal(await page.locator('.source-card').count(),560);
+    assert.equal(await page.locator('.source-card').count(),585);
     assert.equal(await page.locator('.source-card a, iframe, embed, object').count(),0);
     for (const file of ['hydro-6061.pdf','hydro-6063.pdf','copper-alloys-guide.pdf','timet-6-4.pdf','atlas-engineering-bar.pdf','uddeholm-arne.pdf','ohara-optical-glass.pdf','cda-C67600.html','private-sources/index.html']) {
       const response = await context.request.get(base+file);
