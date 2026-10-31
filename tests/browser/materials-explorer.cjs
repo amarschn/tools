@@ -121,13 +121,26 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
 
     // A material missing the chosen property is still discoverable with an explicit alternate chart.
     await page.locator('#tab-browse').click();
-    await page.locator('#material-search').fill('wood'); await ready();
+    await page.locator('#material-search').fill('elastomer'); await ready();
     assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 0);
-    assert.equal(await page.locator('#material-list button').count(), 107);
-    await page.locator('#material-list button').filter({hasText: 'Red alder'}).click(); await ready();
-    await page.getByRole('button', {name: 'Show bending stiffness chart', exact: true}).click(); await ready();
+    assert.equal(await page.locator('#material-list button').count(), 110);
+    await page.locator('#material-list button').filter({hasText: 'Mold Max 10'}).first().click(); await ready();
+    await page.getByRole('button', {name: 'Show tensile strength chart', exact: true}).click(); await ready();
+    assert.equal(await page.locator('#y-prop').inputValue(), 'ultimate_tensile_strength');
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 110);
+
+    // Wood plots on the default chart through its computed along-grain modulus, and the printed bending value stays separate.
+    await page.getByRole('button', {name: 'Stiffness', exact: true}).click(); await ready();
+    await page.locator('#material-search').fill('wood'); await ready();
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 107);
+    await page.getByRole('button', {name: 'Bending stiffness', exact: true}).click(); await ready();
     assert.equal(await page.locator('#y-prop').inputValue(), 'flexural_modulus');
     assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 107);
+    await page.getByRole('button', {name: 'Compressive strength', exact: true}).click(); await ready();
+    assert.equal((await page.evaluate(() => MaterialsExplorer.getRows())).length, 107);
+    await page.getByRole('button', {name: 'Bending stiffness', exact: true}).click(); await ready();
+    await page.locator('#tab-browse').click();
+    await page.locator('#material-list button').filter({hasText: 'Red alder'}).click(); await ready();
     assert.match(await page.locator('#card-props').innerText(), /12.0% moisture/);
     assert.match(await page.locator('#card-props').innerText(), /9.50 GPa/);
 

@@ -9,7 +9,7 @@ redirects here.
 
 The source of truth is `materials-lookup/curated/`, also used by the Materials
 lookup tool. Its published catalog contains 1,453 materials, 101 named states, and
-6,175 observations from 585 sources. The chart reports how many materials have compatible values
+6,410 observations from 585 sources. The chart reports how many materials have compatible values
 for the selected axes and filters. Properties without positive observations
 are not offered on the logarithmic axes.
 
@@ -33,7 +33,9 @@ and describe only the plotted reference observations.
 
 The September 2026 batch adds 11 synthetic composites, 10 woods, 13 ceramics,
 12 foams, 10 elastomers, and 10 glasses. Wood bending modulus has its own
-property and preset. The rubber sheets report tensile strength and elongation
+property and preset. An October batch adds a computed Young's modulus and
+compressive strength for all 107 species and tensile strength for 21, so wood
+also plots on the main charts. The rubber sheets report tensile strength and elongation
 without a small-strain Young's modulus, so those grades appear in the tensile
 strength chart. Divinycell F likewise has no reported tensile modulus in the
 selected sheet. Missing properties stay missing. Source decisions are recorded
@@ -82,7 +84,8 @@ and PA6. Points only removes the outlines and retains the observations and
 reported ranges. Grouping is saved in shared links.
 
 The outline shape is a separate control under Filters & display. The
-[comparison gallery](prototypes/) preserves the earlier subgroup studies:
+[comparison gallery](prototypes/), no longer linked from the chart, preserves the
+earlier subgroup studies:
 
 | Method | Construction |
 | --- | --- |

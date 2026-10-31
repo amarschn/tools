@@ -239,7 +239,8 @@ try {
   // The new families resolve through the same lookup and keep source distinctions.
   await go(origin+'/?material=wood-red-alder');
   assert.match(await page.locator('#property-flexural_modulus').innerText(), /9\.50* GPa/);
-  assert.equal(await page.locator('#property-youngs_modulus').count(),0);
+  assert.match(await page.locator('#property-youngs_modulus').innerText(), /10\.[45]\d* GPa/);
+  assert.match(await page.locator('#property-compressive_strength').innerText(), /40\.1\d* MPa/);
   await go(origin+'/?material=kyocera-f997');
   assert.match(await page.locator('#property-density').innerText(), /Typical minimum \(not guaranteed\)/);
   for (const id of ['toray-2700-f6273c-t2xm-965','diab-divinycell-h45','smooth-on-reoflex-20','schott-n-bk7']) {

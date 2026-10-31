@@ -31,8 +31,9 @@ def property_row(records, mid, pid):
 def test_additions_are_distinct_materials_with_two_properties_not_aliases_or_states(
     expansion,
 ):
-    database, data, _, records, report = expansion
+    database, data, extras, records, report = expansion
     ids = set(report["material_ids"])
+    wood = json.loads((ROOT / "curated/wood-2026-10.json").read_text())["authored_ids"]
     assert len(ids) == report["added_materials"] == 1072
     assert len(ids) >= 1000
     grades = [r for r in database.materials if r["id"] in ids]
@@ -58,7 +59,8 @@ def test_additions_are_distinct_materials_with_two_properties_not_aliases_or_sta
         assert "density" in properties and len(properties) >= 2, mid
         assert not records[mid]["states"], mid
     assert (
-        sum(o["material_id"] in ids for o in data["observations"])
+        sum(o["material_id"] in ids and extras["observations"][o["id"]]["legacy_record_id"] not in wood
+            for o in data["observations"])
         == report["added_observations"]
         == 4033
     )
@@ -69,7 +71,8 @@ def test_all_656_baseline_authored_records_survive_byte_for_byte(expansion):
     staples = json.loads((ROOT / "curated/chart-staples-2026-10.json").read_text())
     concrete = json.loads((ROOT / "curated/concrete-2026-10.json").read_text())
     gathered = json.loads((ROOT / "curated/gathered-2026-10.json").read_text())
-    added = set(report["authored_ids"]) | set(staples["authored_ids"]) | set(concrete["authored_ids"]) | set(gathered["authored_ids"])
+    wood = json.loads((ROOT / "curated/wood-2026-10.json").read_text())
+    added = set(report["authored_ids"]) | set(staples["authored_ids"]) | set(concrete["authored_ids"]) | set(gathered["authored_ids"]) | set(wood["authored_ids"])
     original = [r for r in database.materials if r["id"] not in added]
     assert len(original) == 656
     digest = hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest()
@@ -211,7 +214,8 @@ def test_conditions_and_property_meanings_stay_explicit(expansion):
     _, _, _, records, _ = expansion
     wood = records["wood-black-ash"]["observations"]
     assert all(o["conditions"]["moisture_content_1"] == 0.12 for o in wood)
-    assert not any(o["property_id"] == "youngs_modulus" for o in wood)
+    assert {o["basis"] for o in wood if o["property_id"] == "youngs_modulus"} == {"computed"}
+    assert any(o["property_id"] == "flexural_modulus" for o in wood)
     rubber = records["smooth-on-mold-max-10"]["observations"]
     assert not any(o["property_id"] == "youngs_modulus" for o in rubber)
     assert all("temperature_K" not in o["conditions"] for o in rubber)

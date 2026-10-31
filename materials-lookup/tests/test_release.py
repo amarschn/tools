@@ -28,7 +28,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual([], [str(d) for d in validate(self.data) if d.severity == 'error'])
         self.assertEqual(1453, len(self.data['materials']))
         self.assertEqual(101, len(self.data['states']))
-        self.assertEqual(6175, len(self.data['observations']))
+        self.assertEqual(6410, len(self.data['observations']))
         self.assertEqual(585, len(self.data['sources']))
         self.assertFalse(any(s['name'] in ('stock shape', 'supplier reference state') for s in self.data['states']))
 
