@@ -8,8 +8,8 @@ redirects here.
 ## Data and calculations
 
 The source of truth is `materials-lookup/curated/`, also used by the Materials
-lookup tool. Its published catalog contains 1,375 materials, 101 named states, and
-5,931 observations from 549 sources. The chart reports how many materials have compatible values
+lookup tool. Its published catalog contains 1,387 materials, 101 named states, and
+5,977 observations from 560 sources. The chart reports how many materials have compatible values
 for the selected axes and filters. Properties without positive observations
 are not offered on the logarithmic axes.
 

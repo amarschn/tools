@@ -66,7 +66,7 @@ def adapt(database):
             "aliases": sorted(set(prop["aliases"] + [prop["id"].replace("_", " ")])),
             "quantity_kind": quantity, "canonical_unit": prop["canonical_unit"], "definition": prop["description"]})
     data["property_groups"] = [{"id": "strength", "name": "Strength", "aliases": ["strength"],
-        "member_property_ids": ["tensile_yield_strength", "ultimate_tensile_strength", "flexural_strength"]}]
+        "member_property_ids": ["tensile_yield_strength", "ultimate_tensile_strength", "flexural_strength", "compressive_strength"]}]
     for row in rows:
         rid = row["id"]
         if rid.startswith("synthetic-") or "demo" in rid:

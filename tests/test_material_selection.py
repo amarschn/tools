@@ -55,7 +55,7 @@ def test_missing_modulus_is_not_filled_from_old_aluminium_entry(selection):
     plotted = {p["material_id"] for p in selection["charts"]["density|youngs_modulus"]["points"]}
     assert {"al-1060", "al-6105"} <= set(selection["materials"])
     assert not {"al-1060", "al-6105"} & plotted
-    assert len(selection["materials"]) == 1375
+    assert len(selection["materials"]) == 1387
 
 
 def test_6061_modulus_comes_from_the_pinned_handbook(selection):

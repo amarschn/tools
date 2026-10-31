@@ -9,6 +9,7 @@
     { label: 'Tensile strength', x: 'density', y: 'ultimate_tensile_strength', index: '' },
     { label: 'Bending stiffness', x: 'density', y: 'flexural_modulus', index: '' },
     { label: 'Yield strength', x: 'density', y: 'tensile_yield_strength', index: '' },
+    { label: 'Compressive strength', x: 'density', y: 'compressive_strength', index: '' },
     { label: 'Thermal conductivity', x: 'density', y: 'thermal_conductivity', index: '' },
   ];
   const FAMILY_NAMES = AshbyRegions.FAMILY_NAMES;

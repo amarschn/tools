@@ -29,6 +29,7 @@ const FAMILY_COLORS = {
   wood:      "#72964b",
   elastomer: "#bd66a0",
   glass:     "#8875c4",
+  concrete:  "#6f7782",
 };
 
 const FAMILY_SYMBOLS = {
@@ -43,6 +44,7 @@ const FAMILY_SYMBOLS = {
   wood:      "star",
   elastomer: "pentagon",
   glass:     "diamond",
+  concrete:  "square",
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -167,6 +169,7 @@ const FAMILY_BLOB_COLORS = {
   foam:      { fill: "rgba(156,117,95,0.13)",   line: "rgba(156,117,95,0.5)" },
   fabric:    { fill: "rgba(186,176,172,0.13)", line: "rgba(186,176,172,0.5)" },
   gel:       { fill: "rgba(176,122,161,0.13)", line: "rgba(176,122,161,0.5)" },
+  concrete:  { fill: "rgba(111,119,130,0.13)", line: "rgba(111,119,130,0.5)" },
 };
 
 // ── Theme helper ────────────────────────────────────────────────
