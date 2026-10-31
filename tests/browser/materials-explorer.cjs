@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '/opt/homebrew/lib/node_modules/@playwright/test');
-const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1:8158/tools/materials-explorer/';
+const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1:8158/tools/ashby-chart/';
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
@@ -34,11 +34,11 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     await ready();
     assert.equal(await page.locator('#loading-overlay').isVisible(), false);
     const baseline = await page.evaluate(() => ({ counts: MaterialsExplorer.getData().counts, rows: MaterialsExplorer.getRows().length, indices: [...document.querySelector('#perf-index').options].map(o => o.value), properties: [...document.querySelector('#x-prop').options].map(o => o.value) }));
-    assert.equal(baseline.counts.materials, 1360);
+    assert.equal(baseline.counts.materials, 1375);
     assert.ok(baseline.rows > 150, JSON.stringify(baseline));
     assert.ok(!baseline.properties.includes('price_per_kg'));
     assert.ok(!baseline.properties.includes('max_service_temperature'));
-    assert.match(await page.locator('#data-status').innerText(), /1,?360 materials/);
+    assert.match(await page.locator('#data-status').innerText(), /1,?375 materials/);
     assert.equal(await page.locator('#perf-index').inputValue(), '');
     assert.equal(await page.locator('h1').innerText(), 'Ashby Chart');
     assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /Ashby charts/);
@@ -104,8 +104,10 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
 
     await page.locator('#material-search').fill('titanium'); await ready();
     const titanium = await page.evaluate(() => MaterialsExplorer.getRows());
-    assert.equal(titanium.length, 2);
-    assert.ok(titanium.every(row => row.temperatures_K.includes(293.15) && row.temperatures_K.includes(295.15)));
+    assert.equal(titanium.length, 3);
+    const timet = titanium.filter(row => row.temperatures_K.length);
+    assert.equal(timet.length, 2);
+    assert.ok(timet.every(row => row.temperatures_K.includes(293.15) && row.temperatures_K.includes(295.15)));
     await page.locator('#material-list button').filter({hasText: 'Ti-6Al-4V'}).click(); await ready();
     await groupBy('subgroup');
     assert.match(await page.locator('#card-name').innerText(), /Ti-6Al-4V/);
@@ -267,7 +269,7 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     assert.match(await sourcePage.locator('#view').innerText(), /T6/);
     await sourcePage.close();
 
-    const redirect = new URL('../ashby-chart/', base);
+    const redirect = new URL('../materials-explorer/', base);
     redirect.searchParams.set('material-search', '6061');
     redirect.searchParams.set('y-prop', 'tensile_yield_strength');
     await page.goto(redirect.href);
@@ -339,7 +341,7 @@ const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://127.0.0.1
     await offlinePage.reload();
     await offlinePage.locator('#explorer-main[data-state="ready"]').waitFor();
     assert.equal(await offlinePage.evaluate(() => MaterialsExplorer.getData().source_build_id), freshBuild);
-    assert.equal(await offlinePage.evaluate(() => MaterialsExplorer.getData().counts.materials), 1360);
+    assert.equal(await offlinePage.evaluate(() => MaterialsExplorer.getData().counts.materials), 1375);
     await offlineContext.close();
 
     console.log(JSON.stringify({ passed: true, grades: baseline.counts.materials, defaultPairs: baseline.rows, checks: ['Ashby title and metadata', 'family/subgroup/points grouping independent of shape', 'grouping preserves zoom and selection', 'legacy points-only links and retained experiments', 'titanium with both source temperatures', 'wood, elastomer and foam coverage', 'alternate chart suggestions', 'Python-backed indices and substituted values', 'axis reversal, zoom units and fit', '6061 T4/T6 separation and state search', 'reported-bound markers', 'source citations and lookup link', 'CSV', 'share restoration', 'temperature/basis/family filters', 'empty state', 'labels', 'settings and keyboard controls', 'dark/mobile', 'old URL redirect', 'data mismatch and retry', 'retained prototype API', 'stale service-worker cache refresh'], screenshots: ['/private/tmp/ashby-materials-desktop.png', '/private/tmp/ashby-materials-sourced.png', '/private/tmp/ashby-materials-dark-mobile.png'] }, null, 2));

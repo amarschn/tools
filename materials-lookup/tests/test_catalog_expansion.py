@@ -66,7 +66,8 @@ def test_additions_are_distinct_materials_with_two_properties_not_aliases_or_sta
 
 def test_all_656_baseline_authored_records_survive_byte_for_byte(expansion):
     database, _, _, _, report = expansion
-    added = set(report["authored_ids"])
+    staples = json.loads((ROOT / "curated/chart-staples-2026-10.json").read_text())
+    added = set(report["authored_ids"]) | set(staples["authored_ids"])
     original = [r for r in database.materials if r["id"] not in added]
     assert len(original) == 656
     digest = hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest()

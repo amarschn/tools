@@ -51,10 +51,18 @@ def test_grade_density_is_shared_without_merging_6061_tempers(selection):
 
 
 def test_missing_modulus_is_not_filled_from_old_aluminium_entry(selection):
-    """The older 60-material store has 6061 modulus; this source does not."""
-    assert "al-6061" in selection["materials"]
-    assert not any(p["material_id"] == "al-6061" for p in selection["charts"]["density|youngs_modulus"]["points"])
-    assert len(selection["materials"]) == 1360
+    """The older 60-material store has these moduli; the curated sources do not."""
+    plotted = {p["material_id"] for p in selection["charts"]["density|youngs_modulus"]["points"]}
+    assert {"al-1060", "al-6105"} <= set(selection["materials"])
+    assert not {"al-1060", "al-6105"} & plotted
+    assert len(selection["materials"]) == 1375
+
+
+def test_6061_modulus_comes_from_the_pinned_handbook(selection):
+    rows = [o for o in selection["observations"].values()
+            if o["material_id"] == "al-6061" and o["property_id"] == "youngs_modulus"]
+    assert [o["source_id"] for o in rows] == ["mil-hdbk-5j"]
+    assert any(p["material_id"] == "al-6061" for p in selection["charts"]["density|youngs_modulus"]["points"])
 
 
 def test_every_october_addition_has_a_plottable_density_property_pair(selection):

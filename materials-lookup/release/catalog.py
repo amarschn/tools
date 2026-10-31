@@ -15,8 +15,9 @@ from schema_lab.validator import validate
 from builder.import_steel_grades import STATE_ATTRIBUTES as STEEL_STATE_ATTRIBUTES, HARDNESS_CONDITIONS
 
 PROPERTY_IDS = {"yield_strength": "tensile_yield_strength", "tensile_strength": "ultimate_tensile_strength"}
-REVIEWED_TEMPERS = ("O", "H111", "H112", "T1", "T4", "T5", "T6", "T61", "T63", "T64")
+REVIEWED_TEMPERS = ("O", "H111", "H112", "H24", "H32", "H900", "T1", "T3", "T4", "T5", "T6", "T61", "T63", "T64")
 REVIEWED_HEAT_TREATMENTS = {
+    "annealed": "annealed",
     "mill annealed": "annealed",
     "duplex annealed": "annealed",
     "solution treated and aged": "solution_treated_aged",

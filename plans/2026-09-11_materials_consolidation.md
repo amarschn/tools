@@ -1,11 +1,20 @@
 # Materials data consolidation
 Date: 2026-09-11
-Status: Chart consolidation implemented on 2026-09-30; broader data/API migration remains proposed
+Status: Chart consolidation implemented on 2026-09-30, extended 2026-10-30; broader data/API migration remains proposed
+
+## Progress on 2026-10-30
+
+A readiness audit found the default stiffness chart had no aluminium, carbon
+steel, or magnesium, and that 447 of its 503 metal points were copper alloys.
+The chart staples batch fills part of that gap from pinned sources; see
+`materials-lookup/docs/chart-staples-2026-10-batch-review.md` for what was
+added and what remains off the chart. The tool also moved to
+`/tools/ashby-chart/`, and `/tools/materials-explorer/` now redirects there.
 
 ## Progress on 2026-09-30
 
-Materials Explorer now uses a generated observation projection from the
-Materials lookup catalog. The former Ashby selector URL redirects to it, and
+Materials Explorer (now Ashby Chart) uses a generated observation projection from the
+Materials lookup catalog. The former Ashby selector URL pointed to it, and
 the catalog lists one chart tool. States, conditions, source citations,
 intervals, and specified limits remain attached to each plotted value.
 `pycalcs/material_indices.py` supplies ranking equations and isolines.

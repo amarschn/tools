@@ -8,8 +8,8 @@ any other tool.
 Adding a material happens here, not anywhere else. The project this came from
 is closed; nothing upstream is maintained.
 
-Current contents: **1,360 material identities, 92 named states, 5,858
-observations, 11 registered properties and references to 537 sources**.
+Current contents: **1,375 material identities, 101 named states, 5,931
+observations, 11 registered properties and references to 549 sources**.
 The generated site has no runtime dependencies, backend, accounts, or network
 search service.
 
@@ -167,6 +167,16 @@ python3.13 materials-lookup/builder/import_catalog_expansion.py --source-dir pri
 The default command writes a candidate outside the repository. Use `--apply`
 only after reviewing it. The full reference-table importer also includes this
 batch; it needs all earlier source archives plus the October snapshots.
+
+The October 2026 chart staples batch adds **15 identities and 73 observations**,
+and gives 8 existing aluminium and steel grades the values they needed to appear
+on the stiffness chart. Reconstruct it from the private snapshots with:
+
+```sh
+python3 materials-lookup/builder/import_chart_staples.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/chart-staples-2026-10-batch-review.md).
 
 ## Layout
 
