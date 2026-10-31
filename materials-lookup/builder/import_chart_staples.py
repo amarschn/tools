@@ -1,7 +1,7 @@
 """Reviewed October 2026 additions for materials the Ashby chart was missing.
 
-The tables below are numerical transcriptions of the pinned sources, checked
-against rendered pages. Every earlier curated record stays byte-for-byte: an
+The tables below are numerical transcriptions of the pinned sources; the batch
+review says how each was read. Every earlier curated record stays byte-for-byte: an
 existing grade gains values through a new reference record beside it. Normal
 site builds use curated JSON. See docs/chart-staples-2026-10-batch-review.md.
 """

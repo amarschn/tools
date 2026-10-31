@@ -94,8 +94,10 @@ outnumber every other metal class.
 
 ## Verification
 
-Every number was read from a rendered page or the pinned HTML before
-transcription. `import_chart_staples.py --check` rebuilds the batch from the
+The MIL-HDBK-5J tables for 7075, 2024, 6061, 625, 1025, 17-4PH, CP-3 and the
+low-alloy steels, and the Plexiglas G table, were read from rendered pages. The
+remaining PDF values were read from extracted page text, and web values from
+the pinned HTML. `import_chart_staples.py --check` rebuilds the batch from the
 hash-pinned private snapshots and compares it with the checked-in files. Tests
 in `tests/test_chart_staples.py` cover the values, states, sources, and the rule
 that no earlier record changes.
