@@ -11,12 +11,20 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(pdf_dir, output_dir):
+def prepare(pdf_dir, output_dir, source_ids=None):
+    """Verify and copy all originals, or an explicitly selected review batch."""
     output_dir = output_dir.resolve()
-    if output_dir == ROOT or ROOT in output_dir.parents:
+    repository = ROOT.parent
+    if output_dir == repository or repository in output_dir.parents:
         raise ValueError('Private source review must be outside the repository and preview server root')
     documents = json.loads((ROOT / 'curated/reference-manifest.json').read_text())['documents']
     sources = {s['id']: s for s in json.loads((ROOT / 'curated/sources.json').read_text())['sources']}
+    if source_ids is not None:
+        requested = set(source_ids)
+        known = {d['id'] for d in documents}
+        if not requested or requested - known:
+            raise ValueError('Batch must name at least one source and only known source IDs')
+        documents = [d for d in documents if d['id'] in requested]
     # Verify the entire batch before copying anything.
     verified = []
     for document in documents:
@@ -50,6 +58,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pdf-dir', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
+    parser.add_argument('--batch-report', type=Path,
+                        help='Optional reviewed batch ledger; copy its review_source_ids only')
     args = parser.parse_args()
-    count = prepare(args.pdf_dir, args.output_dir)
+    source_ids = json.loads(args.batch_report.read_text())['review_source_ids'] if args.batch_report else None
+    count = prepare(args.pdf_dir, args.output_dir, source_ids)
     print(f'{count} verified source documents: {args.output_dir.resolve() / "index.html"}')

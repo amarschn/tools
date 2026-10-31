@@ -15,8 +15,9 @@ from schema_lab.validator import validate
 from builder.import_steel_grades import STATE_ATTRIBUTES as STEEL_STATE_ATTRIBUTES, HARDNESS_CONDITIONS
 
 PROPERTY_IDS = {"yield_strength": "tensile_yield_strength", "tensile_strength": "ultimate_tensile_strength"}
-REVIEWED_TEMPERS = ("O", "H111", "H112", "T1", "T4", "T5", "T6", "T61", "T63", "T64")
+REVIEWED_TEMPERS = ("O", "H111", "H112", "H24", "H32", "H900", "T1", "T3", "T4", "T5", "T6", "T61", "T63", "T64")
 REVIEWED_HEAT_TREATMENTS = {
+    "annealed": "annealed",
     "mill annealed": "annealed",
     "duplex annealed": "annealed",
     "solution treated and aged": "solution_treated_aged",
@@ -49,7 +50,9 @@ def adapt(database):
         "bases": [{"id": b, "name": b.replace("_", " ").capitalize()} for b in sorted({o["basis"] for r in rows for o in r["observations"]})],
         "sources": [],
     }
-    extras = {"sources": deepcopy(database.sources), "observations": {}, "legacy_targets": {}}
+    extras = {"sources": deepcopy(database.sources), "observations": {}, "legacy_targets": {},
+              "classifications": {row["id"]: deepcopy(row["family"])
+                                  for row in rows if row["record_type"] == "grade"}}
     for source in database.sources:
         if source["source_type"] == "prototype_seed" or source["id"].startswith("synthetic-"):
             raise ValueError("Release cannot contain prototype or synthetic sources")
@@ -79,7 +82,7 @@ def adapt(database):
             extras["legacy_targets"][rid] = {"category": rid}
         elif row["record_type"] == "grade":
             data["materials"].append({"id": rid, "name": row["name"], "aliases": row["aliases"],
-                "identity_kind": "standard_grade" if any(k != "Supplier" for k in row["designations"]) else "commercial_grade",
+                "identity_kind": "wood_species" if row["parent_id"] == "woods" else "standard_grade" if any(k != "Supplier" for k in row["designations"]) else "commercial_grade",
                 "primary_taxon_id": row["parent_id"], "supplemental_taxon_ids": [],
                 "designations": [{"system_id": k.lower(), "value": v} for k, v in row["designations"].items()],
                 "notes": row["description"]})

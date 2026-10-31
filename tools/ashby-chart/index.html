@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <link rel="manifest" href="/manifest.json">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -12,560 +11,386 @@
       gtag('js', new Date());
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
-
-    <title>Ashby Chart Material Selector - Engineering Tools</title>
-    <meta name="description" content="Explore material property trade-offs with interactive Ashby-style charts for strength vs. density, modulus vs. cost, and more.">
-    <link rel="canonical" href="https://transparent.tools/tools/ashby-chart/">
+    <title>Ashby Chart | Material Selection</title>
+    <meta name="description" content="Interactive Ashby charts for material selection. Compare stiffness, strength, density, and thermal properties using sourced material data.">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Ashby Chart Material Selector - Engineering Tools">
-    <meta property="og:description" content="Explore material property trade-offs with interactive Ashby-style charts for strength vs. density, modulus vs. cost, and more.">
+    <meta property="og:title" content="Ashby Chart | Material Selection">
+    <meta property="og:description" content="Interactive Ashby charts for material selection. Compare stiffness, strength, density, and thermal properties using sourced material data.">
     <meta property="og:url" content="https://transparent.tools/tools/ashby-chart/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Ashby Chart Material Selector - Engineering Tools">
-    <meta name="twitter:description" content="Explore material property trade-offs with interactive Ashby-style charts for strength vs. density, modulus vs. cost, and more.">
+    <meta name="twitter:title" content="Ashby Chart | Material Selection">
+    <meta name="twitter:description" content="Interactive Ashby charts for material selection. Compare stiffness, strength, density, and thermal properties using sourced material data.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
+    <link rel="canonical" href="https://transparent.tools/tools/ashby-chart/">
     <script src="/shared/analytics-autotrack.js" defer></script>
-
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="../../shared/ashby-plot.js?v=7"></script>
+    <script src="envelopes.js?v=2"></script>
+    <script src="/shared/json-ld.js"></script>
     <style>
+        /* ── Design tokens ─────────────────────────────────────── */
         :root {
-            --primary-color: #212529;
-            --primary-light: #f8f9fa;
-            --secondary-color: #495057;
-            --text-color: #212529;
-            --text-light: #6c757d;
-            --border-color: #dee2e6;
-            --bg-color: #f8f9fa;
+            --primary-color: #0b0d12;
+            --primary-light: #f4f5f7;
+            --secondary-color: #4b5563;
+            --accent-color: #111827;
+            --success-color: #0f766e;
+            --warning-color: #b45309;
+            --text-color: #111827;
+            --text-light: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-color: #f8f9fb;
             --bg-card: #ffffff;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 6px 18px rgba(15, 23, 42, 0.08);
             --border-radius: 8px;
+            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', system-ui, sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
         }
+        @media (prefers-color-scheme: dark) {
+            body[data-theme="system"], body[data-theme="dark"] {
+                --primary-color: #f9fafb; --primary-light: #1f2937;
+                --secondary-color: #9ca3af; --accent-color: #f9fafb;
+                --success-color: #34d399; --warning-color: #fbbf24;
+                --text-color: #f9fafb; --text-light: #9ca3af;
+                --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+                --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+            }
+        }
+        body[data-theme="dark"] {
+            --primary-color: #f9fafb; --primary-light: #1f2937;
+            --secondary-color: #9ca3af; --accent-color: #f9fafb;
+            --success-color: #34d399; --warning-color: #fbbf24;
+            --text-color: #f9fafb; --text-light: #9ca3af;
+            --border-color: #374151; --bg-color: #0b0d12; --bg-card: #111827;
+            --shadow: 0 1px 2px rgba(0,0,0,0.45); --shadow-lg: 0 16px 32px rgba(0,0,0,0.55);
+        }
+
+        /* ── Reset & base ──────────────────────────────────────── */
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
+        html, body { min-height: 100%; }
         body {
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+            font-family: var(--font-sans);
             line-height: 1.6;
-            background-color: var(--bg-color);
+            background: var(--bg-color);
             color: var(--text-color);
             display: flex;
             flex-direction: column;
         }
-        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 20px 0; }
-        h1, h2, h3, h4 { color: var(--primary-color); margin-bottom: 0.75em; line-height: 1.2; font-weight: 600; }
-        h1 { font-size: 2.25rem; }
-        h2 { font-size: 1.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
-        h3 { font-size: 1.25rem; color: var(--secondary-color); }
-        h4 { font-size: 1rem; color: var(--text-color); }
-        p { margin-bottom: 1em; color: var(--text-light); }
-        a { color: var(--secondary-color); text-decoration: none; font-weight: 500; }
+        a { color: var(--accent-color); text-decoration: none; font-weight: 500; }
         a:hover { text-decoration: underline; }
+        p { color: var(--text-light); }
+        h1 { font-size: 2.25rem; letter-spacing: -0.025em; font-weight: 600; color: var(--primary-color); }
+        h2 { font-size: 1.375rem; font-weight: 600; color: var(--primary-color); }
+        h3 { font-size: 1rem; font-weight: 600; color: var(--secondary-color); }
 
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); padding: 0 5%; }
-        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 60px; max-width: 1200px; margin: 0 auto; }
-        .nav-brand { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
-        .nav-brand:hover { text-decoration: none; }
-
-        main.container { flex-grow: 1; }
-        .tool-description { font-size: 1.1rem; max-width: 80ch; margin-bottom: 1rem; }
-        .tool-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
-        .card { background-color: var(--bg-card); border-radius: var(--border-radius); border: 1px solid var(--border-color); box-shadow: var(--shadow); padding: 24px; }
-
-        details > summary { list-style: none; cursor: pointer; }
-        details > summary::-webkit-details-marker { display: none; }
-        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
-        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
-        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
-        .purpose-section[open] > summary::after { content: '[Shrink]'; }
-        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
-        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; color: var(--text-light); }
-        .purpose-content code { background-color: var(--bg-color); padding: 2px 4px; border-radius: 4px; }
-
-        .tool-inputs h2 { margin-top: 0; }
-        .input-group { margin-bottom: 1.25rem; position: relative; }
-        .input-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
-        .input-group input[type="number"], .input-group select {
-            width: 100%;
-            padding: 10px 12px;
+        /* ── Navbar ─────────────────────────────────────────────── */
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+        }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 56px;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        .nav-brand { font-size: 1.15rem; font-weight: 600; color: var(--text-color); }
+        .nav-actions { display: flex; gap: 8px; }
+        .settings-button {
+            padding: 6px 14px;
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .input-group input:focus, .input-group select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px var(--primary-light);
-        }
-        .tooltip-trigger {
-            display: inline-block;
-            width: 18px;
-            height: 18px;
-            background-color: var(--border-color);
-            color: var(--text-light);
-            border-radius: 50%;
-            text-align: center;
-            font-size: 12px;
-            font-weight: bold;
-            line-height: 18px;
-            cursor: help;
-            position: absolute;
-            right: -24px;
-            top: 38px;
-        }
-        .tooltip-trigger::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 125%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--text-color);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 400;
-            line-height: 1.4;
-            width: 220px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease-in-out;
-            text-align: left;
-            z-index: 5;
-        }
-        .tooltip-trigger:hover::after,
-        .tooltip-trigger:focus::after {
-            opacity: 1;
-        }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
-        .tab-link {
-            background: none;
-            border: none;
-            padding: 10px 16px;
-            font-weight: 600;
-            color: var(--secondary-color);
-            cursor: pointer;
-            transition: color 0.2s, border-color 0.2s;
-            border-bottom: 3px solid transparent;
-        }
-        .tab-link.active {
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        .tab-content { display: none; }
-
-        .result-item { border-bottom: 1px solid var(--border-color); padding: 12px 0; }
-        .result-item:last-child { border-bottom: none; }
-        .result-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-        .result-header p { margin: 0; color: var(--primary-color); }
-        .inline-details summary { cursor: pointer; color: var(--secondary-color); font-size: 0.85rem; }
-        .equation-details { margin-top: 8px; color: var(--text-light); font-size: 0.85rem; }
-
-        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 1rem; }
-        .btn-primary { background-color: var(--primary-color); color: white; }
-        .btn-primary:hover { background-color: #16181a; }
-        .btn-secondary { background-color: var(--secondary-color); color: white; }
-
-        .footer { text-align: center; padding: 20px 0; color: var(--text-light); border-top: 1px solid var(--border-color); margin-top: 40px; }
-
-        .equation-container { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
-        .equation-card {
-            background: rgba(248, 250, 252, 0.75);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 16px;
-        }
-        .equation-card strong { display: block; margin-bottom: 6px; color: var(--secondary-color); }
-        .equation-card .equation-expression { display: block; margin-bottom: 8px; }
-        .equation-card ul {
-            list-style: none;
-            padding-left: 0;
-            margin: 0;
-            display: grid;
-            gap: 6px 18px;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            background: var(--bg-card);
+            color: var(--text-color);
             font-size: 0.85rem;
-            color: var(--text-light);
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
         }
-        .equation-card .math-inline { font-weight: 600; color: var(--secondary-color); }
+        .settings-button:hover { background: var(--bg-color); }
 
-        @media (max-width: 900px) {
-            .tool-layout { grid-template-columns: 1fr; }
-            .tooltip-trigger { right: 0px; }
-            .input-group { padding-right: 24px; }
+        /* ── Settings panel ─────────────────────────────────────── */
+        .settings-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.25);
+            z-index: 900; display: none;
+            backdrop-filter: blur(2px);
         }
-    
-    .support-link {
-      color: inherit;
-      font-weight: 600;
-      text-decoration: none;
-    }
+        .settings-overlay.open { display: block; }
+        .settings-panel {
+            position: fixed; top: 0; right: 0;
+            width: min(380px, 100vw); height: 100%;
+            visibility: hidden; transform: translateX(105%);
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            z-index: 901;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+        }
+        .settings-panel.open { visibility: visible; transform: translateX(0); }
+        .settings-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-header h3 { margin: 0; }
+        .settings-close {
+            background: none; border: none; font-size: 0.9rem;
+            cursor: pointer; color: var(--text-light); padding: 6px 10px;
+            border-radius: 4px;
+        }
+        .settings-close:hover { background: var(--bg-color); color: var(--text-color); }
+        .settings-content { padding: 24px; }
+        .settings-section { margin-bottom: 28px; }
+        .settings-section h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--text-light); margin-bottom: 14px; font-weight: 600;
+        }
+        .setting-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .setting-row:last-child { border-bottom: none; }
+        .setting-label { font-size: 0.9rem; font-weight: 500; }
+        .setting-help { font-size: 0.78rem; color: var(--text-light); margin-top: 2px; max-width: 220px; }
 
-    .support-link:hover {
-      text-decoration: underline;
-    }
+        /* Toggle switch */
+        .switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
+        .switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        .slider-toggle {
+            width: 42px; height: 24px;
+            background: var(--border-color); border-radius: 999px;
+            position: relative; cursor: pointer; transition: background 0.2s;
+        }
+        .slider-toggle::before {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--bg-card); transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .switch input:checked + .slider-toggle { background: var(--accent-color); }
+        .switch input:checked + .slider-toggle::before { transform: translateX(18px); }
+
+        /* Segmented control */
+        .segmented { display: inline-flex; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; }
+        .segmented button {
+            padding: 5px 14px; border: none; background: var(--bg-card);
+            color: var(--text-color); font-size: 0.8rem; font-weight: 500;
+            cursor: pointer; border-left: 1px solid var(--border-color);
+            transition: all 0.15s;
+        }
+        .segmented button:first-child { border-left: none; }
+        .segmented button.active { background: var(--accent-color); color: var(--bg-card); }
+        .segmented button:hover:not(.active) { background: var(--bg-color); }
+
+
+        :root { --danger-color: #b91c1c; }
+        [hidden] { display:none !important; }
+        button, select, input { font:inherit; }
+        button, select { cursor:pointer; }
+        button, .button-link { min-height:36px; border:1px solid var(--border-color); border-radius:5px; background:var(--bg-card); color:var(--text-color); padding:7px 11px; font-size:.82rem; }
+        button:hover, .button-link:hover { background:var(--primary-light); text-decoration:none; }
+        button:disabled { opacity:.5; cursor:default; }
+        :focus-visible { outline:2px solid var(--accent-color); outline-offset:3px; }
+        .container { width:94%; max-width:1680px; margin:auto; padding:18px 0 26px; }
+        .nav-container { max-width:1680px; height:48px; }
+        .tool-header { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:14px; }
+        h1 { font-size:2rem; line-height:1.2; letter-spacing:-.035em; }
+        .tool-description { font-size:.88rem; margin-top:5px; }
+        .header-links { display:flex; gap:14px; font-size:.8rem; white-space:nowrap; }
+        .presets-row { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+        .eyebrow { font-size:.7rem; text-transform:uppercase; letter-spacing:.075em; color:var(--text-light); font-weight:600; }
+        .preset-chips { display:flex; gap:6px; flex-wrap:wrap; }
+        .preset-chip { border-color:transparent; background:var(--primary-light); }
+        .preset-chip.active { background:var(--accent-color); color:var(--bg-card); }
+        .control-bar { display:grid; grid-template-columns:minmax(160px,1fr) 36px minmax(170px,1fr) minmax(200px,1.15fr) auto; align-items:end; gap:10px; }
+        .input-group label { display:block; font-size:.73rem; font-weight:600; color:var(--text-light); margin-bottom:4px; }
+        .input-group select, .input-group input, .setting-row select { width:100%; height:38px; border:1px solid var(--border-color); border-radius:5px; padding:7px 10px; color:var(--text-color); background:var(--bg-card); min-width:0; font-size:.85rem; }
+        #swap-axes { height:38px; padding:7px; }
+        .filter-menu { position:relative; }
+        summary { cursor:pointer; }
+        .filter-menu>summary { list-style:none; border:1px solid var(--border-color); border-radius:5px; font-size:.82rem; padding:8px 14px; height:38px; }
+        .filter-menu[open]>summary { background:var(--primary-light); }
+        .filter-content { position:absolute; right:0; top:44px; width:300px; padding:18px; background:var(--bg-card); border:1px solid var(--border-color); box-shadow:var(--shadow-lg); border-radius:6px; z-index:50; display:grid; gap:14px; }
+        .check-row { display:flex; align-items:center; gap:9px; font-size:.82rem; cursor:pointer; }
+        .check-row input { accent-color:var(--accent-color); width:16px; height:16px; }
+        .family-bar { display:flex; align-items:center; gap:10px; padding:12px 0; }
+        .family-toggles { display:flex; gap:6px; flex-wrap:wrap; }
+        .family-pill { color:var(--text-light); min-height:32px; padding:5px 9px; display:flex; align-items:center; gap:6px; }
+        .family-pill.active { color:var(--text-color); border-color:var(--text-light); background:var(--bg-card); }
+        .family-dot { width:8px; height:8px; border-radius:50%; background:var(--family-color); flex:none; }
+        .family-pill:not(.active) .family-dot { opacity:.3; }
+        .family-count { font-size:.69rem; font-family:var(--font-mono); color:var(--text-light); }
+        #all-families { border:0; font-size:.75rem; white-space:nowrap; padding:3px 5px; }
+        .workspace-layout { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:14px; align-items:stretch; }
+        .chart-panel, .inspector { border:1px solid var(--border-color); border-radius:7px; background:var(--bg-card); min-width:0; }
+        .plot-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 15px 0; }
+        .plot-heading h2 { font-size:.9rem; border:0; }
+        .plot-actions { display:flex; align-items:center; gap:5px; }
+        .plot-actions button { font-size:.73rem; min-height:30px; padding:4px 8px; }
+        .grouping-row { display:flex; align-items:center; gap:10px; padding:8px 16px 0; }
+        .grouping-label { color:var(--text-light); font-size:.73rem; }
+        .grouping-control { display:flex; gap:2px; }
+        .grouping-control button { min-height:28px; padding:3px 10px; font-size:.75rem; border-color:transparent; }
+        .grouping-control button[aria-pressed="true"] { background:var(--primary-light); border-color:var(--border-color); color:var(--text-color); font-weight:600; }
+        #ashby-chart { width:100%; height:clamp(324px,calc(100dvh - 501px),704px); }
+        .data-status { font-size:.73rem; color:var(--text-light); margin-top:2px; }
+        .chart-note { padding:0 16px 10px; font-size:.72rem; color:var(--text-light); line-height:1.5; }
+        .chart-note span { white-space:nowrap; margin-right:10px; }
+        #grouping-note { white-space:normal; margin-right:0; }
+        .coverage-note { padding:9px 16px; border-top:1px solid var(--border-color); font-size:.75rem; line-height:1.5; color:var(--text-light); }
+        .coverage-note button { border:0; min-height:26px; padding:2px 5px; text-decoration:underline; font-size:inherit; }
+        .empty-state { padding:15px; font-size:.86rem; color:var(--text-color); background:var(--primary-light); }
+        .inspector { display:flex; flex-direction:column; max-height:calc(clamp(360px,calc(100dvh - 465px),740px) + 133px); }
+        .inspector-tabs { display:grid; grid-template-columns:1fr 1fr 1fr; border-bottom:1px solid var(--border-color); padding:5px 8px 0; gap:4px; }
+        .inspector-tabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:none; padding:11px 4px; color:var(--text-light); }
+        .inspector-tabs button[aria-selected="true"] { color:var(--text-color); border-bottom-color:var(--text-color); font-weight:600; }
+        .inspector-pane { overflow-y:auto; padding:16px; flex:1; scrollbar-width:thin; }
+        .pane-heading { font-size:.72rem; color:var(--text-light); margin:0 0 9px; }
+        .material-list { list-style:none; }
+        .material-list button { display:block; width:100%; border:0; border-radius:0; border-bottom:1px solid var(--border-color); padding:11px 0; text-align:left; }
+        .material-list button strong { font-size:.81rem; font-weight:500; display:block; }
+        .material-list button small { color:var(--text-light); font-size:.69rem; display:block; margin-top:3px; }
+        .material-list button:hover { background:var(--primary-light); }
+        .material-list .selected strong { font-weight:650; }
+        .card-header { display:flex; justify-content:space-between; align-items:start; gap:8px; }
+        .card-header h2 { font-size:1.08rem; line-height:1.4; overflow-wrap:anywhere; }
+        .card-close { border:0; padding:0; min-width:28px; font-size:1.35rem; }
+        .meta { font-size:.74rem; color:var(--text-light); margin:6px 0 18px; }
+        .prop-table { width:100%; border-collapse:collapse; }
+        .prop-table tr { display:block; padding:13px 0; border-top:1px solid var(--border-color); }
+        .prop-table th, .prop-table td { display:block; text-align:left; }
+        .prop-table th { font-size:.76rem; color:var(--text-light); font-weight:500; }
+        .prop-table td>.property-value { display:block; font:500 1.4rem/1.5 var(--font-mono); margin:3px 0 8px; }
+        .source-detail { display:block; font:.73rem/1.55 var(--font-sans); color:var(--text-light); overflow-wrap:anywhere; margin-top:6px; }
+        .result-kind { font-size:.67rem; color:var(--text-light); border:1px solid var(--border-color); border-radius:3px; padding:2px 5px; }
+        .source-citation { margin-top:8px; font-size:.72rem; }
+        .data-link { display:block; font-size:.8rem; margin-top:12px; text-decoration:underline; }
+        .ranking-note { margin:12px 0; color:var(--text-light); font-size:.74rem; line-height:1.55; }
+        .ranking-table { border-collapse:collapse; width:100%; font-size:.76rem; }
+        .ranking-table td { border-top:1px solid var(--border-color); padding:10px 3px; vertical-align:top; }
+        .ranking-table td:last-child { font-family:var(--font-mono); white-space:nowrap; }
+        .material-button { border:0; padding:0; text-align:left; font-size:.76rem; min-height:0; text-decoration:underline; }
+        .ranking-table .source-detail { font-size:.68rem; }
+        #ranking-title { font-size:.9rem; margin:14px 0 7px; }
+        .index-explanation { margin:13px 0; font-size:.76rem; line-height:1.5; }
+        .index-explanation p, .index-explanation code { display:block; margin:9px 0; overflow-wrap:anywhere; }
+        .rank-controls { display:grid; gap:12px; }
+        .rank-controls .input-row { display:grid; grid-template-columns:1fr 70px; gap:8px; }
+        .hint { font-size:.72rem; color:var(--text-light); margin-top:4px; }
+        .inspector-empty { padding:18px 0; font-size:.86rem; line-height:1.7; }
+        .purpose-section { margin:20px 0; border-top:1px solid var(--border-color); padding-top:14px; font-size:.83rem; }
+        .purpose-content { max-width:1000px; padding:15px 0; display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+        .purpose-content h3 { margin-bottom:7px; }
+        .purpose-content p { margin:6px 0 14px; }
+        footer { font-size:.74rem; color:var(--text-light); }
+        footer .container { padding-top:0; }
+        .loading-overlay { position:fixed; inset:0; z-index:2000; display:grid; place-content:center; gap:16px; padding:28px; background:var(--bg-color); text-align:center; }
+        body[data-density="compact"] .inspector-pane { padding:12px; }
+        body[data-density="compact"] .material-list button { padding:7px 0; }
+        body[data-density="compact"] .prop-table tr { padding:8px 0; }
+        @media(max-width:1150px) { .workspace-layout { grid-template-columns:minmax(0,1fr) 290px; } .header-links { display:none; } .family-pill { font-size:.72rem; } }
+        @media(max-width:900px) { .workspace-layout { grid-template-columns:1fr; } .inspector { max-height:480px; min-height:250px; } .control-bar { grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr); } .search-group { grid-column:1/3; } .filter-menu { grid-column:3; } .filter-content { width:min(300px,88vw); } .family-bar { align-items:start; } #ashby-chart { height:470px; } }
+        @media(max-width:600px) { .container { width:95%; padding-top:14px; } .nav-container { padding:0 10px; } .nav-brand { font-size:.86rem; } .settings-button { padding:6px 8px; font-size:.75rem; } h1 { font-size:1.6rem; } .tool-description { font-size:.78rem; } .presets-row .eyebrow { display:none; } .preset-chip { font-size:.75rem; padding:7px 9px; min-height:38px; } .family-pill { min-height:36px; padding:6px; } .family-bar { gap:4px; } .family-toggles { gap:4px; } #ashby-chart { height:440px; } .plot-heading { align-items:start; padding:12px 10px 0; } .plot-heading h2 { font-size:.8rem; } .plot-actions { flex-direction:column; gap:3px; } .chart-note { font-size:.68rem; padding:0 10px 9px; } .purpose-content { grid-template-columns:1fr; gap:10px; } }
     </style>
-    <script src="/shared/json-ld.js"></script>
 </head>
-<body>
+<body data-theme="system">
+    <script>try { const s = JSON.parse(localStorage.getItem('materials-explorer-settings') || '{}'); if (['light','dark','system'].includes(s.theme)) document.body.dataset.theme = s.theme; if (['compact','comfortable'].includes(s.density)) document.body.dataset.density = s.density; } catch (_) {}</script>
+    <div id="loading-overlay" class="loading-overlay" role="status"><p id="loading-message">Loading material properties…</p><button type="button" id="retry-load" hidden>Retry loading</button></div>
+    <!-- ── Navbar ──────────────────────────────────────────────── -->
     <header class="navbar">
         <nav class="nav-container">
-            <a href="../../index.html" class="nav-brand">Engineering Tools</a>
+            <a href="/" class="nav-brand">Engineering Tools</a>
+            <div class="nav-actions">
+                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
+                <button class="settings-button" id="copy-link" type="button" data-track="export">Copy link</button>
+            </div>
         </nav>
     </header>
 
-    <main class="container">
-        <h1>Ashby Chart Material Selector</h1>
-        <p class="tool-description" id="tool-description">
-            Evaluate candidate materials against classical Ashby performance indices to find minimum-mass solutions for stiffness, strength, and buckling driven designs.
-        </p>
-
-        <details class="purpose-section" open>
-            <summary>Tool Purpose & README</summary>
-            <div class="purpose-content" id="readme-content">
-                <p>Loading README...</p>
-            </div>
-        </details>
-
-        <div class="tool-layout">
-            <section class="tool-inputs card">
-                <h2>Inputs</h2>
-                <form id="calc-form" novalidate>
-                    <div class="input-group">
-                        <label for="design_mode">Design Scenario</label>
-                        <select id="design_mode" name="design_mode">
-                            <option value="stiffness_limited_beam">Stiffness-limited beam (minimum deflection)</option>
-                            <option value="strength_limited_tie">Strength-limited tie (tension failure)</option>
-                            <option value="buckling_limited_column">Buckling-limited column (Euler instability)</option>
-                        </select>
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <div class="input-group">
-                        <label for="minimum_performance_index">Minimum Ashby Index</label>
-                        <input type="number" id="minimum_performance_index" name="minimum_performance_index" placeholder="e.g., 1e-4" step="any" min="0">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <div class="input-group">
-                        <label for="ranked_count">How many candidates?</label>
-                        <input type="number" id="ranked_count" name="ranked_count" placeholder="e.g., 3" min="1" max="7" step="1">
-                        <span class="tooltip-trigger" data-tooltip="Loading...">?</span>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="calculate-btn">Calculate</button>
-                </form>
-            </section>
-
-            <section class="tool-outputs card">
-                <div class="tabs">
-                    <button class="tab-link active" onclick="openTab(event, 'results')">Results</button>
-                    <button class="tab-link" onclick="openTab(event, 'plot')">Visualization</button>
-                    <button class="tab-link" onclick="openTab(event, 'background')">Background & Principles</button>
-                </div>
-
-                <div id="results" class="tab-content" style="display: block;">
-                    <h3>Ranked Materials</h3>
-                    <div id="results-display">
-                        <p id="results-placeholder">Provide inputs and select Calculate to see ranked candidates.</p>
-                    </div>
-                </div>
-
-                <div id="plot" class="tab-content">
-                    <h3>Visualization</h3>
-                    <div id="plot-container">
-                        <p>An Ashby plot of index isolines versus the candidate database is under development. For now, use the ranked summary to sketch the selection boundary.</p>
-                    </div>
-                </div>
-
-                <div id="background" class="tab-content">
-                    <h3>Underlying Principles</h3>
-                    <p id="background-description">Equations and assumptions will load from the Python docstring.</p>
-                </div>
-            </section>
+    <!-- ── Settings panel ──────────────────────────────────────── -->
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <aside class="settings-panel" id="settings-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Tool settings" inert>
+        <div class="settings-header">
+            <h3>Tool Settings</h3>
+            <button class="settings-close" id="settings-close" type="button">Close</button>
         </div>
+        <div class="settings-content">
+            <div class="settings-section">
+                <h4>Appearance</h4>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-help">Light, dark, or follow system.</div>
+                    </div>
+                    <div class="segmented" id="theme-control">
+                        <button type="button" data-theme="light">Light</button>
+                        <button type="button" data-theme="dark">Dark</button>
+                        <button type="button" data-theme="system" class="active">System</button>
+                    </div>
+                </div>
+                <div class="setting-row"><label for="setting-density">Density</label><select id="setting-density" title="Spacing of the input and result panels"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
+                <div class="setting-row"><label for="setting-precision">Significant figures</label><select id="setting-precision" title="Display precision; calculations retain full precision"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="container" id="explorer-main" data-state="loading">
+        <div class="tool-header">
+            <div><h1>Ashby Chart</h1><p class="tool-description">Compare material stiffness, strength, density, and thermal properties on interactive Ashby charts.</p></div>
+            <div class="header-links"><a href="../materials/">Materials database ↗</a><a href="prototypes/">Design experiments ↗</a><a href="#background">How to read the chart ↓</a></div>
+        </div>
+        <div class="presets-row"><span class="eyebrow">Charts</span><div class="preset-chips" id="preset-chips" aria-label="Chart presets"></div></div>
+        <div class="control-bar">
+            <div class="input-group"><label for="x-prop">Horizontal axis</label><select id="x-prop" title="Material property on the horizontal logarithmic axis"></select></div>
+            <button id="swap-axes" type="button" title="Swap horizontal and vertical properties" aria-label="Swap axes">⇄</button>
+            <div class="input-group"><label for="y-prop">Vertical axis</label><select id="y-prop" title="Material property on the vertical logarithmic axis"></select></div>
+            <div class="input-group search-group"><label for="material-search">Find a material</label><input type="search" id="material-search" placeholder="Titanium, PEEK, wood…" title="Search grades, names, designations, and families across the database"></div>
+            <details class="filter-menu" id="filter-menu"><summary>Filters &amp; display</summary><div class="filter-content">
+                <div class="input-group"><label for="temperature-filter">Test temperature</label><select id="temperature-filter" title="Room-temperature comparisons allow 20–25 °C; unspecified temperatures remain labeled"><option value="ambient">20–25 °C or unspecified</option><option value="all">All temperatures</option></select></div>
+                <div class="input-group"><label for="basis-filter">Reported values</label><select id="basis-filter" title="Filter by the source's result type"><option value="all">All reported values</option><option value="measured">Points and intervals</option><option value="limits">Reported bounds</option></select></div>
+                <div class="input-group"><label for="envelope-mode">Outline shape</label><select id="envelope-mode" title="Choose the outline shape for the selected family or subgroup view"><option value="hulls">Rounded outlines</option><option value="ellipses">Enclosing ellipses</option></select></div>
+                <label class="check-row"><input type="checkbox" id="setting-points" checked title="Show individual reported property pairs">Individual points</label>
+                <label class="check-row"><input type="checkbox" id="setting-ranges" checked title="Draw the endpoints of reported intervals">Reported ranges</label>
+                <label class="check-row"><input type="checkbox" id="setting-isolines" checked title="Lines of equal value for the selected performance index">Index lines</label>
+                <label class="check-row"><input type="checkbox" id="setting-labels" title="Show grade names next to points; use for small selections">Point labels</label>
+                <button id="reset-filters" type="button">Reset filters</button>
+            </div></details>
+        </div>
+        <div class="family-bar"><div class="family-toggles" id="family-toggles" aria-label="Material families"></div><button id="all-families" type="button" title="Show all families and clear the search">Show all</button></div>
+        <div class="workspace-layout">
+            <section class="chart-panel" aria-label="Ashby material property chart">
+                <div class="plot-heading"><div><h2 id="plot-title">Stiffness and density</h2><p class="data-status" id="data-status" aria-live="polite"></p></div><div class="plot-actions"><button id="reset-view" type="button" title="Fit the plot to all visible points">Fit view</button><button id="export-csv" type="button" data-track="export" title="Download plotted observations with values, conditions, and citations">Export CSV</button></div></div>
+                <div class="grouping-row"><span class="grouping-label">Group</span><div class="grouping-control" role="group" aria-label="Chart grouping"><button type="button" data-grouping="family" aria-pressed="true" title="One outline for each broad family, such as Polymers or Metals">Family</button><button type="button" data-grouping="subgroup" aria-pressed="false" title="Separate outlines for material types within a family, such as PEEK and PA6">Subgroup</button><button type="button" data-grouping="points" aria-pressed="false" title="Show individual observations and reported ranges without outlines">Points only</button></div></div>
+                <p class="empty-state" id="empty-state" hidden>No compatible pairs match these filters. Select a material at right to see which properties are available.</p>
+                <div id="ashby-chart" role="img" aria-label="Interactive Ashby chart. The Materials tab also lists plotted grades for keyboard access."></div>
+                <p class="chart-note"><span>● Reference value</span><span>○ Reported bound</span><span>↔ Reported interval</span> · Logarithmic axes. <span id="grouping-note">One outline per family, covering the plotted reference values.</span></p>
+                <div class="coverage-note" id="coverage-note"></div>
+            </section>
+            <aside class="inspector" aria-label="Material browser and inspector">
+                <div class="inspector-tabs" role="tablist" aria-label="Material information"><button type="button" role="tab" id="tab-browse" aria-controls="browse-pane" aria-selected="true">Materials</button><button type="button" role="tab" id="tab-inspect" aria-controls="inspect-pane" aria-selected="false">Inspect</button><button type="button" role="tab" id="tab-rank" aria-controls="rank-pane" aria-selected="false">Rank</button></div>
+                <section class="inspector-pane" id="browse-pane" role="tabpanel" aria-labelledby="tab-browse"><p class="pane-heading" id="browse-count"></p><ul class="material-list" id="material-list"></ul></section>
+                <section class="inspector-pane" id="inspect-pane" role="tabpanel" aria-labelledby="tab-inspect" hidden>
+                    <p class="inspector-empty" id="inspector-empty">Select a point or a material to see its values, test conditions, and sources here.</p>
+                    <div id="detail-card" hidden><div class="card-header"><h2 id="card-name"></h2><button id="card-close" class="card-close" type="button" aria-label="Clear selected material">×</button></div><p class="meta" id="card-meta"></p><table class="prop-table" id="card-props"></table><p class="ranking-note" id="card-index"></p><a id="card-datasheet" class="data-link" href="../materials/">Open full material datasheet ↗</a></div>
+                </section>
+                <section class="inspector-pane" id="rank-pane" role="tabpanel" aria-labelledby="tab-rank" hidden>
+                    <div class="rank-controls"><div class="input-group"><label for="perf-index">Design objective</label><select id="perf-index" title="Rank the displayed reference coordinates using a performance index"></select><p class="hint" id="index-hint"></p></div><div class="input-group"><label for="top-n">Number to compare</label><input type="number" id="top-n" min="1" max="20" value="5" title="Number of top reference scores to show"></div></div>
+                    <section id="ranking-section"><h2 id="ranking-title">Reference ranking</h2><p class="ranking-note">Scores use reported values, interval midpoints, or reported bounds. Compare each value's basis and conditions.</p><table class="ranking-table"><tbody id="ranking-body"></tbody></table><details class="index-explanation"><summary>Equation, assumptions &amp; source</summary><code id="index-equation"></code><p id="index-variables"></p><p id="index-derivation"></p><p id="index-scope"></p><p id="index-source"></p></details></section>
+                </section>
+            </aside>
+        </div>
+        <details class="purpose-section" id="background"><summary>Reading an Ashby chart: properties, group shapes, and performance indices</summary><div class="purpose-content"><div><h3>Compare properties across orders of magnitude</h3><p>An Ashby chart places two material properties on logarithmic axes. Select a chart preset, choose a family, or search for a grade. Select any point to inspect the observations behind it. Drag to zoom and use Fit view to return.</p><h3>What the shapes mean</h3><p>Family view draws one outline per broad family, such as Polymers or Metals. Subgroup view separates material types such as PEEK and PA6, and may split distant clusters. Points only keeps individual observations and range bars. Rounded outlines include reported interval endpoints and a small drawing margin. Reported bounds are excluded from the shapes. The ellipse alternative encloses the same observations; neither method estimates a population distribution or the full range of a family.</p><p><a href="prototypes/">Compare the retained design experiments</a>.</p></div><div><h3>Keep the test conditions in view</h3><p>Each point pairs observations for one material and compatible conditions. Different temperatures within 20–25 °C can be compared at room temperature; both original temperatures remain visible. Elevated-temperature properties are not paired with room-temperature measurements. Unspecified conditions stay unspecified.</p><p>Wood bending modulus is kept separate from tensile Young's modulus. The rubber sources report tensile strength and elongation, but no small-strain Young's modulus. The chart suggests another property pair when the current axes cannot show a material.</p><h3>Rank a design objective</h3><p>The Rank tab provides a performance index, its equation, variable definitions, and derivation. Lines on the plot connect equal index values. These compare source reference values and are not design allowables.</p></div></div></details>
     </main>
-
-    <footer class="footer">
-        <p>&copy; 2025 Engineering Tools. Educational use only. <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p>
-    </footer>
-
-    <script>
-        const README_PATH = './README.md';
-        const TOOL_MODULE_NAME = 'materials';
-        const TOOL_FUNCTION_NAME = 'rank_materials_for_ashby';
-
-        let pyUtils;
-        let pyToolModule;
-        let toolDocumentation = {};
-
-        function openTab(event, tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => (tab.style.display = 'none'));
-            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
-            document.getElementById(tabName).style.display = 'block';
-            event.currentTarget.classList.add('active');
-        }
-
-        function typesetMath() {
-            if (window.MathJax) {
-                window.MathJax.typesetPromise();
-            }
-        }
-
-        function renderMarkdown(markdown) {
-            const lines = markdown.split('\n');
-            const html = [];
-            let inList = false;
-
-            const closeList = () => {
-                if (inList) {
-                    html.push('</ul>');
-                    inList = false;
-                }
-            };
-
-            for (const line of lines) {
-                if (line.startsWith('### ')) {
-                    closeList();
-                    html.push(`<h4>${line.slice(4).trim()}</h4>`);
-                } else if (line.startsWith('## ')) {
-                    closeList();
-                    html.push(`<h3>${line.slice(3).trim()}</h3>`);
-                } else if (line.startsWith('# ')) {
-                    closeList();
-                    html.push(`<h2>${line.slice(2).trim()}</h2>`);
-                } else if (line.startsWith('* ')) {
-                    if (!inList) {
-                        html.push('<ul>');
-                        inList = true;
-                    }
-                    html.push(`<li>${line.slice(2).trim()}</li>`);
-                } else if (line.trim() === '') {
-                    closeList();
-                } else {
-                    closeList();
-                    html.push(`<p>${line.trim()}</p>`);
-                }
-            }
-            closeList();
-            return html.join('\n');
-        }
-
-        async function loadReadme() {
-            try {
-                const response = await fetch(README_PATH);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const markdown = await response.text();
-                document.getElementById('readme-content').innerHTML = renderMarkdown(markdown);
-            } catch (error) {
-                document.getElementById('readme-content').innerHTML = `
-                    <p style="color: red; font-weight: 600;">Unable to load README (${error.message}).</p>
-                `;
-            }
-        }
-
-        function populateUiFromDocs() {
-            if (!toolDocumentation.parameters) {
-                return;
-            }
-
-            document.getElementById('tool-description').textContent = toolDocumentation.description;
-
-            Object.entries(toolDocumentation.parameters).forEach(([param, description]) => {
-                document.querySelector(`#${param} + .tooltip-trigger`)
-                    ?.setAttribute('data-tooltip', description || 'No description provided.');
-            });
-
-            const latexLines = toolDocumentation.latex
-                ? toolDocumentation.latex.split('\n').filter(line => line.trim().length > 0)
-                : [];
-            const variableLegend = `
-                <ul>
-                    <li><span class="math-inline">\\(E\\)</span>: Young's modulus (Pa)</li>
-                    <li><span class="math-inline">\\(\\sigma_y\\)</span>: Tensile yield strength (Pa)</li>
-                    <li><span class="math-inline">\\(\\rho\\)</span>: Density (kg/m^3)</li>
-                </ul>
-            `;
-            const equationCards = latexLines.map((expression, index) => `
-                <div class="equation-card">
-                    <strong>Equation ${index + 1}</strong>
-                    <span class="equation-expression">\\[ ${expression} \\]</span>
-                    ${variableLegend}
-                </div>
-            `).join('');
-
-            document.getElementById('background').innerHTML = `
-                <h3>Underlying Principles</h3>
-                <p>${(toolDocumentation.description || '').replace(/\\n/g, '<br>')}</p>
-                <h4>Equations</h4>
-                <div class="equation-container">
-                    ${equationCards || '<p>No equations provided.</p>'}
-                </div>
-            `;
-            typesetMath();
-        }
-
-        async function initialisePython() {
-            document.getElementById('calculate-btn').textContent = 'Loading Pyodide...';
-            const pyodide = await loadPyodide();
-
-            document.getElementById('calculate-btn').textContent = 'Loading Python...';
-            await pyodide.runPythonAsync(`
-                from pyodide.http import pyfetch
-
-                response_utils = await pyfetch('../../pycalcs/utils.py')
-                with open('utils.py', 'w') as f:
-                    f.write(await response_utils.string())
-
-                response_tool = await pyfetch('../../pycalcs/${TOOL_MODULE_NAME}.py')
-                with open('${TOOL_MODULE_NAME}.py', 'w') as f:
-                    f.write(await response_tool.string())
-
-                import utils
-                import ${TOOL_MODULE_NAME}
-            `);
-
-            pyUtils = pyodide.globals.get('utils');
-            pyToolModule = pyodide.globals.get(TOOL_MODULE_NAME);
-
-            const docMap = pyUtils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME).toJs();
-            if (docMap.has('error')) {
-                throw new Error(docMap.get('error'));
-            }
-
-            toolDocumentation = Object.fromEntries(docMap);
-            if (toolDocumentation.parameters) {
-                toolDocumentation.parameters = Object.fromEntries(toolDocumentation.parameters);
-            }
-            if (toolDocumentation.returns) {
-                toolDocumentation.returns = Object.fromEntries(toolDocumentation.returns);
-            }
-
-            populateUiFromDocs();
-            document.getElementById('calculate-btn').textContent = 'Calculate';
-        }
-
-        document.getElementById('calc-form').addEventListener('submit', async (event) => {
-            event.preventDefault();
-            if (!pyToolModule) {
-                document.getElementById('results-display').innerHTML = '<p style="color:red;">Python environment not ready yet. Please wait.</p>';
-                return;
-            }
-
-            const designMode = document.getElementById('design_mode').value;
-            const minimumIndexRaw = document.getElementById('minimum_performance_index').value;
-            const rankedCountRaw = document.getElementById('ranked_count').value;
-
-            const minimumIndex = parseFloat(minimumIndexRaw);
-            const rankedCount = parseFloat(rankedCountRaw);
-
-            if (minimumIndexRaw === '' || Number.isNaN(minimumIndex)) {
-                document.getElementById('results-display').innerHTML = '<p style="color:red;">Please enter a valid minimum Ashby index.</p>';
-                return;
-            }
-            if (rankedCountRaw === '' || Number.isNaN(rankedCount)) {
-                document.getElementById('results-display').innerHTML = '<p style="color:red;">Please enter how many candidates to display.</p>';
-                return;
-            }
-
-            try {
-                const resultMap = pyToolModule[TOOL_FUNCTION_NAME](designMode, minimumIndex, rankedCount).toJs();
-                const results = Object.fromEntries(resultMap);
-
-                if (results.error) {
-                    throw new Error(results.error);
-                }
-
-                const resultsDiv = document.getElementById('results-display');
-                resultsDiv.innerHTML = '';
-                document.getElementById('results-placeholder')?.remove();
-
-                const returnDefs = toolDocumentation.returns || {};
-                const equations = toolDocumentation.latex
-                    ? toolDocumentation.latex.split('\\n').filter(line => line.trim().length > 0)
-                    : [];
-                let eqIndex = 0;
-
-                Object.keys(returnDefs).forEach((key) => {
-                    const definition = returnDefs[key];
-                    const value = results[key];
-                    const substString = results[`subst_${key}`];
-                    const equation = equations[Math.min(eqIndex, equations.length - 1)] || '';
-                    eqIndex += 1;
-
-                    if (value === undefined) {
-                        return;
-                    }
-
-                    const displayName = key
-                        .replace(/_/g, ' ')
-                        .replace(/\\b\\w/g, char => char.toUpperCase());
-
-                    let displayValue;
-                    if (typeof value === 'number') {
-                        displayValue = Number.isFinite(value) ? value.toExponential(4) : String(value);
-                    } else if (typeof value === 'string') {
-                        displayValue = value;
-                    } else if (Array.isArray(value)) {
-                        displayValue = value.join(', ');
-                    } else if (value && typeof value === 'object') {
-                        displayValue = JSON.stringify(value);
-                    } else {
-                        displayValue = 'Not available';
-                    }
-
-                    const detailsHtml = substString || equation
-                        ? `
-                            <details class="inline-details">
-                                <summary>Show equation</summary>
-                                <div class="equation-details">
-                                    ${equation ? `<p><strong>Equation:</strong> $$${equation}$$</p>` : ''}
-                                    ${substString ? `<p><strong>Substituted:</strong> $$${substString}$$</p>` : ''}
-                                </div>
-                            </details>
-                        `
-                        : '';
-
-                    resultsDiv.insertAdjacentHTML('beforeend', `
-                        <div class="result-item">
-                            <div class="result-header">
-                                <p><strong><span class="def" data-def="${definition}">${displayName}</span>:</strong> ${displayValue}</p>
-                            </div>
-                            ${detailsHtml}
-                        </div>
-                    `);
-                });
-
-                if (!resultsDiv.innerHTML.trim()) {
-                    resultsDiv.innerHTML = '<p>No return values were generated.</p>';
-                }
-
-                typesetMath();
-            } catch (error) {
-                console.error('Calculation error:', error);
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color: red; font-weight:bold;">Calculation Error:</p>
-                    <p style="color: red;">${error.message}</p>
-                `;
-            }
-        });
-
-        Promise.all([loadReadme(), initialisePython()])
-            .then(() => typesetMath())
-            .catch((error) => {
-                console.error('Initialization error:', error);
-                document.getElementById('results-display').innerHTML = `
-                    <p style="color:red;">Tool failed to initialise: ${error.message}</p>
-                `;
-            });
-    </script>
-    <script src="/shared/url-state.js" defer></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-      }
-    </script>
+    <footer><div class="container">Values and citations: <a href="../materials/">Materials database</a>. Index equations: Ashby, <em>Materials Selection in Mechanical Design</em> (2011). <a href="https://ko-fi.com/transparent_tools">Support this project</a></div></footer>
+    <script src="explorer.js?v=3" defer></script>
 </body>
 </html>
