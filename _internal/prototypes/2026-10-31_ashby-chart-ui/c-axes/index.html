@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>C · More axes</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 9px 12px; background: var(--card); border-bottom: 1px solid var(--line); }
+  .axes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .axis-chip { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 7px; padding: 1px 2px 1px 7px; background: var(--card); }
+  .axis-chip b { font-size: 11px; color: var(--ink-2); font-weight: 650; min-width: 12px; }
+  .axis-chip select { border: 0; background: none; min-height: 26px; font-size: 12.5px; max-width: 215px; padding: 2px; }
+  .axis-chip button { min-height: 22px; padding: 0 5px; }
+  .views { display: flex; gap: 2px; padding: 3px; background: var(--soft); border-radius: 8px; }
+  .views button { border: 0; background: none; font-size: 12.5px; min-height: 28px; }
+  .views button.on { background: var(--card); box-shadow: 0 1px 3px rgba(15, 23, 42, .18); color: var(--ink); font-weight: 600; }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 8px; padding: 8px; }
+  .view { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  .view canvas.free { position: absolute; inset: 0; touch-action: none; }
+  .hint { position: absolute; left: 12px; bottom: 10px; font-size: 11.5px; color: var(--ink-2); background: var(--card); padding: 2px 7px; border-radius: 5px; z-index: 2; pointer-events: none; }
+  .coverage { position: absolute; right: 12px; bottom: 10px; font-size: 12px; background: var(--card); padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; z-index: 2; }
+  .coverage.warn { color: var(--warn); }
+  .side { overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .side h2 { margin-bottom: 4px; }
+  .note { font-size: 12.5px; color: var(--ink-2); }
+  .legend { display: flex; flex-wrap: wrap; gap: 3px; }
+  .gradient { height: 10px; border-radius: 4px; margin-top: 4px; }
+  .gradient-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+  .matrix { display: grid; gap: 2px; width: 100%; height: 100%; padding: 6px; }
+  .matrix .cell { position: relative; min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 3px; background: var(--plot); cursor: pointer; overflow: hidden; }
+  .matrix .cell:hover { border-color: var(--ink); }
+  .matrix .cell canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .matrix .diag { display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px; font-size: 12px; font-weight: 600; cursor: default; background: var(--soft); }
+  @media (max-width: 820px) {
+    body { height: auto; }
+    .main { display: flex; flex-direction: column; }
+    .view { height: 70vh; min-height: 400px; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>More axes</h1>
+  <div class="axes" id="axes"></div>
+  <div class="views" id="views" role="tablist" aria-label="Ways to show the extra axis"></div>
+</div>
+<div class="main">
+  <section class="panel view" id="view"></section>
+  <aside class="panel side" id="side"></aside>
+</div>
+<script src="../core.js"></script>
+<script>
+(async () => {
+  const { el, Axis, Plot, FAMILY_NAMES, FAMILY_COLORS, formatValue, clamp } = AC;
+  AC.header('c-axes');
+  const db = await AC.load();
+  const $ = id => document.getElementById(id);
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const axes = ['rho', 'E', 'UTS'];
+  const families = new Set(Object.keys(FAMILY_NAMES));
+  const VIEWS = {
+    orbit: ['3D', 'Drag to rotate, scroll to zoom. Three real axes in space. Depth is hard to read exactly, so hover a point for values.'],
+    encode: ['Colour + size', 'Keeps a flat, readable chart. The third axis becomes colour and the fourth becomes point size.'],
+    parallel: ['Parallel', 'Any number of axes side by side. Each line is a material. Drag along an axis to filter.'],
+    matrix: ['Matrix', 'Every pair of axes at once, which shows trade-offs quickly. Click a cell to open it full size.'],
+  };
+  let viewName = 'orbit', brushes = {}, inspected = null, cleanup = null, plot2d = null;
+  const label = s => db.bySym[s].label;
+  const rowsAll = () => db.materials.filter(m => families.has(m.family) && axes.every(s => m.d[s] > 0));
+  const brushed = m => Object.entries(brushes).every(([s, [a, b]]) => axes.includes(s) ? m.d[s] >= a && m.d[s] <= b : true);
+
+  function renderAxes() {
+    const box = $('axes');
+    box.replaceChildren(...axes.map((sym, i) => {
+      const select = el('select', { 'aria-label': `Axis ${i + 1}`, onchange: () => { axes[i] = select.value; render(); } }, ...db.props.map(p => el('option', { value: p.sym }, `${p.label} (${p.unit})`)));
+      select.value = sym;
+      const names = viewName === 'orbit' ? ['x', 'up', 'depth'] : viewName === 'encode' ? ['x', 'y', 'colour', 'size'] : [];
+      return el('span', { class: 'axis-chip' }, el('b', {}, names[i] ?? i + 1), select, axes.length > 2 ? el('button', { class: 'ghost', 'aria-label': `Remove ${label(sym)}`, onclick: () => { axes.splice(i, 1); delete brushes[sym]; render(); } }, '×') : null);
+    }), el('button', { title: 'Adds the property that keeps the most materials on screen. Change it with the menu.', onclick: () => { const next = db.props.map(p => p.sym).filter(s => !axes.includes(s)).map(s => [s, rowsAll().filter(m => m.d[s] > 0).length]).sort((a, b) => b[1] - a[1])[0]?.[0]; if (next) { axes.push(next); if (axes.length > 4 && (viewName === 'orbit' || viewName === 'encode')) viewName = 'parallel'; render(); } } }, '+ Add axis'));
+    $('views').replaceChildren(...Object.entries(VIEWS).map(([key, [name]]) => el('button', { class: key === viewName ? 'on' : '', role: 'tab', 'aria-selected': String(key === viewName), onclick: () => { viewName = key; render(); } }, name)));
+  }
+  function renderSide(extra) {
+    const rows = rowsAll();
+    $('side').replaceChildren(...[
+      el('div', {}, el('h2', {}, VIEWS[viewName][0]), el('p', { class: 'note' }, VIEWS[viewName][1])),
+      el('div', {}, el('h2', {}, 'Families'), el('div', { class: 'legend' }, Object.entries(FAMILY_NAMES).map(([k, name]) => el('button', { class: 'chip' + (families.has(k) ? '' : ' off'), style: `--c:${FAMILY_COLORS[k]}`, onclick: () => { families.has(k) ? families.delete(k) : families.add(k); render(); } }, name, ' ', el('b', {}, rows.filter(m => m.family === k).length))))),
+      extra || el('span'),
+      Object.keys(brushes).length && viewName !== 'parallel' ? el('div', {}, el('h2', {}, 'Filter from Parallel is on'), el('button', { onclick: () => { brushes = {}; render(); } }, 'Clear it')) : null,
+      inspected ? AC.materialCard(inspected, () => { inspected = null; renderSide(extra); }) : el('p', { class: 'note' }, 'Click a material for its values and sources.'),
+    ].filter(Boolean));
+  }
+
+  /* ---------- 3D: projected by hand so there is no chart library to load ---------- */
+  function orbit() {
+    const host = $('view');
+    const canvas = el('canvas', { class: 'free' });
+    const tip = el('div', { class: 'ac-tip', hidden: true });
+    host.append(canvas, tip, el('div', { class: 'hint' }, 'Drag to rotate · scroll to zoom · pinch on touch'));
+    const ctx = canvas.getContext('2d');
+    let yaw = .62, pitch = .38, zoom = 1, spin = null, pts = [], W = 0, H = 0, raf = 0, hover = null;
+    const data = rowsAll().filter(brushed);
+    const ranges = axes.slice(0, 3).map(s => { const v = data.map(m => Math.log10(m.d[s])); const lo = Math.min(...v), hi = Math.max(...v); return [lo, hi === lo ? lo + 1 : hi]; });
+    const norm = (s, i, m) => (Math.log10(m.d[s]) - ranges[i][0]) / (ranges[i][1] - ranges[i][0]) * 2 - 1;
+    /* Stored as [first axis, second axis (up), third axis (depth)]. */
+    const points = data.map(m => ({ m, p: axes.slice(0, 3).map((s, i) => norm(s, i, m)) }));
+    function project(p) {
+      const [x, up, depth] = p;
+      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const rx = x * cy + depth * sy, back = -x * sy + depth * cy;
+      const ry = up * cp + back * sp, rz = back * cp - up * sp;
+      const persp = 7 / (7 + rz), s = Math.min(W, H) * .245 * zoom * persp;
+      return [W / 2 + rx * s, H / 2 - 4 - ry * s, rz, persp];
+    }
+    function draw() {
+      raf = 0;
+      const rect = host.getBoundingClientRect(); W = rect.width; H = rect.height;
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      if (canvas.width !== Math.round(W * dpr)) { canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px'; }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = css('--plot'); ctx.fillRect(0, 0, W, H);
+      const line = (a, b, color, width = 1) => { const A = project(a), B = project(b); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); };
+      const grid = css('--grid'), ink = css('--ink'), muted = css('--ink-2');
+      const decades = i => { const out = [], span = ranges[i][1] - ranges[i][0], step = Math.max(1, Math.ceil(span / 6)); for (let d = Math.ceil(ranges[i][0]); d <= ranges[i][1]; d += step) out.push(d); return out; };
+      const n = (i, d) => (d - ranges[i][0]) / (ranges[i][1] - ranges[i][0]) * 2 - 1;
+      // Floor and the two back walls carry the grid. The nearer edges carry the scales.
+      const backX = -1, backD = 1, frontX = 1, frontD = -1;
+      for (const d of decades(0)) { line([n(0, d), -1, -1], [n(0, d), -1, 1], grid); line([n(0, d), -1, backD], [n(0, d), 1, backD], grid); }
+      for (const d of decades(2)) { line([-1, -1, n(2, d)], [1, -1, n(2, d)], grid); line([backX, -1, n(2, d)], [backX, 1, n(2, d)], grid); }
+      for (const d of decades(1)) { line([backX, n(1, d), -1], [backX, n(1, d), 1], grid); line([-1, n(1, d), backD], [1, n(1, d), backD], grid); }
+      line([-1, -1, frontD], [1, -1, frontD], muted, 1.2); line([frontX, -1, -1], [frontX, -1, 1], muted, 1.2); line([backX, -1, frontD], [backX, 1, frontD], muted, 1.2);
+      ctx.font = '11px ' + css('--sans'); ctx.fillStyle = muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const text = (p, s) => { const P = project(p); ctx.fillText(s, P[0], P[1]); };
+      decades(0).forEach(d => text([n(0, d), -1.1, -1.1], formatValue(10 ** d)));
+      decades(1).forEach(d => text([-1.1, n(1, d), -1.1], formatValue(10 ** d)));
+      decades(2).forEach(d => text([1.1, -1.1, n(2, d)], formatValue(10 ** d)));
+      ctx.font = '600 12px ' + css('--sans'); ctx.fillStyle = ink;
+      const unit = s => db.bySym[s].unit;
+      const title = (p, s) => { const P = project(p), half = ctx.measureText(s).width / 2 + 5; ctx.fillText(s, clamp(P[0], half, Math.max(half, W - half)), P[1]); };
+      title([0, -1.24, -1.3], `${label(axes[0])} (${unit(axes[0])})`);
+      title([-1.05, 1.13, -1.05], `${label(axes[1])} (${unit(axes[1])})`);
+      title([1.5, -1.28, 0], `${label(axes[2])} (${unit(axes[2])})`);
+      // Points, furthest first, so nearer points cover them.
+      pts = points.map(q => ({ q, s: project(q.p) })).sort((a, b) => b.s[2] - a.s[2]);
+      for (const { q, s } of pts) {
+        ctx.globalAlpha = clamp(.95 - s[2] * .3, .35, 1); ctx.fillStyle = FAMILY_COLORS[q.m.family];
+        ctx.beginPath(); ctx.arc(s[0], s[1], 3 * s[3] * Math.sqrt(zoom), 0, 7); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if (hover) { ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hover.s[0], hover.s[1], 6, 0, 7); ctx.stroke(); }
+    }
+    const ask = () => { if (!raf) raf = requestAnimationFrame(draw); };
+    const pointers = new Map(); let pinch = 0, moved = false;
+    canvas.onpointerdown = e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.offsetX, e.offsetY]); moved = false; if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); spin = null; } else spin = [e.offsetX, e.offsetY]; };
+    canvas.onpointermove = e => {
+      if (pointers.has(e.pointerId)) pointers.set(e.pointerId, [e.offsetX, e.offsetY]);
+      if (pointers.size === 2) { const [a, b] = [...pointers.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom = clamp(zoom * d / (pinch || d), .4, 6); pinch = d; ask(); return; }
+      if (spin) {
+        if (Math.abs(e.offsetX - spin[0]) + Math.abs(e.offsetY - spin[1]) > 2) moved = true;
+        yaw += (e.offsetX - spin[0]) * .008; pitch = clamp(pitch + (e.offsetY - spin[1]) * .008, -1.45, 1.45); spin = [e.offsetX, e.offsetY]; tip.hidden = true; ask(); return;
+      }
+      let best = null, bestD = 196;
+      for (const item of pts) { const d = (item.s[0] - e.offsetX) ** 2 + (item.s[1] - e.offsetY) ** 2; if (d <= bestD) { bestD = d; best = item; } }
+      if (best !== hover) { hover = best; ask(); }
+      if (best) {
+        tip.innerHTML = `<strong>${AC.escapeHtml(best.q.m.name)}</strong>` + axes.slice(0, 3).map(s => `<span>${label(s)}: ${AC.formatProp(s, best.q.m.d[s])}</span>`).join('');
+        tip.hidden = false; tip.style.left = clamp(e.offsetX + 14, 4, W - tip.offsetWidth - 4) + 'px'; tip.style.top = clamp(e.offsetY - tip.offsetHeight - 10, 4, H - tip.offsetHeight - 4) + 'px';
+      } else tip.hidden = true;
+    };
+    canvas.onpointerup = e => { pointers.delete(e.pointerId); spin = null; if (!moved && hover) { inspected = hover.q.m; renderSide(); } };
+    canvas.onwheel = e => { e.preventDefault(); zoom = clamp(zoom * Math.exp(-e.deltaY * .0015), .4, 6); ask(); };
+    const ro = new ResizeObserver(ask); ro.observe(host);
+    draw();
+    renderSide(axes.length > 3 ? el('p', { class: 'note' }, `3D shows the first three axes. ${label(axes[3])} is not drawn here; switch to Parallel or Matrix to see it.`) : null);
+    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }
+
+  /* ---------- flat chart with colour and size as extra axes ---------- */
+  const ramp = t => { const stops = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]]; const f = clamp(t, 0, 1) * 3.999, i = Math.floor(f), k = f - i; const c = stops[i].map((v, n) => Math.round(v + (stops[i + 1][n] - v) * k)); return `rgb(${c})`; };
+  function encode() {
+    const host = el('div', { style: 'position:absolute;inset:0' });
+    $('view').append(host);
+    const data = rowsAll().filter(brushed);
+    const scale = s => { if (!s) return null; const v = data.map(m => Math.log10(m.d[s])); const lo = Math.min(...v), hi = Math.max(...v); return { lo, hi, f: x => (Math.log10(x) - lo) / (hi - lo || 1) }; };
+    const c = scale(axes[2]), z = scale(axes[3]);
+    const xA = new Axis(axes[0]), yA = new Axis(axes[1]);
+    plot2d = new Plot(host, { pointAlpha: 1, onClick: hit => { inspected = hit?.m || null; renderSide(extras()); },
+      tipFormat: r => `<strong>${AC.escapeHtml(r.m.name)}</strong>` + axes.slice(0, 4).map(s => `<span>${label(s)}: ${AC.formatProp(s, r.m.d[s])}</span>`).join('') });
+    const rows = AC.chartRows(data, xA, yA, { color: m => c ? ramp(c.f(m.d[axes[2]])) : FAMILY_COLORS[m.family], size: z ? m => 2 + z.f(m.d[axes[3]]) * 9 : null });
+    plot2d.setData({ rows, xAxis: xA, yAxis: yA });
+    plot2d.setShapes(AC.shapesFor(rows.map(r => ({ ...r, color: FAMILY_COLORS[r.m.family] })), xA, yA, { method: 'gooey', grouping: 'family', softness: 1.1 }));
+    plot2d.opts.blobFill = .08;
+    const extras = () => c ? el('div', {}, el('h2', {}, 'Colour: ' + label(axes[2])), el('div', { class: 'gradient', style: `background:linear-gradient(90deg,${[0, .25, .5, .75, 1].map(ramp).join(',')})` }), el('div', { class: 'gradient-labels' }, el('span', {}, formatValue(10 ** c.lo)), el('span', {}, db.bySym[axes[2]].unit), el('span', {}, formatValue(10 ** c.hi))), z ? el('p', { class: 'note', style: 'margin-top:6px' }, `Size: ${label(axes[3])}, ${formatValue(10 ** z.lo)} to ${formatValue(10 ** z.hi)} ${db.bySym[axes[3]].unit}`) : el('p', { class: 'note', style: 'margin-top:6px' }, 'Add a fourth axis to set point size.')) : null;
+    renderSide(extras());
+    return () => { plot2d?.ro.disconnect(); plot2d = null; };
+  }
+
+  /* ---------- parallel coordinates with brushing on each axis ---------- */
+  function parallel() {
+    const host = $('view');
+    const canvas = el('canvas', { class: 'free' });
+    host.append(canvas, el('div', { class: 'hint' }, 'Drag along an axis to filter · click a filtered axis to clear it'));
+    const tip = el('div', { class: 'ac-tip', hidden: true }); host.append(tip);
+    const ctx = canvas.getContext('2d');
+    const base = rowsAll();
+    const ranges = {};
+    axes.forEach(s => { const v = base.map(m => Math.log10(m.d[s])); const lo = Math.min(...v), hi = Math.max(...v); ranges[s] = [lo, hi === lo ? lo + 1 : hi]; });
+    let W = 0, H = 0, raf = 0, drag = null, hover = null;
+    const pad = { l: 34, r: 34, t: 44, b: 26 };
+    const xAt = i => pad.l + (W - pad.l - pad.r) * i / Math.max(1, axes.length - 1);
+    const yAt = (s, v) => H - pad.b - (Math.log10(v) - ranges[s][0]) / (ranges[s][1] - ranges[s][0]) * (H - pad.t - pad.b);
+    const valueAt = (s, y) => 10 ** (ranges[s][0] + (H - pad.b - y) / (H - pad.t - pad.b) * (ranges[s][1] - ranges[s][0]));
+    function poly(m) { ctx.beginPath(); axes.forEach((s, i) => { const X = xAt(i), Y = yAt(s, m.d[s]); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.stroke(); }
+    function draw() {
+      raf = 0;
+      const rect = host.getBoundingClientRect(); W = rect.width; H = rect.height;
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      if (canvas.width !== Math.round(W * dpr)) { canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px'; }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = css('--plot'); ctx.fillRect(0, 0, W, H);
+      ctx.lineWidth = 1;
+      const on = [], off = [];
+      for (const m of base) (brushed(m) ? on : off).push(m);
+      ctx.strokeStyle = css('--ghost'); off.forEach(poly);
+      ctx.globalAlpha = on.length > 300 ? .35 : .7;
+      for (const m of on) { ctx.strokeStyle = FAMILY_COLORS[m.family]; poly(m); }
+      ctx.globalAlpha = 1;
+      if (hover) { ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.4; poly(hover); ctx.lineWidth = 1; }
+      ctx.font = '11px ' + css('--sans');
+      axes.forEach((s, i) => {
+        const X = xAt(i);
+        ctx.strokeStyle = css('--ink-2'); ctx.beginPath(); ctx.moveTo(X, pad.t); ctx.lineTo(X, H - pad.b); ctx.stroke();
+        ctx.textAlign = i === 0 ? 'left' : i === axes.length - 1 ? 'right' : 'center';
+        const tx = i === 0 ? X - 26 : i === axes.length - 1 ? X + 26 : X;
+        ctx.fillStyle = css('--ink'); ctx.font = '600 12px ' + css('--sans'); ctx.fillText(label(s), tx, 18);
+        ctx.fillStyle = css('--ink-2'); ctx.font = '11px ' + css('--sans'); ctx.fillText(db.bySym[s].unit, tx, 33);
+        ctx.textAlign = 'right';
+        for (let d = Math.ceil(ranges[s][0]); d <= ranges[s][1]; d++) { const Y = yAt(s, 10 ** d); ctx.fillStyle = css('--ink-2'); ctx.fillRect(X - 3, Y, 6, 1); ctx.lineWidth = 3; ctx.strokeStyle = css('--plot'); ctx.strokeText(formatValue(10 ** d), X - 6, Y + 4); ctx.fillText(formatValue(10 ** d), X - 6, Y + 4); ctx.lineWidth = 1; }
+        const b = brushes[s];
+        if (b) { const y0 = yAt(s, b[1]), y1 = yAt(s, b[0]); ctx.fillStyle = css('--ink'); ctx.globalAlpha = .18; ctx.fillRect(X - 9, y0, 18, y1 - y0); ctx.globalAlpha = 1; ctx.strokeStyle = css('--ink'); ctx.strokeRect(X - 9, y0, 18, y1 - y0); }
+      });
+    }
+    const ask = () => { if (!raf) raf = requestAnimationFrame(draw); };
+    const count = () => { const n = base.filter(brushed).length; side(n); };
+    const side = n => renderSide(el('div', {}, el('h2', {}, `${n.toLocaleString()} of ${base.length.toLocaleString()} pass`), Object.keys(brushes).length ? el('button', { onclick: () => { brushes = {}; ask(); count(); } }, 'Clear filters') : el('p', { class: 'note' }, 'No filters yet.'), el('div', { style: 'margin-top:6px;max-height:240px;overflow:auto;font-size:12.5px' }, base.filter(brushed).slice(0, 40).map(m => el('div', {}, el('span', { class: 'dot', style: `background:${FAMILY_COLORS[m.family]}` }), m.name)))));
+    canvas.onpointerdown = e => {
+      const i = axes.findIndex((_, n) => Math.abs(xAt(n) - e.offsetX) < 22);
+      if (i < 0) return;
+      canvas.setPointerCapture(e.pointerId);
+      drag = { s: axes[i], y: clamp(e.offsetY, pad.t, H - pad.b), moved: false };
+    };
+    canvas.onpointermove = e => {
+      if (!drag) {
+        let best = null, bd = 25;
+        const on = base.filter(brushed);
+        if (on.length < 700) for (const m of on) for (let i = 0; i < axes.length - 1; i++) {
+          const x0 = xAt(i), x1 = xAt(i + 1);
+          if (e.offsetX < x0 || e.offsetX > x1) continue;
+          const y = yAt(axes[i], m.d[axes[i]]) + (yAt(axes[i + 1], m.d[axes[i + 1]]) - yAt(axes[i], m.d[axes[i]])) * (e.offsetX - x0) / (x1 - x0);
+          const d = (y - e.offsetY) ** 2; if (d < bd) { bd = d; best = m; }
+        }
+        if (best !== hover) { hover = best; ask(); }
+        if (best) { tip.innerHTML = `<strong>${AC.escapeHtml(best.name)}</strong>`; tip.hidden = false; tip.style.left = clamp(e.offsetX + 12, 4, W - tip.offsetWidth - 4) + 'px'; tip.style.top = Math.max(4, e.offsetY - 34) + 'px'; } else tip.hidden = true;
+        return;
+      }
+      const y = clamp(e.offsetY, pad.t, H - pad.b);
+      if (Math.abs(y - drag.y) > 2) drag.moved = true;
+      if (drag.moved) { const a = valueAt(drag.s, Math.max(y, drag.y)), b = valueAt(drag.s, Math.min(y, drag.y)); brushes[drag.s] = [a, b]; ask(); }
+    };
+    canvas.onpointerup = () => { if (drag) { if (!drag.moved) delete brushes[drag.s]; drag = null; ask(); count(); } };
+    canvas.onclick = () => { if (hover) { inspected = hover; count(); } };
+    const ro = new ResizeObserver(ask); ro.observe(host);
+    draw(); count();
+    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }
+
+  /* ---------- scatterplot matrix ---------- */
+  function matrix() {
+    const data = rowsAll().filter(brushed);
+    const n = axes.length;
+    const grid = el('div', { class: 'matrix', style: `grid-template-columns:repeat(${n},minmax(0,1fr));grid-template-rows:repeat(${n},minmax(0,1fr))` });
+    $('view').append(grid);
+    const cells = [];
+    axes.forEach((ys, r) => axes.forEach((xs, c) => {
+      if (r === c) { grid.append(el('div', { class: 'cell diag' }, `${label(xs)}`)); return; }
+      const canvas = el('canvas');
+      const cell = el('button', { class: 'cell', 'aria-label': `${label(ys)} against ${label(xs)}`, title: `${label(ys)} vs ${label(xs)}`, onclick: () => { axes.splice(0, axes.length, xs, ys, ...axes.filter(a => a !== xs && a !== ys)); viewName = 'encode'; render(); } }, canvas);
+      grid.append(cell); cells.push({ canvas, cell, xs, ys });
+    }));
+    const ranges = Object.fromEntries(axes.map(s => { const v = data.map(m => Math.log10(m.d[s])); return [s, [Math.min(...v), Math.max(...v)]]; }));
+    const paint = () => {
+      for (const { canvas, cell, xs, ys } of cells) {
+        const W = cell.clientWidth, H = cell.clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+        canvas.width = W * dpr; canvas.height = H * dpr;
+        const c = canvas.getContext('2d'); c.scale(dpr, dpr); c.globalAlpha = .75;
+        const m = 7, [x0, x1] = ranges[xs], [y0, y1] = ranges[ys];
+        for (const row of data) {
+          c.fillStyle = FAMILY_COLORS[row.family];
+          c.beginPath(); c.arc(m + (Math.log10(row.d[xs]) - x0) / (x1 - x0 || 1) * (W - 2 * m), H - m - (Math.log10(row.d[ys]) - y0) / (y1 - y0 || 1) * (H - 2 * m), 1.8, 0, 7); c.fill();
+        }
+      }
+    };
+    const ro = new ResizeObserver(paint); ro.observe($('view'));
+    renderSide();
+    return () => ro.disconnect();
+  }
+
+  function render() {
+    cleanup?.(); cleanup = null;
+    $('view').replaceChildren();
+    renderAxes();
+    const total = rowsAll().length;
+    const avail = db.materials.filter(m => axes.every(s => m.d[s] > 0)).length;
+    if (!total) { $('view').append(el('div', { class: 'hint', style: 'position:static;display:block;padding:24px' }, 'No material has all of these values. Remove an axis or turn more families on.')); renderSide(); return; }
+    cleanup = { orbit, encode, parallel, matrix }[viewName]();
+    const passing = rowsAll().filter(brushed).length;
+    $('view').append(el('div', { class: 'coverage' + (avail < 200 ? ' warn' : '') }, `${total.toLocaleString()} of ${db.materials.length.toLocaleString()} have ${axes.length === 2 ? 'both' : `all ${axes.length}`} values` + (passing !== total ? `, ${passing.toLocaleString()} pass the filter` : '')));
+    window.__lastView = viewName;
+  }
+  render();
+  window.__setView = name => { viewName = name; render(); };
+  window.__axes = axes; window.__render = render;
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>E · Design brief</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; }
+  .brief { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 16px; }
+  .sentence { font-size: 19px; line-height: 2; letter-spacing: -.01em; }
+  .sentence select { font-size: 16px; font-weight: 600; border: 0; border-bottom: 2px solid var(--ink); border-radius: 0; background: none; padding: 0 2px; min-height: 30px; max-width: 72vw; }
+  .constraints { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 13px; }
+  .con { display: inline-flex; gap: 3px; align-items: center; background: var(--soft); border-radius: 7px; padding: 2px 3px 2px 8px; }
+  .con select, .con input { font-size: 12.5px; min-height: 26px; padding: 1px 3px; }
+  .con input { width: 66px; }
+  .con button { min-height: 22px; padding: 0 5px; }
+  .why { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
+  .why code { font: 600 13px var(--mono); color: var(--ink); }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 8px; padding: 8px; }
+  .chart-card { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .chart-head { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; }
+  .chart { flex: 1; min-height: 0; }
+  .side { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .rank { flex: 1; min-height: 0; overflow: auto; }
+  .rank-head { padding: 8px 10px; position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--line); z-index: 1; display: flex; justify-content: space-between; align-items: baseline; }
+  .rank-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 52px 28px; gap: 4px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12.5px; width: 100%; }
+  .rank-row:hover { background: var(--soft); }
+  .rank-row .num { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .rank-row .bar { height: 4px; background: var(--soft); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+  .rank-row .bar i { display: block; height: 100%; }
+  .rank-row .score { text-align: right; font-variant-numeric: tabular-nums; }
+  .rank-row button { min-height: 22px; padding: 0 5px; font-size: 13px; }
+  .rank-row.pinned { background: var(--soft); }
+  .compare { max-height: 42%; overflow: auto; padding: 8px 10px; }
+  .compare table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .compare th, .compare td { padding: 3px 5px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .compare th:first-child, .compare td:first-child { text-align: left; color: var(--ink-2); font-weight: 500; }
+  .compare thead th { font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+  .compare td.best { font-weight: 700; }
+  @media (max-width: 860px) {
+    body { height: auto; }
+    .sentence { font-size: 16px; }
+    .main { display: flex; flex-direction: column; }
+    .chart-card { height: 60vh; min-height: 360px; }
+    .rank { max-height: 420px; }
+    .compare { max-height: none; }
+  }
+</style>
+</head>
+<body>
+<section class="brief">
+  <div class="sentence">I need a <select id="shape" aria-label="Part"></select> that is <select id="driver" aria-label="Requirement"></select> for the least <select id="cost" aria-label="Objective"><option>mass</option></select>.</div>
+  <div class="constraints" id="constraints"></div>
+  <p class="why" id="why"></p>
+</section>
+<div class="main">
+  <section class="panel chart-card">
+    <div class="chart-head"><span id="line-note"></span><span><button id="fit">Fit</button></span></div>
+    <div class="chart" id="chart"></div>
+  </section>
+  <div class="side">
+    <section class="panel rank" id="rank"></section>
+    <section class="panel compare" id="compare"></section>
+  </div>
+</div>
+<script src="../core.js"></script>
+<script>
+(async () => {
+  const { el, Axis, Plot, FAMILY_NAMES, FAMILY_COLORS, formatValue } = AC;
+  AC.header('e-brief');
+  const db = await AC.load();
+  const $ = id => document.getElementById(id);
+  // Each entry is a published performance index; slope is the guideline on log axes.
+  const BRIEFS = {
+    'tie (rod in tension)': { stiff: ['E', 'E', 1, 'E / ρ', 'stiff_light_tie'], strong: ['UTS', 'UTS', 1, 'σ / ρ', 'strong_light_tie'] },
+    'beam (in bending)': { stiff: ['E', 'E^0.5', 2, 'E^(1/2) / ρ', 'stiff_light_beam'], strong: ['UTS', 'UTS^(2/3)', 1.5, 'σ^(2/3) / ρ', 'strong_light_beam'] },
+    'plate or panel': { stiff: ['E', 'E^(1/3)', 3, 'E^(1/3) / ρ', 'stiff_light_plate'], strong: ['UTS', 'UTS^0.5', 2, 'σ^(1/2) / ρ', 'strong_light_plate'] },
+  };
+  const DRIVERS = { stiff: 'stiff enough', strong: 'strong enough' };
+  $('shape').append(...Object.keys(BRIEFS).map(k => el('option', { value: k }, k)));
+  $('driver').append(...Object.entries(DRIVERS).map(([k, v]) => el('option', { value: k }, v)));
+  $('shape').value = 'beam (in bending)';
+  let constraints = [{ sym: 'E', op: 'min', value: 1 }];
+  const pinned = new Set();
+  let lineC = null, ranked = [];
+
+  const ink = () => getComputedStyle(document.documentElement).getPropertyValue('--ink');
+  let dragging = false, brief = null;
+  const plot = new Plot($('chart'), {
+    onClick: hit => { if (hit) togglePin(hit.m); },
+    afterPoints: (ctx, p) => {
+      if (lineC == null || !brief) return;
+      const v = p.view, f = t => brief[2] * t + lineC;
+      // shade the side that passes
+      ctx.fillStyle = ink(); ctx.globalAlpha = .045; ctx.beginPath();
+      ctx.moveTo(p.sx(v.x0), p.sy(f(v.x0))); ctx.lineTo(p.sx(v.x1), p.sy(f(v.x1))); ctx.lineTo(p.sx(v.x1), p.sy(v.y1 + 40)); ctx.lineTo(p.sx(v.x0), p.sy(v.y1 + 40)); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = ink(); ctx.lineWidth = 2; ctx.setLineDash([8, 5]); ctx.beginPath(); ctx.moveTo(p.sx(v.x0), p.sy(f(v.x0))); ctx.lineTo(p.sx(v.x1), p.sy(f(v.x1))); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      const tx = v.x0 + (v.x1 - v.x0) * .1;
+      ctx.save(); ctx.translate(p.sx(tx), p.sy(f(tx))); ctx.rotate(-Math.atan2(brief[2] * (p.plotBox.h / (v.y1 - v.y0)), p.plotBox.w / (v.x1 - v.x0))); ctx.font = '600 11.5px ' + getComputedStyle(document.documentElement).getPropertyValue('--sans'); ctx.fillStyle = ink(); ctx.fillText('Drag: better is up and left', 6, -7); ctx.restore();
+    },
+    onPointerDown: (x, y, _e, p) => { if (lineC == null || !brief) return false; if (Math.abs(p.sy(brief[2] * p.ix(x) + lineC) - y) < 10) { dragging = true; return true; } return false; },
+    onPointerDrag: (x, y, _e, p) => { if (dragging) { lineC = p.iy(y) - brief[2] * p.ix(x); update(true); } },
+    onPointerUp: () => { dragging = false; },
+  });
+
+  function renderConstraints() {
+    const box = $('constraints');
+    box.replaceChildren(el('span', { class: 'muted' }, 'Must also have'), ...constraints.map((c, i) => {
+      const sym = el('select', { 'aria-label': 'Property', onchange: () => { c.sym = sym.value; update(); } }, db.props.map(p => el('option', { value: p.sym }, p.label)));
+      sym.value = c.sym;
+      const op = el('select', { 'aria-label': 'At least or at most', onchange: () => { c.op = op.value; update(); } }, el('option', { value: 'min' }, 'at least'), el('option', { value: 'max' }, 'at most'));
+      op.value = c.op;
+      const value = el('input', { type: 'number', step: 'any', value: c.value, 'aria-label': 'Value', oninput: () => { c.value = parseFloat(value.value); update(true); } });
+      return el('span', { class: 'con' }, sym, op, value, el('small', {}, db.bySym[c.sym].unit), el('button', { class: 'ghost', 'aria-label': 'Remove requirement', onclick: () => { constraints.splice(i, 1); renderConstraints(); update(); } }, '×'));
+    }), el('button', { onclick: () => { constraints.push({ sym: 'Sy', op: 'min', value: 100 }); renderConstraints(); update(); } }, '+ Requirement'));
+  }
+  function togglePin(m) { pinned.has(m.id) ? pinned.delete(m.id) : pinned.add(m.id); update(true); }
+  function update(keep) {
+    const started = performance.now();
+    brief = BRIEFS[$('shape').value][$('driver').value];
+    const [ySym, numerator, slope, expression, indexId] = brief;
+    const index = db.indices.find(i => i.id === indexId);
+    $('why').replaceChildren('Performance index ', el('code', {}, 'M = ' + expression), ' ', el('span', {}, `Higher is better. ${index.source}` + ($('driver').value === 'strong' ? ' The index is written with yield strength. This uses tensile strength for now, since more materials have it.' : '')));
+    const xA = new Axis('rho'), yA = new Axis(ySym), mA = new Axis(`${numerator}/rho`);
+    const passes = m => constraints.every(c => { if (!Number.isFinite(c.value)) return true; const v = m.d[c.sym]; return v != null && (c.op === 'min' ? v >= c.value : v <= c.value); });
+    const pool = db.materials.filter(m => Number.isFinite(mA.value(m)));
+    const ok = pool.filter(passes);
+    if (lineC == null || !keep) {
+      const cs = ok.map(m => Math.log10(m.d[ySym]) - slope * Math.log10(m.d.rho)).sort((a, b) => b - a);
+      lineC = cs.length ? cs[Math.min(cs.length - 1, Math.floor(cs.length * .12))] : 0;
+    }
+    const above = m => Math.log10(m.d[ySym]) - slope * Math.log10(m.d.rho) >= lineC;
+    ranked = ok.map(m => ({ m, score: mA.value(m) })).sort((a, b) => b.score - a.score);
+    const rows = AC.chartRows(db.materials, xA, yA, { dim: m => !(passes(m) && above(m) && Number.isFinite(mA.value(m))), ring: m => pinned.has(m.id) ? ink() : null });
+    plot.opts.fitAll = true;
+    plot.setData({ rows, xAxis: xA, yAxis: yA, keepView: !!keep });
+    plot.setShapes(AC.shapesFor(AC.chartRows(ok, xA, yA), xA, yA, { method: 'gooey', grouping: 'family', softness: 1.1 }));
+    plot.opts.blobFill = .12;
+    const best = ranked[0]?.score || 1;
+    const pass = ranked.filter(r => above(r.m));
+    $('line-note').textContent = `${pass.length.toLocaleString()} materials beat the line, of ${ok.length.toLocaleString()} that meet the requirements. Click a point to compare it.`;
+    const rankBox = $('rank');
+    rankBox.replaceChildren(el('div', { class: 'rank-head' }, el('h2', {}, 'Best for this brief'), el('small', {}, '% of the best')),
+      ...ranked.slice(0, 60).map((r, i) => el('div', { class: 'rank-row' + (pinned.has(r.m.id) ? ' pinned' : ''), onclick: () => togglePin(r.m), title: `${FAMILY_NAMES[r.m.family]} · ${r.m.cls}` },
+        el('span', { class: 'num' }, i + 1),
+        el('span', {}, r.m.name, el('div', { class: 'bar' }, el('i', { style: `width:${r.score / best * 100}%;background:${FAMILY_COLORS[r.m.family]}` }))),
+        el('span', { class: 'score' }, Math.round(r.score / best * 100) + '%'),
+        el('button', { class: 'ghost', 'aria-label': pinned.has(r.m.id) ? 'Remove from comparison' : 'Add to comparison', title: 'Compare' }, pinned.has(r.m.id) ? '✓' : '+'))));
+    renderCompare();
+    window.__lastRefreshMs = performance.now() - started;
+  }
+  function renderCompare() {
+    const box = $('compare');
+    const list = [...pinned].map(id => db.byId[id]);
+    if (!list.length) { box.replaceChildren(el('h2', {}, 'Compare'), el('p', { class: 'muted', style: 'font-size:12.5px' }, 'Pick materials from the list or the chart.')); return; }
+    const props = db.props.filter(p => list.some(m => m.d[p.sym] != null));
+    const lowerBetter = new Set(['rho']);
+    box.replaceChildren(el('div', { style: 'display:flex;justify-content:space-between;margin-bottom:4px' }, el('h2', {}, 'Compare'), el('button', { class: 'ghost', onclick: () => { AC.tags.add('Compared', [...pinned]); box.querySelector('.saved').textContent = 'Saved as tag "Compared"'; } }, 'Save as tag')), el('small', { class: 'saved' }),
+      el('table', {}, el('thead', {}, el('tr', {}, el('th', {}), list.map(m => el('th', { title: m.name }, m.name)))),
+        el('tbody', {}, props.map(p => {
+          const values = list.map(m => m.d[p.sym]).filter(v => v != null);
+          const top = lowerBetter.has(p.sym) ? Math.min(...values) : Math.max(...values);
+          return el('tr', {}, el('td', {}, `${p.label} (${p.unit})`), list.map(m => el('td', { class: list.length > 1 && m.d[p.sym] === top ? 'best' : '' }, m.d[p.sym] != null ? formatValue(m.d[p.sym]) : '–')));
+        }))));
+  }
+  $('shape').onchange = $('driver').onchange = () => { lineC = null; update(); };
+  $('fit').onclick = () => plot.fit();
+  renderConstraints();
+  update();
+  plot.view = { ...plot.fitView }; plot.draw();
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>

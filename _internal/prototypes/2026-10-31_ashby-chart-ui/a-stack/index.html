@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>A · Selection stack</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; }
+  .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 230px; gap: 10px; padding: 10px; }
+  .stack { grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0; }
+  .stack-head { padding: 12px 12px 8px; border-bottom: 1px solid var(--line); }
+  .stack-head p { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .query { display: flex; gap: 4px; margin-top: 9px; }
+  .query input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  .query-msg { font-size: 11.5px; color: var(--ink-2); min-height: 16px; margin-top: 3px; }
+  .query-msg.bad { color: var(--warn); }
+  .stages { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 0; }
+  .start, .end { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); padding: 4px 6px; }
+  .end { color: var(--ink); font-weight: 650; font-size: 13px; }
+  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 7px; margin: 0 0 3px; }
+  .stage.off { opacity: .55; }
+  .stage.drag-over { border-color: var(--ink); }
+  .stage-top { display: flex; align-items: center; gap: 5px; padding: 5px 5px 5px 8px; cursor: grab; }
+  .stage-title { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stage-top button { min-height: 24px; padding: 0 6px; font-size: 12px; }
+  .stage-body { padding: 0 8px 8px; }
+  .funnel { display: flex; align-items: center; gap: 6px; padding: 0 8px 7px; font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .funnel .bar { flex: 1; height: 5px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+  .funnel .bar i { display: block; height: 100%; background: var(--ink-2); border-radius: 3px; transition: width .18s; }
+  .add { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; border-top: 1px solid var(--line); }
+  .add button { font-size: 12px; padding: 3px 8px; }
+  .hist { position: relative; height: 50px; margin-bottom: 4px; touch-action: none; }
+  .hist canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .range-row { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+  .range-row input { width: 76px; min-height: 26px; padding: 2px 5px; font-size: 12px; }
+  .range-row select { min-height: 26px; padding: 2px 4px; font-size: 12px; flex: 1; min-width: 0; }
+  .chartbox { display: flex; flex-direction: column; min-height: 0; }
+  .chart-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .chart-tools label { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--ink-2); }
+  .chart-tools select { max-width: 170px; font-size: 12.5px; }
+  .chart { flex: 1; min-height: 0; }
+  .spacer { flex: 1; }
+  .results-box { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .results-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .results-scroll { flex: 1; overflow: auto; }
+  .inspector { position: fixed; top: 44px; right: 10px; bottom: 10px; width: min(370px, calc(100vw - 20px)); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: auto; box-shadow: 0 16px 32px rgba(15, 23, 42, .2); z-index: 20; }
+  @media (max-width: 860px) {
+    body { height: auto; }
+    .layout { display: flex; flex-direction: column; }
+    .chartbox { order: -1; height: 66vh; min-height: 380px; }
+    .stages { overflow: visible; }
+    .results-box { height: 330px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <section class="panel stack" aria-label="Selection stages">
+    <div class="stack-head">
+      <h1>Selection stack</h1>
+      <p>Each stage narrows the one above. Drag to reorder.</p>
+      <form class="query" id="query-form">
+        <input id="query" type="text" placeholder="E > 5, family metal, tag shortlist" aria-label="Type a filter" autocomplete="off">
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <div class="query-msg" id="query-msg">rho E Ef UTS Sy MOR Sc k cp nu el, or a formula like E^0.5/rho &gt; 0.002</div>
+    </div>
+    <div class="stages" id="stages"></div>
+    <div class="add" id="add"></div>
+  </section>
+  <section class="panel chartbox" aria-label="Chart">
+    <div class="chart-tools">
+      <label>x <select id="x"></select></label>
+      <label>y <select id="y"></select></label>
+      <button class="ghost" id="swap" title="Swap axes">⇄</button>
+      <span class="spacer"></span>
+      <button id="draw-region" title="Drag on the chart to add a stage">Draw region</button>
+      <button id="add-line" title="Add a line from a performance index">Selection line</button>
+      <button id="fit">Fit</button>
+    </div>
+    <div class="chart" id="chart"></div>
+  </section>
+  <section class="panel results-box" aria-label="Results">
+    <div class="results-top">
+      <h2 id="result-count"></h2>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <select id="add-col" aria-label="Add a column"></select>
+        <input id="tag-input" type="text" list="tag-list" placeholder="Tag these results" style="width:150px" aria-label="Tag all results">
+        <datalist id="tag-list"></datalist>
+        <button id="tag-apply">Tag</button>
+        <button id="export">CSV</button>
+      </div>
+    </div>
+    <div class="results-scroll"><table class="results" id="results"></table></div>
+  </section>
+</div>
+<aside class="inspector" id="inspector" hidden></aside>
+<script src="../core.js"></script>
+<script>
+(async () => {
+  const { el, Axis, Plot, tags, FAMILY_NAMES, FAMILY_COLORS, formatValue } = AC;
+  AC.header('a-stack');
+  const db = await AC.load();
+  const num = v => Number.isFinite(v) ? v : null;
+  let stages = [
+    { type: 'family', values: ['metal', 'composite', 'wood', 'polymer', 'ceramic'], enabled: true },
+    { type: 'limit', expr: 'E', min: 2, max: null, enabled: true },
+    { type: 'limit', expr: 'rho', min: null, max: 4000, enabled: true },
+  ];
+  let xExpr = 'rho', yExpr = 'E', columns = ['Sy', 'UTS', 'k'], sortKey = 'y', sortDir = -1, selected = null, armRegion = false;
+  try {
+    const state = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+    if (state?.stages) { stages = state.stages; xExpr = state.x || xExpr; yExpr = state.y || yExpr; }
+  } catch { /* no shared state in the URL */ }
+
+  const plot = new Plot(document.getElementById('chart'), {
+    onClick: hit => { selected = hit?.m || null; renderInspector(); renderTable(); plot.selected = new Set(selected ? [selected.id] : []); plot.draw(); },
+    onSelect: (_, shape) => {
+      if (shape.kind !== 'box') return;
+      plot.mode = 'pan'; armRegion = false; regionBtn.classList.remove('on');
+      stages.push({ type: 'region', x: xExpr, y: yExpr, xLog: true, yLog: true, x0: shape.x0, x1: shape.x1, y0: shape.y0, y1: shape.y1, enabled: true });
+      refresh();
+    },
+    afterPoints: (ctx, p) => {
+      for (const s of stages) {
+        if (s.type !== 'index' || s.enabled === false || s.x !== xExpr || s.y !== yExpr) continue;
+        const v = p.view, f = t => s.slope * t + s.c;
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink'); ctx.lineWidth = 1.5; ctx.setLineDash([7, 5]);
+        ctx.beginPath(); ctx.moveTo(p.sx(v.x0), p.sy(f(v.x0))); ctx.lineTo(p.sx(v.x1), p.sy(f(v.x1))); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      }
+    },
+    onPointerDown: (x, y, _e, p) => {
+      for (const s of stages) {
+        if (s.type !== 'index' || s.enabled === false || s.x !== xExpr || s.y !== yExpr) continue;
+        const lineY = p.sy(s.slope * p.ix(x) + s.c);
+        if (Math.abs(lineY - y) < 9) { draggingLine = s; return true; }
+      }
+      return false;
+    },
+    onPointerDrag: (x, y, _e, p) => { if (draggingLine) { draggingLine.c = p.iy(y) - draggingLine.slope * p.ix(x); refresh(true); } },
+    onPointerUp: () => { draggingLine = null; },
+  });
+  let draggingLine = null;
+
+  const options = (select, list) => select.replaceChildren(...list.map(([value, text]) => el('option', { value }, text)));
+  const propOptions = db.props.map(p => [p.sym, `${p.label} (${p.unit})`]);
+  const X = document.getElementById('x'), Y = document.getElementById('y');
+  options(X, propOptions); options(Y, propOptions); X.value = xExpr; Y.value = yExpr;
+  X.onchange = () => { xExpr = X.value; refresh(); plot.fit(); };
+  Y.onchange = () => { yExpr = Y.value; refresh(); plot.fit(); };
+  document.getElementById('swap').onclick = () => { [xExpr, yExpr] = [yExpr, xExpr]; X.value = xExpr; Y.value = yExpr; refresh(); plot.fit(); };
+  document.getElementById('fit').onclick = () => plot.fit();
+  const regionBtn = document.getElementById('draw-region');
+  regionBtn.onclick = () => { armRegion = !armRegion; plot.mode = armRegion ? 'box' : 'pan'; regionBtn.classList.toggle('on', armRegion); };
+  document.getElementById('add-line').onclick = () => {
+    const known = db.indices.find(i => i.x === xExpr && i.y === yExpr);
+    const slope = known?.expression.includes('1/2') ? 2 : known?.expression.includes('1/3') ? 3 : known?.expression.includes('2/3') ? 1.5 : 1;
+    const v = plot.view;
+    stages.push({ type: 'index', x: xExpr, y: yExpr, slope, c: (v.y0 + v.y1) / 2 - slope * (v.x0 + v.x1) / 2, above: true, enabled: true });
+    refresh();
+  };
+
+  /* ---------- text queries become ordinary stages ---------- */
+  function parseQuery(text) {
+    const q = text.trim(); let m;
+    const unitScale = { gpa: 1, mpa: 1 };
+    if ((m = q.match(/^family\s+(.+)$/i))) {
+      const wanted = m[1].split(/[, ]+/).map(w => w.toLowerCase()).map(w => Object.keys(FAMILY_NAMES).find(k => k === w || FAMILY_NAMES[k].toLowerCase() === w || k.startsWith(w)));
+      if (wanted.includes(undefined)) throw new Error('Families: ' + Object.values(FAMILY_NAMES).join(', '));
+      return { type: 'family', values: wanted, enabled: true };
+    }
+    if ((m = q.match(/^tag\s+(.+)$/i))) return { type: 'tag', value: m[1].trim(), enabled: true };
+    if ((m = q.match(/^(?:class|type)\s+(.+)$/i))) {
+      const need = m[1].toLowerCase();
+      const values = [...new Set(db.materials.map(x => x.cls))].filter(c => c.toLowerCase().includes(need));
+      if (!values.length) throw new Error(`No class matches "${m[1]}"`);
+      return { type: 'class', values, enabled: true };
+    }
+    if ((m = q.match(/^(.+?)\s*(<=|>=|<|>)\s*(-?[\d.]+)\s*([a-z/³%]*)$/i))) {
+      const compiled = AC.compile(m[1]);
+      if (compiled.error) throw new Error(compiled.error + '. Symbols: ' + db.props.map(p => p.sym).join(', '));
+      const value = parseFloat(m[3]) * (m[4].toLowerCase() in unitScale ? unitScale[m[4].toLowerCase()] : 1);
+      return { type: 'limit', expr: m[1].trim(), min: m[2].includes('>') ? value : null, max: m[2].includes('<') ? value : null, enabled: true };
+    }
+    if (q) return { type: 'text', value: q, enabled: true };
+    throw new Error('Type a filter');
+  }
+  document.getElementById('query-form').onsubmit = e => {
+    e.preventDefault();
+    const input = document.getElementById('query'), msg = document.getElementById('query-msg');
+    try { stages.push(parseQuery(input.value)); input.value = ''; msg.classList.remove('bad'); refresh(); }
+    catch (error) { msg.textContent = error.message; msg.classList.add('bad'); }
+  };
+
+  /* ---------- stage editors ---------- */
+  const add = document.getElementById('add');
+  add.append(...[
+    ['Family', () => ({ type: 'family', values: Object.keys(FAMILY_NAMES), enabled: true })],
+    ['Limit', () => ({ type: 'limit', expr: 'UTS', min: null, max: null, enabled: true })],
+    ['Material class', () => ({ type: 'class', values: [], enabled: true })],
+    ['Source', () => ({ type: 'org', values: [], enabled: true })],
+    ['Tag', () => ({ type: 'tag', value: tags.names()[0] || '', enabled: true })],
+    ['Search', () => ({ type: 'text', value: '', enabled: true })],
+  ].map(([label, make]) => el('button', { onclick: () => { stages.push(make()); refresh(); } }, '+ ' + label)));
+
+  function stageTitle(s) {
+    switch (s.type) {
+      case 'family': return 'Family: ' + (s.values.length === Object.keys(FAMILY_NAMES).length ? 'all' : s.values.map(v => FAMILY_NAMES[v]).join(', ') || 'none');
+      case 'limit': {
+        const axis = new Axis(s.expr, false);
+        const parts = [s.min != null ? `≥ ${formatValue(s.min)}` : '', s.max != null ? `≤ ${formatValue(s.max)}` : ''].filter(Boolean).join(' and ');
+        return `${axis.short} ${parts || '(any)'}${axis.prop && parts ? ' ' + axis.prop.unit : ''}`;
+      }
+      case 'class': return 'Class: ' + (s.values.join(', ') || 'choose');
+      case 'org': return 'Source: ' + (s.values.join(', ') || 'choose');
+      case 'tag': return 'Tag: ' + (s.value || 'choose');
+      case 'text': return 'Search: ' + (s.value || 'type');
+      case 'region': return `Region on ${new Axis(s.y).short} vs ${new Axis(s.x).short}`;
+      case 'index': return `${s.above ? 'Above' : 'Below'} line, slope ${s.slope}`;
+      default: return s.type;
+    }
+  }
+  function histogram(s, inputs) {
+    const axis = new Axis(s.expr, false), base = new Axis(s.expr, true);
+    const stageIndex = stages.indexOf(s);
+    const before = AC.runStages(stages.slice(0, stageIndex)).rows;
+    const values = before.map(m => base.value(m)).filter(Number.isFinite);
+    const wrap = el('div', { class: 'hist' }), canvas = el('canvas');
+    wrap.append(canvas);
+    if (values.length < 2) return wrap;
+    const lo = Math.log10(Math.min(...values)), hi = Math.log10(Math.max(...values)) + 1e-6, bins = 44;
+    const counts = new Array(bins).fill(0);
+    values.forEach(v => { counts[Math.min(bins - 1, Math.floor((Math.log10(v) - lo) / (hi - lo) * bins))]++; });
+    const peak = Math.max(...counts);
+    const paint = () => {
+      const w = wrap.clientWidth || 300, h = 50, dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      const c = canvas.getContext('2d'); c.scale(dpr, dpr);
+      const css = getComputedStyle(document.documentElement);
+      const a = s.min != null ? (Math.log10(s.min) - lo) / (hi - lo) : 0, b = s.max != null ? (Math.log10(s.max) - lo) / (hi - lo) : 1;
+      counts.forEach((n, i) => {
+        const pos = (i + .5) / bins; c.fillStyle = pos >= a && pos <= b ? css.getPropertyValue('--ink') : css.getPropertyValue('--line');
+        const bh = n ? Math.max(2, Math.sqrt(n / peak) * (h - 8)) : 0; c.fillRect(i / bins * w + .5, h - 4 - bh, w / bins - 1, bh);
+      });
+      c.fillStyle = css.getPropertyValue('--ink');
+      for (const f of [clamp01(a), clamp01(b)]) c.fillRect(f * w - 1, 0, 2, h);
+    };
+    const clamp01 = v => AC.clamp(v, 0, 1);
+    requestAnimationFrame(paint);
+    let side = null;
+    const move = e => {
+      const r = wrap.getBoundingClientRect(), f = AC.clamp((e.clientX - r.left) / r.width, 0, 1), value = 10 ** (lo + f * (hi - lo));
+      const shown = +value.toPrecision(3);
+      if (side === 'min') { s.min = f <= .005 ? null : shown; inputs.min.value = s.min ?? ''; } else { s.max = f >= .995 ? null : shown; inputs.max.value = s.max ?? ''; }
+      paint(); refresh(true);
+    };
+    wrap.onpointerdown = e => {
+      const r = wrap.getBoundingClientRect(), f = (e.clientX - r.left) / r.width;
+      const a = s.min != null ? (Math.log10(s.min) - lo) / (hi - lo) : 0, b = s.max != null ? (Math.log10(s.max) - lo) / (hi - lo) : 1;
+      side = Math.abs(f - a) <= Math.abs(f - b) ? 'min' : 'max';
+      wrap.setPointerCapture(e.pointerId); move(e);
+    };
+    wrap.onpointermove = e => { if (side) move(e); };
+    wrap.onpointerup = () => { side = null; renderStages(); };
+    return wrap;
+  }
+  function editor(s) {
+    const body = el('div', { class: 'stage-body' });
+    if (s.type === 'family') {
+      const box = el('div', { class: 'chips' });
+      for (const [k, name] of Object.entries(FAMILY_NAMES)) box.append(el('button', { class: 'chip' + (s.values.includes(k) ? '' : ' off'), style: `--c:${FAMILY_COLORS[k]}`, onclick: () => { s.values = s.values.includes(k) ? s.values.filter(v => v !== k) : [...s.values, k]; refresh(); } }, name));
+      body.append(box);
+    } else if (s.type === 'limit') {
+      const min = el('input', { type: 'number', step: 'any', value: s.min ?? '', placeholder: 'min', 'aria-label': 'Minimum', onchange: () => { s.min = num(parseFloat(min.value)); refresh(); } });
+      const max = el('input', { type: 'number', step: 'any', value: s.max ?? '', placeholder: 'max', 'aria-label': 'Maximum', onchange: () => { s.max = num(parseFloat(max.value)); refresh(); } });
+      const select = el('select', { 'aria-label': 'Property', onchange: () => { s.expr = select.value; s.min = s.max = null; refresh(); } });
+      const known = db.bySym[s.expr];
+      options(select, known ? propOptions : [[s.expr, s.expr], ...propOptions]); select.value = s.expr;
+      body.append(histogram(s, { min, max }), el('div', { class: 'range-row' }, select, min, max));
+    } else if (s.type === 'class' || s.type === 'org') {
+      const stageIndex = stages.indexOf(s);
+      const before = AC.runStages(stages.slice(0, stageIndex)).rows, counts = new Map();
+      before.forEach(m => (s.type === 'class' ? [m.cls] : m.orgs).forEach(c => counts.set(c, (counts.get(c) || 0) + 1)));
+      const box = el('div', { class: 'chips', style: 'max-height:128px;overflow:auto' });
+      [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([name, n]) => box.append(el('button', { class: 'chip' + (s.values.includes(name) ? '' : ' off'), onclick: () => { s.values = s.values.includes(name) ? s.values.filter(v => v !== name) : [...s.values, name]; refresh(); } }, name, ' ', el('b', {}, n))));
+      body.append(box);
+    } else if (s.type === 'tag') {
+      const select = el('select', { 'aria-label': 'Tag', onchange: () => { s.value = select.value; refresh(); } });
+      options(select, tags.names().map(n => [n, n])); select.value = s.value;
+      body.append(tags.names().length ? select : el('small', {}, 'No tags yet. Tag the results below, or make tags in prototype B.'));
+    } else if (s.type === 'text') {
+      const input = el('input', { type: 'search', value: s.value, placeholder: 'Name, class or source', style: 'width:100%', oninput: () => { s.value = input.value; refresh(true); } });
+      body.append(input);
+    } else if (s.type === 'index') {
+      const flip = el('button', { onclick: () => { s.above = !s.above; refresh(); } }, s.above ? 'Keep above' : 'Keep below');
+      const slope = el('select', { 'aria-label': 'Slope', onchange: () => { s.slope = parseFloat(slope.value); refresh(); } });
+      options(slope, [[1, 'Slope 1: tie'], [1.5, 'Slope 1.5: strong beam'], [2, 'Slope 2: stiff beam'], [3, 'Slope 3: stiff plate']]); slope.value = s.slope;
+      body.append(el('div', { class: 'range-row' }, flip, slope), el('small', {}, 'Drag the dashed line on the chart.'));
+    } else if (s.type === 'region') {
+      const a = new Axis(s.x), b = new Axis(s.y);
+      body.append(el('small', {}, `${a.short} ${formatValue(s.x0)} to ${formatValue(s.x1)}; ${b.short} ${formatValue(s.y0)} to ${formatValue(s.y1)}`));
+    }
+    return body;
+  }
+  let dragFrom = null;
+  function renderStages() {
+    const host = document.getElementById('stages');
+    const { counts } = AC.runStages(stages);
+    const nodes = [el('div', { class: 'start' }, el('span', {}, 'All materials'), el('span', {}, db.materials.length.toLocaleString()))];
+    stages.forEach((s, i) => {
+      const c = counts[i];
+      const card = el('div', { class: 'stage' + (s.enabled === false ? ' off' : ''), draggable: false });
+      const top = el('div', { class: 'stage-top', draggable: true,
+        ondragstart: e => { dragFrom = i; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); },
+        ondragover: e => { e.preventDefault(); card.classList.add('drag-over'); },
+        ondragleave: () => card.classList.remove('drag-over'),
+        ondrop: e => { e.preventDefault(); if (dragFrom != null && dragFrom !== i) { const [moved] = stages.splice(dragFrom, 1); stages.splice(i, 0, moved); dragFrom = null; refresh(); } },
+      },
+        el('span', { class: 'stage-title', title: stageTitle(s) }, stageTitle(s)),
+        i > 0 ? el('button', { class: 'ghost', title: 'Move up', 'aria-label': 'Move stage up', onclick: () => { [stages[i - 1], stages[i]] = [stages[i], stages[i - 1]]; refresh(); } }, '↑') : null,
+        el('button', { class: 'ghost', title: s.enabled === false ? 'Turn on' : 'Turn off', 'aria-pressed': String(s.enabled !== false), onclick: () => { s.enabled = s.enabled === false; refresh(); } }, s.enabled === false ? 'Off' : 'On'),
+        el('button', { class: 'ghost', title: 'Remove', 'aria-label': 'Remove stage', onclick: () => { stages.splice(i, 1); refresh(); } }, '×'));
+      card.append(top, editor(s), el('div', { class: 'funnel' }, el('span', { class: 'bar' }, el('i', { style: `width:${c.before ? c.after / db.materials.length * 100 : 0}%` })), el('span', {}, `${c.before.toLocaleString()} → ${c.after.toLocaleString()}`)));
+      nodes.push(card);
+    });
+    nodes.push(el('div', { class: 'end' }, el('span', {}, 'Remaining'), el('span', {}, (counts.at(-1)?.after ?? db.materials.length).toLocaleString())));
+    host.replaceChildren(...nodes);
+  }
+
+  /* ---------- results ---------- */
+  function renderTable(passing = current) {
+    const xA = new Axis(xExpr), yA = new Axis(yExpr);
+    const cols = [...new Set([yExpr, xExpr, ...columns])].filter(c => db.bySym[c]);
+    const key = sortKey === 'y' ? yExpr : sortKey;
+    const rows = [...passing].sort((a, b) => {
+      if (key === 'name') return sortDir * a.name.localeCompare(b.name);
+      const va = a.d[key], vb = b.d[key];
+      if (va == null) return 1; if (vb == null) return -1;
+      return sortDir * (va - vb);
+    });
+    const table = document.getElementById('results');
+    const head = el('tr', {}, el('th', { onclick: () => setSort('name') }, 'Material'), cols.map(c => el('th', { onclick: () => setSort(c), title: 'Sort. Shift+click removes the column' }, `${db.bySym[c].label} (${db.bySym[c].unit})`)));
+    const body = rows.slice(0, 150).map(m => el('tr', { class: selected?.id === m.id ? 'sel' : '', onclick: () => { selected = m; plot.selected = new Set([m.id]); plot.draw(); renderInspector(); renderTable(); } },
+      el('td', {}, el('span', { class: 'dot', style: `background:${FAMILY_COLORS[m.family]}` }), m.name), cols.map(c => el('td', {}, m.d[c] != null ? formatValue(m.d[c]) : '–'))));
+    table.replaceChildren(el('thead', {}, head), el('tbody', {}, body));
+    document.getElementById('result-count').textContent = `${passing.length.toLocaleString()} results` + (passing.length > 150 ? ', first 150 shown' : '');
+  }
+  function setSort(key) { if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = key === 'name' ? 1 : -1; } renderTable(); }
+  const addCol = document.getElementById('add-col');
+  options(addCol, [['', '+ Column'], ...db.props.map(p => [p.sym, p.label])]);
+  addCol.onchange = () => { if (addCol.value && !columns.includes(addCol.value)) columns.push(addCol.value); addCol.value = ''; renderTable(); };
+  document.getElementById('tag-apply').onclick = () => {
+    const input = document.getElementById('tag-input'), name = input.value.trim();
+    if (name) { tags.add(name, current.map(m => m.id)); input.value = ''; refreshTagList(); renderStages(); }
+  };
+  function refreshTagList() { document.getElementById('tag-list').replaceChildren(...tags.names().map(n => el('option', { value: n }))); }
+  document.getElementById('export').onclick = () => AC.downloadCsv('selection.csv', ['Material', 'Family', ...db.props.map(p => `${p.label} (${p.unit})`)], current.map(m => [m.name, FAMILY_NAMES[m.family], ...db.props.map(p => m.d[p.sym] ?? '')]));
+  function renderInspector() {
+    const box = document.getElementById('inspector');
+    if (!selected) { box.hidden = true; return; }
+    box.hidden = false;
+    box.replaceChildren(AC.materialCard(selected, () => { selected = null; plot.selected = new Set(); plot.draw(); renderInspector(); renderTable(); }));
+  }
+
+  /* ---------- everything flows from one refresh ---------- */
+  let current = [];
+  function refresh(light) {
+    const started = performance.now();
+    const { rows } = AC.runStages(stages);
+    current = rows;
+    const set = new Set(rows.map(m => m.id));
+    const xA = new Axis(xExpr), yA = new Axis(yExpr);
+    const chart = AC.chartRows(db.materials, xA, yA, { dim: m => !set.has(m.id) });
+    plot.opts.fitAll = true;
+    plot.setData({ rows: chart, xAxis: xA, yAxis: yA, keepView: true });
+    plot.setShapes(AC.shapesFor(chart, xA, yA, { method: 'gooey', grouping: 'family', softness: 1.15 }));
+    if (!light) renderStages();
+    else { const { counts } = AC.runStages(stages); document.querySelectorAll('.funnel').forEach((node, i) => { const c = counts[i]; if (c) { node.lastChild.textContent = `${c.before.toLocaleString()} → ${c.after.toLocaleString()}`; node.querySelector('i').style.width = c.after / db.materials.length * 100 + '%'; } }); const end = document.querySelector('.end span:last-child'); if (end) end.textContent = (counts.at(-1)?.after ?? db.materials.length).toLocaleString(); }
+    renderTable();
+    history.replaceState(null, '', '#' + encodeURIComponent(JSON.stringify({ stages, x: xExpr, y: yExpr })));
+    window.__lastRefreshMs = performance.now() - started;
+  }
+  refreshTagList();
+  refresh();
+  plot.view = { ...plot.fitView }; plot.draw();
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
