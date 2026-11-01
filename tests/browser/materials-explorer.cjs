@@ -37,6 +37,13 @@ const outDir = process.env.ASHBY_SCREENSHOTS || '/private/tmp';
 
     await page.goto(base);
     await ready();
+    // The first paint uses the real colours, which Safari could miss when the styles arrived later.
+    const firstPaint = await page.evaluate(() => {
+      const pl = MaterialsExplorer.getPlot(), k = pl.canvas.width / pl.w;
+      return { plotVar: getComputedStyle(document.documentElement).getPropertyValue('--plot-color'), corner: [...pl.canvas.getContext('2d').getImageData((pl.plotBox.l + 3) * k, (pl.plotBox.t + 3) * k, 1, 1).data] };
+    });
+    assert.equal(firstPaint.plotVar.trim(), '#fbfbfc');
+    assert.deepEqual(firstPaint.corner, [251, 251, 252, 255], 'The plot background is not black');
     await page.waitForTimeout(200);
 
     /* ---------- page and SEO ---------- */
@@ -166,6 +173,7 @@ const outDir = process.env.ASHBY_SCREENSHOTS || '/private/tmp';
     assert.deepEqual(sixty.map(r => r.state_id).sort(), ['al-6061-t4', 'al-6061-t6']);
     assert.ok(sixty.every(r => r.hasBounds));
     assert.equal((await shapes()).length, 0, 'Bounds do not create a family shape');
+    assert.match(await page.evaluate(() => document.getElementById('outside-note').textContent), /Metals: no outline/);
     assert.ok(await page.evaluate(() => MaterialsExplorer.getPlot().rows.filter(r => !r.dim).every(r => r.bound)));
     await page.locator('#tab-rank').click();
     await page.locator('#perf-index').selectOption('strong_light_tie');
@@ -535,6 +543,10 @@ const outDir = process.env.ASHBY_SCREENSHOTS || '/private/tmp';
     await page.screenshot({ path: `${outDir}/ashby-${browserName}-parallel.png` });
     await page.keyboard.press('Escape');
     const parallelLink = await page.evaluate(() => MaterialsExplorer.getShareUrl());
+    download = page.waitForEvent('download');
+    await page.locator('#export-csv').click();
+    const parallelCsv = (await fs.readFile(await (await download).path(), 'utf8')).split('\r\n')[0];
+    for (const column of ['E value (SI)', 'rho value (SI)', 'UTS value (SI)']) assert.ok(parallelCsv.includes(column), column);
     await page.goto(parallelLink); await ready(); await page.waitForTimeout(120);
     assert.ok(await page.locator('#parallel').isVisible());
     assert.equal(await page.locator('.axis-chip').count(), 3);
@@ -561,6 +573,28 @@ const outDir = process.env.ASHBY_SCREENSHOTS || '/private/tmp';
     await page.keyboard.press('Home');
     assert.equal(await page.locator('#tab-show').getAttribute('aria-selected'), 'true');
 
+    // Keyboard users keep their place when a panel redraws.
+    await page.locator('[data-family="foam"]').focus();
+    await page.keyboard.press('Enter'); await page.waitForTimeout(60);
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.family), 'foam');
+    await page.keyboard.press('Enter'); await page.waitForTimeout(60);
+
+    // A damaged or hostile link cannot break the page, and text from a link stays text.
+    const hostile = new URL(base);
+    hostile.searchParams.set('stages', JSON.stringify([{ type: 'family' }, { type: 'limit', expr: 'alert(1)' }, { type: 'nope' }, null, { type: 'text', value: '<img src=x onerror=window.__pwned=1>', enabled: true }, { type: 'limit', expr: 'E', min: 5, max: null, enabled: true }]));
+    hostile.searchParams.set('stack', '1');
+    hostile.searchParams.set('x-prop', 'alert(1)');
+    hostile.searchParams.set('labels', 'nope~~1~2,<b>~~3~4');
+    hostile.searchParams.set('brief', 'nope~nope');
+    hostile.searchParams.set('axes', 'nope,alsonope');
+    hostile.searchParams.set('point', 'obs-nope:obs-nope');
+    await page.goto(hostile.href); await ready(); await page.waitForTimeout(150);
+    assert.equal(await page.locator('.stage').count(), 2, 'Only readable stages survive');
+    assert.equal(await page.evaluate(() => window.__pwned), undefined);
+    assert.match(await page.locator('#x-btn').innerText(), /Density/);
+    assert.equal(await page.locator('.label-box').count(), 0);
+    await page.goto(base); await ready();
+
     await page.locator('#settings-button').click();
     await page.locator('#theme-control [data-theme="dark"]').click();
     await page.locator('#setting-density').selectOption('compact');
@@ -568,7 +602,7 @@ const outDir = process.env.ASHBY_SCREENSHOTS || '/private/tmp';
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#settings-button').evaluate(el => el === document.activeElement), true);
     await page.reload(); await ready();
-    assert.equal(await page.locator('body').getAttribute('data-theme'), 'dark');
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
     assert.equal(await page.locator('body').getAttribute('data-density'), 'compact');
     await page.waitForTimeout(150);
     await page.screenshot({ path: `${outDir}/ashby-${browserName}-dark.png` });

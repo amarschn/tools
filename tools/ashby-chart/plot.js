@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
   const { clamp, formatValue } = root.AshbyEngine;
-  const cssVar = name => getComputedStyle(document.body).getPropertyValue(name).trim();
+  const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   function niceTicks(lo, hi, count) {
     const span = hi - lo, raw = span / Math.max(2, count), mag = 10 ** Math.floor(Math.log10(raw || 1));
     const step = [1, 2, 5, 10].map(n => n * mag).find(s => s >= raw) || mag * 10;
@@ -59,6 +59,15 @@
       return { x0: x0 - px, x1: x1 + px, y0: y0 - py, y1: y1 + py };
     }
     setShapes(shapes) { this.shapes = shapes || []; this.draw(); }
+    /* Fit makes room for the outlines, so they are not clipped at the edge of the plot. */
+    growFit(shapes, keepView) {
+      if (!this.fitView) return;
+      const f = this.fitView, mx = (f.x1 - f.x0) * .02, my = (f.y1 - f.y0) * .02;
+      for (const shape of shapes) for (const loop of shape.loops) for (const [x, y] of loop) {
+        f.x0 = Math.min(f.x0, x - mx); f.x1 = Math.max(f.x1, x + mx); f.y0 = Math.min(f.y0, y - my); f.y1 = Math.max(f.y1, y + my);
+      }
+      if (!keepView) this.view = { ...f };
+    }
     fit() { this.animateTo({ ...this.fitView }); }
     animateTo(target) {
       const from = { ...this.view }, start = performance.now();

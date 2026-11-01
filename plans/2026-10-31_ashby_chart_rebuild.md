@@ -6,8 +6,13 @@ Turn prototype F into the real tool at `/tools/ashby-chart/`. The prototype is a
 for how it looks and works. It is not production code, because it simplifies the data.
 This plan keeps that interface and restores the data rules of the live chart.
 
-Reference: `_internal/prototypes/2026-10-31_ashby-chart-ui/f-combined/`, on branch
-`task/ashby-ui-prototypes`.
+Reference: `_internal/prototypes/2026-10-31_ashby-chart-ui/f-combined/`.
+
+**Status:** milestones 1 to 7 are built on `task/ashby-chart-rebuild`, with the release steps
+and person checks still open. Three decisions changed during the build. The release manifest
+loads after the first chart, because it was the largest file on the page and only confirms the
+build. A group drawn mostly from reported bounds gets no outline, and the panel names it. The
+data details for tests stay in `selection.json`, which the page no longer loads.
 
 ## What ships
 

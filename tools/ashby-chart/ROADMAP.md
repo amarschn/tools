@@ -1,5 +1,15 @@
 # Ashby Chart roadmap
 
+## October 31 rebuild
+
+- [x] Move from Plotly to a canvas chart, with data from a table of compatible rows.
+- [x] Studio as the default view, with formula axes and colour and size by property.
+- [x] One Ashby oval per family, single-material tags, draggable label boxes, and a movable box.
+- [x] Selection stack, design brief and Parallel view on one filter chain.
+- [x] Save the chart as an image, since Plotly's download went with it.
+- [ ] Try pinch zoom and label dragging on a real phone, and a final look in real Safari.
+- [ ] Compare search clicks for a few weeks after release.
+
 ## October 3 catalog expansion
 
 - [x] Add at least 1,000 distinct, sourced materials across multiple classes.

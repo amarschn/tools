@@ -6,7 +6,8 @@ import { setupPanels } from './panels.js?v=1';
 
 const { Database, Axis, runStages, compile, formatValue, clamp, FAMILY_COLORS, FAMILY_NAMES } = window.AshbyEngine;
 const $ = id => document.getElementById(id);
-const cssVar = name => getComputedStyle(document.body).getPropertyValue(name).trim();
+// Read from the root element: WebKit can report stale values on body until the next paint.
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const isPhone = () => matchMedia('(max-width: 820px)').matches;
 const finePointer = () => matchMedia('(pointer: fine)').matches;
 const el = (tag, props = {}, ...children) => {
@@ -550,6 +551,14 @@ function openAxis(which) {
 }
 
 /* ---------- side panel: Show ---------- */
+/* Panels redraw when filters change. Keyboard users keep their place in the panel. */
+function keepFocus(host, render) {
+  const controls = () => [...host.querySelectorAll('button, select, input, summary, a')];
+  const at = host.contains(document.activeElement) ? controls().indexOf(document.activeElement) : -1;
+  render();
+  if (at >= 0) { const list = controls(); list[Math.min(at, list.length - 1)]?.focus({ preventScroll: true }); }
+}
+ctx.keepFocus = keepFocus;
 function renderFamilies(available, all) {
   $('family-toggles').replaceChildren(...Object.entries(FAMILY_NAMES).map(([key, name]) => el('button', {
     type: 'button', class: 'chip family-pill' + (state.families.has(key) ? '' : ' off'), style: `--c:${FAMILY_COLORS[key]}`, 'data-family': key,
@@ -627,6 +636,25 @@ function exprFromParam(value) {
   if (prop) return prop.symbol;
   return compile(db, value).error ? null : value;
 }
+/* A shared link is outside input, so keep only stages this page can read. */
+function cleanStages(list) {
+  if (!Array.isArray(list)) return [];
+  const number = v => typeof v === 'number' && Number.isFinite(v);
+  const optional = v => v == null || number(v);
+  const axis = v => typeof v === 'string' && !compile(db, v).error;
+  const strings = v => Array.isArray(v) && v.every(item => typeof item === 'string');
+  return list.filter(s => {
+    if (!s || typeof s !== 'object') return false;
+    switch (s.type) {
+      case 'family': case 'class': case 'org': return strings(s.values);
+      case 'text': case 'tag': return typeof s.value === 'string';
+      case 'limit': return axis(s.expr) && optional(s.min) && optional(s.max);
+      case 'region': return axis(s.x) && axis(s.y) && [s.x0, s.x1, s.y0, s.y1].every(number);
+      case 'index': return axis(s.x) && axis(s.y) && number(s.slope) && s.slope > 0 && number(s.c);
+      default: return false;
+    }
+  });
+}
 function readParams() {
   state.x = exprFromParam(params.get('x-prop')) || state.x;
   state.y = exprFromParam(params.get('y-prop')) || state.y;
@@ -657,7 +685,7 @@ function readParams() {
   state.topN = clamp(Math.round(Number(params.get('top-n')) || 5), 1, 20);
   state.stackOpen = params.get('stack') === '1';
   state.resultsOpen = params.get('results') === '1';
-  if (params.has('stages')) { try { const list = JSON.parse(params.get('stages')); if (Array.isArray(list)) ctx.stages = list; } catch { /* Ignore a damaged link. */ } }
+  if (params.has('stages')) { try { ctx.stages = cleanStages(JSON.parse(params.get('stages'))); } catch { /* Ignore a damaged link. */ } }
   if (params.has('brief')) { const [part, driver] = params.get('brief').split('~'); state.brief = { part, driver }; }
   if (params.has('axes')) { const known = params.get('axes').split(',').map(id => db.props.find(p => p.id === id)?.symbol).filter(Boolean); if (known.length >= 2) state.paxes = known; }
   if (params.get('view') === 'parallel') state.view = 'parallel';
@@ -760,10 +788,14 @@ function refresh(keep = true, light = false) {
     tagsOf: r => tags.of(r.m.id).filter(n => !state.hiddenTags.has(n)), tagColor: name => tags.color(name),
   });
   plot.setShapes(shapes);
+  plot.growFit(shapes, keep);
   if (ctx.selBox) syncBoxSelection();
-  const outside = shapes.reduce((sum, s) => sum + (s.outside || 0), 0);
-  $('outside-note').hidden = !outside;
-  $('outside-note').textContent = `${outside.toLocaleString()} isolated ${outside === 1 ? 'material sits' : 'materials sit'} outside the outlines, so one far point does not stretch a whole family.`;
+  const outside = shapes.reduce((sum, s) => sum + (s.outside || 0), 0), skipped = shapes.skipped || [];
+  $('outside-note').hidden = !outside && !skipped.length;
+  $('outside-note').textContent = [
+    outside ? `${outside.toLocaleString()} isolated ${outside === 1 ? 'material sits' : 'materials sit'} outside the outlines, so one far point does not stretch a whole family.` : '',
+    skipped.length ? `${skipped.join(', ')}: no outline, because most values on these axes are reported bounds.` : '',
+  ].filter(Boolean).join(' ');
   $('empty-state').hidden = liveRows.length > 0 || state.view === 'parallel';
   $('export-image').disabled = !rows.length;
   const shown = new Set(liveRows.map(r => r.m.id)).size;
@@ -777,14 +809,14 @@ function refresh(keep = true, light = false) {
       for (const m of db.materials) (all[m.family] ||= new Set()).add(m.id);
       for (const row of db.rows) if (axes.every(a => Number.isFinite(a.value(row, allow)))) (seen[row.m.family] ||= new Set()).add(row.m.id);
       const size = bag => Object.fromEntries(Object.entries(bag).map(([k, v]) => [k, v.size]));
-      renderFamilies(size(seen), size(all));
+      keepFocus($('family-toggles'), () => renderFamilies(size(seen), size(all)));
     } else {
       const counts = familyCounts(xA, yA);
-      renderFamilies(counts.available, counts.all);
+      keepFocus($('family-toggles'), () => renderFamilies(counts.available, counts.all));
     }
-    renderTags();
-    renderViews();
-    if (state.stackOpen) ctx.renderStages();
+    keepFocus($('tag-rows'), renderTags);
+    keepFocus($('views'), renderViews);
+    if (state.stackOpen) keepFocus($('stages'), ctx.renderStages);
   } else if (state.stackOpen) ctx.updateFunnels();
   renderLabels();
   ctx.renderResults();
@@ -814,7 +846,7 @@ ctx.refresh = refresh;
 
 /* ---------- settings and page chrome ---------- */
 function applySettings() {
-  document.body.dataset.theme = settings.theme;
+  document.documentElement.dataset.theme = settings.theme;
   document.body.dataset.density = settings.density;
   $('setting-density').value = settings.density;
   $('setting-precision').value = settings.precision;
@@ -840,7 +872,7 @@ function bindChrome() {
   $('setting-density').addEventListener('change', () => { settings.density = $('setting-density').value; applySettings(); });
   $('setting-precision').addEventListener('change', () => { settings.precision = Number($('setting-precision').value); applySettings(); ctx.refreshCard?.(); ctx.updateRanking?.(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
-  $('retry-load').addEventListener('click', init);
+  $('retry-load').addEventListener('click', () => { if (bound) location.reload(); else init(); });
   applySettings();
 }
 function bindApp() {
@@ -1014,8 +1046,10 @@ async function init() {
   $('retry-load').hidden = true;
   $('loading-message').textContent = 'Loading material properties…';
   try {
-    const [core, manifest] = await Promise.all([fetchJson('../../data/materials/selection-core.json'), fetchJson('../materials/release-manifest.json')]);
-    if (core.schema_version !== 2 || core.source_build_id !== manifest.build_id) throw new Error('The material data versions differ. Reload to update.');
+    const core = await (window.ashbyCore || fetchJson('../../data/materials/selection-core.json'));
+    window.ashbyCore = null;
+    if (core.loadError) throw new Error(core.loadError);
+    if (core.schema_version !== 2) throw new Error('The material data versions differ. Reload to update.');
     db = new Database(core);
     ctx.db = db;
     if (!bound) {
@@ -1052,6 +1086,15 @@ async function init() {
     $('loading-overlay').hidden = true;
     $('explorer-main').dataset.state = 'ready';
     window.__ready = true;
+    verifyRelease();
+  } catch (error) { showError(error); }
+}
+/* The manifest is large and only confirms the release, so it follows the first chart. A chart
+   from another build still fails visibly rather than showing old values. */
+async function verifyRelease() {
+  try {
+    const manifest = await fetchJson('../materials/release-manifest.json');
+    if (db.core.source_build_id !== manifest.build_id) showError(new Error('The material data versions differ. Reload to update.'));
   } catch (error) { showError(error); }
 }
 window.MaterialsExplorer = {
@@ -1062,6 +1105,7 @@ window.MaterialsExplorer = {
   })),
   getLines: () => ctx.lines,
   getShapes: () => plot.shapes.map(s => ({ family: s.family, label: s.label, outside: s.outside, loops: s.loops.length })),
+  getSkippedShapes: () => plot.shapes.skipped || [],
   getShareUrl: () => shareUrl().href,
   getPlot: () => plot,
   showCard: (...args) => ctx.showCard(...args),

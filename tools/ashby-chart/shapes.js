@@ -146,7 +146,11 @@
     const method = options.method || 'ashby', grouping = options.grouping || 'family';
     if (method === 'none' || grouping === 'points') return [];
     const usable = rows.filter(r => !r.hasBounds);
-    if (!usable.length) return [];
+    if (!usable.length) {
+      // Every value is a reported bound, so no group can have an outline. Say which were left out.
+      const names = grouping === 'tag' ? [] : [...new Set(rows.map(r => (grouping === 'subgroup' ? classLabel(r.group) : FAMILY_NAMES[r.family] || r.family)))];
+      return Object.assign([], { skipped: names });
+    }
     const endpoints = usable.flatMap(r => {
       const xs = r.tRange?.x || [r.tx], ys = r.tRange?.y || [r.ty];
       return xs.flatMap(x => ys.map(y => ({ r, p: [x, y] })));
@@ -172,8 +176,17 @@
         groups.get(key).entries.push(entry);
       }
     }
-    const shapes = [];
+    const shapes = [], skipped = [];
+    // An outline around a small minority of a group's values would misrepresent the group,
+    // so a group drawn mostly from reported bounds gets none, and the panel says so.
+    const nameOf = r => (grouping === 'subgroup' ? r.group : r.family);
+    const plottedIn = new Map(), usableIn = new Map();
+    if (grouping !== 'tag') {
+      for (const r of rows) plottedIn.set(nameOf(r), (plottedIn.get(nameOf(r)) || 0) + 1);
+      for (const r of usable) usableIn.set(nameOf(r), (usableIn.get(nameOf(r)) || 0) + 1);
+    }
     for (const group of groups.values()) {
+      if (grouping !== 'tag' && usableIn.get(group.name) * 2 < plottedIn.get(group.name)) { skipped.push(group.label); continue; }
       let parts;
       if (grouping === 'family' || grouping === 'tag') {
         // A few isolated materials stay outside the oval rather than stretching it across
@@ -199,6 +212,7 @@
         });
       }
     }
+    shapes.skipped = skipped;
     return shapes;
   }
   return { build, contains, convexHull, enclosingEllipse, pebble, splitAtGaps, classLabel, FAMILY_NAMES };

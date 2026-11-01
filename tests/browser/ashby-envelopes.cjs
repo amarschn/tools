@@ -35,14 +35,22 @@ for (const method of ['ashby', 'pebble']) {
   assert.ok(Math.min(...region.loops[0].map(p => p[0])) > 2, 'The bound does not stretch the shape');
   assert.ok(Math.max(...region.loops[0].map(p => p[1])) < 3);
 }
-assert.deepEqual(shapes([row('limit', 0, 9, { hasBounds: true })]), []);
+const onlyBounds = shapes([row('limit', 0, 9, { hasBounds: true })]);
+assert.equal(onlyBounds.length, 0);
+assert.deepEqual(onlyBounds.skipped, ['Metals']);
+
+// A group drawn mostly from bounds gets no outline, and the result says which.
+const mostlyBounds = [row('a', 3, 1), row('b', 3.1, 1.2), row('c', 3.2, 1.05), ...Array.from({ length: 5 }, (_, i) => row('m' + i, 3, 2 + i, { hasBounds: true }))];
+const omitted = shapes(mostlyBounds);
+assert.equal(omitted.length, 0);
+assert.deepEqual(omitted.skipped, ['Metals']);
 
 // Reported interval endpoints do define a shape.
 const interval = shapes([row('i', 3, 1, { tRange: { x: [2.5, 3.5] } }), row('b', 3.1, 1.2)]);
 assert.ok(contains(interval[0].loops[0], 2.5, 1) && contains(interval[0].loops[0], 3.5, 1), 'Interval endpoints are enclosed');
 
 // A lone point has no shape, and coincident points still produce a small finite one.
-assert.deepEqual(shapes([row('a', 3, 1)]), []);
+assert.equal(shapes([row('a', 3, 1)]).length, 0);
 const twin = shapes([row('a', 3, 1), row('b', 3, 1)]);
 assert.equal(twin.length, 1);
 assert.ok(twin[0].loops[0].flat().every(Number.isFinite));
@@ -67,8 +75,8 @@ const grouped = [poly('a', 3, 0, 'PA6'), poly('b', 3.04, .03, 'PA6'), poly('c', 
   poly('e', 3.3, .7, 'PEEK'), poly('f', 3.32, .71, 'PEEK'), row('m', 3.9, 2.3), row('n', 3.9, 2.32)];
 assert.deepEqual(shapes(grouped).map(r => r.label).sort(), ['Metals', 'Polymers']);
 assert.equal(shapes(grouped, { grouping: 'subgroup' }).filter(r => r.family === 'polymer').length, 3);
-assert.deepEqual(shapes(grouped, { grouping: 'points' }), []);
-assert.deepEqual(shapes(grouped, { method: 'none' }), []);
+assert.equal(shapes(grouped, { grouping: 'points' }).length, 0);
+assert.equal(shapes(grouped, { method: 'none' }).length, 0);
 
 // Tag grouping draws one shape per tag.
 const tagged = shapes(grouped, { grouping: 'tag', tagsOf: r => r.family === 'metal' ? ['Picks'] : [], tagColor: () => '#111' });

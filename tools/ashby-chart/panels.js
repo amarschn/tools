@@ -29,7 +29,12 @@ export function setupPanels(ctx) {
   });
 
   /* ---------- value text ---------- */
-  const resultPrecise = o => db.resultText(o, precise);
+  // Plain numbers read better than 2.71e+3, while the chosen significant figures still apply.
+  const readable = value => {
+    const text = precise(value);
+    return text.includes('e') && Math.abs(value) >= 1 && Math.abs(value) < 1e6 ? Number(text).toLocaleString('en-US') : text;
+  };
+  const resultPrecise = o => db.resultText(o, readable);
   function conditionText(conditions) {
     return Object.entries(conditions).map(([key, value]) => {
       if (key === 'temperature_K') return precise(value - 273.15) + ' °C';
