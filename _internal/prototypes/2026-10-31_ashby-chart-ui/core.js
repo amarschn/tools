@@ -634,6 +634,7 @@
     bind() {
       const c = this.canvas;
       c.style.touchAction = 'none';
+      c.addEventListener('selectstart', e => e.preventDefault());
       c.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = this.point(e); this.zoomAt(x, y, Math.exp(e.deltaY * .0016)); }, { passive: false });
       c.addEventListener('dblclick', () => this.fit());
       c.addEventListener('pointerdown', e => {

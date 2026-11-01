@@ -32,7 +32,11 @@ each tag in study B or F. Label boxes are stored the same way and appear only in
   similar grades does not pull it off centre. A very small isolated group (under 2% of a
   family of 10 or more, and more than 9% of the chart's width away) stays outside, and
   the panel says how many materials that leaves out. Their points still plot.
-- **3D view:** dropped after trying it. Colour and size are the extra axes for now.
+- **More axes:** the 3D and matrix views were dropped after trying them. Colour and size
+  add two axes to the chart, and Parallel shows any number. Dragging on a parallel axis
+  edits a limit stage in the stack, so both views share one filter chain.
+- **Safari:** it needs the prefixed `-webkit-user-select` rule, or a drag on the chart
+  highlights the page. Test drags in WebKit as well as Chromium.
 - **Brief:** it sets the axes and adds a line stage, so it shares one filter chain with
   the stack and its ranking appears in the results table.
 - **Typed filters:** a unit is now converted (`E > 200000 MPa` means 200 GPa) or refused

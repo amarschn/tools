@@ -30,18 +30,19 @@
   const state = {
     x: 'rho', y: 'E', xLog: true, yLog: true, shape: 'ashby', group: 'family', color: 'family', size: 'none',
     ranges: false, ghosts: true, families: new Set(Object.keys(FAMILY_NAMES)), hiddenTags: new Set(), isolate: null,
-    hidden: new Set(), find: '', stackOpen: false, resultsOpen: false, brief: null,
+    hidden: new Set(), find: '', stackOpen: false, resultsOpen: false, brief: null, view: 'chart', paxes: ['rho', 'E', 'UTS'],
   };
   let stages = [];
   let selection = new Set(), selBox = null, armRegion = false;
-  let popM = null, detailM = null, rowById = new Map(), current = [], grip = null;
+  let popM = null, popAt = null, detailM = null, rowById = new Map(), current = [], grip = null;
   const pinned = new Set();
   let columns = ['Sy', 'UTS', 'k'], sortKey = 'auto', sortDir = -1, resultTab = 'results';
 
   try {
     const saved = JSON.parse(decodeURIComponent(location.hash.slice(1)));
     if (saved && typeof saved === 'object') {
-      for (const key of ['x', 'y', 'xLog', 'yLog', 'shape', 'group', 'color', 'size', 'ghosts', 'stackOpen', 'resultsOpen', 'brief']) if (key in saved) state[key] = saved[key];
+      for (const key of ['x', 'y', 'xLog', 'yLog', 'shape', 'group', 'color', 'size', 'ghosts', 'stackOpen', 'resultsOpen', 'brief', 'view']) if (key in saved) state[key] = saved[key];
+      if (Array.isArray(saved.paxes)) { const known = saved.paxes.filter(s => db.bySym[s]); if (known.length >= 2) state.paxes = known; }
       if (Array.isArray(saved.families)) state.families = new Set(saved.families);
       if (Array.isArray(saved.stages)) stages = saved.stages;
     }
@@ -244,6 +245,8 @@
       el('strong', {}, m.name), el('span', {}),
       el('button', { 'aria-label': `Remove the label on ${m.name}`, title: 'Remove this label', onpointerdown: e => e.stopPropagation(), onclick: e => { e.stopPropagation(); removeLabel(m.id); } }, '×'));
     let press = null;
+    // Stops Safari from starting a text selection when a drag begins on the box.
+    node.addEventListener('mousedown', e => e.preventDefault());
     node.addEventListener('pointerdown', e => {
       node.setPointerCapture(e.pointerId);
       press = { x: e.clientX, y: e.clientY, at: [...labels.get(m.id)], moved: false };
@@ -277,6 +280,11 @@
     saveLabels(); renderLabels(); plot.draw();
   }
   function removeLabel(id) { labels.delete(id); saveLabels(); renderLabels(); renderPop(); plot.draw(); }
+  // A drag anywhere on the chart must never become a text selection. Inputs and the cards stay selectable.
+  $('wrap').addEventListener('selectstart', e => {
+    const target = e.target.nodeType === 1 ? e.target : e.target.parentElement;
+    if (!target?.closest('input, .mat, .drawer')) e.preventDefault();
+  });
   $('labels').addEventListener('wheel', e => { e.preventDefault(); const [x, y] = plot.point(e); plot.zoomAt(x, y, Math.exp(e.deltaY * .0016)); }, { passive: false });
   $('labels-clear').onclick = () => { labels.clear(); saveLabels(); renderLabels(); renderPop(); plot.draw(); };
 
@@ -290,15 +298,18 @@
     if (popM && !mat.hidden && !isPhone()) {
       const row = rowById.get(popM.id), wrap = $('wrap');
       const w = mat.offsetWidth, h = mat.offsetHeight, W = wrap.clientWidth, H = wrap.clientHeight;
-      const X = row ? plot.sx(row.tx) : W / 2, Y = row ? plot.sy(row.ty) : H / 2;
+      const onParallel = state.view === 'parallel' && popAt;
+      const X = onParallel ? popAt[0] : row ? plot.sx(row.tx) : W / 2, Y = onParallel ? popAt[1] : row ? plot.sy(row.ty) : H / 2;
       const left = X + 16 + w > W - 6 ? X - w - 16 : X + 16;
       mat.style.transform = `translate(${Math.round(clamp(left, 6, Math.max(6, W - w - 6)))}px, ${Math.round(clamp(Y - 24, 6, Math.max(6, H - h - 6)))}px)`;
     }
   }
 
   /* ---------- one material: tag it, label it, compare it ---------- */
-  function openPop(m) { popM = m; renderPop(); plot.selected = new Set([...selection, m.id]); plot.draw(); }
-  function closePop() { popM = null; $('mat').hidden = true; plot.selected = new Set(selection); plot.draw(); }
+  function openPop(m, at = null) { popM = m; popAt = at; renderPop(); plot.selected = new Set([...selection, m.id]); plot.draw(); drawParallel(); }
+  // Safari keeps focus on a hidden field, which would swallow the keyboard shortcuts, so let go of it first.
+  const releaseFocus = box => { if (box.contains(document.activeElement)) document.activeElement.blur(); };
+  function closePop() { releaseFocus($('mat')); popM = null; popAt = null; $('mat').hidden = true; plot.selected = new Set(selection); plot.draw(); drawParallel(); }
   function renderPop(focus = true) {
     const box = $('mat');
     if (!popM) { box.hidden = true; return; }
@@ -309,7 +320,9 @@
     box.replaceChildren(...[
       el('header', {}, el('h3', {}, m.name), el('button', { class: 'ghost', 'aria-label': 'Close', onclick: closePop }, '×')),
       el('p', { class: 'sub' }, `${FAMILY_NAMES[m.family]} · ${m.cls}`),
-      row ? el('p', { class: 'vals' }, `${axisValue(plot.yAxis, row.y)} · ${axisValue(plot.xAxis, row.x)}`) : el('p', { class: 'vals muted' }, 'No value on these axes.'),
+      state.view === 'parallel'
+        ? el('p', { class: 'vals' }, state.paxes.filter(s => m.d[s] != null).map(s => `${s.replace('rho', 'ρ')} ${AC.formatProp(s, m.d[s])}`).join(' · '))
+        : row ? el('p', { class: 'vals' }, `${axisValue(plot.yAxis, row.y)} · ${axisValue(plot.xAxis, row.x)}`) : el('p', { class: 'vals muted' }, 'No value on these axes.'),
       applied.length || others.length ? el('div', { class: 'chips' },
         applied.map(t => el('button', { class: 'chip', style: `--c:${tags.color(t)}`, title: `Remove the tag ${t}`, onclick: () => tags.remove(t, [m.id]) }, t, ' ×')),
         others.map(t => el('button', { class: 'chip ghosted', style: `--c:${tags.color(t)}`, title: `Add the tag ${t}`, onclick: () => tags.add(t, [m.id]) }, '+ ', t))) : null,
@@ -334,6 +347,7 @@
   function setSelection(ids, focus = false) {
     selection = new Set(ids);
     plot.selected = new Set(selection);
+    if (selection.size === 0 && !selBox) releaseFocus($('actions'));
     $('actions').hidden = selection.size === 0 && !selBox;
     $('sel-count').textContent = `${selection.size} selected`;
     $('sel-filter').hidden = !selBox;
@@ -458,6 +472,7 @@
   function readViews() { try { return JSON.parse(localStorage.getItem(VIEW_KEY)) || []; } catch { return []; } }
   function renderViews() {
     $('views').replaceChildren(...[...STARTER_VIEWS, ...readViews()].map(v => el('button', { title: `${v.y} vs ${v.x}`, onclick: () => {
+      setView('chart');
       if (Array.isArray(v.stages)) { stages = JSON.parse(JSON.stringify(v.stages)); state.brief = v.brief || null; }
       setAxes({ x: v.x, y: v.y, xLog: v.xLog ?? true, yLog: v.yLog ?? true });
     } }, v.name)));
@@ -500,9 +515,10 @@
     ['Tag', () => ({ type: 'tag', value: tags.names()[0] || '', enabled: true })],
     ['Search', () => ({ type: 'text', value: '', enabled: true })],
   ].map(([label, make]) => el('button', { onclick: () => { stages.push(make()); refresh(); } }, '+ ' + label)),
-  el('button', { id: 'add-region', title: 'Drag on the chart to add a region', onclick: () => { armRegion = true; clearSelection(); setMode('box'); armRegion = true; $('arm-note').hidden = false; if (isPhone()) setStack(false); } }, '+ Region'),
+  el('button', { id: 'add-region', title: 'Drag on the chart to add a region', onclick: () => { setView('chart'); armRegion = true; clearSelection(); setMode('box'); armRegion = true; $('arm-note').hidden = false; if (isPhone()) setStack(false); } }, '+ Region'),
   el('button', { id: 'add-line', title: 'Add a dashed line you can drag on the chart', onclick: addLine }, '+ Line'));
   function addLine() {
+    setView('chart');
     if (!state.xLog || !state.yLog) { $('query-msg').textContent = 'A selection line needs log scales on both axes.'; $('query-msg').classList.add('bad'); return; }
     const known = db.indices.find(i => i.x === state.x && i.y === state.y);
     const slope = known?.expression.includes('1/2') ? 2 : known?.expression.includes('1/3') ? 3 : known?.expression.includes('2/3') ? 1.5 : 1;
@@ -672,6 +688,7 @@
     $('brief-box').open = $('brief-box').open || !!state.brief;
   }
   function useBrief() {
+    setView('chart');
     const [ySym, numerator, slope] = chosenBrief();
     stages = stages.filter(s => !s.brief);
     state.brief = { part: $('b-part').value, driver: $('b-driver').value };
@@ -731,8 +748,9 @@
       if (!okA || !okB) return okA ? -1 : okB ? 1 : 0;
       return sortDir * (va - vb);
     });
-    const plotted = current.filter(m => { const r = rowById.get(m.id); return r && !r.dim; }).length;
-    $('result-count').textContent = `${current.length.toLocaleString()} results, ${plotted.toLocaleString()} on this chart` + (current.length > 150 ? ', first 150 listed' : '');
+    const onParallel = state.view === 'parallel';
+    const plotted = onParallel ? current.filter(m => state.paxes.every(s => m.d[s] > 0)).length : current.filter(m => { const r = rowById.get(m.id); return r && !r.dim; }).length;
+    $('result-count').textContent = `${current.length.toLocaleString()} results, ${plotted.toLocaleString()} on ${onParallel ? 'these axes' : 'this chart'}` + (current.length > 150 ? ', first 150 listed' : '');
     const head = el('tr', {}, el('th', { onclick: () => setSort('name') }, 'Material'),
       score ? el('th', { onclick: () => setSort('score'), title: 'Performance index as a percentage of the best result' }, 'Index, % of best') : null,
       cols.map(c => el('th', { onclick: e => { if (e.shiftKey) { columns = columns.filter(k => k !== c); renderResults(); } else setSort(c); }, title: 'Sort. Shift+click removes the column.' }, db.bySym[c].unit ? `${db.bySym[c].label} (${db.bySym[c].unit})` : db.bySym[c].label)),
@@ -767,9 +785,205 @@
     );
   }
 
+  /* ---------- parallel axes: dragging on an axis edits a limit stage, so both views share one filter chain ---------- */
+  const pv = { W: 0, H: 0, raf: 0, drag: null, hover: null, rows: [], ranges: {}, live: () => true, color: m => FAMILY_COLORS[m.family] };
+  const pPad = { l: 44, r: 44, t: 48, b: 26 };
+  const pCanvas = el('canvas'), pTip = el('div', { class: 'ac-tip', hidden: true });
+  const pHint = el('div', { class: 'p-hint' }, 'Drag along an axis to filter. Filters also appear in the stack. Click a filtered axis to clear it.');
+  $('p-stage').append(pCanvas, pTip, pHint);
+  const pCtx = pCanvas.getContext('2d');
+  const pX = i => pPad.l + (pv.W - pPad.l - pPad.r) * i / Math.max(1, state.paxes.length - 1);
+  const pY = (s, v) => pv.H - pPad.b - (Math.log10(v) - pv.ranges[s][0]) / (pv.ranges[s][1] - pv.ranges[s][0]) * (pv.H - pPad.t - pPad.b);
+  const pValue = (s, y) => 10 ** (pv.ranges[s][0] + (pv.H - pPad.b - y) / (pv.H - pPad.t - pPad.b) * (pv.ranges[s][1] - pv.ranges[s][0]));
+  const limitStage = s => stages.find(st => st.type === 'limit' && st.expr === s && st.enabled !== false);
+  function pTicks(lo, hi) {
+    const span = hi - lo, out = [];
+    const steps = span >= 1.5 ? [1] : span >= .6 ? [1, 2, 5] : [1, 1.5, 2, 3, 5, 7];
+    const every = span >= 7 ? 2 : 1;
+    for (let d = Math.floor(lo); d <= hi; d += every) for (const k of steps) { const t = d + Math.log10(k); if (t >= lo - 1e-9 && t <= hi + 1e-9) out.push(t); }
+    return out.length >= 2 ? out : [lo, hi];
+  }
+  function pPath(m) {
+    pCtx.beginPath();
+    state.paxes.forEach((s, i) => { const X = pX(i), Y = pY(s, m.d[s]); i ? pCtx.lineTo(X, Y) : pCtx.moveTo(X, Y); });
+    pCtx.stroke();
+  }
+  function paintParallel() {
+    pv.raf = 0;
+    if (state.view !== 'parallel') return;
+    const rect = $('p-stage').getBoundingClientRect();
+    pv.W = rect.width; pv.H = rect.height;
+    const dpr = Math.min(devicePixelRatio || 1, 2), ctx = pCtx;
+    if (pCanvas.width !== Math.round(pv.W * dpr) || pCanvas.height !== Math.round(pv.H * dpr)) {
+      pCanvas.width = Math.round(pv.W * dpr); pCanvas.height = Math.round(pv.H * dpr);
+      pCanvas.style.width = pv.W + 'px'; pCanvas.style.height = pv.H + 'px';
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, pv.W, pv.H);
+    ctx.fillStyle = cssVar('--plot'); ctx.fillRect(0, 0, pv.W, pv.H);
+    if (!pv.rows.length) return;
+    const ink = cssVar('--ink'), muted = cssVar('--ink-2'), plotBg = cssVar('--plot');
+    const on = pv.rows.filter(pv.live), off = pv.rows.filter(m => !pv.live(m));
+    ctx.lineWidth = 1;
+    if (state.ghosts) { ctx.strokeStyle = cssVar('--ghost'); off.forEach(pPath); }
+    ctx.globalAlpha = on.length > 300 ? .35 : .7;
+    for (const m of on) { ctx.strokeStyle = pv.color(m); pPath(m); }
+    ctx.globalAlpha = 1;
+    // Tagged materials stay readable among hundreds of lines.
+    ctx.lineWidth = 2;
+    for (const m of on) { const t = tags.of(m.id).find(n => !state.hiddenTags.has(n)); if (t) { ctx.strokeStyle = tags.color(t); pPath(m); } }
+    ctx.strokeStyle = ink; ctx.lineWidth = 1.6;
+    for (const m of pv.rows) if (selection.has(m.id)) pPath(m);
+    ctx.lineWidth = 2.6;
+    for (const m of [popM, pv.hover]) if (m && m.d && state.paxes.every(s => m.d[s] > 0)) pPath(m);
+    ctx.lineWidth = 1;
+    const room = (pv.W - pPad.l - pPad.r) / Math.max(1, state.paxes.length - 1);
+    state.paxes.forEach((s, i) => {
+      const X = pX(i), prop = db.bySym[s], last = state.paxes.length - 1;
+      ctx.strokeStyle = muted; ctx.beginPath(); ctx.moveTo(X + .5, pPad.t); ctx.lineTo(X + .5, pv.H - pPad.b); ctx.stroke();
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = i === 0 ? 'left' : i === last ? 'right' : 'center';
+      const tx = i === 0 ? X - pPad.l + 8 : i === last ? X + pPad.r - 8 : X;
+      ctx.font = '600 12px ' + cssVar('--sans'); ctx.fillStyle = ink;
+      // End titles sit fully on one side of their axis, so they get less room before they hit a neighbour.
+      const titleRoom = i === 0 || i === last ? room * .62 : room * .85;
+      ctx.fillText(ctx.measureText(prop.label).width > titleRoom ? prop.sym.replace('rho', 'ρ') : prop.label, tx, 18);
+      ctx.font = '11px ' + cssVar('--sans'); ctx.fillStyle = muted;
+      ctx.fillText(prop.unit, tx, 33);
+      ctx.textAlign = 'right';
+      const [lo, hi] = pv.ranges[s];
+      let lastY = Infinity;
+      for (const t of pTicks(lo, hi)) {
+        const Y = pY(s, 10 ** t);
+        ctx.fillStyle = muted; ctx.fillRect(X - 3, Y, 6, 1);
+        if (Math.abs(lastY - Y) < 15) continue;
+        lastY = Y;
+        ctx.lineWidth = 3; ctx.strokeStyle = plotBg; ctx.lineJoin = 'round';
+        ctx.strokeText(formatValue(10 ** t), X - 6, Y + 4); ctx.fillText(formatValue(10 ** t), X - 6, Y + 4); ctx.lineWidth = 1;
+      }
+      const st = limitStage(s);
+      if (st && (st.min != null || st.max != null)) {
+        const y0 = st.max != null ? clamp(pY(s, st.max), pPad.t, pv.H - pPad.b) : pPad.t, y1 = st.min != null ? clamp(pY(s, st.min), pPad.t, pv.H - pPad.b) : pv.H - pPad.b;
+        ctx.fillStyle = ink; ctx.globalAlpha = .18; ctx.fillRect(X - 9, y0, 18, y1 - y0); ctx.globalAlpha = 1;
+        ctx.strokeStyle = ink; ctx.strokeRect(X - 9, y0, 18, y1 - y0);
+        ctx.textAlign = i === last ? 'right' : 'left'; ctx.font = '600 11px ' + cssVar('--sans'); ctx.fillStyle = ink;
+        const side = i === last ? X - 13 : X + 13;
+        ctx.lineWidth = 3; ctx.strokeStyle = plotBg;
+        if (st.max != null) { ctx.strokeText(formatValue(st.max), side, y0 + 10); ctx.fillText(formatValue(st.max), side, y0 + 10); }
+        if (st.min != null) { ctx.strokeText(formatValue(st.min), side, y1 - 3); ctx.fillText(formatValue(st.min), side, y1 - 3); }
+        ctx.lineWidth = 1; ctx.font = '11px ' + cssVar('--sans'); ctx.textAlign = 'right';
+      }
+    });
+  }
+  function drawParallel() { if (state.view === 'parallel' && !pv.raf) pv.raf = requestAnimationFrame(paintParallel); }
+  function pNearest(x, y, limit = 7) {
+    let best = null, bestD = limit * limit;
+    const n = state.paxes.length;
+    const seg = clamp(Math.floor((x - pX(0)) / ((pX(n - 1) - pX(0)) / (n - 1) || 1)), 0, n - 2);
+    const x0 = pX(seg), x1 = pX(seg + 1), k = clamp((x - x0) / (x1 - x0 || 1), 0, 1), a = state.paxes[seg], b = state.paxes[seg + 1];
+    for (const m of pv.rows) {
+      if (!pv.live(m)) continue;
+      const ya = pY(a, m.d[a]), d = (ya + (pY(b, m.d[b]) - ya) * k - y) ** 2;
+      if (d < bestD) { bestD = d; best = m; }
+    }
+    return best;
+  }
+  function pBrush(drag, y) {
+    let stage = limitStage(drag.s), created = false;
+    if (!stage) { stage = { type: 'limit', expr: drag.s, min: null, max: null, enabled: true }; stages.push(stage); created = true; }
+    const top = Math.min(y, drag.y), bottom = Math.max(y, drag.y);
+    // A drag that reaches the end of an axis leaves that side open, so rounding cannot drop the last material.
+    stage.max = top <= pPad.t + 1 ? null : +pValue(drag.s, top).toPrecision(3);
+    stage.min = bottom >= pv.H - pPad.b - 1 ? null : +pValue(drag.s, bottom).toPrecision(3);
+    refresh(true, !created);
+  }
+  pCanvas.addEventListener('pointerdown', e => {
+    const x = e.offsetX, y = e.offsetY, i = state.paxes.findIndex((_, n) => Math.abs(pX(n) - x) < 20);
+    pCanvas.setPointerCapture(e.pointerId);
+    pTip.hidden = true;
+    pv.drag = i >= 0 && pv.rows.length ? { s: state.paxes[i], y: clamp(y, pPad.t, pv.H - pPad.b), moved: false, touch: e.pointerType === 'touch' } : { s: null, touch: e.pointerType === 'touch' };
+  });
+  pCanvas.addEventListener('pointermove', e => {
+    const x = e.offsetX, y = e.offsetY, drag = pv.drag;
+    if (drag?.s) {
+      const at = clamp(y, pPad.t, pv.H - pPad.b);
+      if (Math.abs(at - drag.y) > 3) drag.moved = true;
+      if (drag.moved) pBrush(drag, at);
+      return;
+    }
+    if (drag || !pv.rows.length) return;
+    const nearAxis = state.paxes.some((_, n) => Math.abs(pX(n) - x) < 20);
+    pCanvas.style.cursor = nearAxis ? 'ns-resize' : 'default';
+    const hit = pNearest(x, y);
+    if (hit !== pv.hover) { pv.hover = hit; drawParallel(); }
+    if (hit) {
+      pTip.replaceChildren(el('strong', {}, hit.name), ...state.paxes.map(s => el('span', {}, `${db.bySym[s].label}: ${AC.formatProp(s, hit.d[s])}`)));
+      pTip.hidden = false;
+      const w = pTip.offsetWidth, h = pTip.offsetHeight;
+      pTip.style.left = clamp(x + 14 + w > pv.W ? x - w - 14 : x + 14, 4, Math.max(4, pv.W - w - 4)) + 'px';
+      pTip.style.top = clamp(y - h - 10 < 0 ? y + 14 : y - h - 10, 4, Math.max(4, pv.H - h - 4)) + 'px';
+      if (!nearAxis) pCanvas.style.cursor = 'pointer';
+    } else pTip.hidden = true;
+  });
+  const pRelease = e => {
+    const drag = pv.drag;
+    pv.drag = null;
+    if (!drag) return;
+    if (drag.s && drag.moved) { refresh(true); return; }
+    if (drag.s) {
+      const st = limitStage(drag.s);
+      if (st && (st.min != null || st.max != null)) { stages.splice(stages.indexOf(st), 1); refresh(true); return; }
+    }
+    if (e.type === 'pointercancel' || !pv.rows.length) return;
+    const stageBox = $('p-stage').getBoundingClientRect(), wrapBox = $('wrap').getBoundingClientRect();
+    const hit = pNearest(e.offsetX, e.offsetY, drag.touch ? 16 : 7);
+    if (hit) openPop(hit, [e.offsetX + stageBox.left - wrapBox.left, e.offsetY + stageBox.top - wrapBox.top]);
+    else closePop();
+  };
+  pCanvas.addEventListener('pointerup', pRelease);
+  pCanvas.addEventListener('pointercancel', pRelease);
+  pCanvas.addEventListener('pointerleave', () => { if (!pv.drag && pv.hover) { pv.hover = null; pTip.hidden = true; drawParallel(); } });
+  new ResizeObserver(drawParallel).observe($('p-stage'));
+  function renderParallelBar() {
+    const n = pv.rows.length, base = baseMaterials().length, passing = pv.rows.filter(pv.live).length;
+    const coverage = el('span', { class: 'p-coverage' + (n < 200 ? ' warn' : '') }, `${n.toLocaleString()} of ${base.toLocaleString()} have all ${state.paxes.length} values` + (passing !== n ? `, ${passing.toLocaleString()} pass` : ''));
+    const open = document.activeElement?.closest?.('#p-bar') ? document.activeElement.getAttribute('aria-label') : null;
+    $('p-bar').replaceChildren(...state.paxes.map((sym, i) => {
+      const select = el('select', { 'aria-label': `Axis ${i + 1}`, onchange: () => { state.paxes[i] = select.value; refresh(); } }, db.props.filter(p => p.sym === sym || !state.paxes.includes(p.sym)).map(p => el('option', { value: p.sym }, p.label)));
+      select.value = sym;
+      return el('span', { class: 'axis-chip' },
+        i > 0 ? el('button', { class: 'ghost', title: 'Move this axis left', 'aria-label': `Move ${db.bySym[sym].label} left`, onclick: () => { [state.paxes[i - 1], state.paxes[i]] = [state.paxes[i], state.paxes[i - 1]]; refresh(); } }, '←') : null,
+        select,
+        state.paxes.length > 2 ? el('button', { class: 'ghost', 'aria-label': `Remove ${db.bySym[sym].label}`, title: 'Remove this axis', onclick: () => { state.paxes.splice(i, 1); refresh(); } }, '×') : null);
+    }), state.paxes.length < db.props.length ? el('button', { id: 'p-add', title: 'Adds the property that keeps the most materials. Change it with its menu.', onclick: () => {
+      const rows = baseMaterials().filter(m => state.paxes.every(s => m.d[s] > 0));
+      const next = db.props.map(p => p.sym).filter(s => !state.paxes.includes(s)).map(s => [s, rows.filter(m => m.d[s] > 0).length]).sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (next) { state.paxes.push(next); refresh(); }
+    } }, '+ Add axis') : null, coverage);
+    if (open) $('p-bar').querySelector(`[aria-label="${open}"]`)?.focus();
+    pHint.hidden = !n || isPhone();
+    const empty = $('p-stage').querySelector('.p-empty');
+    if (!n && !empty) $('p-stage').append(el('div', { class: 'p-empty' }, 'No material has all of these values. Remove an axis or turn more families on.'));
+    if (n && empty) empty.remove();
+  }
+  function setView(name) {
+    if (state.view === name && document.body.classList.contains(name === 'parallel' ? 'parallel-on' : 'chart-on')) return;
+    state.view = name;
+    const parallelOn = name === 'parallel';
+    document.body.classList.toggle('parallel-on', parallelOn);
+    document.body.classList.toggle('chart-on', !parallelOn);
+    $('parallel').hidden = !parallelOn;
+    $('view-chart').classList.toggle('on', !parallelOn); $('view-chart').setAttribute('aria-pressed', String(!parallelOn));
+    $('view-parallel').classList.toggle('on', parallelOn); $('view-parallel').setAttribute('aria-pressed', String(parallelOn));
+    closePop(); selBox = null; setSelection([]); disarm();
+    pv.hover = null; pTip.hidden = true;
+    refresh();
+  }
+  $('view-chart').onclick = () => setView('chart');
+  $('view-parallel').onclick = () => setView('parallel');
+
   /* ---------- everything flows from one refresh ---------- */
   function writeHash() {
-    const shared = { x: state.x, y: state.y, xLog: state.xLog, yLog: state.yLog, shape: state.shape, group: state.group, color: state.color, size: state.size, ghosts: state.ghosts, stackOpen: state.stackOpen, resultsOpen: state.resultsOpen, brief: state.brief, families: [...state.families], stages };
+    const shared = { view: state.view, paxes: state.paxes, x: state.x, y: state.y, xLog: state.xLog, yLog: state.yLog, shape: state.shape, group: state.group, color: state.color, size: state.size, ghosts: state.ghosts, stackOpen: state.stackOpen, resultsOpen: state.resultsOpen, brief: state.brief, families: [...state.families], stages };
     history.replaceState(null, '', '#' + encodeURIComponent(JSON.stringify(shared)));
   }
   const availableCache = new Map();
@@ -817,8 +1031,22 @@
     const outside = shapes.reduce((sum, s) => sum + (s.outside || 0), 0);
     $('outside-note').hidden = !outside;
     $('outside-note').textContent = `${outside.toLocaleString()} isolated ${outside === 1 ? 'material sits' : 'materials sit'} outside the ovals, so one far point does not stretch a whole family.`;
+    // Parallel axes read the same filters and colours as the chart.
+    pv.rows = base.filter(m => state.paxes.every(s => m.d[s] > 0));
+    pv.live = live;
+    pv.color = colorOf;
+    pv.ranges = {};
+    if (pv.rows.length) for (const s of state.paxes) {
+      const values = pv.rows.map(m => Math.log10(m.d[s])), lo = Math.min(...values), hi = Math.max(...values);
+      pv.ranges[s] = hi === lo ? [lo - .5, lo + .5] : [lo, hi];
+    }
+    if (state.view === 'parallel') { renderParallelBar(); drawParallel(); }
     if (!light) {
-      renderFamilies(availableFor(xA, yA));
+      if (state.view === 'parallel') {
+        const counts = {};
+        db.materials.forEach(m => { if (state.paxes.every(s => m.d[s] > 0)) counts[m.family] = (counts[m.family] || 0) + 1; });
+        renderFamilies(counts);
+      } else renderFamilies(availableFor(xA, yA));
       renderTags();
       if (state.stackOpen) renderStages();
     } else if (state.stackOpen) updateFunnels();
@@ -831,7 +1059,7 @@
     $('results-count').textContent = passing.length.toLocaleString();
     const scope = $('scope'), limited = state.isolate || state.hidden.size;
     const findMatches = find ? passing.filter(m => m.search.includes(find)).length : 0;
-    const findMissing = find && !rows.some(r => !r.dim);
+    const findMissing = find && (state.view === 'parallel' ? !pv.rows.some(live) : !rows.some(r => !r.dim));
     scope.hidden = !limited && !findMissing;
     scope.replaceChildren(
       findMissing ? (findMatches ? `${findMatches} found, but not on these axes` : 'Nothing found') : '',
@@ -860,13 +1088,14 @@
   addEventListener('keydown', e => {
     if (e.target.matches('input, select, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const key = e.key.toLowerCase();
+    const key = e.key.toLowerCase(), chart = state.view === 'chart';
     if (key === '/') { e.preventDefault(); $('search').focus(); }
-    else if (key === 'v') setMode('pan');
-    else if (key === 'b') setMode('box');
-    else if (key === 'l') setMode('lasso');
-    else if (key === 'f') plot.fit();
-    else if (key === 'x') setAxes({ x: state.y, y: state.x, xLog: state.yLog, yLog: state.xLog });
+    else if (key === 'a') setView(chart ? 'parallel' : 'chart');
+    else if (key === 'v' && chart) setMode('pan');
+    else if (key === 'b' && chart) setMode('box');
+    else if (key === 'l' && chart) setMode('lasso');
+    else if (key === 'f' && chart) plot.fit();
+    else if (key === 'x' && chart) setAxes({ x: state.y, y: state.x, xLog: state.yLog, yLog: state.xLog });
     else if (key === 's') setStack(!state.stackOpen);
     else if (key === 'r') setResults(!state.resultsOpen);
     else if (key === 'p') $('side-btn').click();
@@ -878,9 +1107,13 @@
 
   renderViews();
   renderBrief();
+  const startView = state.view === 'parallel' ? 'parallel' : 'chart';
+  state.view = 'chart';
   refresh(false);
   plot.view = { ...plot.fitView };
   rowById = new Map(plot.rows.map(r => [r.m.id, r]));
+  document.body.classList.add('chart-on');
+  if (startView === 'parallel') setView('parallel');
   setStack(state.stackOpen);
   setResults(state.resultsOpen);
   renderLabels();
