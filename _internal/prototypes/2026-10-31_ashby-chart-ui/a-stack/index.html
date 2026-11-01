@@ -161,34 +161,10 @@
   };
 
   /* ---------- text queries become ordinary stages ---------- */
-  function parseQuery(text) {
-    const q = text.trim(); let m;
-    const unitScale = { gpa: 1, mpa: 1 };
-    if ((m = q.match(/^family\s+(.+)$/i))) {
-      const wanted = m[1].split(/[, ]+/).map(w => w.toLowerCase()).map(w => Object.keys(FAMILY_NAMES).find(k => k === w || FAMILY_NAMES[k].toLowerCase() === w || k.startsWith(w)));
-      if (wanted.includes(undefined)) throw new Error('Families: ' + Object.values(FAMILY_NAMES).join(', '));
-      return { type: 'family', values: wanted, enabled: true };
-    }
-    if ((m = q.match(/^tag\s+(.+)$/i))) return { type: 'tag', value: m[1].trim(), enabled: true };
-    if ((m = q.match(/^(?:class|type)\s+(.+)$/i))) {
-      const need = m[1].toLowerCase();
-      const values = [...new Set(db.materials.map(x => x.cls))].filter(c => c.toLowerCase().includes(need));
-      if (!values.length) throw new Error(`No class matches "${m[1]}"`);
-      return { type: 'class', values, enabled: true };
-    }
-    if ((m = q.match(/^(.+?)\s*(<=|>=|<|>)\s*(-?[\d.]+)\s*([a-z/³%]*)$/i))) {
-      const compiled = AC.compile(m[1]);
-      if (compiled.error) throw new Error(compiled.error + '. Symbols: ' + db.props.map(p => p.sym).join(', '));
-      const value = parseFloat(m[3]) * (m[4].toLowerCase() in unitScale ? unitScale[m[4].toLowerCase()] : 1);
-      return { type: 'limit', expr: m[1].trim(), min: m[2].includes('>') ? value : null, max: m[2].includes('<') ? value : null, enabled: true };
-    }
-    if (q) return { type: 'text', value: q, enabled: true };
-    throw new Error('Type a filter');
-  }
   document.getElementById('query-form').onsubmit = e => {
     e.preventDefault();
     const input = document.getElementById('query'), msg = document.getElementById('query-msg');
-    try { stages.push(parseQuery(input.value)); input.value = ''; msg.classList.remove('bad'); refresh(); }
+    try { stages.push(AC.parseQuery(input.value)); input.value = ''; msg.classList.remove('bad'); refresh(); }
     catch (error) { msg.textContent = error.message; msg.classList.add('bad'); }
   };
 

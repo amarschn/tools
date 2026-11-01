@@ -2,9 +2,9 @@
 
 Date: 2026-10-31
 
-Five working studies for the next version of the Ashby chart. They use real database
-values and no chart library. Nothing here is linked from the public site, and
-`netlify.toml` returns 404 for `/_internal/`.
+Working studies for the next version of the Ashby chart. They use real database values
+and no chart library. Nothing here is linked from the public site, and `netlify.toml`
+returns 404 for `/_internal/`.
 
 ```bash
 python3 -m http.server 8000
@@ -16,14 +16,27 @@ Then open `http://localhost:8000/_internal/prototypes/2026-10-31_ashby-chart-ui/
 
 | Study | Question it tests |
 | --- | --- |
+| [F, Combined](f-combined/) | Do the choices from the first five work as one tool? Studio by default, one oval per family, tags and movable label boxes on single materials, and the stack and brief as an add-on. |
 | [A, Selection stack](a-stack/) | Should narrowing work like Granta, with an ordered chain of stages? |
 | [B, Studio](b-studio/) | Should the chart fill the screen, with axes, tags and selection on the chart itself? |
 | [C, More axes](c-axes/) | Which way of adding a third or fourth axis is readable: 3D, colour and size, parallel axes, or a matrix? |
 | [D, Blob lab](d-blobs/) | Which shape looks right? Four methods drawn from the same data. |
 | [E, Design brief](e-brief/) | Should people be able to start from the part and let the chart follow? |
 
-Tags are stored in the browser and shared by all five studies. Clear them by deleting
-each tag in study B.
+Tags are stored in the browser and shared by all the studies. Clear them by deleting
+each tag in study B or F. Label boxes are stored the same way and appear only in F.
+
+## Choices behind study F
+
+- **Shape:** one ellipse per family, the smallest that encloses it, so a dense run of
+  similar grades does not pull it off centre. A very small isolated group (under 2% of a
+  family of 10 or more, and more than 9% of the chart's width away) stays outside, and
+  the panel says how many materials that leaves out. Their points still plot.
+- **3D view:** dropped after trying it. Colour and size are the extra axes for now.
+- **Brief:** it sets the axes and adds a line stage, so it shares one filter chain with
+  the stack and its ranking appears in the results table.
+- **Typed filters:** a unit is now converted (`E > 200000 MPa` means 200 GPa) or refused
+  (`rho > 5 GPa`). Study A used to ignore the unit and read the number wrongly.
 
 ## Files
 

@@ -154,6 +154,42 @@
     return { rows: current, counts };
   }
 
+  /* Typed filters become ordinary stages: "E > 5", "UTS < 300 MPa", "family metal", "tag shortlist". */
+  const STRESS_UNITS = { pa: 1e-6, kpa: 1e-3, mpa: 1, gpa: 1e3 };
+  function parseQuery(text) {
+    const q = String(text).trim();
+    let m;
+    if ((m = q.match(/^family\s+(.+)$/i))) {
+      const wanted = m[1].split(/[, ]+/).map(w => w.toLowerCase()).map(w => Object.keys(FAMILY_NAMES).find(k => k === w || FAMILY_NAMES[k].toLowerCase() === w || k.startsWith(w)));
+      if (wanted.includes(undefined)) throw new Error('Families: ' + Object.values(FAMILY_NAMES).join(', '));
+      return { type: 'family', values: wanted, enabled: true };
+    }
+    if ((m = q.match(/^tag\s+(.+)$/i))) return { type: 'tag', value: m[1].trim(), enabled: true };
+    if ((m = q.match(/^(?:class|type)\s+(.+)$/i))) {
+      const need = m[1].toLowerCase();
+      const values = [...new Set(db.materials.map(x => x.cls))].filter(c => c.toLowerCase().includes(need));
+      if (!values.length) throw new Error(`No class matches "${m[1]}"`);
+      return { type: 'class', values, enabled: true };
+    }
+    if ((m = q.match(/^(.+?)\s*(<=|>=|<|>)\s*(-?[\d.]+)\s*(\S*)$/))) {
+      const compiled = compile(m[1]);
+      if (compiled.error) throw new Error(compiled.error + '. Symbols: ' + db.props.map(p => p.sym).join(', '));
+      let value = parseFloat(m[3]);
+      if (m[4]) {
+        // Convert stresses, and refuse any other unit rather than quietly reading the number wrong.
+        const prop = db.bySym[m[1].trim()], given = m[4].toLowerCase(), own = prop?.unit.toLowerCase();
+        if (!prop) throw new Error('Leave the unit off a formula');
+        if (given !== own) {
+          if (!(given in STRESS_UNITS && own in STRESS_UNITS)) throw new Error(`${prop.sym} is in ${prop.unit || 'no unit'}`);
+          value = value * STRESS_UNITS[given] / STRESS_UNITS[own];
+        }
+      }
+      return { type: 'limit', expr: m[1].trim(), min: m[2].includes('>') ? value : null, max: m[2].includes('<') ? value : null, enabled: true };
+    }
+    if (q) return { type: 'text', value: q, enabled: true };
+    throw new Error('Type a filter');
+  }
+
   /* ---------- blob geometry, built in normalized plot space so shapes look round ---------- */
   function marchingSquares(field, w, h, iso) {
     const segs = new Map();
@@ -247,6 +283,59 @@
     return loop;
   }
 
+  /* Smallest ellipse around the points (Khachiyan's algorithm on the hull), so it follows
+     the family's extent and a dense cluster of similar grades does not pull it off centre. */
+  function enclosingEllipse(points, pad) {
+    const hull = convexHull(points);
+    const fallback = () => ellipseLoop(points, pad, 1.6);
+    if (hull.length < 3) return fallback();
+    const n = hull.length, u = new Array(n).fill(1 / n);
+    const invert3 = m => {
+      const [a, b, c, d, e, f, g, h, i] = m;
+      const A = e * i - f * h, B = f * g - d * i, C = d * h - e * g, det = a * A + b * B + c * C;
+      if (Math.abs(det) < 1e-14) return null;
+      return [A, c * h - b * i, b * f - c * e, B, a * i - c * g, c * d - a * f, C, b * g - a * h, a * e - b * d].map(v => v / det);
+    };
+    for (let iter = 0; iter < 400; iter++) {
+      const m = new Array(9).fill(0);
+      hull.forEach(([x, y], k) => { const q = [x, y, 1]; for (let r = 0; r < 3; r++) for (let s = 0; s < 3; s++) m[r * 3 + s] += u[k] * q[r] * q[s]; });
+      const inv = invert3(m);
+      if (!inv) return fallback();
+      let top = -1, at = 0;
+      hull.forEach(([x, y], k) => {
+        const q = [x, y, 1];
+        let v = 0;
+        for (let r = 0; r < 3; r++) for (let s = 0; s < 3; s++) v += q[r] * inv[r * 3 + s] * q[s];
+        if (v > top) { top = v; at = k; }
+      });
+      const step = (top - 3) / (3 * (top - 1));
+      if (step < 1e-3) break;
+      for (let k = 0; k < n; k++) u[k] *= 1 - step;
+      u[at] += step;
+    }
+    let cx = 0, cy = 0;
+    hull.forEach(([x, y], k) => { cx += u[k] * x; cy += u[k] * y; });
+    let a = 0, b = 0, c = 0;
+    hull.forEach(([x, y], k) => { a += u[k] * (x - cx) ** 2; b += u[k] * (x - cx) * (y - cy); c += u[k] * (y - cy) ** 2; });
+    const mean = (a + c) / 2, spread = Math.sqrt(Math.max(0, (a - c) ** 2 / 4 + b * b));
+    const l1 = mean + spread, l2 = mean - spread;
+    if (l2 < 1e-10) return fallback();
+    const angle = .5 * Math.atan2(2 * b, a - c), cos = Math.cos(angle), sin = Math.sin(angle);
+    // The iteration stops slightly early, so scale until every hull point is inside.
+    let scale = 0;
+    for (const [x, y] of hull) {
+      const p = (x - cx) * cos + (y - cy) * sin, q = -(x - cx) * sin + (y - cy) * cos;
+      scale = Math.max(scale, p * p / l1 + q * q / l2);
+    }
+    const r1 = Math.sqrt(scale * l1) + pad, r2 = Math.sqrt(scale * l2) + pad;
+    const loop = [];
+    for (let i = 0; i < 72; i++) {
+      const t = i / 72 * Math.PI * 2, x = r1 * Math.cos(t), y = r2 * Math.sin(t);
+      loop.push([cx + x * cos - y * sin, cy + x * sin + y * cos]);
+    }
+    return { loop, center: [cx, cy] };
+  }
+
   function splitAtGaps(points, gap) {
     const parent = points.map((_, i) => i);
     const find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
@@ -291,6 +380,18 @@
         const pad = .018 * softness;
         const grown = (hull.length > 2 ? hull : ellipseLoop(norm, pad, 1)).map(([x, y]) => { const dx = x - cx, dy = y - cy, r = Math.hypot(dx, dy) || 1; return [x + dx / r * pad, y + dy / r * pad]; });
         shape.loops = [chaikin(grown, 4).map(unNorm)];
+      } else if (method === 'ashby') {
+        // One oval per group. A few isolated materials far from the rest stay outside the
+        // outline rather than stretching it across empty space; their points still plot.
+        const clusters = splitAtGaps(norm, .09);
+        const least = Math.max(3, norm.length * .02);
+        const kept = norm.length < 10 ? norm : clusters.filter(c => c.length >= least).flat();
+        const used = kept.length ? kept : norm;
+        const fitted = enclosingEllipse(used, .014 * softness);
+        const loop = Array.isArray(fitted) ? fitted : fitted.loop;
+        shape.loops = [loop.map(unNorm)];
+        shape.outside = norm.length - used.length;
+        shape.center = unNorm(Array.isArray(fitted) ? [loop.reduce((s, p) => s + p[0], 0) / loop.length, loop.reduce((s, p) => s + p[1], 0) / loop.length] : fitted.center);
       } else if (method === 'classic') {
         // Classic chart: an ellipse per material class, inside a soft family envelope.
         const field = densityField(norm, .026 * softness, W, H, 3);
@@ -300,7 +401,7 @@
         // A far outlier would stretch one ellipse across empty space, so split each class at large gaps.
         for (const [name, pts] of byClass) for (const cluster of splitAtGaps(pts, .09)) shape.parts.push({ label: name, loop: ellipseLoop(cluster, .011 * softness).map(unNorm), count: cluster.length });
       }
-      shape.center = group.points.reduce((s, p) => [s[0] + p[0], s[1] + p[1]], [0, 0]).map(v => v / group.points.length);
+      shape.center = shape.center || group.points.reduce((s, p) => [s[0] + p[0], s[1] + p[1]], [0, 0]).map(v => v / group.points.length);
       out.push(shape);
     }
     return out;
@@ -585,6 +686,9 @@
         } else if (drag.kind === 'lasso' && o.path.length > 4) {
           const inside = (X, Y) => { let hit = false; for (let i = 0, j = o.path.length - 1; i < o.path.length; j = i++) { const [xi, yi] = o.path[i], [xj, yj] = o.path[j]; if ((yi > Y) !== (yj > Y) && X < (xj - xi) * (Y - yi) / (yj - yi) + xi) hit = !hit; } return hit; };
           this.opts.onSelect?.(this.rows.filter(r => !r.dim && inside(this.sx(r.tx), this.sy(r.ty))), { kind: 'lasso' });
+        } else {
+          // A click with no drag still picks a single material in Box and Lasso modes.
+          this.opts.onClick?.(this.nearest(x, y, e.pointerType === 'touch' ? 26 : 16), e);
         }
         this.draw();
       };
@@ -649,7 +753,7 @@
   }
 
   /* Prototype header: every page gets the same switcher back to the gallery. */
-  const PAGES = [['a-stack', 'A · Selection stack'], ['b-studio', 'B · Studio'], ['c-axes', 'C · More axes'], ['d-blobs', 'D · Blob lab'], ['e-brief', 'E · Design brief']];
+  const PAGES = [['f-combined', 'F · Combined'], ['a-stack', 'A · Selection stack'], ['b-studio', 'B · Studio'], ['c-axes', 'C · More axes'], ['d-blobs', 'D · Blob lab'], ['e-brief', 'E · Design brief']];
   function header(current) {
     const nav = el('nav', { class: 'ac-nav' }, el('a', { href: '../', class: 'ac-home' }, 'All prototypes'),
       ...PAGES.map(([slug, label]) => el('a', { href: `../${slug}/`, class: slug === current ? 'on' : '' }, label)));
@@ -669,6 +773,6 @@
       el('table', {}, el('tbody', {}, rows)));
   }
 
-  window.AC = { load, compile, Axis, Plot, tags, runStages, stageTest, buildBlobs, shapesFor, chartRows, blobGroups, extent, formatValue, formatProp, downloadCsv, header, materialCard, el, clamp, escapeHtml, FAMILY_COLORS, FAMILY_NAMES, PALETTE, get db() { return db; } };
+  window.AC = { load, compile, parseQuery, Axis, Plot, tags, runStages, stageTest, buildBlobs, shapesFor, chartRows, blobGroups, extent, formatValue, formatProp, downloadCsv, header, materialCard, el, clamp, escapeHtml, FAMILY_COLORS, FAMILY_NAMES, PALETTE, get db() { return db; } };
   window.AC_BASE = document.currentScript?.src;
 })();
