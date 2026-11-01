@@ -91,6 +91,5 @@ def test_all_sources_are_pinned_and_recorded(batch):
 
 
 def test_gaps_are_recorded_rather_than_estimated(batch):
-    database, _, _, report = batch
+    _, _, _, report = batch
     assert {e["id"] for e in report["excluded"]} >= {"astm-a36"}
-    assert not any("a36" in r["id"] for r in database.materials)

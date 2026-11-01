@@ -11,6 +11,13 @@ The chart staples batch fills part of that gap from pinned sources; see
 added and what remains off the chart. The tool also moved to
 `/tools/ashby-chart/`, and `/tools/materials-explorer/` now redirects there.
 
+Released to production on 2026-10-30 as `a429e5f` (Netlify published it at
+01:16 UTC on 2026-10-31). Live checks passed: the homepage, chart, Materials
+tool, and one unchanged tool (Beam Bending) loaded with no console errors; the
+chart reported 1,047 of 1,375 materials; a 7075 search found the new record in
+both tools; the old URL redirected with its search preserved; `sitemap.xml`
+lists the new URL only; and the private source documents return 404.
+
 ## Progress on 2026-09-30
 
 Materials Explorer (now Ashby Chart) uses a generated observation projection from the
@@ -30,8 +37,7 @@ verifier checked all 776 generated artifacts; lookup search tests and the site
 build passed. Browser checks covered light/dark themes, mobile sizing,
 source inspection, CSV and shared links, state/condition filters, the old URL
 redirect, data-version mismatch and retry, stale offline caches, and the three
-retained prototypes using the shared chart component. Production release is
-pending the account credit check required by `docs/RELEASE.md`.
+retained prototypes using the shared chart component.
 
 ## Original proposal
 

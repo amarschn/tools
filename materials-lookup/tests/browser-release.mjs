@@ -159,7 +159,7 @@ try {
     await page.locator('#state-al-6061-t6[open] .citation details[open]').waitFor();
     assert.match(await page.locator('#state-al-6061-t6 .value').innerText(), /≥ 35 ksi/);
     await page.getByRole('link',{name:'Sources',exact:true}).click(); await settled();
-    assert.equal(await page.locator('.source-card').count(),549);
+    assert.equal(await page.locator('.source-card').count(),585);
     assert.equal(await page.locator('.source-card a, iframe, embed, object').count(),0);
     for (const file of ['hydro-6061.pdf','hydro-6063.pdf','copper-alloys-guide.pdf','timet-6-4.pdf','atlas-engineering-bar.pdf','uddeholm-arne.pdf','ohara-optical-glass.pdf','cda-C67600.html','private-sources/index.html']) {
       const response = await context.request.get(base+file);
@@ -239,7 +239,8 @@ try {
   // The new families resolve through the same lookup and keep source distinctions.
   await go(origin+'/?material=wood-red-alder');
   assert.match(await page.locator('#property-flexural_modulus').innerText(), /9\.50* GPa/);
-  assert.equal(await page.locator('#property-youngs_modulus').count(),0);
+  assert.match(await page.locator('#property-youngs_modulus').innerText(), /10\.[45]\d* GPa/);
+  assert.match(await page.locator('#property-compressive_strength').innerText(), /40\.1\d* MPa/);
   await go(origin+'/?material=kyocera-f997');
   assert.match(await page.locator('#property-density').innerText(), /Typical minimum \(not guaranteed\)/);
   for (const id of ['toray-2700-f6273c-t2xm-965','diab-divinycell-h45','smooth-on-reoflex-20','schott-n-bk7']) {

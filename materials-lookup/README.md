@@ -8,8 +8,8 @@ any other tool.
 Adding a material happens here, not anywhere else. The project this came from
 is closed; nothing upstream is maintained.
 
-Current contents: **1,375 material identities, 101 named states, 5,931
-observations, 11 registered properties and references to 549 sources**.
+Current contents: **1,453 material identities, 101 named states, 6,410
+observations, 12 registered properties and references to 585 sources**.
 The generated site has no runtime dependencies, backend, accounts, or network
 search service.
 
@@ -177,6 +177,32 @@ python3 materials-lookup/builder/import_chart_staples.py --source-dir private-so
 ```
 
 See [the batch review](docs/chart-staples-2026-10-batch-review.md).
+
+The October 2026 concrete batch adds a compressive strength property, a Concrete
+family, **12 identities and 46 observations**. Reconstruct it with:
+
+```sh
+python3 materials-lookup/builder/import_concrete.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/concrete-2026-10-batch-review.md).
+
+The gathered documents batch adds **66 identities and 198 observations**. Reconstruct it with:
+
+```sh
+python3 materials-lookup/builder/import_gathered.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/gathered-2026-10-batch-review.md).
+
+The wood batch adds **235 observations to the 107 existing species** and no new
+identities. Reconstruct it with:
+
+```bash
+python3 materials-lookup/builder/import_wood.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/wood-2026-10-batch-review.md).
 
 ## Layout
 

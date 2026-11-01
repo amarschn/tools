@@ -31,6 +31,7 @@ PROPERTIES = {
     "elongation_at_break": ("1", "%", .01),
     "thermal_conductivity": ("W/(m*K)", "W/(m·K)", 1),
     "flexural_strength": ("Pa", "MPa", 1e6),
+    "compressive_strength": ("Pa", "MPa", 1e6),
     "flexural_modulus": ("Pa", "MPa", 1e6),
     "specific_heat": ("J/(kg*K)", "J/(kg·K)", 1),
     "poissons_ratio": ("1", "1", 1),

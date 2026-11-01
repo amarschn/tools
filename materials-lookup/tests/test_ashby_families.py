@@ -47,7 +47,8 @@ def test_wood_density_includes_water_and_bending_modulus_stays_distinct(batch):
     modulus = prop(records, "wood-red-alder", "flexural_modulus")
     assert modulus["result"]["canonical"]["value"] == 9.5e9
     assert modulus["conditions"]["orientation"] == "L"
-    assert not any(o["property_id"] == "youngs_modulus" for o in data["observations"] if o["material_id"].startswith("wood-"))
+    # The computed Young's modulus sits beside the printed bending value, never replacing it.
+    assert prop(records, "wood-red-alder", "youngs_modulus")["basis"] == "computed"
 
 
 def test_foam_tensile_modulus_and_nominal_density_not_inferred_from_name(batch):

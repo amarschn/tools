@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>D · Blob lab</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 9px 12px; background: var(--card); border-bottom: 1px solid var(--line); }
+  .bar label { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+  .bar input[type=range] { width: 120px; }
+  .bar select { font-size: 12.5px; max-width: 170px; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; padding: 8px; }
+  .grid.solo { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .grid.solo .cell:not(.big) { display: none; }
+  .cell { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .cell header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 10px; }
+  .cell header p { font-size: 12px; color: var(--ink-2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell header h2 { white-space: nowrap; }
+  .cell header button { min-height: 24px; padding: 0 8px; font-size: 12px; }
+  .chart { flex: 1; min-height: 0; }
+  @media (max-width: 760px) {
+    body { height: auto; }
+    .grid { display: flex; flex-direction: column; }
+    .cell { height: 60vh; min-height: 340px; }
+    .cell header p { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Blob lab</h1>
+  <label>Chart <select id="preset"></select></label>
+  <label>Group by <select id="group"><option value="family">Family</option><option value="class">Material class</option></select></label>
+  <label>Softness <input id="soft" type="range" min=".5" max="2.4" step=".05" value="1.1"></label>
+  <label>Fill <input id="fill" type="range" min=".05" max=".5" step=".01" value=".22"></label>
+  <label><input id="points" type="checkbox" checked> Points</label>
+  <label><input id="labels" type="checkbox" checked> Labels</label>
+</div>
+<div class="grid" id="grid"></div>
+<script src="../core.js"></script>
+<script>
+(async () => {
+  const { el, Axis, Plot } = AC;
+  AC.header('d-blobs');
+  const db = await AC.load();
+  const METHODS = [
+    ['gooey', 'A. Gooey metaballs', 'Each material adds a soft halo and halos melt together. Gaps stay gaps and outliers get their own droplet.'],
+    ['classic', 'B. Classic Ashby', 'A tight ellipse per material class inside a pale family envelope, like the printed charts.'],
+    ['pebble', 'C. Smooth pebble', 'The current outline with its corners rounded away. Always one shape per family.'],
+    ['contour', 'D. Density contours', 'Nested levels show where materials cluster, so the 486 copper grades read as a peak and not just a region.'],
+  ];
+  const PRESETS = [['Stiffness', 'rho', 'E'], ['Tensile strength', 'rho', 'UTS'], ['Bending stiffness', 'rho', 'Ef'], ['Compressive strength', 'rho', 'Sc'], ['Thermal conductivity', 'rho', 'k'], ['Stiffness vs compression', 'Sc', 'E']];
+  const $ = id => document.getElementById(id);
+  $('preset').append(...PRESETS.map((p, i) => el('option', { value: i }, p[0])));
+  const cells = METHODS.map(([method, title, note]) => {
+    const host = el('div', { class: 'chart' });
+    const expand = el('button', { onclick: () => {
+      const on = cell.classList.toggle('big');
+      $('grid').classList.toggle('solo', on);
+      expand.textContent = on ? 'Back to all four' : 'Enlarge';
+    } }, 'Enlarge');
+    const cell = el('section', { class: 'panel cell' }, el('header', {}, el('h2', {}, title), el('p', { title: note }, note), expand), host);
+    $('grid').append(cell);
+    return { method, plot: new Plot(host, { padding: { l: 50, r: 10, t: 6, b: 42 }, pointSize: 2.2 }) };
+  });
+  function render() {
+    const started = performance.now();
+    const [, xs, ys] = PRESETS[$('preset').value];
+    const xA = new Axis(xs), yA = new Axis(ys);
+    const rows = AC.chartRows(db.materials, xA, yA);
+    for (const { method, plot } of cells) {
+      plot.opts.blobFill = parseFloat($('fill').value);
+      plot.opts.pointAlpha = $('points').checked ? .85 : 0;
+      plot.opts.showLabels = $('labels').checked;
+      plot.setData({ rows, xAxis: xA, yAxis: yA, keepView: plot.xAxis?.expr === xs && plot.yAxis?.expr === ys });
+      plot.setShapes(AC.shapesFor(rows, xA, yA, { method, grouping: $('group').value, softness: parseFloat($('soft').value) * (method === 'classic' ? .9 : 1) }));
+    }
+    window.__lastRefreshMs = performance.now() - started;
+  }
+  for (const id of ['preset', 'group', 'soft', 'fill', 'points', 'labels']) $(id).addEventListener('input', render);
+  render();
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
