@@ -1,14 +1,18 @@
 """Traceability and condition boundaries for the Ashby catalog projection."""
 
 from copy import deepcopy
+import gzip
+from itertools import combinations
 import json
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from pycalcs.material_selection import (
-    build_selection_database, compatible_observations, observation_value,
+    build_chart_files, build_selection_database, compatible_observations,
+    compatible_rows, index_exponents, observation_value,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,6 +164,101 @@ def test_generated_projection_matches_published_source_and_keeps_citations(selec
     payload = json.dumps(selection).lower()
     assert ".pdf" not in payload
     assert "http://" not in payload and "https://" not in payload
+
+
+def chart_files(selection):
+    return build_chart_files(selection)
+
+
+def published_pairs(selection):
+    pairs = set()
+    for key, chart in selection["charts"].items():
+        if chart["properties"][0] != chart["properties"][1]:
+            pairs |= {frozenset(point["observations"]) for point in chart["points"]}
+    return pairs
+
+
+def test_rows_reproduce_every_published_pair_and_no_others(selection):
+    core, details = chart_files(selection)
+    ids = [row["id"] for row in details["observations"]]
+    found = set()
+    for row in core["rows"]:
+        names = [ids[i] for i in row]
+        found |= {frozenset(pair) for pair in combinations(names, 2)}
+    assert found == published_pairs(selection)
+    # Every observation appears somewhere, including those with no partner.
+    assert {ids[i] for row in core["rows"] for i in row} == set(selection["observations"])
+
+
+def test_each_row_holds_compatible_observations_with_one_value_per_property(selection):
+    core, details = chart_files(selection)
+    observations = selection["observations"]
+    for row in core["rows"]:
+        items = [observations[details["observations"][i]["id"]] for i in row]
+        assert len({item["property_id"] for item in items}) == len(items)
+        assert len({item["material_id"] for item in items}) == 1
+        for left, right in combinations(items, 2):
+            assert compatible_observations(left, right)
+
+
+def test_rows_are_maximal_so_no_larger_combination_is_lost():
+    density = {**observation(), "id": "rho"}
+    modulus = {**observation("youngs_modulus", 69e9), "id": "e"}
+    t4 = {**observation("tensile_yield_strength", 110e6, state="t4"), "id": "t4"}
+    t6 = {**observation("tensile_yield_strength", 240e6, state="t6"), "id": "t6"}
+    rows = [{item["id"] for item in row} for row in compatible_rows([density, modulus, t4, t6])]
+    assert sorted(rows, key=sorted) == [{"e", "rho", "t4"}, {"e", "rho", "t6"}]
+
+
+def test_a_batch_with_too_many_rows_stops_the_build(selection, monkeypatch):
+    monkeypatch.setattr("pycalcs.material_selection.MAX_ROWS_PER_MATERIAL", 10)
+    with pytest.raises(ValueError, match="compatible rows"):
+        build_chart_files(selection)
+
+
+def test_index_exponents_come_from_the_python_formula(selection):
+    core, _ = chart_files(selection)
+    for key, index in core["indices"].items():
+        assert index["exponents"], key
+    assert core["indices"]["stiff_light_beam"]["exponents"] == pytest.approx(
+        {"youngs_modulus": 0.5, "density": -1})
+    assert core["indices"]["strong_light_beam"]["exponents"] == pytest.approx(
+        {"tensile_yield_strength": 2 / 3, "density": -1})
+    assert core["indices"]["strong_light_beam"]["y"] == "tensile_yield_strength"
+    not_power = SimpleNamespace(required_properties=("a", "b"), compute=lambda m: m["a"] + m["b"])
+    assert index_exponents(not_power) is None
+
+
+def test_chart_files_match_the_release_and_carry_no_document_links(selection):
+    manifest = json.loads((ROOT / "tools/materials/release-manifest.json").read_text())
+    for name in ("selection-core.json", "selection-details.json"):
+        generated = json.loads((ROOT / "data/materials" / name).read_text())
+        assert generated["source_build_id"] == manifest["build_id"]
+        assert generated["source_sha256"] == manifest["files"][manifest["catalog"]]["sha256"]
+        payload = json.dumps(generated).lower()
+        assert ".pdf" not in payload
+        assert "http://" not in payload and "https://" not in payload
+        assert "private-sources" not in payload
+    core, details = chart_files(selection)
+    assert json.loads((ROOT / "data/materials/selection-core.json").read_text())["rows"] == core["rows"]
+    assert len(details["observations"]) == len(core["observations"]["value"])
+    # The first-paint file holds no citations.
+    assert "source" not in core["observations"]
+    assert all("locator" in row and "source" in row for row in details["observations"])
+    assert set(details["sources"]) <= set(selection["sources"])
+
+
+def test_first_paint_file_stays_small(selection):
+    raw = (ROOT / "data/materials/selection-core.json").read_bytes()
+    assert len(gzip.compress(raw)) < 200_000
+
+
+def test_core_values_round_only_for_plotting_and_details_keep_full_precision(selection):
+    core, details = chart_files(selection)
+    for i, row in enumerate(details["observations"]):
+        source = selection["observations"][row["id"]]
+        assert row["value"] == source["plot_value"]
+        assert core["observations"]["value"][i] == pytest.approx(source["plot_value"], rel=1e-8)
 
 
 def test_same_property_plot_uses_one_observation_not_two_samples(selection):

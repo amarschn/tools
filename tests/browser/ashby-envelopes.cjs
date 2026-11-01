@@ -1,50 +1,77 @@
-/* Numerical drawing invariants; no browser or charting dependency required. */
+/* Numerical drawing invariants for the chart's shapes; no browser needed. */
 const assert = require('node:assert/strict');
-const { roundedHull, splitClusters, build } = require('../../tools/ashby-chart/envelopes.js');
-const input = [[0,0], [1,.2], [.4,1], [.5,.4]];
-const padding = .055;
-const outline = roundedHull(input, padding);
-const cross = (a,b,c) => (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
-for (const point of input) {
-  assert.ok(outline.every((a,i) => cross(a,outline[(i+1)%outline.length],point) >= -1e-10), 'Every endpoint stays enclosed');
-}
-for (let axis=0;axis<2;axis++) {
-  assert.ok(Math.max(...outline.map(p=>p[axis])) <= Math.max(...input.map(p=>p[axis]))+padding+1e-10);
-  assert.ok(Math.min(...outline.map(p=>p[axis])) >= Math.min(...input.map(p=>p[axis]))-padding-1e-10);
-}
-assert.equal(splitClusters([[0,0],[.1,.1],[2,2],[2.1,2.1]]).length, 2, 'Disconnected clusters cannot create a giant hull');
-const row = (id,x,y,extra={}) => ({id, material_id:id, family:'metal', classification:['metal','titanium'], x:{value:x}, y:{value:y}, ...extra});
-const rows = [row('a',1000,10),row('b',1100,12),row('bound',1,10000,{hasBounds:true})];
-for (const mode of ['hulls','ellipses']) {
-  const regions = build(rows,'x','y',mode);
-  assert.equal(regions.length,1);
-  assert.ok(regions[0].points.flat().every(v=>Number.isFinite(v)&&v>0));
-  assert.ok(Math.min(...regions[0].points.map(p=>p[0]))>800,'The specified bound must not define an envelope');
-}
-assert.deepEqual(build(rows,'x','y','points'),[]);
-assert.equal(build([row('a',1000,10),row('b',1000,10)],'x','y').length,1,'Coincident values produce a small outline');
+const { build, contains, enclosingEllipse, pebble } = require('../../tools/ashby-chart/shapes.js');
 
-// Broad families enclose every subgroup and separated cluster in one region.
-const polymer = (id,x,y,subgroup) => row(id,x,y,{family:'polymer',classification:['polymer',subgroup]});
-const groupedRows = [polymer('pa6-a',1000,2,'PA6'),polymer('pa6-b',1100,2.1,'PA6'),
-  polymer('pa6-c',1000,20,'PA6'),polymer('pa6-d',1100,21,'PA6'),
-  polymer('peek-a',2000,5,'PEEK'),polymer('peek-b',2100,5.1,'PEEK'),
-  row('metal-a',7800,200),row('metal-b',7900,210),
-  {...polymer('limit',1e9,1e9,'PA6'),hasBounds:true}];
-for (const shape of ['hulls','ellipses']) {
-  const families = build(groupedRows,'x','y',shape,'family');
-  assert.deepEqual(families.map(r=>r.label),['Polymers','Metals']);
-  const region = families[0].points.map(p=>p.map(Math.log10));
-  for (const point of groupedRows.filter(r=>r.family==='polymer'&&!r.hasBounds)) {
-    const log = [Math.log10(point.x.value),Math.log10(point.y.value)];
-    assert.ok(region.every((a,i)=>cross(a,region[(i+1)%region.length],log)>=-1e-10),'Family envelope contains all eligible grades');
-  }
-  assert.ok(Math.max(...families[0].points.map(p=>p[0]))<10000,'Reported bounds remain excluded');
-  const subgroups = build(groupedRows,'x','y',shape,'subgroup').filter(r=>r.family==='polymer');
-  assert.equal(subgroups.length,3,'Subgroups keep their original cluster separation');
-  assert.deepEqual(build(groupedRows,'x','y',shape,'points'),[]);
+const row = (id, tx, ty, extra = {}) => ({ id, family: 'metal', group: 'titanium', tx, ty, ...extra });
+const colorOf = () => '#000';
+const shapes = (rows, options = {}) => build(rows, { colorOf, ...options });
+
+// Both shapes enclose the points they are built from.
+const square = [[0, 0], [1, .2], [.4, 1], [.5, .4], [.9, .9]];
+for (const fit of [enclosingEllipse(square, .01), pebble(square, .02)]) {
+  for (const [x, y] of square) assert.ok(contains(fit.loop, x, y), `Point ${x},${y} is enclosed`);
+  assert.ok(fit.loop.flat().every(Number.isFinite));
 }
-const interval = row('interval',100,10,{x:{value:100,min:1,max:1000}});
-const intervalRegion = build([interval],'x','y')[0];
-assert.ok(Math.min(...intervalRegion.points.map(p=>p[0]))<1 && Math.max(...intervalRegion.points.map(p=>p[0]))>1000,'Family view preserves distant interval endpoints');
-console.log('Ashby geometry: family containment, subgroup separation, independent shape/grouping, interval endpoints, and bound exclusion passed.');
+
+// The enclosing ellipse ignores density: piling points on one end does not move it.
+const stretched = [[0, 0], [1, 1], [1, 0], [0, 1]];
+const piled = [...stretched, ...Array.from({ length: 200 }, () => [.02, .02])];
+const a = enclosingEllipse(stretched, .01).center, b = enclosingEllipse(piled, .01).center;
+assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1]) < .02, 'A dense cluster does not pull the oval off centre');
+
+// One shape per family with no inner layer, in both methods.
+for (const method of ['ashby', 'pebble']) {
+  const regions = shapes([row('a', 3, 1), row('b', 3.1, 1.2), row('c', 3.2, 1.05)], { method });
+  assert.equal(regions.length, 1);
+  assert.equal(regions[0].loops.length, 1);
+  assert.deepEqual(regions[0].parts, []);
+  assert.equal(regions[0].label, 'Metals');
+}
+
+// Reported bounds never define a shape.
+const withBound = [row('a', 3, 1), row('b', 3.1, 1.2), row('c', 3.2, 1.05), row('limit', 0, 9, { hasBounds: true })];
+for (const method of ['ashby', 'pebble']) {
+  const [region] = shapes(withBound, { method });
+  assert.ok(Math.min(...region.loops[0].map(p => p[0])) > 2, 'The bound does not stretch the shape');
+  assert.ok(Math.max(...region.loops[0].map(p => p[1])) < 3);
+}
+assert.deepEqual(shapes([row('limit', 0, 9, { hasBounds: true })]), []);
+
+// Reported interval endpoints do define a shape.
+const interval = shapes([row('i', 3, 1, { tRange: { x: [2.5, 3.5] } }), row('b', 3.1, 1.2)]);
+assert.ok(contains(interval[0].loops[0], 2.5, 1) && contains(interval[0].loops[0], 3.5, 1), 'Interval endpoints are enclosed');
+
+// A lone point has no shape, and coincident points still produce a small finite one.
+assert.deepEqual(shapes([row('a', 3, 1)]), []);
+const twin = shapes([row('a', 3, 1), row('b', 3, 1)]);
+assert.equal(twin.length, 1);
+assert.ok(twin[0].loops[0].flat().every(Number.isFinite));
+
+// In family view an isolated material stays outside, its count is reported, and everything
+// else stays inside. Small groups keep every member.
+const cluster = Array.from({ length: 60 }, (_, i) => row('c' + i, 3 + (i % 10) * .03, 1 + Math.floor(i / 10) * .03));
+const withOutlier = [...cluster, row('far', 9, 9)];
+for (const method of ['ashby', 'pebble']) {
+  const [region] = shapes(withOutlier, { method });
+  assert.equal(region.outside, 1, 'The outlier is counted');
+  assert.ok(!contains(region.loops[0], 9, 9), 'The outlier does not stretch the shape');
+  for (const r of cluster) assert.ok(contains(region.loops[0], r.tx, r.ty), 'Every other material is enclosed');
+}
+const [small] = shapes([row('a', 3, 1), row('b', 3.1, 1.1), row('far', 9, 9)]);
+assert.equal(small.outside, 0, 'A small family keeps all its members');
+assert.ok(contains(small.loops[0], 9, 9));
+
+// Subgroup view separates material types and splits distant clusters.
+const poly = (id, tx, ty, group) => row(id, tx, ty, { family: 'polymer', group });
+const grouped = [poly('a', 3, 0, 'PA6'), poly('b', 3.04, .03, 'PA6'), poly('c', 3, 1.3, 'PA6'), poly('d', 3.04, 1.32, 'PA6'),
+  poly('e', 3.3, .7, 'PEEK'), poly('f', 3.32, .71, 'PEEK'), row('m', 3.9, 2.3), row('n', 3.9, 2.32)];
+assert.deepEqual(shapes(grouped).map(r => r.label).sort(), ['Metals', 'Polymers']);
+assert.equal(shapes(grouped, { grouping: 'subgroup' }).filter(r => r.family === 'polymer').length, 3);
+assert.deepEqual(shapes(grouped, { grouping: 'points' }), []);
+assert.deepEqual(shapes(grouped, { method: 'none' }), []);
+
+// Tag grouping draws one shape per tag.
+const tagged = shapes(grouped, { grouping: 'tag', tagsOf: r => r.family === 'metal' ? ['Picks'] : [], tagColor: () => '#111' });
+assert.deepEqual(tagged.map(r => r.label), ['Picks']);
+
+console.log('Ashby shapes: one oval per family, containment, density independence, bounds, intervals, outliers, subgroups, tags.');

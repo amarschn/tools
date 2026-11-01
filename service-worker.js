@@ -109,7 +109,7 @@ function isHomepageData(url) {
 
 function isMaterialsReleaseData(url) {
   const pathname = new URL(url).pathname;
-  return pathname.endsWith('/data/materials/selection.json') ||
+  return /\/data\/materials\/selection(-core|-details)?\.json$/.test(pathname) ||
     pathname.endsWith('/tools/materials/release-manifest.json');
 }
 
