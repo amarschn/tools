@@ -12,8 +12,11 @@ BTU calculator.
 
 ## Decisions
 
-- **No ACCA or ASHRAE data tables copied as a product.** Design weather is computed
-  from public NOAA ISD-Lite hourly data (`scripts/build_hvac_climate.py`).
+- **No ACCA tables, and no licensed climate data.** Design weather is computed from
+  public NOAA ISD-Lite hourly data (`scripts/build_hvac_climate.py`). ASHRAE material
+  is used with citation: Chapter 17 Table 6 duct factors are embedded in
+  `pycalcs/hvac_loads.py`, along with published coefficients and equations. Have this
+  reviewed before launch.
 - **Cooling is a solved 24-hour design day**, not a table: clear-sky solar, exact
   periodic conduction through wall layers, attic heat balance, and a two-node room
   that finds the capacity for a 3 °F swing, the ASHRAE RHB control assumption.
