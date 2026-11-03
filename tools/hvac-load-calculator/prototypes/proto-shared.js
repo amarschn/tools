@@ -371,7 +371,7 @@
     document.documentElement.dataset.theme = saved || prefers;
     const header = document.createElement('header');
     header.className = 'pnav';
-    header.innerHTML = `<a class="brand" href="../../../index.html">transparent.tools</a><span class="tag">Prototype</span>
+    header.innerHTML = `<a class="brand" href="../../../index.html">transparent<wbr>.tools</a><span class="tag">Prototype</span>
       <div class="links">${[['option-a-cutaway.html', 'A: Cutaway'], ['option-b-floorplan.html', 'B: Floor plan'], ['option-c-sizing-board.html', 'C: Sizing board']].map(([h, t]) => `<a href="${h}" class="${h.startsWith(active) ? 'on' : ''}">${t}</a>`).join('')}<button type="button" id="p-theme">Theme</button></div>`;
     document.body.prepend(header);
     const cover = document.createElement('div');
