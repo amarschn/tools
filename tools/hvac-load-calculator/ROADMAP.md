@@ -1,5 +1,8 @@
 # HVAC Load Calculator Roadmap
 
+- [ ] Choose a direction from `prototypes/`, then bring into the page: the system
+      choice, tiered inputs, live visuals, and the derivation tree from the engine.
+- [ ] Retire `_derivations` in `pycalcs/hvac_loads.py` once the page uses the tree.
 - [ ] Duct sizing (the Manual D job), using room airflows from this tool.
 - [ ] Standalone psychrometric chart that shares the moist air functions.
 - [ ] Heat pump pages by climate, linking here, for search traffic.
