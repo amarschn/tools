@@ -581,11 +581,33 @@ class TestSizesAndDerivations:
         assert (sizes["cooling_tons"] - 0.5) * 12000 * factor < 0.9 * 30000
         assert sizes["furnace_output"] == 40000
 
-    def test_dry_climate_sensible_load_can_set_the_size(self):
+    def test_sensible_load_can_set_the_size(self):
         total_only = h.suggest_sizes(40000, 24000, 90)
-        with_sensible = h.suggest_sizes(40000, 24000, 90, cooling_sensible=23000)
+        with_sensible = h.suggest_sizes(40000, 24000, 90, cooling_sensible=23800)
         assert with_sensible["cooling_tons"] > total_only["cooling_tons"]
         assert with_sensible["cooling_sensible_pct"] >= 90
+
+    def test_excess_latent_counts_half_toward_sensible(self):
+        # The arithmetic on the published Manual S worksheet: latent capacity 8,403,
+        # latent load 3,707, so 2,348 Btu/h moves to sensible.
+        assert h.effective_sensible_capacity(25802, 8403, 3707) == pytest.approx(25802 + 2348)
+
+    def test_equipment_check_uses_the_latent_credit(self):
+        result = h.evaluate_equipment(
+            heating_load=40000, cooling_sensible=30000, cooling_latent=1000,
+            heating_design_f=10, cooling_design_f=95,
+            cooling_total_at_design=36000, cooling_sensible_at_design=27000,
+        )
+        assert result["cooling_capacity_usable_sensible"] == pytest.approx(27000 + 0.5 * 8000)
+        assert result["cooling_sensible_pct"] == pytest.approx(100 * 31000 / 30000)
+
+    def test_dry_climate_is_not_pushed_to_an_oversized_unit(self):
+        # Phoenix-like load: 3.1 tons total, almost all sensible, at 110 °F.
+        sizes = h.suggest_sizes(21700, 37600, 110, cooling_sensible=36100)
+        assert sizes["cooling_tons"] <= 4.0
+
+    def test_suggestion_never_goes_below_a_central_unit(self):
+        assert h.suggest_sizes(10000, 6000, 90)["cooling_tons"] == 1.5
 
     def test_huge_load_has_no_single_unit(self):
         assert h.suggest_sizes(500000, 500000, 95)["cooling_tons"] is None
@@ -642,3 +664,72 @@ class TestClimateData:
         assert len(table) > 30000
         assert float(table["60601"][0]) == pytest.approx(41.9, abs=0.2)
         assert float(table["33101"][1]) == pytest.approx(-80.2, abs=0.2) if "33101" in table else True
+
+
+class TestPublishedGuideTables:
+    """The sizing tables on the page must match what the engine calculates."""
+
+    CITIES = {
+        "Minneapolis": ("Minneapolis-St Paul", "MN"), "Chicago": ("Midway", "IL"),
+        "Seattle": ("Seattle-Tacoma", "WA"), "Atlanta": ("Hartsfield", "GA"),
+        "Dallas": ("Dallas Love", "TX"), "Phoenix": ("Phoenix Sky", "AZ"),
+        "Miami": ("Miami International", "FL"),
+    }
+    AREAS = [1000, 1500, 2000, 2500, 3000]
+
+    def _run(self, stations, city, area):
+        name, state = self.CITIES[city]
+        s = next(x for x in stations if name in x["n"] and x["s"] == state)
+        months = s["tm"]
+        return h.calculate_hvac_loads({
+            "floor_area_ft2": area, "heating_design_f": s["h99"], "cooling_design_f": s["c1"],
+            "cooling_wet_bulb_f": s["wb"], "daily_range_f": s["dr"], "latitude": s["la"],
+            "elevation_ft": s["el"], "ground_mean_f": sum(months) / 12,
+            "ground_amp_f": (max(months) - min(months)) / 2,
+        }, detail=False)
+
+    @pytest.fixture(scope="class")
+    def tool_dir(self):
+        from pathlib import Path
+        return Path(__file__).parent.parent / "tools/hvac-load-calculator"
+
+    def _cells(self, html, table_id):
+        import re
+        body = re.search(rf'id="{table_id}".*?<tbody>(.*?)</tbody>', html, re.S).group(1)
+        for row in re.findall(r"<tr>(.*?)</tr>", body, re.S):
+            city = re.search(r'<th scope="row">(.*?)</th>', row).group(1)
+            yield city, re.findall(r"<td>(.*?)</td>", row)
+
+    def test_cooling_table(self, tool_dir):
+        import json
+        html = (tool_dir / "index.html").read_text()
+        stations = json.loads((tool_dir / "data/stations.json").read_text())["stations"]
+        seen = 0
+        for city, cells in self._cells(html, "guide-cooling"):
+            for area, cell in zip(self.AREAS, cells):
+                result = self._run(stations, city, area)
+                tons = result["sizing"]["cooling_tons"]
+                unit = f"{tons:g} ton" if tons else "over 5 ton"
+                assert cell == f"{result['cooling_tons']:.1f} ({unit})", (city, area)
+                seen += 1
+        assert seen == 35
+
+    def test_heating_table(self, tool_dir):
+        import json
+        html = (tool_dir / "index.html").read_text()
+        stations = json.loads((tool_dir / "data/stations.json").read_text())["stations"]
+        seen = 0
+        for city, cells in self._cells(html, "guide-heating"):
+            for area, cell in zip(self.AREAS, cells):
+                result = self._run(stations, city, area)
+                assert cell == f"{result['heating_total'] / 1000:.0f}", (city, area)
+                seen += 1
+        assert seen == 35
+
+    def test_page_names_the_search_terms_and_the_limit(self, tool_dir):
+        html = (tool_dir / "index.html").read_text()
+        title = html[html.index("<title>"):html.index("</title>")]
+        assert "Manual J" in title
+        assert "Manual J Alternative" in html[html.index("<h1"):html.index("</h1>")]
+        assert "not ACCA-approved" in html
+        assert "Manual S" in html[html.index('class="tool-description"'):html.index("</main>")]

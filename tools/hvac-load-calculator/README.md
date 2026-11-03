@@ -26,6 +26,14 @@ ACCA-approved software and does not satisfy a permit that requires it.
   in `data/` is generated: do not hand-edit it.
 - Equipment oversizing limits stay advisory until checked against Manual S Section N2.
 
+## Search terms
+
+The page targets phrases from Google autocomplete, checked 2026-11-02: "free manual j
+calculator", "manual j load calculation", "manual s calculator", "heat pump sizing
+calculator", and "what size ac for 2000 sq ft". It says "Manual J alternative", never
+"Manual J calculator" on its own, because it is not approved Manual J software.
+`tests/test_hvac_loads.py` recomputes the guide's sizing tables, so they cannot drift.
+
 ## Files
 
 - `index.html`: inputs, results layout, and background copy.

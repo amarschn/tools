@@ -203,6 +203,7 @@ const noAnalytics = (context) => context.route(/google-analytics|googletagmanage
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   });
   assert(contrast > 4.5, 'input contrast in dark mode ' + contrast);
+  assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('floor_area_ft2')).colorScheme), 'dark', 'number arrows follow the dark theme');
   await page.waitForTimeout(300);
   await shot(page, '07-results-dark');
   await page.click('#settings-button');

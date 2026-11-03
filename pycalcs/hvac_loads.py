@@ -1495,6 +1495,11 @@ def rated_to_design_factor(cooling_design_f: float) -> float:
     return (1 - 0.007 * (cooling_design_f - 95.0)) * (1 - 0.0135 * 4.0)
 
 
+def effective_sensible_capacity(sensible: float, latent: float, latent_load: float) -> float:
+    """Sensible capacity plus half of the latent capacity the house does not need."""
+    return sensible + 0.5 * max(latent - latent_load, 0.0)
+
+
 def suggest_sizes(
     heating_load: float,
     cooling_total: float,
@@ -1506,8 +1511,10 @@ def suggest_sizes(
     Smallest common equipment sizes that meet the design loads.
 
     A cooling size must reach ACCA's 90% lower limit on the total load and on
-    the sensible load. In dry climates sensible capacity sets the size, because
-    equipment removes moisture the house does not need removed.
+    the sensible load. Half of any latent capacity beyond the moisture load counts
+    toward sensible, as in the Manual S worksheet: a coil with little moisture to
+    remove runs drier and delivers more sensible cooling. The smallest size offered
+    is 1.5 tons, the usual floor for ducted central equipment.
 
     ---Parameters---
     heating_load : float
@@ -1533,17 +1540,23 @@ def suggest_sizes(
 
     ---LaTeX---
     Q_{design} = Q_{rated}[1 - 0.007(T_d - 95)][1 - 0.0135 \\times 4]
-    Q_{design} \\ge 0.9\\,q_t, \\quad SHR\\,Q_{design} \\ge 0.9\\,q_s
+    Q_s = SHR\\,Q_{design} + 0.5\\max(Q_l - q_l, 0)
+    Q_{design} \\ge 0.9\\,q_t, \\quad Q_s \\ge 0.9\\,q_s
     """
     factor = rated_to_design_factor(cooling_design_f)
+    latent = cooling_total - cooling_sensible if cooling_sensible is not None else 0.0
+
+    def usable_sensible(capacity: float) -> float:
+        return effective_sensible_capacity(
+            capacity * equipment_shr, capacity * (1 - equipment_shr), latent)
 
     def fits(tons: float) -> bool:
         capacity = tons * TON_BTUH * factor
         if capacity < 0.9 * cooling_total:
             return False
-        return cooling_sensible is None or capacity * equipment_shr >= 0.9 * cooling_sensible
+        return cooling_sensible is None or usable_sensible(capacity) >= 0.9 * cooling_sensible
 
-    tons = next((t for t in NOMINAL_TONS if fits(t)), None)
+    tons = next((t for t in NOMINAL_TONS if t >= 1.5 and fits(t)), None)
     furnace = next((f for f in FURNACE_OUTPUTS if f >= heating_load), None)
     capacity = tons * TON_BTUH * factor if tons else None
     return {
@@ -1551,7 +1564,7 @@ def suggest_sizes(
         "cooling_capacity_at_design": capacity,
         "cooling_pct": 100.0 * capacity / cooling_total if capacity and cooling_total > 0 else None,
         "cooling_sensible_pct": (
-            100.0 * capacity * equipment_shr / cooling_sensible
+            100.0 * usable_sensible(capacity) / cooling_sensible
             if capacity and cooling_sensible else None
         ),
         "furnace_output": furnace,
@@ -2263,12 +2276,16 @@ def evaluate_equipment(
         Share of annual heat delivered by the compressor.
     cooling_total_pct : float
         Cooling capacity as a percent of the total load (%).
+    cooling_sensible_pct : float
+        Sensible capacity, plus half of any excess latent capacity, as a percent
+        of the sensible load (%).
     furnace_pct : float
         Furnace output as a percent of the heating load (%).
 
     ---LaTeX---
     L(T) = q_{heat}\\frac{T_0 - T}{T_0 - T_d}, \\quad T_0 = T_i - \\frac{q_{int}}{UA}
     Q_{design} = Q_{rated}[1 - 0.007(T_d - 95)][1 - 0.0135(67 - T_{wb})]
+    Q_{s,usable} = Q_s + 0.5\\max(Q_l - q_l, 0)
     """
     if heating_load <= 0:
         raise ValueError("The heating load must be above zero.")
@@ -2304,6 +2321,7 @@ def evaluate_equipment(
             cap_sensible = cap_total * cooling_shr
             source = "estimate from rated capacity"
         cap_latent = max(cap_total - cap_sensible, 0.0)
+        cap_usable = effective_sensible_capacity(cap_sensible, cap_latent, cooling_latent)
         pct = 100.0 * cap_total / total_load if total_load > 0 else 0.0
         limit = {"single": 115.0, "two": 120.0, "variable": 130.0}.get(cooling_stages, 115.0)
         out.update({
@@ -2313,7 +2331,8 @@ def evaluate_equipment(
             "cooling_capacity_latent": cap_latent,
             "cooling_source": source,
             "cooling_limit_pct": limit,
-            "cooling_sensible_pct": 100.0 * cap_sensible / cooling_sensible if cooling_sensible > 0 else 0.0,
+            "cooling_capacity_usable_sensible": cap_usable,
+            "cooling_sensible_pct": 100.0 * cap_usable / cooling_sensible if cooling_sensible > 0 else 0.0,
             "cooling_latent_pct": 100.0 * cap_latent / cooling_latent if cooling_latent > 0 else None,
         })
         checks.append({"name": "Cooling capacity meets the load",
