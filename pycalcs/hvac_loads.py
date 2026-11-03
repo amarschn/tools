@@ -1764,6 +1764,428 @@ def _derivations(run: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # =============================================================================
+# DERIVATION TREE
+# =============================================================================
+
+
+def _var(symbol: str, meaning: str, value: Any = None, unit: str = "") -> Dict[str, Any]:
+    return {"symbol": symbol, "meaning": meaning, "value": value, "unit": unit}
+
+
+def _node(
+    node_id: str,
+    label: str,
+    value: float,
+    unit: str = "Btu/h",
+    about: str = "",
+    equation: str = "",
+    substituted: str = "",
+    variables: Optional[List[Dict[str, Any]]] = None,
+    meaning: str = "",
+    limits: Optional[List[str]] = None,
+    reference: str = "",
+    children: Optional[List[Dict[str, Any]]] = None,
+    digits: int = 0,
+) -> Dict[str, Any]:
+    """One result: what it is, its equation, every variable, and what to make of it."""
+    return {
+        "id": node_id, "label": label, "value": value, "unit": unit, "digits": digits,
+        "about": about, "equation": equation, "substituted": substituted,
+        "variables": variables or [], "meaning": meaning, "limits": limits or [],
+        "reference": reference, "children": children or [],
+    }
+
+
+def _derivation_tree(run: Dict[str, Any]) -> Dict[str, Any]:
+    """Every result as a tree: value, description, equation, variables, and units."""
+    p = run["params"]
+    zones = run["zones"]
+    heating = run["heating"]
+    cooling = run["cooling"]
+    c_s, c_l = air_factors(p["elevation_ft"])
+    pressure = pressure_psia(p["elevation_ft"])
+    n = _tex_number
+    dt = heating["delta_t"]
+    t_in_h, t_out_h = p["indoor_heating_f"], p["heating_design_f"]
+    t_in_c = p["indoor_cooling_f"]
+
+    windows = sum(sum(z["windows"].values()) for z in zones)
+    doors = sum(z["door_area"] for z in zones)
+    gross = sum(sum(z["wall_lengths"].values()) * z["height"] * z["levels"] for z in zones)
+    net = max(gross - windows - doors, 0.0)
+    ceiling = sum(z["ceiling_area"] for z in zones)
+    floor_area = sum(z["floor_area_exposed"] for z in zones)
+    perimeter = sum(z["perimeter"] for z in zones)
+    volume = sum(z["volume"] for z in zones)
+    heat = heating["components"]
+    cool = cooling["components"]
+    air_h, air_c = heating["air"], cooling["air"]
+    envelope = heating["total"] - heat["ducts"]
+    factor_h = heat["ducts"] / max(envelope, 1.0)
+    factor_c = cool["ducts"] / max(cooling["room_load"], 1.0)
+    peak = cooling["peak_hour"]
+    t_peak = cooling["t_out"][peak - 1]
+    attic = cooling["attic_at_peak"]
+    ratio = cooling["swing_ratio"]
+    recovery = p["ventilation_effectiveness"] if p["ventilation_type"] in ("hrv", "erv") else 0.0
+    ash17 = "ASHRAE Handbook Fundamentals, Chapter 17"
+
+    u_vars = lambda u, a, name: [
+        _var("U", f"{name} U-factor: heat flow per ft² per °F. Lower is better insulated.", u, "Btu/h·ft²·°F"),
+        _var("A", f"{name} area", a, "ft²"),
+        _var("\\Delta t", "Indoor design temperature minus outdoor design temperature", dt, "°F"),
+    ]
+
+    def ua_node(node_id: str, label: str, u: float, a: float, name: str, extra: str, digits: int = 3) -> Dict[str, Any]:
+        return _node(
+            f"heat-{node_id}", label, heat[node_id],
+            about=f"Heat conducted through the {name.lower()} on the coldest design hour. {extra}",
+            equation="q = U A \\Delta t",
+            substituted=f"q = {u:.{digits}f} \\times {n(a)} \\times {dt:.0f} = {n(heat[node_id])}\\ \\text{{Btu/h}}",
+            variables=u_vars(u, a, name),
+            meaning=f"{100 * heat[node_id] / max(heating['total'], 1):.0f}% of the design heat loss.",
+            reference=f"{ash17}, Equation 33",
+        )
+
+    design_t = _node(
+        "design-dt", "Design temperature difference", dt, "°F",
+        about="How far the house must hold indoor air above outdoor air on a design winter hour. Every conduction line scales with it.",
+        equation="\\Delta t = t_{in} - t_{out}",
+        substituted=f"\\Delta t = {t_in_h:.0f} - ({t_out_h:.1f}) = {dt:.1f}\\ °F",
+        variables=[
+            _var("t_{in}", "Indoor winter design temperature", t_in_h, "°F"),
+            _var("t_{out}", "Outdoor winter design temperature. Exceeded in about 99% of the hours of the year.", t_out_h, "°F"),
+        ],
+        reference="Outdoor value computed from NOAA hourly observations with ASHRAE's definition.",
+        digits=1,
+    )
+
+    leak_area = _node(
+        "heat-leak-area", "Effective leakage area", air_h["leak_area_in2"], "in²",
+        about="The size of one hole with the same leakage as all the cracks in the house, converted from a blower door number.",
+        equation="A_L = 0.055 \\, \\frac{ACH_{50} V}{60}",
+        substituted=f"A_L = 0.055 \\times \\frac{{{p['ach50']:g} \\times {n(volume)}}}{{60}} = {air_h['leak_area_in2']:.1f}\\ \\text{{in}}^2",
+        variables=[
+            _var("ACH_{50}", "Air changes per hour at 50 Pa from a blower door test", p["ach50"], "1/h"),
+            _var("V", "Conditioned volume", volume, "ft³"),
+        ],
+        limits=["The rule assumes a typical leakage exponent of 0.65."],
+        digits=1,
+    )
+    driving = _node(
+        "heat-idf", "Infiltration driving force", air_h["idf"], "cfm/in²",
+        about="How hard winter stack effect and wind push air through each square inch of leakage.",
+        equation="IDF = \\frac{I_0 + H \\, \\Delta t \\, (I_1 + I_2 \\, f)}{1000}",
+        substituted=f"IDF = \\frac{{698 + {air_h['stack_height']:.1f} \\times {dt:.1f} \\times (0.81 + 0.53 \\times {p['flue_fraction']:g})}}{{1000}} = {air_h['idf']:.3f}\\ \\text{{cfm/in}}^2",
+        variables=[
+            _var("I_0, I_1, I_2", "ASHRAE coefficients for 15 mph wind and typical suburban shelter", "698, 0.81, 0.53", ""),
+            _var("H", "Stack height, the average ceiling height above the floor or grade", air_h["stack_height"], "ft"),
+            _var("f", "Share of leakage area that is flues", p["flue_fraction"], ""),
+        ],
+        limits=["Valid for typical suburban sheltering and flue share below one half."],
+        reference=f"{ash17}, Equation 10",
+        digits=3,
+    )
+    infiltration_h = _node(
+        "heat-infiltration", "Air leakage", heat["infiltration"],
+        about="Cold outdoor air replaces warm indoor air through cracks, and all of it must be heated.",
+        equation="q = C_s Q \\Delta t, \\quad Q = \\max(Q_{unbal},\\ A_L \\, IDF + 0.5 Q_{unbal})",
+        substituted=f"q = {c_s:.3f} \\times {air_h['combined']:.1f} \\times {dt:.1f} = {n(heat['infiltration'])}\\ \\text{{Btu/h}}",
+        variables=[
+            _var("C_s", "Heat carried per cfm per °F, reduced for altitude. 1.08 at sea level.", round(c_s, 3), "Btu/h·cfm·°F"),
+            _var("Q", "Air leakage flow on the design day", air_h["combined"], "cfm"),
+            _var("Q_{unbal}", "Exhaust-only or supply-only fan flow", p["ventilation_cfm"] if p["ventilation_type"] in ("exhaust", "supply") else 0.0, "cfm"),
+        ],
+        meaning=f"Equal to {air_h['combined'] * 60 / max(volume, 1):.2f} air changes per hour at design conditions.",
+        reference=f"{ash17}, Equations 8, 14, and 15",
+        children=[leak_area, driving],
+    )
+    if p["floor_type"] == "slab":
+        f_p = SLAB_EDGE_F[p["slab_edge"]]
+        floor_heat = _node(
+            "heat-floor", "Floor", heat["floor"],
+            about="A slab loses most of its heat sideways through the exposed edge, so the calculation uses perimeter and not floor area.",
+            equation="q = F_p P \\Delta t",
+            substituted=f"q = {f_p:.2f} \\times {n(perimeter)} \\times {dt:.1f} = {n(heat['floor'])}\\ \\text{{Btu/h}}",
+            variables=[
+                _var("F_p", "Heat-loss coefficient per foot of slab edge, set by edge insulation", f_p, "Btu/h·ft·°F"),
+                _var("P", "Exposed slab perimeter", perimeter, "ft"),
+                _var("\\Delta t", "Indoor minus outdoor design temperature", dt, "°F"),
+            ],
+            reference=f"{ash17}, Table 16, with ASHRAE Chapter 18 coefficients",
+        )
+    elif p["floor_type"] in ("crawl_vented", "over_ambient"):
+        floor_heat = _node(
+            "heat-floor", "Floor", heat["floor"],
+            about="The space below is taken at the outdoor temperature, as ASHRAE recommends for design.",
+            equation="q = U A \\Delta t",
+            substituted=f"q = {p['floor_u']:.3f} \\times {n(floor_area)} \\times {dt:.1f} = {n(heat['floor'])}\\ \\text{{Btu/h}}",
+            variables=u_vars(p["floor_u"], floor_area, "Floor"),
+            reference=f"{ash17}, Equation 33",
+        )
+    else:
+        floor_heat = _node(
+            "heat-floor", "Floor and below-grade walls", heat["floor"],
+            about="Heat flows to the ground, or to a basement or crawlspace whose temperature comes from a steady heat balance.",
+            equation="q = \\sum U_{avg} A (t_{in} - t_{gr})",
+            substituted=f"t_{{gr}} = {_ground_temperature(p):.1f}\\ °F; \\quad q = {n(heat['floor'])}\\ \\text{{Btu/h}}",
+            variables=[
+                _var("U_{avg}", "Depth-averaged U-factor through wall insulation and soil", None, "Btu/h·ft²·°F"),
+                _var("A", "Below-grade wall and floor area", None, "ft²"),
+                _var("t_{gr}", "Ground temperature: annual mean less the seasonal amplitude", _ground_temperature(p), "°F"),
+            ],
+            reference="ASHRAE Fundamentals, Chapter 18, Equations 37 to 42; Latta and Boileau 1969",
+        )
+
+    ducts_h = _node(
+        "heat-ducts", "Ducts", heat["ducts"],
+        about="Heat lost through duct walls and leaks before the air reaches the rooms. The equipment has to make it up.",
+        equation="q_d = F_{dl} \\sum q",
+        substituted=f"q_d = {factor_h:.3f} \\times {n(envelope)} = {n(heat['ducts'])}\\ \\text{{Btu/h}}" if p["duct_location"] != "conditioned" else "q_d = 0\\ \\text{(ducts are inside the conditioned space)}",
+        variables=[
+            _var("F_{dl}", "Duct loss factor for this location, insulation, and leakage, adjusted to these temperatures", round(factor_h, 3), ""),
+            _var("\\sum q", "Everything else in the heat loss", envelope, "Btu/h"),
+            _var("R", "Duct insulation", p["duct_r"], "ft²·h·°F/Btu"),
+            _var("\\ell", "Leakage on each of the supply and return sides", p["duct_leakage_pct"], "% of fan flow"),
+        ],
+        meaning="Moving ducts inside conditioned space removes this line.",
+        limits=["Factors assume the ASHRAE Standard 152 default duct area. Long runs can lose more."],
+        reference=f"{ash17}, Table 6",
+    )
+    heat_children = [
+        ua_node("walls", "Walls", p["wall_u"], net, "Walls", "Area is gross wall minus windows and doors."),
+        ua_node("windows", "Windows", p["window_u"], windows, "Windows", "No credit is taken for winter sun.", 2),
+        ua_node("doors", "Doors", p["door_u"], doors, "Doors", "", 2),
+        ua_node("ceiling", "Ceiling", p["ceiling_u"], ceiling, "Ceiling", "A vented attic is taken at the outdoor temperature."),
+        floor_heat,
+        infiltration_h,
+    ]
+    if heat["ventilation"] > 0.5:
+        heat_children.append(_node(
+            "heat-ventilation", "Mechanical ventilation", heat["ventilation"],
+            about="Balanced fans bring in outdoor air on purpose. A heat recovery core reclaims part of the heat.",
+            equation="q = C_s Q_{bal} (1 - \\varepsilon) \\Delta t",
+            substituted=f"q = {c_s:.3f} \\times {air_h['balanced']:.0f} \\times (1 - {recovery:.2f}) \\times {dt:.1f} = {n(heat['ventilation'])}\\ \\text{{Btu/h}}",
+            variables=[
+                _var("Q_{bal}", "Balanced ventilation flow", air_h["balanced"], "cfm"),
+                _var("\\varepsilon", "Sensible heat recovery effectiveness", recovery, ""),
+            ],
+            reference=f"{ash17}, Equation 15",
+        ))
+    heat_children.append(ducts_h)
+    heat_root = _node(
+        "heating", "Design heat loss", heating["total"],
+        about="The heat the equipment must deliver to hold the indoor temperature on a design winter hour, with no credit for sun, people, or stored heat.",
+        equation="q_{heat} = \\sum q_{envelope} + q_{air} + q_{ducts}",
+        substituted=f"q_{{heat}} = {n(envelope)} + {n(heat['ducts'])} = {n(heating['total'])}\\ \\text{{Btu/h}}",
+        variables=[
+            _var("UA", "Total heat loss per °F of temperature difference", heating["ua"], "Btu/h·°F"),
+            _var("\\Delta t", "Indoor minus outdoor design temperature", dt, "°F"),
+        ],
+        meaning=f"Equal to {heating['total'] / KW_BTUH:.1f} kW. Heating is steady and worst case by design, which leaves a built-in margin.",
+        reference=f"{ash17}, section 8",
+        children=heat_children + [design_t],
+    )
+
+    # ------------------------------------------------------------------- cooling
+    def scaled(key: str, about: str, equation: str, substituted: str, variables: List[Dict[str, Any]],
+               label: str, meaning: str = "", children: Optional[List[Dict[str, Any]]] = None,
+               reference: str = "") -> Dict[str, Any]:
+        return _node(f"cool-{key}", label, cool[key], about=about, equation=equation,
+                     substituted=substituted, variables=variables, meaning=meaning,
+                     children=children, reference=reference)
+
+    attic_node = _node(
+        "cool-attic", "Attic temperature at the peak", attic, "°F",
+        about="Sun heats the roof deck, the deck heats the attic air, and ventilation carries some of that away. This balance sets what the ceiling and attic ducts see.",
+        equation="T_{attic} = \\frac{U_r T_{sa} + C_s Q_v T_o + U_c T_i}{U_r + C_s Q_v + U_c}",
+        substituted=f"T_{{attic}} = {attic:.1f}\\ °F\\ \\text{{at solar hour {peak}}}",
+        variables=[
+            _var("U_r", "Heat transfer from the roof deck into attic air per ft² of ceiling", None, "Btu/h·ft²·°F"),
+            _var("T_{sa}", "Sol-air temperature of the roof", None, "°F"),
+            _var("Q_v", "Attic ventilation per ft² of ceiling", p["attic_vent_cfm_per_ft2"], "cfm/ft²"),
+            _var("T_o", "Outdoor air temperature at this hour", t_peak, "°F"),
+            _var("U_c", "Ceiling U-factor", p["ceiling_u"], "Btu/h·ft²·°F"),
+        ],
+        reference=f"{ash17}, Equation 5, with a one-hour lag for sheathing and framing",
+        digits=1,
+    )
+    room_children = [
+        scaled("walls", "Sun heats the outside of each wall, and that heat crosses the wall's layers hours later. The calculation follows each face through the day.",
+               "T_{sa} = T_o + \\frac{\\alpha E_t}{h_o}, \\quad q(t) = A \\sum_n Y_n T_{sa,n} e^{i n \\omega t}",
+               f"q_{{peak}} = {n(cool['walls'])}\\ \\text{{Btu/h}}\\ \\text{{over}}\\ {n(net)}\\ \\text{{ft}}^2",
+               [_var("\\alpha", "Share of sunlight the wall absorbs", p["wall_absorptance"], ""),
+                _var("E_t", "Clear-sky sun on each face at each hour", None, "Btu/h·ft²"),
+                _var("h_o", "Outside surface conductance", H_OUT_WALL, "Btu/h·ft²·°F"),
+                _var("Y_n", "How much of harmonic n of the daily temperature wave gets through the wall layers. This sets the time lag.", None, "Btu/h·ft²·°F"),
+                _var("A", "Net wall area", net, "ft²")],
+               "Walls", reference="Periodic conduction: Carslaw and Jaeger; checked against a finite-difference march in the test suite"),
+        scaled("windows", "Windows admit sun directly and also conduct heat. Sun is the larger part, and it depends on direction, shading, and hour.",
+               "q = A\\left[U(T_o - T_i) + T_x \\, IAC \\, SHGC\\left(E_D f_\\theta (1 - F_{shd}) + 0.89 E_d\\right)\\right]",
+               f"q_{{peak}} = {n(cool['windows'])}\\ \\text{{Btu/h}}\\ \\text{{over}}\\ {n(windows)}\\ \\text{{ft}}^2",
+               [_var("U", "Window U-factor", p["window_u"], "Btu/h·ft²·°F"),
+                _var("SHGC", "Solar heat gain coefficient: share of sunlight that becomes heat inside", p["window_shgc"], ""),
+                _var("T_x", "Transmission of insect screens", SCREEN_TX[p["insect_screen"]], ""),
+                _var("IAC", "Interior shade attenuation", INTERIOR_SHADE_IAC[p["interior_shade"]], ""),
+                _var("E_D, E_d", "Direct and diffuse sun on the glass", None, "Btu/h·ft²"),
+                _var("f_\\theta", "Drop in gain at steep sun angles", None, ""),
+                _var("F_{shd}", "Share of the window shaded by the overhang that hour", None, "")],
+               "Windows", reference=f"{ash17}, Equations 25 to 29; ASHRAE clear-sky model, Chapter 14"),
+    ]
+    if cool["doors"]:
+        room_children.append(scaled("doors", "Doors share the sol-air temperature of the walls they sit in, with no time lag.",
+                                    "q = U A (T_{sa} - T_i)", f"q_{{peak}} = {n(cool['doors'])}\\ \\text{{Btu/h}}",
+                                    [_var("U", "Door U-factor", p["door_u"], "Btu/h·ft²·°F"), _var("A", "Door area", doors, "ft²")], "Doors"))
+    room_children += [
+        scaled("ceiling", "The attic is far hotter than outdoors on a sunny day, so the ceiling sees a large temperature difference even with little sun on it directly.",
+               "q(t) = A \\sum_n Y_n (T_{attic} - T_i)_n e^{i n \\omega t}",
+               f"q_{{peak}} = {n(cool['ceiling'])}\\ \\text{{Btu/h}}\\ \\text{{over}}\\ {n(ceiling)}\\ \\text{{ft}}^2",
+               [_var("U", "Ceiling U-factor", p["ceiling_u"], "Btu/h·ft²·°F"), _var("A", "Ceiling area", ceiling, "ft²"),
+                _var("T_{attic}", "Attic air temperature at the peak", attic, "°F")],
+               "Ceiling", children=[attic_node]),
+        scaled("floor", "A slab is a small steady heat sink, so this line can be negative. A floor over a crawlspace or garage gains heat from the warmer space below.",
+               "q_{slab} = A\\left(0.59 - \\frac{2.5}{R_{cvr} + 0.68}\\right)",
+               f"q_{{peak}} = {n(cool['floor'])}\\ \\text{{Btu/h}}",
+               [_var("A", "Floor area", floor_area, "ft²"), _var("R_{cvr}", "Resistance of the floor covering", 1.2 if p["floor_cover"] == "carpet" else 0.1, "ft²·h·°F/Btu")],
+               "Floor", reference=f"{ash17}, Equation 23"),
+        scaled("infiltration", "Hot outdoor air leaks in. Summer driving forces are about half of winter's, with less wind and a smaller stack effect.",
+               "q = C_s Q (T_o - T_i)",
+               f"q = {c_s:.3f} \\times {air_c['combined']:.1f} \\times ({t_peak:.1f} - {t_in_c:.0f}) \\times {ratio:.3f} = {n(cool['infiltration'])}\\ \\text{{Btu/h}}",
+               [_var("Q", "Air leakage flow in summer", air_c["combined"], "cfm"), _var("T_o", "Outdoor temperature at the peak hour", t_peak, "°F"),
+                _var("T_i", "Indoor summer temperature", t_in_c, "°F"), _var("r", "Swing ratio applied to all room lines", round(ratio, 3), "")],
+               "Air leakage", reference=f"{ash17}, Equations 8 and 15"),
+    ]
+    if cool["ventilation"]:
+        room_children.append(scaled("ventilation", "Fans bring in hot outdoor air on purpose. Heat recovery reclaims part of it.",
+                                    "q = C_s Q_{bal} (1 - \\varepsilon)(T_o - T_i)", f"q_{{peak}} = {n(cool['ventilation'])}\\ \\text{{Btu/h}}",
+                                    [_var("Q_{bal}", "Balanced ventilation flow", air_c["balanced"], "cfm"), _var("\\varepsilon", "Heat recovery effectiveness", recovery, "")],
+                                    "Mechanical ventilation"))
+    room_children.append(scaled("internal", "People, lights, and appliances. The value comes from typical US home profiles at 4 pm.",
+                                "q_{ig,s} = 464 + 0.7 A_{cf} + 75 N_{oc}",
+                                f"q_{{ig,s}} = {n(cooling['q_internal_sensible'])}\\ \\text{{Btu/h before storage}}",
+                                [_var("A_{cf}", "Conditioned floor area", p["floor_area_ft2"], "ft²"), _var("N_{oc}", "Occupants", p["occupants"], "people")],
+                                "People and appliances", reference=f"{ash17}, Equation 30"))
+    mass = THERMAL_MASS[p["construction_mass"]]
+    room_node = _node(
+        "cool-room", "Room load with temperature swing", cooling["room_load"],
+        about="Equipment need not hold the thermostat exactly at the peak. The room may drift a few degrees while the structure soaks up heat, which lowers the capacity required.",
+        equation="C_m \\frac{d\\theta_m}{dt} = G_{rad} - H(\\theta_m - \\theta_a), \\quad 0 = G_{conv} + H(\\theta_m - \\theta_a) - UA \\, \\theta_a - Q",
+        substituted=f"Q_{{fixed}} = {n(cooling['fixed_setpoint_peak'])} \\ \\rightarrow\\ Q_{{swing}} = {n(cooling['room_load'])}\\ \\text{{Btu/h}}",
+        variables=[
+            _var("\\theta_a, \\theta_m", "Air and thermal mass temperature above the thermostat setting", None, "°F"),
+            _var("C_m", "Thermally active capacity of the structure and contents", mass["capacity"] * p["floor_area_ft2"], "Btu/°F"),
+            _var("H", "Heat transfer between the mass and room air", mass["conductance"] * p["floor_area_ft2"], "Btu/h·°F"),
+            _var("UA", "House conductance to outdoors", cooling["ua_house"], "Btu/h·°F"),
+            _var("G_{rad}, G_{conv}", "Radiant and convective shares of each gain", None, "Btu/h"),
+            _var("\\Delta T_{swing}", "Allowed rise above the thermostat", p["temperature_swing_f"], "°F"),
+        ],
+        meaning=f"Each line below is scaled by {ratio:.3f}, so the parts add up to the capacity required. The hourly peak falls at solar hour {peak}.",
+        limits=["Thermal mass was calibrated once, to the ASHRAE Chapter 17 worked example."],
+        reference="Control assumption of ASHRAE's Residential Heat Balance method (Barnaby, Spitler, and Xiao 2005)",
+        children=room_children,
+    )
+    ducts_c = _node(
+        "cool-ducts", "Ducts", cool["ducts"],
+        about="Cold air gains heat through duct walls and leaks on the way to the rooms. In an attic this can be a large line.",
+        equation="q_d = F_{dl} \\, q_{room}",
+        substituted=f"q_d = {factor_c:.3f} \\times {n(cooling['room_load'])} = {n(cool['ducts'])}\\ \\text{{Btu/h}}" if p["duct_location"] != "conditioned" else "q_d = 0\\ \\text{(ducts are inside the conditioned space)}",
+        variables=[
+            _var("F_{dl}", "Duct gain factor adjusted to the temperature around the ducts at the peak", round(factor_c, 3), ""),
+            _var("q_{room}", "Room load with temperature swing", cooling["room_load"], "Btu/h"),
+        ],
+        reference=f"{ash17}, Table 6",
+    )
+    sensible_node = _node(
+        "cool-sensible", "Sensible cooling", cooling["sensible"],
+        about="Heat that changes air temperature, the part a thermostat responds to.",
+        equation="q_s = q_{room} + q_d",
+        substituted=f"q_s = {n(cooling['room_load'])} + {n(cool['ducts'])} = {n(cooling['sensible'])}\\ \\text{{Btu/h}}",
+        children=[room_node, ducts_c],
+    )
+    latent = cooling["latent_components"]
+    w_node = _node(
+        "cool-dw", "Moisture difference", cooling["delta_w"] * 7000.0, "grains/lb",
+        about="How much wetter the outdoor air is than the indoor air you want. Zero in a dry climate.",
+        equation="\\Delta W = W_o - W_i",
+        substituted=f"\\Delta W = {cooling['w_out']:.4f} - {cooling['w_in']:.4f} = {cooling['delta_w']:.4f}\\ \\text{{lb/lb}}",
+        variables=[
+            _var("W_o", f"Outdoor humidity ratio at {p['cooling_design_f']:.1f} °F and a {p['cooling_wet_bulb_f']:.1f} °F wet bulb", round(cooling["w_out"], 4), "lb/lb"),
+            _var("W_i", f"Indoor humidity ratio at {t_in_c:.0f} °F and {p['indoor_rh_pct']:.0f}% RH", round(cooling["w_in"], 4), "lb/lb"),
+            _var("p", "Atmospheric pressure at this elevation", round(pressure, 2), "psia"),
+        ],
+        reference="ASHRAE Fundamentals, Chapter 1; Hyland and Wexler 1983",
+        digits=1,
+    )
+    latent_node = _node(
+        "cool-latent", "Latent cooling", cooling["latent"],
+        about="Heat removed by condensing moisture out of the air. The equipment must do this as well as lower the temperature.",
+        equation="q_l = C_l Q \\Delta W + q_{ig,l} + q_{duct,l}",
+        substituted=(
+            f"q_l = {n(latent['infiltration'] + latent['ventilation'])} + {n(latent['internal'])} + {n(latent['ducts'])} "
+            f"= {n(cooling['latent'])}\\ \\text{{Btu/h}}"
+        ),
+        variables=[
+            _var("C_l", "Latent heat carried per cfm per lb/lb, reduced for altitude. 4,840 at sea level.", round(c_l), "Btu/h·cfm"),
+            _var("Q", "Outdoor air flow from leakage and ventilation", air_c["combined"] + air_c["balanced"], "cfm"),
+            _var("\\Delta W", "Outdoor minus indoor humidity ratio", round(cooling["delta_w"], 4), "lb/lb"),
+            _var("q_{ig,l}", "Moisture from people, cooking, and bathing: 68 + 0.07 A + 41 N", latent["internal"], "Btu/h"),
+            _var("q_{duct,l}", "Humid air drawn in by return duct leaks", latent["ducts"], "Btu/h"),
+        ],
+        reference=f"{ash17}, Equations 16, 31, and 32",
+        children=[w_node],
+    )
+    cool_root = _node(
+        "cooling", "Total cooling load", cooling["total"],
+        about="The sensible and latent heat the equipment must remove on a clear design day.",
+        equation="q_t = q_s + q_l",
+        substituted=f"q_t = {n(cooling['sensible'])} + {n(cooling['latent'])} = {n(cooling['total'])}\\ \\text{{Btu/h}}",
+        variables=[
+            _var("q_s", "Sensible cooling", cooling["sensible"], "Btu/h"),
+            _var("q_l", "Latent cooling", cooling["latent"], "Btu/h"),
+            _var("SHR", "Sensible heat ratio of the load", round(cooling["shr"], 2), ""),
+        ],
+        meaning=f"Equal to {cooling['total'] / TON_BTUH:.2f} tons. One ton is 12,000 Btu/h.",
+        children=[sensible_node, latent_node],
+    )
+    return {"heating": heat_root, "cooling": cool_root}
+
+
+def _room_tree(zone: Dict[str, Any], heat: Dict[str, float], p: Dict[str, Any], dt: float, c_s: float) -> List[Dict[str, Any]]:
+    """Heat loss lines for one room, each with its equation and numbers."""
+    n = _tex_number
+    windows = sum(zone["windows"].values())
+    gross = sum(zone["wall_lengths"].values()) * zone["height"] * zone["levels"]
+    net = max(gross - windows - zone["door_area"], 0.0)
+    rows = []
+
+    def add(key: str, label: str, u: float, area: float) -> None:
+        if heat.get(key, 0.0) <= 0.5:
+            return
+        rows.append(_node(
+            f"room-{key}", label, heat[key], about="Conduction on the design winter hour.",
+            equation="q = U A \\Delta t",
+            substituted=f"q = {u:.3f} \\times {n(area)} \\times {dt:.1f} = {n(heat[key])}\\ \\text{{Btu/h}}",
+            variables=[_var("U", f"{label} U-factor", u, "Btu/h·ft²·°F"), _var("A", f"{label} area in this room", area, "ft²"),
+                       _var("\\Delta t", "Indoor minus outdoor design temperature", dt, "°F")],
+        ))
+
+    add("walls", "Exterior walls", p["wall_u"], net)
+    add("windows", "Windows", p["window_u"], windows)
+    add("doors", "Doors", p["door_u"], zone["door_area"])
+    add("ceiling", "Ceiling", p["ceiling_u"], zone["ceiling_area"])
+    if heat.get("floor", 0.0) > 0.5:
+        rows.append(_node("room-floor", "Floor", heat["floor"], about="Heat lost through this room's floor or slab edge.",
+                          variables=[_var("P", "Exposed perimeter in this room", zone["perimeter"], "ft")]))
+    if heat.get("infiltration", 0.0) > 0.5:
+        rows.append(_node("room-infiltration", "Air leakage share", heat["infiltration"],
+                          about="ASHRAE allocates whole-house leakage to rooms by volume.",
+                          variables=[_var("V", "Room volume", zone["volume"], "ft³")]))
+    if heat.get("ducts", 0.0) > 0.5:
+        rows.append(_node("room-ducts", "Duct share", heat["ducts"], about="Duct losses shared in proportion to the room's load."))
+    return rows
+
+
+# =============================================================================
 # PUBLIC CALCULATION
 # =============================================================================
 
@@ -1909,6 +2331,10 @@ def _room_table(run: Dict[str, Any]) -> List[Dict[str, Any]]:
             "peak_hour": cool["peak_hour"],
             "heating_cfm": heating["fan_cfm"] * heat["total"] / total_heat,
             "cooling_cfm": cooling["fan_cfm"] * cool["peak"] / total_cool,
+            "hourly": [max(v, 0.0) * swing_ratio / eta_c for v in cool["load"]],
+            "heating_parts": {k: v for k, v in heat.items() if k != "total"},
+            "heating_tree": _room_tree(
+                zone, heat, run["params"], heating["delta_t"], air_factors(run["params"]["elevation_ft"])[0]),
         })
     return rows
 
@@ -2143,6 +2569,13 @@ def calculate_hvac_loads(inputs: Dict[str, Any], known_inputs: Optional[List[str
         f"= {cooling['total']:,.0f}\\,\\text{{Btu/h}}"
     ).replace(",", "{,}")
 
+    result["tree"] = _derivation_tree(run)
+    result["cooling"]["sun"] = [
+        dict(zip(("altitude", "azimuth"), solar_altitude_azimuth(
+            p_used["latitude"], DECLINATION_DEG[p_used["design_month"]], hour - 0.5)))
+        for hour in HOURS
+    ]
+    result["cooling"]["ua_house"] = cooling["ua_house"]
     result["sizing"] = suggest_sizes(
         heating["total"], cooling["total"], p_used["cooling_design_f"], cooling["sensible"])
     result["design"] = {

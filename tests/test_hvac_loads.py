@@ -733,3 +733,59 @@ class TestPublishedGuideTables:
         assert "Manual J Alternative" in html[html.index("<h1"):html.index("</h1>")]
         assert "not ACCA-approved" in html
         assert "Manual S" in html[html.index('class="tool-description"'):html.index("</main>")]
+
+
+class TestDerivationTree:
+    """Each result must carry its description, equation, variables, and units."""
+
+    def _walk(self, node):
+        yield node
+        for child in node["children"]:
+            yield from self._walk(child)
+
+    @pytest.mark.parametrize("floor", ["slab", "crawl_vented", "basement_conditioned", "crawl_sealed"])
+    @pytest.mark.parametrize("vent", ["none", "hrv"])
+    def test_every_node_is_complete_and_json_ready(self, floor, vent):
+        import json
+        result = run(floor_type=floor, ventilation_type=vent, ventilation_cfm=80)
+        json.dumps(result["tree"])
+        ids = []
+        for root in result["tree"].values():
+            for node in self._walk(root):
+                ids.append(node["id"])
+                assert node["about"], node["id"]
+                assert node["unit"], node["id"]
+                assert math.isfinite(node["value"]), node["id"]
+                assert node["equation"] or node["children"], node["id"]
+                for variable in node["variables"]:
+                    assert variable["symbol"] and variable["meaning"], node["id"]
+        assert len(ids) == len(set(ids)), "node ids must be unique"
+
+    def test_heating_children_add_up_to_the_root(self):
+        tree = run()["tree"]["heating"]
+        parts = [c["value"] for c in tree["children"] if c["unit"] == "Btu/h"]
+        assert sum(parts) == pytest.approx(tree["value"])
+
+    def test_cooling_tree_adds_up(self):
+        tree = run()["tree"]["cooling"]
+        sensible, latent = tree["children"]
+        assert sensible["value"] + latent["value"] == pytest.approx(tree["value"])
+        room, ducts = sensible["children"]
+        assert room["value"] + ducts["value"] == pytest.approx(sensible["value"])
+
+    def test_substituted_equation_reproduces_the_wall_result(self):
+        result = run(wall_u=0.1, floor_area_ft2=1500)
+        walls = next(c for c in result["tree"]["heating"]["children"] if c["id"] == "heat-walls")
+        by_symbol = {v["symbol"]: v["value"] for v in walls["variables"]}
+        assert by_symbol["U"] * by_symbol["A"] * by_symbol["\\Delta t"] == pytest.approx(walls["value"])
+
+    def test_room_results_carry_hourly_series_and_lines(self):
+        rooms = run(rooms=TestRooms.rooms)["rooms"]
+        assert len(rooms[0]["hourly"]) == 24
+        assert max(rooms[0]["hourly"]) == pytest.approx(rooms[0]["cooling"])
+        assert rooms[0]["heating_tree"]
+
+    def test_sun_series_has_a_day_and_a_night(self):
+        sun = run()["cooling"]["sun"]
+        assert len(sun) == 24
+        assert sun[12]["altitude"] > 60 and sun[0]["altitude"] < 0
