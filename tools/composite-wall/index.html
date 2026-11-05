@@ -27,6 +27,10 @@
     <link rel="canonical" href="https://transparent.tools/tools/composite-wall/">
     <script src="/shared/analytics-autotrack.js" defer></script>
 
+    <script>
+        // Dynamic equations are rendered through the page's serialized queue.
+        window.MathJax = { startup: { typeset: false } };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
@@ -1131,6 +1135,40 @@
                     maximumFractionDigits: settings.precision,
                 });
             };
+            // Wait for the async library, then serialize DOM updates and typesetting.
+            const mathJaxReady = new Promise((resolve) => {
+                const finish = () => {
+                    const math = window.MathJax;
+                    if (!math?.startup?.promise) {
+                        resolve(null);
+                        return;
+                    }
+                    math.startup.promise.then(() => resolve(math), () => resolve(null));
+                };
+                if (window.MathJax?.startup?.promise) finish();
+                else {
+                    $('MathJax-script').addEventListener('load', finish, { once: true });
+                    $('MathJax-script').addEventListener('error', () => resolve(null), {
+                        once: true,
+                    });
+                    // Also settle if the CDN failed before these listeners were attached.
+                    window.addEventListener('load', finish, { once: true });
+                }
+            });
+            let mathQueue = Promise.resolve();
+            function queueMath(task) {
+                mathQueue = mathQueue.then(async () => task(await mathJaxReady)).catch(() => {});
+                return mathQueue;
+            }
+            function replaceMath(element, markup) {
+                return queueMath(async (math) => {
+                    if (math?.typesetClear) math.typesetClear([element]);
+                    element.innerHTML = markup;
+                    if (element.isConnected && math?.typesetPromise) {
+                        await math.typesetPromise([element]);
+                    }
+                });
+            }
             function selectOutputTab(panelId) {
                 document.querySelectorAll('.tab-link').forEach((tab) => {
                     const selected = tab.getAttribute('aria-controls') === panelId;
@@ -1644,7 +1682,7 @@
             }
             function renderDerivations() {
                 const r = latestResults;
-                $('derivation-content').innerHTML =
+                const markup =
                     Object.entries(derivationLabels)
                         .map(
                             ([key, [label, unit]]) =>
@@ -1657,7 +1695,7 @@
                                 `<section class="equation-card"><strong>${escapeHtml(label)} resistance</strong>${equationMarkup(subst)}<p class="legend">R: resistance (K/W); L: thickness (m); k: conductivity (W/(m·K)); A: wall area (m²); h: convection coefficient (W/(m²·K)).</p></section>`,
                         )
                         .join('');
-                typeset($('derivation-content'));
+                replaceMath($('derivation-content'), markup);
             }
             document.querySelectorAll('[data-derivation]').forEach((button) =>
                 button.addEventListener('click', () => {
@@ -1668,12 +1706,12 @@
                     });
                 }),
             );
-            async function typeset(element) {
-                if (window.MathJax?.typesetPromise) {
-                    try {
-                        await MathJax.typesetPromise([element]);
-                    } catch {}
-                }
+            function typeset(element) {
+                return queueMath(async (math) => {
+                    if (element.isConnected && math?.typesetPromise) {
+                        await math.typesetPromise([element]);
+                    }
+                });
             }
             function renderPlot() {
                 if (!window.Plotly || !latestResults || $('results').hidden) return;
@@ -1765,14 +1803,14 @@
                     .split('\n')
                     .map((line) => line.trim())
                     .filter(Boolean);
-                $('equations').innerHTML = equations
+                const markup = equations
                     .map(
                         (line, i) =>
                             `<section class="equation-card"><strong>Equation (${i + 1})</strong>${equationMarkup(line)}<p class="legend">${legend}</p></section>`,
                     )
                     .join('');
                 $('source-references').textContent = documentation.references || '';
-                typeset($('equations'));
+                replaceMath($('equations'), markup);
             }
             function csvCell(value) {
                 let s = String(value ?? '');

@@ -3,7 +3,7 @@
 // resources are network-first.
 // Designed to be lightweight and safe: failures fall through to the network.
 
-const CACHE_VERSION = 'tt-cache-v3';
+const CACHE_VERSION = 'tt-cache-v4';
 const MAX_CACHE_ENTRIES = 100;
 const NETWORK_FALLBACK_DELAY_MS = 1000;
 const NAVIGATION_FALLBACK_DELAY_MS = 750;
