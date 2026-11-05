@@ -537,6 +537,66 @@ class TestElectricalUnits:
 class TestPowerUnits:
     """Tests for power unit conversions."""
 
+    @pytest.mark.parametrize(
+        ("symbol", "watts"),
+        [
+            ("BTU/hr", 0.2930711),
+            ("kBTU/hr", 293.0711),
+            ("MMBTU/hr", 293071.1),
+            ("ton_ref", 3516.853),
+            ("kcal/hr", 1.163),
+            ("mW", 0.001),
+        ],
+    )
+    def test_heat_rate_reference_values(self, symbol, watts):
+        """NIST SP 811 B.9 heat-flow factors, rounded as published.
+
+        The IT kilocalorie is 4186.8 J; one hour is 3600 seconds.
+        BTU multiples and milliwatts use their stated decimal prefixes.
+        """
+        result = units.convert_units("power", symbol, "W", 1.0)
+        assert result["converted_value"] == pytest.approx(watts, rel=2e-7)
+        assert result["base_value"] == result["converted_value"]
+        assert result["multiplier"] == result["converted_value"]
+        assert result["has_multiplier_only"] is True
+
+    def test_refrigeration_ton_definition(self):
+        """A refrigeration ton is exactly 12,000 IT BTU per hour."""
+        assert units.convert_value("power", "ton_ref", "BTU/hr", 1) == pytest.approx(12000)
+        assert units.convert_value("power", "ton_ref", "kBTU/hr", 1) == pytest.approx(12)
+
+    def test_heat_rate_matches_energy_over_one_hour(self):
+        """Power and energy must use the same IT British thermal unit."""
+        watts = units.convert_value("power", "BTU/hr", "W", 1)
+        joules = units.convert_value("energy", "BTU", "J", 1)
+        assert watts * 3600 == pytest.approx(joules, rel=1e-14)
+
+    @pytest.mark.parametrize("value", [0, -3500, 1e-9, 1e12])
+    @pytest.mark.parametrize("symbol", ["BTU/hr", "kBTU/hr", "MMBTU/hr", "ton_ref", "kcal/hr", "mW"])
+    def test_thermal_power_round_trip(self, value, symbol):
+        """Signed heat flows and small/large loads survive a W round trip."""
+        watts = units.convert_value("power", symbol, "W", value)
+        result = units.convert_value("power", "W", symbol, watts)
+        assert result == pytest.approx(value, rel=1e-14)
+
+    @pytest.mark.parametrize(
+        ("alias", "canonical"),
+        [
+            ("BTU/h", "BTU/hr"), ("Btu/h", "BTU/hr"), ("Btu/hr", "BTU/hr"),
+            ("kBTU/h", "kBTU/hr"), ("kBtu/h", "kBTU/hr"), ("kBtu/hr", "kBTU/hr"),
+            ("MMBTU/h", "MMBTU/hr"), ("MMBtu/h", "MMBTU/hr"), ("MMBtu/hr", "MMBTU/hr"),
+            ("kcal/h", "kcal/hr"), ("TR", "ton_ref"),
+        ],
+    )
+    def test_power_aliases_across_public_helpers(self, alias, canonical):
+        """Aliases work on both sides, including the structured UI helper."""
+        result = units.convert_units("POWER", alias, "W", 120)
+        expected = units.convert_units("power", canonical, "W", 120)
+        assert result == expected
+        assert units.convert_value("power", "W", alias, result["converted_value"]) == pytest.approx(120)
+        assert units.conversion_factor("power", alias, canonical) == pytest.approx(1)
+        assert alias not in units.get_unit_catalog()["power"]
+
     def test_mechanical_horsepower(self):
         """1 hp (mechanical) = 745.7 W (approx)."""
         result = units.convert_value("power", "hp_mech", "W", 1.0)

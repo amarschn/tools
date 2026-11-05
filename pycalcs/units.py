@@ -60,6 +60,12 @@ def _cubic_unit(symbol: str, name: str, linear_factor: float) -> UnitDefinition:
 
 QuantityUnits = Dict[str, Dict[str, UnitDefinition]]
 
+# International Table (IT) heat units, shared by energy and power conversions.
+# NIST SP 811, Appendix B.8/B.9. A refrigeration ton is 12,000 BTU_IT/hour.
+BTU_IT_JOULES = 1055.05585262
+KCAL_IT_JOULES = 4186.8
+SECONDS_PER_HOUR = 3600.0
+
 
 QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
     "length": {
@@ -138,7 +144,7 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "MJ": _linear_unit("MJ", "megajoule", 1e6),
         "Wh": _linear_unit("Wh", "watt-hour", 3600.0),
         "kWh": _linear_unit("kWh", "kilowatt-hour", 3.6e6),
-        "BTU": _linear_unit("BTU", "British thermal unit (IT)", 1055.05585262),
+        "BTU": _linear_unit("BTU", "British thermal unit (IT)", BTU_IT_JOULES),
         "ft·lbf": _linear_unit("ft·lbf", "foot-pound-force", 1.3558179483314004),
         "eV": _linear_unit("eV", "electronvolt", 1.602176634e-19),
         "keV": _linear_unit("keV", "kiloelectronvolt", 1.602176634e-16),
@@ -150,8 +156,29 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "W": _linear_unit("W", "watt", 1.0),
         "kW": _linear_unit("kW", "kilowatt", 1e3),
         "MW": _linear_unit("MW", "megawatt", 1e6),
+        "BTU/hr": _linear_unit(
+            "BTU/hr", "British thermal unit per hour (IT)",
+            BTU_IT_JOULES / SECONDS_PER_HOUR,
+        ),
+        "kBTU/hr": _linear_unit(
+            "kBTU/hr", "thousand BTU per hour (IT)",
+            1e3 * BTU_IT_JOULES / SECONDS_PER_HOUR,
+        ),
+        "MMBTU/hr": _linear_unit(
+            "MMBTU/hr", "million BTU per hour (IT)",
+            1e6 * BTU_IT_JOULES / SECONDS_PER_HOUR,
+        ),
+        "ton_ref": _linear_unit(
+            "ton_ref", "ton of refrigeration (12,000 BTU/hr)",
+            12_000 * BTU_IT_JOULES / SECONDS_PER_HOUR,
+        ),
+        "kcal/hr": _linear_unit(
+            "kcal/hr", "kilocalorie per hour (IT)",
+            KCAL_IT_JOULES / SECONDS_PER_HOUR,
+        ),
         "hp_mech": _linear_unit("hp_mech", "horsepower (mechanical)", 745.6998715822702),
         "hp_metric": _linear_unit("hp_metric", "horsepower (metric)", 735.49875),
+        "mW": _linear_unit("mW", "milliwatt", 1e-3),
     },
     "current": {
         "A": _linear_unit("A", "ampere", 1.0),
@@ -291,6 +318,42 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "lb/h": _linear_unit("lb/h", "pound per hour", 0.45359237 / 3600.0),
     },
 }
+
+# Alternate spellings are accepted by Python without duplicating catalog rows.
+UNIT_ALIASES: dict[str, dict[str, str]] = {
+    "power": {
+        "BTU/h": "BTU/hr",
+        "Btu/h": "BTU/hr",
+        "Btu/hr": "BTU/hr",
+        "kBTU/h": "kBTU/hr",
+        "kBtu/h": "kBTU/hr",
+        "kBtu/hr": "kBTU/hr",
+        "MMBTU/h": "MMBTU/hr",
+        "MMBtu/h": "MMBTU/hr",
+        "MMBtu/hr": "MMBTU/hr",
+        "kcal/h": "kcal/hr",
+        "TR": "ton_ref",
+    },
+}
+
+
+def _canonical_unit(quantity: str, symbol: str) -> str:
+    """Return the catalog symbol for a supported alternate spelling.
+
+    ---Parameters---
+    quantity : str
+        Lowercase quantity identifier.
+    symbol : str
+        Unit symbol, including any supported alias.
+
+    ---Returns---
+    canonical_symbol : str
+        Catalog symbol, or the unchanged input when no alias matches.
+
+    ---LaTeX---
+    u_{\\mathrm{canonical}} = A_q(u)
+    """
+    return UNIT_ALIASES.get(quantity, {}).get(symbol, symbol)
 
 
 # =============================================================================
@@ -446,6 +509,8 @@ def convert_value(quantity: str, from_unit: str, to_unit: str, value: float) -> 
         raise ValueError(f"Unsupported quantity '{quantity}'.")
 
     units = QUANTITY_DEFINITIONS[key]
+    from_unit = _canonical_unit(key, from_unit)
+    to_unit = _canonical_unit(key, to_unit)
     if from_unit not in units:
         raise ValueError(f"Unit '{from_unit}' is not valid for quantity '{quantity}'.")
     if to_unit not in units:
@@ -486,6 +551,8 @@ def conversion_factor(quantity: str, from_unit: str, to_unit: str) -> float:
         raise ValueError(f"Unsupported quantity '{quantity}'.")
 
     units = QUANTITY_DEFINITIONS[key]
+    from_unit = _canonical_unit(key, from_unit)
+    to_unit = _canonical_unit(key, to_unit)
     definition_from = units.get(from_unit)
     definition_to = units.get(to_unit)
     if definition_from is None:
@@ -540,7 +607,8 @@ def convert_units(quantity: str, from_unit: str, to_unit: str, value: float) -> 
 
     converted = convert_value(quantity, from_unit, to_unit, numeric_value)
     key = quantity.lower()
-    base = QUANTITY_DEFINITIONS[key][from_unit].to_base(numeric_value)
+    definition_from = QUANTITY_DEFINITIONS[key][_canonical_unit(key, from_unit)]
+    base = definition_from.to_base(numeric_value)
 
     has_multiplier = False
     multiplier = 0.0

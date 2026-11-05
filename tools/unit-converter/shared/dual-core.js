@@ -33,7 +33,7 @@ const QUANTITY_LABELS = {
   torque: "Torque",
   pressure: "Pressure",
   energy: "Energy",
-  power: "Power",
+  power: "Power / heat rate",
   velocity: "Velocity",
   density: "Density",
   temperature: "Temperature",
@@ -358,6 +358,7 @@ function titleCase(text) {
 export function initDualConverter({
   container,
   comparablesLimit = DEFAULT_COMPARABLE_LIMIT,
+  precision = 6,
 } = {}) {
   if (!container) {
     throw new Error("Dual converter container not provided.");
@@ -382,9 +383,10 @@ export function initDualConverter({
     infoNature: container.querySelector("[data-role='info-nature']"),
     comparisons: container.querySelector("[data-role='info-comparisons']"),
     infoUpdated: container.querySelector("[data-role='info-updated']"),
+    copyLink: container.querySelector("[data-role='copy-link']"),
   };
 
-  const optionalRefs = new Set(["infoDimensions", "infoSymbol", "infoNature"]);
+  const optionalRefs = new Set(["infoDimensions", "infoSymbol", "infoNature", "copyLink"]);
   const missingRef = Object.entries(refs)
     .filter(([key, node]) => !node && !optionalRefs.has(key))
     .map(([key]) => key);
@@ -408,7 +410,7 @@ export function initDualConverter({
     },
     catalog: {},
     lastResult: null,
-    precision: 6,
+    precision: [4, 6, 8].includes(Number(precision)) ? Number(precision) : 6,
     raw: {
       left: "1",
       right: "1",
@@ -418,6 +420,48 @@ export function initDualConverter({
   let pyodideInstance;
   let unitsModule;
   let syncing = false;
+  const loadingOverlay = document.getElementById("loading-overlay");
+  const loadingText = document.getElementById("loading-text");
+  const loadingRetry = document.getElementById("loading-retry");
+  loadingRetry?.addEventListener("click", () => window.location.reload());
+
+  function restoreSharedConversion() {
+    const params = new URLSearchParams(window.location.search);
+    const quantity = params.get("quantity");
+    const from = params.get("from");
+    const to = params.get("to");
+    const raw = params.get("value");
+    if (!quantity || !state.catalog[quantity]?.[from] || !state.catalog[quantity]?.[to]) return;
+    if (raw === null || raw.trim() === "" || !Number.isFinite(Number(raw))) return;
+    state.quantity = quantity;
+    state.leftUnit = from;
+    state.rightUnit = to;
+    state.leftValue = Number(raw);
+    refs.leftInput.value = formatForInput(state.leftValue);
+    state.raw.left = refs.leftInput.value;
+  }
+
+  refs.copyLink?.addEventListener("click", async () => {
+    const values = [[refs.leftInput, state.leftValue], [refs.rightInput, state.rightValue]];
+    if (values.some(([input, value]) => input.value === "" || !Number.isFinite(Number(input.value)) || Number(input.value) !== value)) {
+      setMessage("error", "Enter valid values before copying the conversion link.");
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.search = new URLSearchParams({
+      quantity: state.quantity,
+      from: state.leftUnit,
+      to: state.rightUnit,
+      value: String(state.leftValue),
+    }).toString();
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setMessage("info", "Conversion link copied.");
+    } catch {
+      window.history.replaceState(null, "", url);
+      setMessage("info", "The address bar now contains your conversion link. Copy it to share.");
+    }
+  });
 
   function isIncompleteRaw(value) {
     if (value === null || value === undefined) return false;
@@ -428,7 +472,7 @@ export function initDualConverter({
   }
 
   function buildCandidatePaths(target) {
-    const candidates = new Set();
+    const candidates = new Set([new URL(`../../../${target}`, import.meta.url).href]);
     const prefixes = ["", ".", "..", "../..", "../../..", "../../../.."];
     prefixes.forEach((prefix) => {
       const trimmed = prefix.replace(/\/+$/, "");
@@ -500,6 +544,7 @@ export function initDualConverter({
       button.type = "button";
       button.className = "quantity-chip" + (state.quantity === quantity ? " is-active" : "");
       button.textContent = titleCase(quantity);
+      button.setAttribute("aria-pressed", String(state.quantity === quantity));
       button.addEventListener("click", () => {
         if (state.quantity === quantity) return;
         state.quantity = quantity;
@@ -519,6 +564,7 @@ export function initDualConverter({
     const button = document.createElement("button");
     button.type = "button";
     button.className = "unit-chip" + (isActive ? " is-active" : "");
+    button.setAttribute("aria-pressed", String(isActive));
     const trimmedSymbol = symbol.trim();
     const trimmedDescription = (description || "").trim();
     const descIsDuplicate =
@@ -729,9 +775,11 @@ export function initDualConverter({
   async function boot() {
     try {
       setMessage("info", "Loading Python runtime…");
+      if (loadingText) loadingText.textContent = "Loading Python runtime...";
       pyodideInstance = await loadPyodide();
       await pyodideInstance.loadPackage("micropip");
       setMessage("info", "Loading conversion library…");
+      if (loadingText) loadingText.textContent = "Loading conversion library...";
       const unitsCandidates = buildCandidatePaths("pycalcs/units.py");
       const utilsCandidates = buildCandidatePaths("pycalcs/utils.py");
 
@@ -766,13 +814,19 @@ import units
       catalogProxy.destroy();
 
       ensureQuantityInitialized();
+      restoreSharedConversion();
       renderQuantityChips();
       renderUnitList("left");
       renderUnitList("right");
       convert("left");
       setMessage("", "");
+      if (refs.copyLink) refs.copyLink.disabled = false;
+      if (loadingOverlay) loadingOverlay.hidden = true;
     } catch (error) {
       setMessage("error", error.message || "Failed to initialise converter.");
+      if (loadingText) loadingText.textContent = "Could not load the unit converter. Check your connection and retry.";
+      loadingOverlay?.classList.add("failed");
+      if (loadingRetry) loadingRetry.hidden = false;
     }
   }
 
@@ -790,4 +844,13 @@ import units
   );
 
   boot();
+
+  return {
+    setPrecision(value) {
+      const digits = Number(value);
+      if (![4, 6, 8].includes(digits)) return;
+      state.precision = digits;
+      if (state.lastResult) updateInfo(state.lastResult);
+    },
+  };
 }
