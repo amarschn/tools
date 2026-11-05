@@ -33,13 +33,14 @@ class InlineScripts(HTMLParser):
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
-def test_resonance_inline_javascript_parses(tmp_path):
+def test_resonance_javascript_parses(tmp_path):
     """Literal newlines in JS strings previously stopped all initialization."""
     page = Path(__file__).resolve().parents[1] / "tools/structural-resonance/index.html"
     parser = InlineScripts()
     parser.feed(page.read_text())
     assert parser.scripts, "No inline scripts found in the tool"
-    for index, source in enumerate(parser.scripts):
+    sources = parser.scripts + [path.read_text() for path in page.parent.glob("*.js")]
+    for index, source in enumerate(sources):
         script = tmp_path / f"inline-{index}.mjs"
         script.write_text(source)
         result = subprocess.run(

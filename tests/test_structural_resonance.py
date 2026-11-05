@@ -4,7 +4,10 @@ import math
 
 import pytest
 
-from pycalcs.structural_resonance import MATERIALS, calculate_structural_resonance
+from pycalcs.structural_resonance import (
+    BEAM_ROOTS, MATERIALS, _beam_mode_value, calculate_beam_resonance,
+    calculate_structural_resonance,
+)
 from pycalcs.utils import get_documentation
 
 
@@ -227,3 +230,210 @@ def test_return_documentation_and_numerical_substitutions():
         assert "e+" not in equation and "e-" not in equation
         assert "\\rho" not in equation
         assert "Hz" in equation
+
+
+def test_default_beam_frequency_and_section_properties():
+    """Georgia Tech cantilever root 1.875104... with Al 300×25×5 mm beam."""
+    result = calculate_beam_resonance()
+    assert result["section_area_m2"] == pytest.approx(1.25e-4)
+    assert result["second_moment_m4"] == pytest.approx(2.604166666666667e-10)
+    assert result["mass_per_length_kg_m"] == pytest.approx(0.3375)
+    assert result["beam_mass_kg"] == pytest.approx(0.10125)
+    assert result["natural_frequency_hz"] == pytest.approx(45.3680819916)
+    assert [item["natural_frequency_hz"] for item in result["mode_frequencies"]] == (
+        pytest.approx([45.3680819916, 284.316916626, 796.095599255,
+                       1560.02964195, 2578.84077762])
+    )
+
+
+@pytest.mark.parametrize("support", list(BEAM_ROOTS))
+def test_beam_roots_and_selected_spectrum_entry(support):
+    for number, eigenvalue in enumerate(BEAM_ROOTS[support], 1):
+        if support == "simply_supported":
+            assert eigenvalue == pytest.approx(number * math.pi)
+        else:
+            rhs = -1 if support == "cantilever" else 1
+            # Stable equivalent of cos(lambda)*cosh(lambda)=+/-1.
+            assert math.cos(eigenvalue) - rhs / math.cosh(eigenvalue) == (
+                pytest.approx(0, abs=3e-15)
+            )
+        result = calculate_beam_resonance(support_type=support, mode_number=number)
+        assert result["natural_frequency_hz"] == result["mode_frequencies"][number - 1][
+            "natural_frequency_hz"
+        ]
+        assert result["eigenvalue"] == eigenvalue
+
+
+@pytest.mark.parametrize("support", list(BEAM_ROOTS))
+def test_beam_shapes_satisfy_analytical_boundary_conditions(support):
+    """Displacement/slope at clamps; moment/shear at free ends, not fitted curves."""
+    for root in BEAM_ROOTS[support]:
+        if support == "cantilever":
+            boundaries = [(0, 0), (0, 1), (1, 2), (1, 3)]
+        elif support == "fixed_fixed":
+            boundaries = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        else:
+            boundaries = [(0, 0), (0, 2), (1, 0), (1, 2)]
+        for x, derivative in boundaries:
+            value = _beam_mode_value(support, root, x, derivative) / root**derivative
+            assert value == pytest.approx(0, abs=2e-8)
+
+
+@pytest.mark.parametrize("support", list(BEAM_ROOTS))
+@pytest.mark.parametrize("mode", range(1, 6))
+def test_beam_diagram_normalization_and_internal_node_count(support, mode):
+    diagram = calculate_beam_resonance(support_type=support, mode_number=mode)[
+        "diagram_data"
+    ]
+    x, shape = diagram["x"], diagram["displacement"]
+    assert len(x) == len(shape) == 201
+    assert x[0] == 0 and x[-1] == 1
+    assert max(abs(value) for value in shape) == pytest.approx(1)
+    assert shape[0] == 0
+    if support != "cantilever":
+        assert shape[-1] == 0
+    nonzero = [value for value in shape if abs(value) > 1e-8]
+    crossings = sum(left * right < 0 for left, right in zip(nonzero, nonzero[1:]))
+    assert crossings == mode - 1
+
+
+def test_beam_scaling_support_and_bending_direction():
+    baseline = calculate_beam_resonance()["natural_frequency_hz"]
+    assert calculate_beam_resonance(length_mm=600)["natural_frequency_hz"] == (
+        pytest.approx(baseline / 4)
+    )
+    assert calculate_beam_resonance(depth_mm=10)["natural_frequency_hz"] == (
+        pytest.approx(2 * baseline)
+    )
+    assert calculate_beam_resonance(width_mm=50)["natural_frequency_hz"] == (
+        pytest.approx(baseline)
+    )
+    assert calculate_beam_resonance(bending_axis="width")["natural_frequency_hz"] == (
+        pytest.approx(5 * baseline)
+    )
+    pinned = calculate_beam_resonance(support_type="simply_supported")
+    fundamental = pinned["natural_frequency_hz"]
+    assert [row["natural_frequency_hz"] / fundamental for row in pinned["mode_frequencies"]] == (
+        pytest.approx([1, 4, 9, 16, 25])
+    )
+    fixed = calculate_beam_resonance(support_type="fixed_fixed")["natural_frequency_hz"]
+    assert fixed > fundamental > baseline
+
+
+@pytest.mark.parametrize("section, overrides, area, inertia", [
+    ("rectangular", {"width_mm": 20, "depth_mm": 10}, 200e-6, 1666.6666666667e-12),
+    ("box", {"width_mm": 40, "depth_mm": 20, "wall_thickness_mm": 2},
+     224e-6, 14378.6666666667e-12),
+    ("circular_solid", {"outer_diameter_mm": 10}, math.pi * 25e-6, math.pi * 156.25e-12),
+    ("circular_hollow", {"outer_diameter_mm": 10, "wall_thickness_mm": 1},
+     math.pi * 9e-6, math.pi * 92.25e-12),
+])
+def test_beam_section_geometry(section, overrides, area, inertia):
+    result = calculate_beam_resonance(section_type=section, **overrides)
+    assert result["section_area_m2"] == pytest.approx(area)
+    assert result["second_moment_m4"] == pytest.approx(inertia)
+
+
+def test_beam_box_axis_swap_and_circle_symmetry():
+    arguments = dict(section_type="box", width_mm=40, depth_mm=20, wall_thickness_mm=2)
+    turned = calculate_beam_resonance(**arguments, bending_axis="width")
+    exchanged = calculate_beam_resonance(**(arguments | {"width_mm": 20, "depth_mm": 40}))
+    assert turned["natural_frequency_hz"] == exchanged["natural_frequency_hz"]
+    for section in ("circular_solid", "circular_hollow"):
+        depth = calculate_beam_resonance(section_type=section)
+        width = calculate_beam_resonance(section_type=section, bending_axis="width")
+        assert depth["natural_frequency_hz"] == width["natural_frequency_hz"]
+
+
+@pytest.mark.parametrize("overrides", [
+    {"length_mm": 0}, {"length_mm": float("nan")}, {"depth_mm": float("inf")},
+    {"width_mm": True}, {"depth_mm": -1}, {"mode_number": 0},
+    {"mode_number": 6}, {"mode_number": 1.5}, {"mode_number": True},
+    {"support_type": "free"}, {"section_type": "i_beam"}, {"bending_axis": "invalid"},
+    {"section_type": "box", "wall_thickness_mm": 3},
+    {"section_type": "circular_hollow", "wall_thickness_mm": 5},
+    {"section_type": "circular_hollow", "wall_thickness_mm": float("nan")},
+    {"section_type": "circular_solid", "outer_diameter_mm": 0},
+    {"material": "custom", "custom_e_gpa": float("inf")},
+    {"material": "custom", "custom_rho_kg_m3": 0},
+])
+def test_beam_invalid_active_inputs(overrides):
+    with pytest.raises(ValueError):
+        calculate_beam_resonance(**overrides)
+
+
+def test_beam_ignored_inputs_and_custom_material():
+    default = calculate_beam_resonance()
+    inactive = calculate_beam_resonance(
+        outer_diameter_mm=None, wall_thickness_mm=float("nan"), custom_e_gpa=-1,
+    )
+    assert inactive["natural_frequency_hz"] == default["natural_frequency_hz"]
+    circle = calculate_beam_resonance(
+        section_type="circular_solid", width_mm=None, depth_mm=-1,
+        bending_axis="ignored", wall_thickness_mm=float("nan"),
+    )
+    assert circle["natural_frequency_hz"] > 0
+    custom = calculate_beam_resonance(
+        material="custom", custom_e_gpa=69, custom_rho_kg_m3=2700, custom_nu=-0.2,
+    )
+    assert custom["natural_frequency_hz"] == default["natural_frequency_hz"]
+
+
+@pytest.mark.parametrize("overrides", [
+    {"length_mm": 5e-324}, {"width_mm": 1e308, "depth_mm": 1e100}, {"depth_mm": 1e308},
+    {"material": "custom", "custom_e_gpa": 1e308}, {"length_mm": 1e-200},
+])
+def test_beam_extreme_inputs_fail_cleanly(overrides):
+    with pytest.raises(ValueError):
+        calculate_beam_resonance(**overrides)
+
+
+def test_beam_documentation_matches_results():
+    docs = get_documentation("pycalcs.structural_resonance", "calculate_beam_resonance")
+    assert set(docs["returns"]) == set(calculate_beam_resonance())
+    assert all(docs["returns"].values())
+    assert docs["references"] and docs["symbols"]
+
+
+def test_plate_mode_grid_boundary_nodes_and_signs():
+    diagram = calculate(mode_1=2, mode_2=3)["diagram_data"]
+    assert diagram["kind"] == "plate" and diagram["available"]
+    x, y, grid = diagram["x"], diagram["y"], diagram["displacement"]
+    assert len(grid) == len(y) and all(len(row) == len(x) for row in grid)
+    assert max(abs(value) for row in grid for value in row) == pytest.approx(1)
+    for row in grid:
+        assert row[0] == pytest.approx(0, abs=1e-14)
+        assert row[-1] == pytest.approx(0, abs=1e-14)
+        assert row[x.index(0.5)] == pytest.approx(0, abs=1e-14)
+    assert grid[0] == pytest.approx([0] * len(x), abs=1e-14)
+    assert grid[-1] == pytest.approx([0] * len(x), abs=1e-14)
+    assert grid[y.index(1 / 6)][x.index(0.25)] == pytest.approx(1)
+    assert grid[y.index(1 / 6)][x.index(0.75)] == pytest.approx(-1)
+
+
+def test_ring_bending_tangential_displacement_preserves_inextensionality():
+    diagram = ring(mode_2=2)["diagram_data"]
+    theta, radial, tangent = diagram["theta"], diagram["radial"], diagram["tangential"]
+    assert radial[0] == radial[-1] == pytest.approx(1)
+    assert tangent[0] == pytest.approx(tangent[-1], abs=1e-14)
+    quarter_lobe = len(theta) // 8
+    assert radial[quarter_lobe] == pytest.approx(0, abs=1e-14)
+    assert tangent[quarter_lobe] == pytest.approx(-0.5)
+    step = theta[1] - theta[0]
+    for i in range(1, len(theta) - 1):
+        tangent_derivative = (tangent[i + 1] - tangent[i - 1]) / (2 * step)
+        assert tangent_derivative + radial[i] == pytest.approx(0, abs=0.002)
+    breathing = ring(mode_2=0)["diagram_data"]
+    assert all(value == 1 for value in breathing["radial"])
+    assert all(value == 0 for value in breathing["tangential"])
+
+
+def test_unresolvable_diagram_modes_keep_geometry_and_frequency():
+    plate = calculate(mode_1=13)
+    ring_result = ring(mode_2=33)
+    for result in (plate, ring_result):
+        assert result["natural_frequency_hz"] > 0
+        diagram = result["diagram_data"]
+        assert not diagram["available"] and diagram["reason"]
+        assert diagram["geometry"]
+        assert "displacement" not in diagram and "radial" not in diagram

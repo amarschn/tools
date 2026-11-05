@@ -13,16 +13,16 @@
       gtag('config', 'G-YG3SBRRZFZ');
     </script>
 
-    <title>Structural Resonance Calculator - Engineering Tools</title>
-    <meta name="description" content="Estimate natural frequencies of simply supported plates and free thin rings, with mode selection, material properties, and calculation steps.">
+    <title>Natural Frequency Quick Checker - Engineering Tools</title>
+    <meta name="description" content="Check natural frequencies of beams, plates, and rings with support choices, dimensioned diagrams, and animated vibration modes.">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Structural Resonance Calculator - Engineering Tools">
-    <meta property="og:description" content="Estimate natural frequencies of simply supported plates and free thin rings, with mode selection, material properties, and calculation steps.">
+    <meta property="og:title" content="Natural Frequency Quick Checker - Engineering Tools">
+    <meta property="og:description" content="Check natural frequencies of beams, plates, and rings with support choices, dimensioned diagrams, and animated vibration modes.">
     <meta property="og:url" content="https://transparent.tools/tools/structural-resonance/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Structural Resonance Calculator - Engineering Tools">
-    <meta name="twitter:description" content="Estimate natural frequencies of simply supported plates and free thin rings, with mode selection, material properties, and calculation steps.">
+    <meta name="twitter:title" content="Natural Frequency Quick Checker - Engineering Tools">
+    <meta name="twitter:description" content="Check natural frequencies of beams, plates, and rings with support choices, dimensioned diagrams, and animated vibration modes.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
     <link rel="canonical" href="https://transparent.tools/tools/structural-resonance/">
     <script src="/shared/analytics-autotrack.js" defer></script>
@@ -206,12 +206,12 @@
                 width: 92%;
                 max-width: 1400px;
                 margin: auto;
-                padding: 30px 0 48px;
+                padding: 24px 0 48px;
             }
             .tool-header {
                 text-align: center;
                 max-width: 740px;
-                margin: 0 auto 30px;
+                margin: 0 auto 24px;
             }
             h1 {
                 margin: 0 0 12px;
@@ -308,6 +308,7 @@
                 margin-bottom: 16px;
             }
             .material-summary {
+                margin-bottom: 0;
                 font-family: var(--font-mono);
                 font-size: 0.8rem;
                 margin-top: 12px;
@@ -331,7 +332,7 @@
             }
             #calculate-btn {
                 width: 100%;
-                margin-top: 18px;
+                margin-top: 12px;
             }
             .error {
                 color: var(--danger-color);
@@ -475,6 +476,7 @@
             }
             .references {
                 white-space: pre-line;
+                overflow-wrap: anywhere;
                 color: var(--text-light);
                 font-size: 0.85rem;
             }
@@ -563,6 +565,53 @@
                 padding: 14px;
                 margin-bottom: 12px;
             }
+            .sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border: 0;
+            }
+            #mode-options {
+                margin-top: 12px;
+            }
+            .beam-dimensions {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 12px;
+                margin-top: 16px;
+            }
+            .beam-dimensions .input-group {
+                margin-bottom: 0;
+            }
+            .frequency-list {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .frequency-list button {
+                padding: 9px 5px;
+                min-width: 0;
+                font-size: 0.8rem;
+            }
+            .frequency-list button[aria-pressed='true'] {
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-text);
+            }
+            .frequency-list span {
+                display: block;
+                font-family: var(--font-mono);
+                font-size: 0.75rem;
+                margin-top: 3px;
+                overflow-wrap: anywhere;
+            }
+            #frequency-visualization {
+                min-width: 0;
+            }
             @media (max-width: 1000px) {
                 .tool-layout {
                     grid-template-columns: minmax(0, 1fr);
@@ -601,6 +650,7 @@
             }
         </style>
         <script src="/shared/json-ld.js"></script>
+        <script src="./visualization.js" defer></script>
     </head>
     <body data-theme="system" data-density="comfortable">
         <script>
@@ -636,10 +686,9 @@
         </header>
         <main class="container">
             <header class="tool-header">
-                <h1>Structural Resonance Calculator</h1>
+                <h1>Natural Frequency Quick Checker</h1>
                 <p class="muted">
-                    Estimate a plate or ring's natural frequency from its geometry, material, and
-                    vibration mode.
+                    Estimate beam, plate, and ring frequencies with dimensioned mode shapes.
                 </p>
             </header>
             <div class="tool-layout">
@@ -651,18 +700,112 @@
                             <div class="input-group">
                                 <label for="geometry_type">Model</label
                                 ><select id="geometry_type" aria-describedby="geometry-help">
-                                    <option value="plate" selected>Rectangular plate</option>
+                                    <option value="beam" selected>Beam</option>
+                                    <option value="plate">Rectangular plate</option>
                                     <option value="cylinder">Thin circular ring</option>
                                 </select>
-                                <p class="help" id="geometry-help">
+                                <p class="sr-only" id="geometry-help">
                                     Choose the idealized shape that matches your component.
                                 </p>
                             </div>
                             <p class="model-hint" id="model-hint">
-                                Plate supported along all four edges, free to rotate at the
-                                supports.
+                                Beam fixed at one end and free at the other.
                             </p>
-                            <div id="plate-geometry" class="input-row">
+                            <div id="beam-geometry">
+                                <div class="input-row">
+                                    <div class="input-group">
+                                        <label for="beam_support">Supports</label
+                                        ><select id="beam_support" aria-describedby="model-hint">
+                                            <option value="cantilever" selected>Cantilever</option>
+                                            <option value="simply_supported">
+                                                Simply supported
+                                            </option>
+                                            <option value="fixed_fixed">Fixed at both ends</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="beam_section">Cross-section</label
+                                        ><select
+                                            id="beam_section"
+                                            aria-describedby="beam-section-help"
+                                        >
+                                            <option value="rectangular" selected>
+                                                Solid rectangle
+                                            </option>
+                                            <option value="circular_solid">Round rod</option>
+                                            <option value="circular_hollow">Round tube</option>
+                                            <option value="box">Rectangular tube</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="beam-dimensions">
+                                    <div class="input-group">
+                                        <label for="beam_length_mm">Length, L (mm)</label
+                                        ><input
+                                            id="beam_length_mm"
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value="300"
+                                            aria-describedby="beam-length-help"
+                                        />
+                                        <p class="sr-only" id="beam-length-help">
+                                            Unsupported span between supports, or from the fixed end
+                                            to the free end.
+                                        </p>
+                                    </div>
+                                    <div class="input-group" id="beam-width-group">
+                                        <label for="beam_width_mm">Width, b (mm)</label
+                                        ><input
+                                            id="beam_width_mm"
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value="25"
+                                            aria-describedby="beam-section-help"
+                                        />
+                                    </div>
+                                    <div class="input-group" id="beam-depth-group">
+                                        <label for="beam_depth_mm">Depth, h (mm)</label
+                                        ><input
+                                            id="beam_depth_mm"
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value="5"
+                                            aria-describedby="beam-section-help"
+                                        />
+                                    </div>
+                                    <div class="input-group" id="beam-diameter-group" hidden>
+                                        <label for="beam_diameter_mm">Outside Ø (mm)</label
+                                        ><input
+                                            id="beam_diameter_mm"
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value="10"
+                                            aria-describedby="beam-section-help"
+                                            disabled
+                                        />
+                                    </div>
+                                    <div class="input-group" id="beam-wall-group" hidden>
+                                        <label for="beam_wall_mm">Wall, t (mm)</label
+                                        ><input
+                                            id="beam_wall_mm"
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value="1"
+                                            aria-describedby="beam-section-help"
+                                            disabled
+                                        />
+                                    </div>
+                                </div>
+                                <p class="help" id="beam-section-help">
+                                    Width and depth are shown in the section inset.
+                                </p>
+                            </div>
+                            <div id="plate-geometry" class="input-row" hidden>
                                 <div class="input-group">
                                     <label for="length_mm">Length, a (mm)</label
                                     ><input
@@ -709,7 +852,7 @@
                                     </p>
                                 </div>
                             </div>
-                            <div class="input-group">
+                            <div class="input-group" id="shell-thickness-group" hidden>
                                 <label for="thickness_mm">Thickness, h (mm)</label
                                 ><input
                                     id="thickness_mm"
@@ -734,8 +877,7 @@
                                     <option value="custom">Custom material</option>
                                 </select>
                                 <p id="material-help" class="help">
-                                    Presets are representative values. Use custom properties for a
-                                    specific grade or operating temperature.
+                                    Representative values; choose Custom for your material data.
                                 </p>
                             </div>
                             <p id="material-summary" class="material-summary"></p>
@@ -791,9 +933,47 @@
                             </div>
                         </fieldset>
                         <details id="mode-options">
-                            <summary id="mode-summary">Mode: plate (1, 1)</summary>
+                            <summary id="mode-summary">Mode 1 · bending through depth</summary>
                             <div>
-                                <div id="plate-modes">
+                                <div id="beam-modes">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label for="beam_mode">Bending mode</label
+                                            ><select
+                                                id="beam_mode"
+                                                aria-describedby="beam-mode-help"
+                                            >
+                                                <option value="1" selected>1 · lowest</option>
+                                                <option value="2">2</option>
+                                                <option value="3">3</option>
+                                                <option value="4">4</option>
+                                                <option value="5">5</option>
+                                            </select>
+                                        </div>
+                                        <div class="input-group" id="beam-axis-group">
+                                            <label for="beam_axis">Bending direction</label
+                                            ><select
+                                                id="beam_axis"
+                                                aria-describedby="beam-axis-help"
+                                            >
+                                                <option value="depth" selected>
+                                                    Through depth, h
+                                                </option>
+                                                <option value="width">Through width, b</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p class="help" id="beam-mode-help">
+                                        Mode 1 is the lowest bending frequency for the selected
+                                        direction and supports.
+                                    </p>
+                                    <p class="help" id="beam-axis-help">
+                                        Changing bending direction swaps the section's width and
+                                        depth in the stiffness calculation. The inset shows the
+                                        direction.
+                                    </p>
+                                </div>
+                                <div id="plate-modes" hidden>
                                     <div class="input-row">
                                         <div class="input-group">
                                             <label for="mode_1">Lengthwise mode, m</label
@@ -902,7 +1082,7 @@
                     >
                         <h2>Natural frequency</h2>
                         <p class="muted" id="results-placeholder">
-                            Preparing the default plate calculation.
+                            Preparing the default cantilever calculation.
                         </p>
                         <div id="results-display" hidden>
                             <button
@@ -929,6 +1109,18 @@
                                     Export CSV
                                 </button>
                             </div>
+                            <div
+                                id="frequency-visualization"
+                                aria-label="Structure dimensions and selected mode"
+                            ></div>
+                            <details id="beam-frequency-list" hidden>
+                                <summary>First five bending frequencies</summary>
+                                <div id="beam-frequencies" class="frequency-list"></div>
+                                <p class="help">
+                                    Select a mode to calculate and display its shape. Frequencies
+                                    use the same section, supports, and bending direction.
+                                </p>
+                            </details>
                             <details id="calculation-steps">
                                 <summary>Calculation steps</summary>
                                 <div id="derivation-content"></div>
@@ -964,7 +1156,15 @@
                             ><a href="#references">References</a>
                         </nav>
                         <section class="background-section" id="model-scope">
-                            <h3>Two idealized structures</h3>
+                            <h3>Three idealized structures</h3>
+                            <p>
+                                The beam model uses Euler–Bernoulli bending theory for a straight,
+                                uniform beam. Choose a cantilever, simple supports at both ends, or
+                                fixed supports at both ends. Cross-sections can be solid rectangles,
+                                round rods, round tubes, or rectangular tubes. It omits attached
+                                masses, joint flexibility, prestress, shear deformation, and rotary
+                                inertia.
+                            </p>
                             <p>
                                 The plate model assumes a thin, uniform rectangular plate with all
                                 four edges simply supported. The edges cannot move out of plane but
@@ -992,8 +1192,10 @@
                             </p>
                             <p>
                                 Each selected mode is calculated independently. A higher mode result
-                                is not the structure's lowest natural frequency. The plate's lowest
-                                mode is (1, 1); the free ring's first elastic bending mode is n = 2.
+                                is not the structure's lowest natural frequency. The beam's lowest
+                                bending mode in the chosen direction is mode 1; the plate's lowest
+                                mode is (1, 1), and the free ring's first elastic bending mode is n
+                                = 2.
                             </p>
                         </section>
                         <section class="background-section" id="references">
@@ -1055,15 +1257,18 @@
             const $ = (id) => document.getElementById(id);
             const TOOL_MODULE_NAME = 'structural_resonance';
             const TOOL_FUNCTION_NAME = 'calculate_structural_resonance';
+            const BEAM_FUNCTION_NAME = 'calculate_beam_resonance';
             const PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
             let runtime = null,
                 pyModule = null,
                 documentation = null,
+                beamDocumentation = null,
                 materials = {},
                 latestResults = null,
                 latestInputs = null,
                 initializing = false,
-                restored = false;
+                restored = false,
+                resultsStale = false;
             let settings = {
                 theme: document.body.dataset.theme,
                 density: document.body.dataset.density,
@@ -1231,39 +1436,82 @@
                     .forEach((input) => (input.disabled = !enabled));
             }
             function syncForm() {
-                const plate = $('geometry_type').value === 'plate',
-                    custom = $('material').value === 'custom',
-                    breathing = $('ring-mode-type').value === 'breathing';
+                const geometry = $('geometry_type').value;
+                const beam = geometry === 'beam',
+                    plate = geometry === 'plate',
+                    ring = geometry === 'cylinder';
+                const custom = $('material').value === 'custom';
+                const breathing = $('ring-mode-type').value === 'breathing';
+                const section = $('beam_section').value;
+                const rectangle = ['rectangular', 'box'].includes(section);
+                const hollow = ['circular_hollow', 'box'].includes(section);
+                enableGroup('beam-geometry', beam);
                 enableGroup('plate-geometry', plate);
                 $('plate-size-help').hidden = !plate;
-                enableGroup('ring-geometry', !plate);
+                enableGroup('ring-geometry', ring);
+                enableGroup('shell-thickness-group', !beam);
+                enableGroup('beam-modes', beam);
                 enableGroup('plate-modes', plate);
-                enableGroup('ring-modes', !plate);
+                enableGroup('ring-modes', ring);
                 enableGroup('custom-properties', custom);
+                enableGroup('beam-width-group', beam && rectangle);
+                enableGroup('beam-depth-group', beam && rectangle);
+                enableGroup('beam-diameter-group', beam && !rectangle);
+                enableGroup('beam-wall-group', beam && hollow);
+                enableGroup('beam-axis-group', beam && rectangle);
+                $('beam-section-help').textContent = hollow
+                    ? rectangle
+                        ? 'Outside width/depth and uniform wall thickness; see inset.'
+                        : 'Outside diameter and uniform wall thickness; see inset.'
+                    : rectangle
+                      ? 'Width and depth are shown in the section inset.'
+                      : 'Outside diameter is shown in the section inset.';
+                $('beam-axis-help').hidden = !rectangle;
                 $('ring-order-group').hidden = breathing;
-                $('ring_mode_n').disabled = plate || breathing;
-                $('model-hint').textContent = plate
-                    ? 'Plate supported along all four edges, free to rotate at the supports.'
-                    : 'Free circular ring vibrating in its own plane; housing end conditions and attachments are excluded.';
-                $('mode-summary').textContent = plate
-                    ? `Mode: plate (${$('mode_1').value || '…'}, ${$('mode_2').value || '…'})`
-                    : breathing
-                      ? 'Mode: uniform breathing (n = 0)'
-                      : `Mode: ring bending (n = ${$('ring_mode_n').value || '…'})`;
+                $('ring_mode_n').disabled = !ring || breathing;
+                const supportLabels = {
+                    cantilever: 'Beam fixed at one end and free at the other.',
+                    simply_supported:
+                        'Beam supported at both ends, free to rotate at each support.',
+                    fixed_fixed: 'Beam fixed against motion and rotation at both ends.',
+                };
+                $('model-hint').textContent = beam
+                    ? supportLabels[$('beam_support').value]
+                    : plate
+                      ? 'Plate supported along all four edges, free to rotate at the supports.'
+                      : 'Free circular ring vibrating in its own plane; housing end conditions and attachments are excluded.';
+                $('mode-summary').textContent = beam
+                    ? `Mode ${$('beam_mode').value}${rectangle ? ' · bending through ' + $('beam_axis').value : ' · beam bending'}`
+                    : plate
+                      ? `Mode: plate (${$('mode_1').value || '…'}, ${$('mode_2').value || '…'})`
+                      : breathing
+                        ? 'Mode: uniform breathing (n = 0)'
+                        : `Mode: ring bending (n = ${$('ring_mode_n').value || '…'})`;
                 const material = materials[$('material').value];
                 $('material-summary').hidden = custom;
                 $('material-summary').textContent = material
                     ? `E = ${material.elastic_modulus_gpa} GPa · ρ = ${material.density_kg_m3} kg/m³ · ν = ${material.poisson_ratio}`
                     : '';
             }
-            ['geometry_type', 'material', 'ring-mode-type'].forEach((id) =>
-                $(id).addEventListener('change', syncForm),
-            );
+            [
+                'geometry_type',
+                'material',
+                'ring-mode-type',
+                'beam_support',
+                'beam_section',
+                'beam_axis',
+                'beam_mode',
+            ].forEach((id) => $(id).addEventListener('change', syncForm));
             ['mode_1', 'mode_2', 'ring_mode_n'].forEach((id) =>
                 $(id).addEventListener('input', syncForm),
             );
             function markStale() {
                 if (latestResults) {
+                    resultsStale = true;
+                    window.FrequencyVisualization?.setStale($('frequency-visualization'), true);
+                    $('beam-frequencies')
+                        .querySelectorAll('button')
+                        .forEach((button) => (button.disabled = true));
                     $('result-status').textContent = 'Inputs changed. Calculate to update.';
                     $('export-csv').disabled = true;
                 }
@@ -1273,7 +1521,7 @@
             function shareUrl() {
                 const url = new URL(location.href);
                 url.search = '';
-                url.searchParams.set('resonance-state', '2');
+                url.searchParams.set('resonance-state', '3');
                 controls().forEach((input) => url.searchParams.set(input.id, input.value));
                 return url.href;
             }
@@ -1289,6 +1537,14 @@
             });
             function restoreUrl() {
                 const params = new URLSearchParams(location.search);
+                const legacy =
+                    !params.has('resonance-state') || Number(params.get('resonance-state')) < 3;
+                if (
+                    legacy &&
+                    !params.has('geometry_type') &&
+                    controls().some((input) => params.has(input.id))
+                )
+                    $('geometry_type').value = 'plate';
                 controls().forEach((input) => {
                     if (!params.has(input.id)) return;
                     const value = params.get(input.id);
@@ -1312,16 +1568,19 @@
                         $('mode_2').value = '1';
                     }
                 }
+                const geometry = $('geometry_type').value;
                 const changedMode =
-                    $('geometry_type').value === 'plate'
-                        ? $('mode_1').value !== '1' || $('mode_2').value !== '1'
-                        : $('ring-mode-type').value === 'breathing' ||
-                          $('ring_mode_n').value !== '2';
+                    geometry === 'beam'
+                        ? $('beam_mode').value !== '1' || $('beam_axis').value !== 'depth'
+                        : geometry === 'plate'
+                          ? $('mode_1').value !== '1' || $('mode_2').value !== '1'
+                          : $('ring-mode-type').value === 'breathing' ||
+                            $('ring_mode_n').value !== '2';
                 if (changedMode) $('mode-options').open = true;
             }
             function numberInput(id, label, { positive = false, integer = false } = {}) {
                 const input = $(id),
-                    value = input.valueAsNumber;
+                    value = input.tagName === 'SELECT' ? Number(input.value) : input.valueAsNumber;
                 if (
                     input.value.trim() === '' ||
                     !Number.isFinite(value) ||
@@ -1334,10 +1593,53 @@
                 return value;
             }
             function readInputs() {
-                const plate = $('geometry_type').value === 'plate',
+                const geometry = $('geometry_type').value,
                     custom = $('material').value === 'custom';
+                const materialInputs = {
+                    material: $('material').value,
+                    custom_e_gpa: custom
+                        ? numberInput('custom_e_gpa', 'Elastic modulus', { positive: true })
+                        : 200,
+                    custom_rho_kg_m3: custom
+                        ? numberInput('custom_rho_kg_m3', 'Density', { positive: true })
+                        : 7850,
+                    custom_nu: custom ? numberInput('custom_nu', "Poisson's ratio") : 0.3,
+                };
+                if (geometry === 'beam') {
+                    const section = $('beam_section').value;
+                    const rectangle = ['rectangular', 'box'].includes(section),
+                        hollow = ['circular_hollow', 'box'].includes(section);
+                    return {
+                        ...materialInputs,
+                        geometry_type: geometry,
+                        support_type: $('beam_support').value,
+                        section_type: section,
+                        length_mm: numberInput('beam_length_mm', 'Beam length', { positive: true }),
+                        width_mm: rectangle
+                            ? numberInput('beam_width_mm', 'Section width', { positive: true })
+                            : 0,
+                        depth_mm: rectangle
+                            ? numberInput('beam_depth_mm', 'Section depth', { positive: true })
+                            : 0,
+                        outer_diameter_mm: !rectangle
+                            ? numberInput('beam_diameter_mm', 'Outside diameter', {
+                                  positive: true,
+                              })
+                            : 0,
+                        wall_thickness_mm: hollow
+                            ? numberInput('beam_wall_mm', 'Wall thickness', { positive: true })
+                            : 0,
+                        bending_axis: rectangle ? $('beam_axis').value : 'depth',
+                        mode_number: numberInput('beam_mode', 'Beam mode', {
+                            positive: true,
+                            integer: true,
+                        }),
+                    };
+                }
+                const plate = geometry === 'plate';
                 const values = {
-                    geometry_type: $('geometry_type').value,
+                    ...materialInputs,
+                    geometry_type: geometry,
                     thickness_mm: numberInput('thickness_mm', 'Thickness', { positive: true }),
                     length_mm: plate ? numberInput('length_mm', 'Length', { positive: true }) : 0,
                     width_mm: plate ? numberInput('width_mm', 'Width', { positive: true }) : 0,
@@ -1361,14 +1663,6 @@
                                 positive: true,
                                 integer: true,
                             }),
-                    material: $('material').value,
-                    custom_e_gpa: custom
-                        ? numberInput('custom_e_gpa', 'Elastic modulus', { positive: true })
-                        : 200,
-                    custom_rho_kg_m3: custom
-                        ? numberInput('custom_rho_kg_m3', 'Density', { positive: true })
-                        : 7850,
-                    custom_nu: custom ? numberInput('custom_nu', "Poisson's ratio") : 0.3,
                 };
                 if (!plate && $('ring-mode-type').value === 'bending' && values.mode_2 < 2)
                     throw new Error(
@@ -1388,21 +1682,39 @@
                 try {
                     $('error-message').hidden = true;
                     const values = readInputs();
-                    const proxy = pyModule[TOOL_FUNCTION_NAME](
-                        values.geometry_type,
-                        values.thickness_mm,
-                        values.length_mm,
-                        values.width_mm,
-                        values.diameter_mm,
-                        values.mode_1,
-                        values.mode_2,
-                        values.material,
-                        values.custom_e_gpa,
-                        values.custom_rho_kg_m3,
-                        values.custom_nu,
-                    );
+                    const proxy =
+                        values.geometry_type === 'beam'
+                            ? pyModule[BEAM_FUNCTION_NAME](
+                                  values.support_type,
+                                  values.section_type,
+                                  values.length_mm,
+                                  values.width_mm,
+                                  values.depth_mm,
+                                  values.outer_diameter_mm,
+                                  values.wall_thickness_mm,
+                                  values.bending_axis,
+                                  values.mode_number,
+                                  values.material,
+                                  values.custom_e_gpa,
+                                  values.custom_rho_kg_m3,
+                                  values.custom_nu,
+                              )
+                            : pyModule[TOOL_FUNCTION_NAME](
+                                  values.geometry_type,
+                                  values.thickness_mm,
+                                  values.length_mm,
+                                  values.width_mm,
+                                  values.diameter_mm,
+                                  values.mode_1,
+                                  values.mode_2,
+                                  values.material,
+                                  values.custom_e_gpa,
+                                  values.custom_rho_kg_m3,
+                                  values.custom_nu,
+                              );
                     latestResults = toObject(proxy);
                     latestInputs = values;
+                    resultsStale = false;
                     renderResults();
                     $('result-status').textContent = 'Calculated from current inputs.';
                     $('export-csv').disabled = false;
@@ -1412,6 +1724,11 @@
                         $('result-status').textContent =
                             'Calculation failed. Previous results shown.';
                     $('export-csv').disabled = true;
+                    resultsStale = true;
+                    window.FrequencyVisualization?.setStale($('frequency-visualization'), true);
+                    $('beam-frequencies')
+                        .querySelectorAll('button')
+                        .forEach((button) => (button.disabled = true));
                 }
             }
             $('calc-form').addEventListener('submit', (event) => {
@@ -1434,14 +1751,24 @@
                 $('applicability-notes').innerHTML = notes
                     .map((item) => `<li>${escapeHtml(item)}</li>`)
                     .join('');
+                const beam = latestInputs.geometry_type === 'beam';
                 const rows = [
                     ['Material', r.material_display],
                     ['Elastic modulus', `${format(r.elastic_modulus_gpa)} GPa`],
                     ['Density', `${format(r.density_kg_m3)} kg/m³`],
                     ["Poisson's ratio", format(r.poisson_ratio)],
-                    [r.stiffness_label, `${format(r.flexural_rigidity_n_m)} N·m`],
-                    ['Extensional wave speed', `${format(r.wave_velocity_m_s)} m/s`],
                 ];
+                if (beam)
+                    rows.push(
+                        ['Section area', `${format(r.section_area_m2)} m²`],
+                        ['Second moment of area', `${format(r.second_moment_m4)} m⁴`],
+                        ['Bending rigidity EI', `${format(r.bending_rigidity_n_m2)} N·m²`],
+                        ['Mass per length', `${format(r.mass_per_length_kg_m)} kg/m`],
+                        ['Beam mass', `${format(r.beam_mass_kg)} kg`],
+                        ['Mode eigenvalue', format(r.eigenvalue)],
+                    );
+                else rows.push([r.stiffness_label, `${format(r.flexural_rigidity_n_m)} N·m`]);
+                rows.push(['Extensional wave speed', `${format(r.wave_velocity_m_s)} m/s`]);
                 $('intermediate-values').innerHTML = rows
                     .map(
                         ([label, value]) =>
@@ -1449,13 +1776,55 @@
                     )
                     .join('');
                 renderDerivations();
+                renderFrequencyList();
+                renderVisualization();
             }
-            const symbolLegend = () => escapeHtml(documentation?.symbols || '');
+            function renderVisualization() {
+                if (!latestResults?.diagram_data || !window.FrequencyVisualization) return;
+                FrequencyVisualization.render(
+                    $('frequency-visualization'),
+                    latestResults.diagram_data,
+                    {
+                        theme: settings.theme,
+                        reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+                    },
+                );
+                FrequencyVisualization.setStale($('frequency-visualization'), resultsStale);
+            }
+            function renderFrequencyList() {
+                const modes = latestResults.mode_frequencies || [];
+                $('beam-frequency-list').hidden = latestInputs.geometry_type !== 'beam';
+                $('beam-frequencies').innerHTML = modes
+                    .map(
+                        (mode) =>
+                            `<button type="button" data-beam-mode="${mode.mode_number}" aria-pressed="${mode.mode_number === latestInputs.mode_number}" ${resultsStale ? 'disabled' : ''}>Mode ${mode.mode_number}<span>${format(mode.natural_frequency_hz)} Hz</span></button>`,
+                    )
+                    .join('');
+            }
+            $('beam-frequencies').addEventListener('click', (event) => {
+                const button = event.target.closest('[data-beam-mode]');
+                if (!button || button.disabled || resultsStale) return;
+                $('beam_mode').value = button.dataset.beamMode;
+                syncForm();
+                selectTab('results');
+                calculate();
+            });
+            const activeDocumentation = () =>
+                latestInputs?.geometry_type === 'beam' ? beamDocumentation : documentation;
+            const symbolLegend = () => escapeHtml(activeDocumentation()?.symbols || '');
             function renderDerivations() {
                 const r = latestResults;
                 const items = [
                     ['Selected natural frequency', r.subst_natural_frequency_hz],
-                    [r.stiffness_label, r.subst_flexural_rigidity_n_m],
+                    [
+                        latestInputs.geometry_type === 'beam'
+                            ? 'Beam bending rigidity EI'
+                            : r.stiffness_label,
+                        latestInputs.geometry_type === 'beam'
+                            ? r.subst_bending_rigidity_n_m2
+                            : r.subst_flexural_rigidity_n_m,
+                    ],
+                    ['Mass per unit length', r.subst_mass_per_length_kg_m],
                     ['Extensional wave speed', r.subst_wave_velocity_m_s],
                 ];
                 const markup = items
@@ -1486,20 +1855,33 @@
                 if ($('calculation-steps').open) typeset($('derivation-content'));
             });
             function renderDocumentation() {
-                const lines = (documentation.latex || '')
-                    .split('\n')
-                    .map((line) => line.trim())
-                    .filter(Boolean);
-                $('equations').innerHTML = lines
-                    .map(
-                        (line, index) =>
-                            `<section class="equation-card"><strong>Equation (${index + 1})</strong>${equationMarkup(line)}<p class="legend">${symbolLegend()}</p></section>`,
-                    )
+                let equationNumber = 0;
+                const groups = [
+                    ['Beam bending', beamDocumentation],
+                    ['Plate and ring', documentation],
+                ];
+                $('equations').innerHTML = groups
+                    .map(([title, doc]) => {
+                        const lines = (doc?.latex || '')
+                            .split('\n')
+                            .map((line) => line.trim())
+                            .filter(Boolean);
+                        return (
+                            `<h3>${title}</h3>` +
+                            lines
+                                .map(
+                                    (line) =>
+                                        `<section class="equation-card"><strong>Equation (${++equationNumber})</strong>${equationMarkup(line)}<p class="legend">${escapeHtml(doc.symbols || '')}</p></section>`,
+                                )
+                                .join('')
+                        );
+                    })
                     .join('');
                 $('source-references').replaceChildren();
-                const references = documentation.references || '';
-                const pieces = references.split(/(https:\/\/[^\s)]+)/);
-                pieces.forEach((piece) => {
+                const references = [
+                    ...new Set(groups.map(([, doc]) => doc?.references || '').filter(Boolean)),
+                ].join('\n\n');
+                references.split(/(https:\/\/[^\s)]+)/).forEach((piece) => {
                     if (piece.startsWith('https://')) {
                         const link = document.createElement('a');
                         link.href = piece;
@@ -1515,29 +1897,45 @@
                 return '"' + s.replace(/"/g, '""') + '"';
             }
             $('export-csv').addEventListener('click', () => {
-                if (!latestResults) return;
+                if (!latestResults || resultsStale) return;
                 const r = latestResults,
                     v = latestInputs,
+                    beam = v.geometry_type === 'beam',
                     plate = v.geometry_type === 'plate';
                 const rows = [
-                    ['Structural natural frequency'],
+                    ['Natural Frequency Quick Checker'],
                     ['Input', 'Value', 'Unit'],
                     ['Model', r.geometry_display, ''],
                     ['Material', r.material_display, ''],
-                    ['Thickness', v.thickness_mm, 'mm'],
                 ];
-                if (plate)
+                if (beam) {
                     rows.push(
+                        ['Supports', v.support_type, ''],
+                        ['Cross-section', v.section_type, ''],
                         ['Length', v.length_mm, 'mm'],
-                        ['Width', v.width_mm, 'mm'],
-                        ['Mode m', v.mode_1, ''],
-                        ['Mode n', v.mode_2, ''],
+                        ['Bending direction', v.bending_axis, ''],
+                        ['Mode number', v.mode_number, ''],
                     );
-                else
-                    rows.push(
-                        ['Mean diameter', v.diameter_mm, 'mm'],
-                        ['Circumferential order n', v.mode_2, ''],
-                    );
+                    if (['rectangular', 'box'].includes(v.section_type))
+                        rows.push(['Width', v.width_mm, 'mm'], ['Depth', v.depth_mm, 'mm']);
+                    else rows.push(['Outside diameter', v.outer_diameter_mm, 'mm']);
+                    if (['circular_hollow', 'box'].includes(v.section_type))
+                        rows.push(['Wall thickness', v.wall_thickness_mm, 'mm']);
+                } else {
+                    rows.push(['Thickness', v.thickness_mm, 'mm']);
+                    if (plate)
+                        rows.push(
+                            ['Length', v.length_mm, 'mm'],
+                            ['Width', v.width_mm, 'mm'],
+                            ['Mode m', v.mode_1, ''],
+                            ['Mode n', v.mode_2, ''],
+                        );
+                    else
+                        rows.push(
+                            ['Mean diameter', v.diameter_mm, 'mm'],
+                            ['Circumferential order n', v.mode_2, ''],
+                        );
+                }
                 rows.push(
                     ['Elastic modulus', r.elastic_modulus_gpa, 'GPa'],
                     ['Density', r.density_kg_m3, 'kg/m³'],
@@ -1545,24 +1943,38 @@
                     [],
                     ['Result', 'Value', 'Unit'],
                     ['Natural frequency', r.natural_frequency_hz, 'Hz'],
-                    [r.stiffness_label, r.flexural_rigidity_n_m, 'N·m'],
-                    ['Extensional wave speed', r.wave_velocity_m_s, 'm/s'],
-                    [],
-                    ['Model assumptions'],
                 );
+                if (beam)
+                    rows.push(
+                        ['Section area', r.section_area_m2, 'm²'],
+                        ['Second moment of area', r.second_moment_m4, 'm⁴'],
+                        ['Bending rigidity EI', r.bending_rigidity_n_m2, 'N·m²'],
+                        ['Mass per length', r.mass_per_length_kg_m, 'kg/m'],
+                        ['Beam mass', r.beam_mass_kg, 'kg'],
+                        ['Eigenvalue', r.eigenvalue, ''],
+                    );
+                else rows.push([r.stiffness_label, r.flexural_rigidity_n_m, 'N·m']);
+                rows.push(['Extensional wave speed', r.wave_velocity_m_s, 'm/s']);
+                if (beam) {
+                    rows.push([], ['Bending mode', 'Frequency (Hz)', 'Eigenvalue']);
+                    r.mode_frequencies.forEach((mode) =>
+                        rows.push([mode.mode_number, mode.natural_frequency_hz, mode.eigenvalue]),
+                    );
+                }
+                rows.push([], ['Model assumptions']);
                 (r.model_assumptions || []).forEach((note) => rows.push([note]));
                 if (r.applicability_notes?.length) {
                     rows.push([], ['Applicability notes']);
                     r.applicability_notes.forEach((note) => rows.push([note]));
                 }
                 const blob = new Blob(
-                        ['\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n')],
-                        { type: 'text/csv;charset=utf-8' },
-                    ),
-                    url = URL.createObjectURL(blob),
+                    ['\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n')],
+                    { type: 'text/csv;charset=utf-8' },
+                );
+                const url = URL.createObjectURL(blob),
                     link = document.createElement('a');
                 link.href = url;
-                link.download = 'structural-resonance.csv';
+                link.download = 'natural-frequency.csv';
                 link.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             });
@@ -1598,7 +2010,7 @@ import sys
 import importlib
 from pyodide.http import pyfetch
 sys.dont_write_bytecode = True
-for module_name in ('utils', '${TOOL_MODULE_NAME}'):
+for module_name in ('utils', 'beam_analysis', '${TOOL_MODULE_NAME}'):
     response = await pyfetch('../../pycalcs/' + module_name + '.py')
     if not response.ok:
         raise RuntimeError('Unable to load ' + module_name + '. Check your connection and retry.')
@@ -1630,10 +2042,14 @@ importlib.reload(${TOOL_MODULE_NAME})
                         documentation = toObject(
                             utils.get_documentation(TOOL_MODULE_NAME, TOOL_FUNCTION_NAME),
                         );
+                        beamDocumentation = toObject(
+                            utils.get_documentation(TOOL_MODULE_NAME, BEAM_FUNCTION_NAME),
+                        );
                     } finally {
                         utils.destroy();
                     }
-                    if (documentation.error) throw new Error(documentation.error);
+                    if (documentation.error || beamDocumentation.error)
+                        throw new Error(documentation.error || beamDocumentation.error);
                     if (!restored) {
                         restoreUrl();
                         restored = true;
@@ -1653,11 +2069,21 @@ importlib.reload(${TOOL_MODULE_NAME})
                     revealHash();
                 }
             }
+            matchMedia('(prefers-color-scheme: dark)').addEventListener(
+                'change',
+                renderVisualization,
+            );
+            matchMedia('(prefers-reduced-motion: reduce)').addEventListener(
+                'change',
+                renderVisualization,
+            );
             $('retry-load').addEventListener('click', initialize);
             syncForm();
             applySettings();
             initialize();
             window.addEventListener('pagehide', (event) => {
+                if (!event.persisted)
+                    window.FrequencyVisualization?.destroy($('frequency-visualization'));
                 if (!event.persisted && pyModule) {
                     pyModule.destroy();
                     pyModule = null;

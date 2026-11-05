@@ -1,98 +1,119 @@
-# Structural Resonance Calculator
+# Natural Frequency Quick Checker
 
 ## Purpose
 
-Estimate a selected natural frequency of a rectangular plate or a free circular
-ring. The tool supports early vibration screening of covers, rings, and similar
-components. It calculates free-vibration frequencies, not forced response or a
-resonance pass/fail verdict.
+Estimate natural frequencies of uniform beams, rectangular plates, and free
+circular rings. The tool shows the structure's dimensions, supports, and selected
+vibration mode alongside the frequency. Its URL remains
+`/tools/structural-resonance/` so existing links continue to work.
+
+These are free-vibration estimates for early design checks. The calculator does
+not predict forced response or give a resonance pass/fail verdict.
 
 ## Models and requirements
 
-The plate model uses classical thin-plate bending theory with all four edges
-simply supported. The supports prevent transverse displacement and allow rotation.
-Geometry consists of length, width, and uniform thickness. The two positive
-integer mode indices count half-waves along each span; (1, 1) is the lowest mode.
+### Beam bending
 
-The ring model is a free, complete, thin circular ring with a uniform rectangular
-section. Inputs are mean diameter and radial thickness. It supports in-plane
-ovaling/bending modes with circumferential order n ≥ 2, and radial breathing with
-n = 0. Order 1 is rigid translation in the bending family and is not an elastic
-mode. This model does not represent the axial deformation or attachment stiffness
-of a finite cylindrical housing.
+The beam model uses Euler–Bernoulli theory for a straight, uniform beam. Support
+choices are cantilever, simply supported at both ends, and fixed at both ends.
+Sections can be solid rectangles, round rods, round tubes, or rectangular tubes.
+All dimensions are in millimetres. Tube dimensions are outside dimensions with a
+uniform wall thickness.
 
-Both models assume uniform isotropic material, small vibration amplitude, and no
-added components or prestress. Shear deformation and rotary inertia are omitted.
-The results show the relevant thickness ratio and assumptions so users can judge
-whether the thin-model approximation is suitable. High mode orders also shorten
-the bending wavelength and limit that approximation.
+The initial case is an aluminum cantilever: length 300 mm, width 25 mm, depth
+5 mm, and bending mode 1. For a rectangle or rectangular tube, an optional bending
+direction control selects deflection through the depth or width. The section
+inset shows that direction. The two directions can have different frequencies.
+
+Beam modes 1–5 are available. A compact list of the first five bending frequencies
+can be expanded in Results; selecting one calculates that mode and updates its
+shape. The list is disabled when inputs change so an old frequency cannot be
+mistaken for a result from the edited beam.
+
+This model omits shear deformation, rotary inertia, axial prestress, attached
+masses, and joint flexibility. It calculates transverse bending, not axial or
+torsional modes. Thin, slender geometry is an assumption, not a safety verdict.
+
+### Plate bending
+
+The plate model uses classical thin-plate theory with all four edges simply
+supported. The supports prevent transverse displacement and allow rotation.
+Geometry consists of length, width, and uniform thickness. The positive integer
+mode indices count half-waves along each span; (1, 1) is the lowest mode.
+
+### Free circular ring
+
+The ring is complete and thin, with a uniform rectangular section. Inputs are mean
+diameter and radial thickness. It supports in-plane ovaling/bending modes with
+circumferential order n ≥ 2, and radial breathing with n = 0. Order 1 is rigid
+translation in the bending family. This model does not represent the axial
+deformation or attachment stiffness of a finite cylindrical housing.
+
+Plate and ring assumptions include uniform isotropic material, small vibration
+amplitude, and no added components or prestress. Shear deformation and rotary
+inertia are omitted. Results include relevant geometry ratios and limits; higher
+mode orders also shorten the bending wavelength and limit these approximations.
 
 ## Interface
 
-Geometry and Material are separate input sections. The default is a 300 × 200 ×
-5 mm aluminum plate. Material presets come from the Python material table;
-selecting Custom reveals elastic modulus, density, and Poisson's ratio. Presets
-are representative values, not specifications for a particular batch or service
+Geometry and Material are separate input sections. Model-specific fields show
+only the dimensions that apply. The material presets come from Python; selecting
+Custom reveals elastic modulus, density, and Poisson's ratio. Presets are
+representative values rather than specifications for a particular batch or service
 temperature.
 
-Mode settings are expandable. Plate and ring modes have separate controls, so
-switching from the default plate to a ring selects valid n = 2 bending. Choose
-Breathing to use n = 0. Hidden geometry, mode, and custom-material inputs are
-disabled and excluded from input validation; their values are retained when
-switching models.
+Mode and bending-direction settings are expandable. Beam, plate, and ring modes
+have independent controls. Switching from a plate to a ring therefore selects
+valid n = 2 bending; choose Breathing for n = 0. Hidden geometry, section, mode,
+and custom-material inputs are disabled and excluded from validation. Their
+values are retained when switching models.
 
-The right-hand panel contains Results and Background tabs. The primary result is
-the natural frequency in Hz, with the calculated mode and a brief support/model
-summary. Clicking the frequency reveals substituted calculations. Model assumptions
-and applicability limits have their own expandable panel. Material properties,
-bending stiffness, and extensional wave speed are also available on demand. Background contains numbered equations, variable definitions, and linked
-references from the Python documentation.
+The right-hand panel has Results and Background tabs. Results puts frequency and
+a brief model/support summary first, followed by the visual. The visual has
+geometry and mode-shape views with an optional animation. Deformation is
+normalized and exaggerated, and animation runs slowly for inspection; neither
+represents a predicted displacement or physical vibration rate.
 
-The first valid case calculates after initialization. Later edits mark the results
-as stale and require Calculate. Export is disabled until a successful calculation
-matches the current inputs. Settings provide Light, Dark, or Auto theme, spacing,
-and display precision; preferences persist locally.
+Clicking the frequency opens substituted calculations. Assumptions and limits,
+material properties, and intermediate values have separate disclosures.
+Background contains model descriptions, numbered source equations, symbol
+legends, and linked references.
 
-## Calculation source
+The first valid case calculates after loading. Later edits mark the results and
+visual as stale and require Calculate. CSV export and mode-list selection are
+disabled until the current inputs have a successful result. Settings provide
+Light, Dark, or Auto theme, spacing, and display precision.
 
-`pycalcs/structural_resonance.py` owns the material presets, equations, validation,
-assumptions, applicability notes, and substituted expressions. The page calls
-`calculate_structural_resonance` through Pyodide and formats its returned data.
-There is no duplicate frequency implementation in JavaScript.
+## Calculation and visualization sources
 
-Plate flexural rigidity includes the Poisson correction for a plate. Free-ring
-bending stiffness per unit axial width and free-ring frequencies use the ring
-model without that correction. The intermediate speed is the extensional
-rod/ring speed, not the three-dimensional longitudinal wave speed of a bulk solid.
+`pycalcs/structural_resonance.py` owns the material presets, validation, natural
+frequency calculations, mode-shape samples, model notes, and substituted
+expressions. The page calls `calculate_beam_resonance` for beams and
+`calculate_structural_resonance` for plates and rings through Pyodide. The beam
+function reuses section properties from `pycalcs/beam_analysis.py`.
 
-Geometry must be finite and positive. Mode indices must be integers rather than
-values that are rounded or clamped. Custom material properties require positive
-modulus and density, with −1 < ν < 0.5. Ring thickness must be less than mean
-diameter to leave a positive inner diameter.
+`visualization.js` draws the returned `diagram_data` and handles view/animation
+controls. It exposes `FrequencyVisualization.render(container, data, options)`,
+`setStale(container, boolean)`, and `destroy(container)`. The frontend does not
+implement a second frequency calculation.
 
-## Sharing, export, and loading
+Beam bending rigidity has units N·m². Plate rigidity and ring stiffness per unit
+axial width have units N·m. The results and CSV distinguish these quantities.
+The intermediate speed is the extensional rod/ring speed, not the longitudinal
+wave speed in a three-dimensional bulk solid.
 
-Copy link saves the complete form, including inactive geometry and mode values,
-custom properties, and blank fields. The page restores state before its first
-calculation. Older ring links using `geometry_type=cylinder` and `mode_2` are
-mapped to the ring controls. Background section links open the Background tab.
+## Validation
 
-CSV export contains the calculated geometry, selected mode, effective material
-properties, frequency, intermediate values, assumptions, and applicability notes.
-Numeric values retain calculation precision. Export uses the last successful
-calculation rather than mixing stale results with edited inputs.
+Dimensions must be finite and positive. Hollow sections require positive internal
+dimensions. Mode indices are integers rather than values silently rounded or
+clamped; beams support modes 1–5. Custom materials require positive modulus and
+density, with −1 < ν < 0.5. Ring thickness must be smaller than its mean diameter.
 
-The loading overlay remains visible while the browser loads Pyodide and the
-Python files. Initialization failures show a retry button. A retry loads the model
-again without requiring a page refresh. The tool needs access to its CDN on first
-load and a static server for the Python module files.
-
-## Checks
-
-For aluminum with E = 69 GPa, ρ = 2700 kg/m³, and ν = 0.33:
+Useful checks for aluminum with E = 69 GPa, ρ = 2700 kg/m³, and ν = 0.33:
 
 | Case | Expected frequency |
 | --- | ---: |
+| 300 mm cantilever, 25 × 5 mm solid section, mode 1 through depth | 45.368082 Hz |
 | 300 × 200 × 5 mm plate, mode (1, 1) | 438.449472 Hz |
 | 150 mm mean-diameter ring, 5 mm radial thickness, n = 2 | 553.969555 Hz |
 | Same ring, breathing n = 0 | 10727.574309 Hz |
@@ -100,15 +121,36 @@ For aluminum with E = 69 GPa, ρ = 2700 kg/m³, and ν = 0.33:
 Numerical regression tests are in `tests/test_structural_resonance.py`. The UI
 syntax regression test is in `tests/test_structural_resonance_ui.py`.
 
-Browser verification should cover initialization and retry, all presets, custom
-properties, invalid and fractional mode indices, ring bending/breathing, shared
-links, CSV, keyboard tab navigation, and mobile layout in light and dark themes.
-Check that switching models retains values and disables hidden controls.
+## Sharing, export, and loading
 
-## References
+Copy link saves the complete form, including inactive geometry, modes, section
+values, custom properties, and blank fields. Version 3 links include the new beam
+state. Earlier links without an explicit model retain the former plate default;
+plain visits now default to the cantilever. Earlier ring links using
+`geometry_type=cylinder` and `mode_2` map to the ring controls. Background
+fragments open the Background tab.
 
-- Leissa, A. W. (1969), *Vibration of Plates*, NASA SP-160, Chapter 4:
-  [NASA record](https://ntrs.nasa.gov/citations/19700009156).
-- Knight, N. F., Jr., and Rankin, C. C. (2006), *STAGS Example Problems Manual*,
-  NASA/CR-2006-214281, free circular ring example, pp. 40–41:
-  [NASA record](https://ntrs.nasa.gov/citations/20060008654).
+CSV contains the calculated geometry, supports, section, selected mode, effective
+material properties, frequency, intermediate values, and model notes. For beams
+it also includes the first five bending frequencies. Numeric values retain
+calculation precision; export uses the last successful calculation.
+
+The loading overlay remains visible while Pyodide and the Python files load.
+Initialization errors provide a retry button. A retry reloads the model without
+requiring a page refresh. The page loads `beam_analysis.py` alongside the resonance
+module and needs a static server plus access to the Pyodide CDN on first load.
+
+## Browser checks
+
+1. Verify the default cantilever, every support type, and all four sections.
+2. Change the bending direction of a nonsquare rectangle and check that frequency
+   and the section inset agree. Select modes 1–5 from the control and result list.
+3. Check plate and ring calculations, including breathing and custom materials.
+4. Confirm invalid dimensions and fractional modes give errors; hidden fields
+   should not block a valid model.
+5. Open shared beam, legacy plate, and legacy ring links, including a Background
+   fragment. Compare results and CSV values.
+6. Verify loading retry, tab keyboard navigation, diagram controls, animation,
+   reduced-motion preference, and mobile layout in light and dark themes.
+7. Edit an input while the visual is displayed. It should mark the previous
+   calculation as stale and disable CSV and mode-list actions.
