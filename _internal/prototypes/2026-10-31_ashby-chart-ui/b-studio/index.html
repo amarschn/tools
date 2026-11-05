@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>B · Studio</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  .stage { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 280px; }
+  .canvas-wrap { position: relative; min-width: 0; min-height: 0; background: var(--card); }
+  #chart { position: absolute; inset: 0; }
+  .title { position: absolute; left: 96px; top: 12px; z-index: 3; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+  .title > * { pointer-events: auto; }
+  .tools { position: absolute; z-index: 4; left: 96px; top: 44px; display: flex; gap: 2px; padding: 3px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+  .tools button { min-height: 28px; padding: 2px 8px; font-size: 12px; border-color: transparent; background: none; }
+  .tools button.on { background: var(--accent); color: var(--on-accent); }
+  .axis-btn { position: absolute; z-index: 4; font-size: 12.5px; font-weight: 600; background: var(--card); border: 1px dashed var(--ink-2); border-radius: 6px; padding: 2px 9px; min-height: 26px; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .axis-btn:hover { border-style: solid; border-color: var(--ink); }
+  #x-btn { left: 50%; transform: translateX(-50%); bottom: 5px; }
+  #y-btn { left: 6px; top: 50%; transform-origin: 0 0; transform: rotate(-90deg) translateX(-50%); max-width: none; }
+  .pop { position: absolute; z-index: 10; width: min(340px, calc(100vw - 24px)); max-height: min(520px, 76vh); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 16px 40px rgba(15, 23, 42, .22); padding: 10px; }
+  .pop h2 { margin-bottom: 6px; }
+  .prop-row { display: grid; grid-template-columns: 1fr 44px; gap: 8px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 5px 6px; border-radius: 5px; font-size: 12.5px; }
+  .prop-row:hover, .prop-row.on { background: var(--soft); }
+  .prop-row small { display: block; font-size: 11px; }
+  .cov { height: 4px; background: var(--soft); border-radius: 2px; overflow: hidden; display: block; margin-top: 3px; }
+  .cov i { display: block; height: 100%; background: var(--ink-2); }
+  .prop-row .n { text-align: right; font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .formula { display: flex; gap: 4px; margin: 8px 0 3px; }
+  .formula input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  .formula-msg { font-size: 11.5px; color: var(--ink-2); min-height: 16px; }
+  .formula-msg.bad { color: var(--warn); }
+  .quick { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
+  .quick button { font-size: 11.5px; font-family: var(--mono); padding: 1px 6px; min-height: 24px; }
+  .scale { display: flex; gap: 2px; align-items: center; margin: 2px 0 8px; font-size: 12px; color: var(--ink-2); }
+  .scale button { min-height: 24px; padding: 0 8px; font-size: 12px; }
+  .side { border-left: 1px solid var(--line); background: var(--card); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .sec { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .sec h2 { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .sec label { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px; align-items: center; font-size: 12px; color: var(--ink-2); margin-bottom: 5px; }
+  .sec label select { font-size: 12.5px; min-width: 0; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 3px; }
+  .tag-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+  .tag-row .chip { flex: 1; justify-content: flex-start; cursor: pointer; }
+  .tag-row button.x { min-height: 22px; padding: 0 5px; }
+  .views { display: flex; flex-wrap: wrap; gap: 3px; }
+  .views button { font-size: 12px; padding: 2px 7px; min-height: 26px; }
+  .gradient { height: 10px; border-radius: 4px; }
+  .gradient-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+  .actionbar { position: absolute; z-index: 6; left: 50%; bottom: 42px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px 8px 6px 12px; background: var(--accent); color: var(--on-accent); border-radius: 10px; box-shadow: 0 10px 28px rgba(15, 23, 42, .3); max-width: calc(100% - 20px); flex-wrap: wrap; justify-content: center; }
+  .actionbar input { background: var(--card); color: var(--ink); width: 160px; min-height: 28px; }
+  .actionbar button { min-height: 28px; font-size: 12.5px; background: none; color: inherit; border-color: transparent; padding: 2px 8px; }
+  .actionbar button:hover { border-color: currentColor; }
+  .actionbar button.do { background: var(--card); color: var(--ink); }
+  .actionbar .count { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .drawer { position: absolute; z-index: 8; top: 8px; right: 288px; width: min(350px, calc(100vw - 20px)); max-height: calc(100% - 16px); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 12px; box-shadow: 0 16px 40px rgba(15, 23, 42, .22); }
+  .search { width: 170px; }
+  .side-toggle { display: none; }
+  @media (max-width: 820px) {
+    .stage { grid-template-columns: 1fr; }
+    .side { position: absolute; inset: auto 0 0 0; height: 56%; z-index: 7; border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -10px 30px rgba(15, 23, 42, .2); }
+    .side.closed { display: none; }
+    .side-toggle { display: inline-block; }
+    .drawer { right: 10px; }
+    .title { left: 92px; }
+    .tools { left: 92px; }
+    .search { width: 118px; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="canvas-wrap">
+    <div id="chart"></div>
+    <div class="title">
+      <input id="search" class="search" type="search" placeholder="Find, or press /" aria-label="Find a material">
+      <button id="side-toggle" class="side-toggle">Panel</button>
+    </div>
+    <div class="tools" role="toolbar" aria-label="Chart tools">
+      <button data-mode="pan" class="on" title="Drag to pan, scroll to zoom (V)">Pan</button>
+      <button data-mode="box" title="Drag a box to select (B)">Box</button>
+      <button data-mode="lasso" title="Draw around materials to select (L)">Lasso</button>
+      <button id="fit" title="Fit all (F)">Fit</button>
+    </div>
+    <button class="axis-btn" id="x-btn" aria-haspopup="dialog"></button>
+    <button class="axis-btn" id="y-btn" aria-haspopup="dialog"></button>
+    <div class="actionbar" id="actions" hidden>
+      <span class="count" id="sel-count"></span>
+      <input id="tag-name" type="text" list="tag-list" placeholder="Tag name, then Enter" aria-label="Tag name">
+      <datalist id="tag-list"></datalist>
+      <button class="do" id="tag-go">Tag</button>
+      <button id="sel-zoom">Zoom</button>
+      <button id="sel-isolate">Isolate</button>
+      <button id="sel-hide">Hide</button>
+      <button id="sel-clear" aria-label="Clear selection">Clear</button>
+    </div>
+    <aside class="drawer" id="drawer" hidden></aside>
+    <div class="pop" id="pop" hidden></div>
+  </div>
+  <aside class="side" id="side">
+    <div class="sec">
+      <h2>Show</h2>
+      <label>Shapes <select id="shape"><option value="gooey">Gooey blobs</option><option value="classic">Classic Ashby</option><option value="contour">Density contours</option><option value="pebble">Smooth pebbles</option><option value="none">None</option></select></label>
+      <label>Group by <select id="group"><option value="family">Family</option><option value="class">Material class</option><option value="tag">My tags</option></select></label>
+      <label>Colour by <select id="color"></select></label>
+      <label>Size by <select id="size"></select></label>
+      <div id="color-legend"></div>
+      <label style="grid-template-columns:auto 1fr;margin-top:5px"><input type="checkbox" id="ranges"> <span>Reported ranges</span></label>
+    </div>
+    <div class="sec"><h2>Families</h2><div class="legend" id="families"></div></div>
+    <div class="sec">
+      <h2>My tags <small id="tag-hint"></small></h2>
+      <div id="tag-rows"></div>
+      <small id="tag-empty">Pick Box or Lasso, drag across the chart, then name a tag. Tags work in every prototype.</small>
+    </div>
+    <div class="sec">
+      <h2>Saved views</h2>
+      <div class="views" id="views"></div>
+      <button id="save-view" style="margin-top:6px;font-size:12px">Save this view</button>
+    </div>
+    <div class="sec proto-note"><kbd>/</kbd> find &nbsp; <kbd>V</kbd> pan &nbsp; <kbd>B</kbd> box &nbsp; <kbd>L</kbd> lasso &nbsp; <kbd>F</kbd> fit &nbsp; <kbd>X</kbd> swap axes &nbsp; <kbd>Esc</kbd> clear</div>
+  </aside>
+</div>
+<script src="../core.js"></script>
+<script>
+(async () => {
+  const { el, Axis, Plot, tags, FAMILY_NAMES, FAMILY_COLORS, formatValue } = AC;
+  AC.header('b-studio');
+  const db = await AC.load();
+  const $ = id => document.getElementById(id);
+  const VIEW_KEY = 'ashby-prototype-views';
+  const STARTER_VIEWS = [
+    { name: 'Stiffness', x: 'rho', y: 'E' }, { name: 'Strength', x: 'rho', y: 'UTS' },
+    { name: 'Specific stiffness vs specific strength', x: 'UTS/rho', y: 'E/rho' },
+    { name: 'Beam stiffness index', x: 'rho', y: 'E^0.5/rho' },
+    { name: 'Insulators', x: 'rho', y: 'k' },
+  ];
+  const state = { x: 'rho', y: 'E', xLog: true, yLog: true, shape: 'gooey', group: 'family', color: 'family', size: 'none', ranges: false, families: new Set(Object.keys(FAMILY_NAMES)), hiddenTags: new Set(), isolate: null, hidden: new Set(), find: '' };
+  let selection = new Set(), inspected = null;
+
+  const plot = new Plot($('chart'), {
+    padding: { l: 84, r: 14, t: 12, b: 50 }, drawAxisTitles: false,
+    onSelect: hits => { selection = new Set(hits.map(r => r.m.id)); showActions(); plot.selected = selection; plot.draw(); },
+    onClick: hit => { inspected = hit?.m || null; if (!hit) { selection = new Set(); showActions(); plot.selected = selection; plot.draw(); } renderDrawer(); },
+  });
+  plot.opts.padding.b = 52;
+
+  /* ---------- axis popover: properties ranked by how much data they would plot ---------- */
+  function coverage(expr, other) { const a = new Axis(expr), b = new Axis(other); return db.materials.filter(m => Number.isFinite(a.value(m)) && Number.isFinite(b.value(m))).length; }
+  function openAxis(which) {
+    const pop = $('pop');
+    if (!pop.hidden && pop.dataset.which === which) { pop.hidden = true; return; }
+    pop.dataset.which = which; pop.hidden = false;
+    const other = which === 'x' ? state.y : state.x, current = which === 'x' ? state.x : state.y, logKey = which + 'Log';
+    const counts = db.props.map(p => [p, coverage(p.sym, other)]).sort((a, b) => b[1] - a[1]);
+    const peak = Math.max(1, ...counts.map(c => c[1]));
+    const input = el('input', { type: 'text', value: db.bySym[current] ? '' : current, placeholder: 'E^0.5/rho', 'aria-label': 'Formula', spellcheck: false });
+    const msg = el('div', { class: 'formula-msg' }, 'Symbols: ' + db.props.map(p => p.sym).join(', '));
+    const apply = () => { const c = AC.compile(input.value); if (c.error) { msg.textContent = c.error; msg.classList.add('bad'); return; } state[which] = input.value.trim(); pop.hidden = true; render(); plot.fit(); };
+    input.oninput = () => {
+      if (!input.value.trim()) { msg.textContent = ''; msg.classList.remove('bad'); return; }
+      const c = AC.compile(input.value); msg.classList.toggle('bad', !!c.error);
+      msg.textContent = c.error || `${coverage(input.value, other).toLocaleString()} materials would plot`;
+    };
+    input.onkeydown = e => { if (e.key === 'Enter') apply(); };
+    pop.replaceChildren(
+      el('h2', {}, which === 'x' ? 'Horizontal axis' : 'Vertical axis'),
+      el('div', { class: 'scale' }, 'Scale ', ...[['Log', true], ['Linear', false]].map(([label, value]) => el('button', { class: state[logKey] === value ? 'on' : '', onclick: () => { state[logKey] = value; pop.hidden = true; render(); plot.fit(); } }, label))),
+      ...counts.map(([p, n]) => el('button', { class: 'prop-row' + (p.sym === current ? ' on' : ''), title: p.definition, onclick: () => { state[which] = p.sym; pop.hidden = true; render(); plot.fit(); } },
+        el('span', {}, `${p.label} (${p.unit})`, el('span', { class: 'cov' }, el('i', { style: `width:${n / peak * 100}%` }))), el('span', { class: 'n' }, n.toLocaleString()))),
+      el('h2', { style: 'margin-top:10px' }, 'Or write a formula'),
+      el('div', { class: 'formula' }, input, el('button', { class: 'primary', onclick: apply }, 'Plot')), msg,
+      el('div', { class: 'quick' }, ...['E/rho', 'E^0.5/rho', 'E^(1/3)/rho', 'UTS/rho', 'UTS^(2/3)/rho', 'Sy/E', 'k/rho', 'rho*cp', 'k/(rho*cp)'].map(f => el('button', { onclick: () => { input.value = f; input.oninput(); } }, f))));
+    const button = $(which + '-btn').getBoundingClientRect(), host = pop.parentElement.getBoundingClientRect();
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    pop.style.left = AC.clamp(which === 'x' ? button.left - host.left + button.width / 2 - w / 2 : 40, 8, Math.max(8, host.width - w - 8)) + 'px';
+    pop.style.top = AC.clamp(which === 'x' ? button.top - host.top - h - 8 : (host.height - h) / 2, 8, Math.max(8, host.height - h - 8)) + 'px';
+    if (!db.bySym[current]) input.focus();
+  }
+  $('x-btn').onclick = () => openAxis('x');
+  $('y-btn').onclick = () => openAxis('y');
+  document.addEventListener('pointerdown', e => { if (!$('pop').hidden && !e.target.closest('#pop, .axis-btn')) $('pop').hidden = true; });
+
+  /* ---------- side panel ---------- */
+  const shapeSelect = $('shape'), groupSelect = $('group'), colorSelect = $('color'), sizeSelect = $('size');
+  const propOptions = db.props.map(p => el('option', { value: p.sym }, p.label));
+  colorSelect.append(el('option', { value: 'family' }, 'Family'), el('option', { value: 'tag' }, 'My tags'), ...propOptions.map(o => o.cloneNode(true)));
+  sizeSelect.append(el('option', { value: 'none' }, 'Same size'), ...propOptions.map(o => o.cloneNode(true)));
+  shapeSelect.onchange = () => { state.shape = shapeSelect.value; render(true); };
+  groupSelect.onchange = () => { state.group = groupSelect.value; render(true); };
+  colorSelect.onchange = () => { state.color = colorSelect.value; render(true); };
+  sizeSelect.onchange = () => { state.size = sizeSelect.value; render(true); };
+  $('ranges').onchange = e => { state.ranges = e.target.checked; plot.opts.showRanges = state.ranges; render(true); };
+  function renderFamilies(available) {
+    $('families').replaceChildren(...Object.entries(FAMILY_NAMES).map(([key, name]) => el('button', {
+      class: 'chip' + (state.families.has(key) ? '' : ' off'), style: `--c:${FAMILY_COLORS[key]}`, title: 'Click to toggle. Double-click for only this family.',
+      onclick: () => { state.families.has(key) ? state.families.delete(key) : state.families.add(key); render(true); },
+      ondblclick: () => { state.families = new Set([key]); render(true); },
+    }, name, ' ', el('b', {}, available[key] || 0))));
+  }
+  function renderTags() {
+    const names = tags.names();
+    $('tag-empty').hidden = names.length > 0;
+    $('tag-list').replaceChildren(...names.map(n => el('option', { value: n })));
+    $('tag-rows').replaceChildren(...names.map(name => el('div', { class: 'tag-row' },
+      el('button', { class: 'chip' + (state.hiddenTags.has(name) ? ' off' : ''), style: `--c:${tags.color(name)}`, title: 'Show or hide the ring on these materials', onclick: () => { state.hiddenTags.has(name) ? state.hiddenTags.delete(name) : state.hiddenTags.add(name); render(true); } }, name, ' ', el('b', {}, tags.all()[name].ids.length)),
+      el('button', { class: 'ghost', title: 'Show only this tag', onclick: () => { state.isolate = new Set(tags.all()[name].ids); render(true); plot.fit(); } }, 'Only'),
+      el('button', { class: 'ghost x', title: 'Delete tag', 'aria-label': `Delete ${name}`, onclick: () => { tags.drop(name); render(true); } }, '×'))));
+  }
+  function readViews() { try { return JSON.parse(localStorage.getItem(VIEW_KEY)) || []; } catch { return []; } }
+  function renderViews() {
+    $('views').replaceChildren(...[...STARTER_VIEWS, ...readViews()].map(v => el('button', { title: `${v.y} vs ${v.x}`, onclick: () => { Object.assign(state, { x: v.x, y: v.y, xLog: v.xLog ?? true, yLog: v.yLog ?? true }); render(); plot.fit(); } }, v.name)));
+  }
+  $('save-view').onclick = () => {
+    const name = prompt('Name this view', `${new Axis(state.y).short} vs ${new Axis(state.x).short}`);
+    if (!name) return;
+    const list = readViews(); list.push({ name, x: state.x, y: state.y, xLog: state.xLog, yLog: state.yLog });
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(list)); } catch { /* private window */ }
+    renderViews();
+  };
+
+  /* ---------- colours for continuous properties ---------- */
+  const ramp = t => { const stops = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]]; const f = AC.clamp(t, 0, 1) * 3.999, i = Math.floor(f), k = f - i; const c = stops[i].map((v, n) => Math.round(v + (stops[i + 1][n] - v) * k)); return `rgb(${c})`; };
+  function scaleFor(sym) { const values = db.materials.map(m => m.d[sym]).filter(v => v > 0).map(Math.log10); const lo = Math.min(...values), hi = Math.max(...values); return { lo, hi, f: v => (Math.log10(v) - lo) / (hi - lo || 1) }; }
+
+  /* ---------- render ---------- */
+  function visible(m) {
+    if (!state.families.has(m.family)) return false;
+    if (state.isolate && !state.isolate.has(m.id)) return false;
+    if (state.hidden.has(m.id)) return false;
+    if (state.find && !m.search.includes(state.find)) return false;
+    return true;
+  }
+  function render(keep) {
+    const started = performance.now();
+    const xA = new Axis(state.x, state.xLog), yA = new Axis(state.y, state.yLog);
+    $('x-btn').textContent = xA.label + ' ▾'; $('y-btn').textContent = yA.label + ' ▾';
+    const colorScale = db.bySym[state.color] ? scaleFor(state.color) : null;
+    const sizeScale = db.bySym[state.size] ? scaleFor(state.size) : null;
+    const colorOf = m => {
+      if (colorScale) return m.d[state.color] > 0 ? ramp(colorScale.f(m.d[state.color])) : '#9ca3af';
+      if (state.color === 'tag') { const t = tags.of(m.id).find(n => !state.hiddenTags.has(n)); return t ? tags.color(t) : '#9ca3af'; }
+      return FAMILY_COLORS[m.family];
+    };
+    const ringOf = state.color === 'tag' ? null : m => { const t = tags.of(m.id).find(n => !state.hiddenTags.has(n)); return t ? tags.color(t) : null; };
+    const sizeOf = sizeScale ? m => m.d[state.size] > 0 ? 2 + sizeScale.f(m.d[state.size]) * 8 : 2 : null;
+    const rangeOf = state.ranges ? m => {
+      const xr = db.bySym[state.x] && m.range[state.x], yr = db.bySym[state.y] && m.range[state.y];
+      return { x: xr && xr[0] !== xr[1] ? xr : null, y: yr && yr[0] !== yr[1] ? yr : null };
+    } : null;
+    const live = db.materials.filter(visible);
+    const rows = AC.chartRows(live, xA, yA, { color: colorOf, ring: ringOf, size: sizeOf, range: rangeOf });
+    const available = {};
+    AC.chartRows(db.materials, xA, yA).forEach(r => { available[r.m.family] = (available[r.m.family] || 0) + 1; });
+    plot.opts.pointAlpha = colorScale ? 1 : .9;
+    plot.setData({ rows, xAxis: xA, yAxis: yA, keepView: !!keep });
+    plot.setShapes(xA.log && yA.log || true ? AC.shapesFor(rows, xA, yA, { method: state.shape, grouping: state.group }) : []);
+    plot.selected = selection;
+    renderFamilies(available); renderTags();
+    const legend = $('color-legend');
+    legend.replaceChildren(...(colorScale ? [el('div', { class: 'gradient', style: `background:linear-gradient(90deg,${[0, .25, .5, .75, 1].map(ramp).join(',')})` }), el('div', { class: 'gradient-labels' }, el('span', {}, formatValue(10 ** colorScale.lo)), el('span', {}, db.bySym[state.color].unit), el('span', {}, formatValue(10 ** colorScale.hi)))] : []));
+    window.__lastRefreshMs = performance.now() - started;
+    window.__rows = rows.length;
+  }
+  function showActions() {
+    $('actions').hidden = selection.size === 0;
+    $('sel-count').textContent = `${selection.size} selected`;
+    if (selection.size) setTimeout(() => $('tag-name').focus({ preventScroll: true }));
+  }
+  function applyTag() {
+    const name = $('tag-name').value.trim();
+    if (!name) return;
+    tags.add(name, [...selection]);
+    $('tag-name').value = ''; selection = new Set(); showActions(); render(true);
+  }
+  $('tag-go').onclick = applyTag;
+  $('tag-name').onkeydown = e => { if (e.key === 'Enter') applyTag(); e.stopPropagation(); };
+  $('sel-clear').onclick = () => { selection = new Set(); showActions(); plot.selected = selection; plot.draw(); };
+  $('sel-isolate').onclick = () => { state.isolate = new Set(selection); selection = new Set(); showActions(); render(); };
+  $('sel-hide').onclick = () => { selection.forEach(id => state.hidden.add(id)); selection = new Set(); showActions(); render(true); };
+  $('sel-zoom').onclick = () => {
+    const rows = plot.rows.filter(r => selection.has(r.m.id));
+    if (rows.length) plot.animateTo(plot.computeFit(rows));
+  };
+  function renderDrawer() {
+    const box = $('drawer');
+    box.hidden = !inspected;
+    if (inspected) box.replaceChildren(AC.materialCard(inspected, () => { inspected = null; renderDrawer(); }));
+  }
+  function setMode(mode) {
+    plot.mode = mode;
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  }
+  document.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => setMode(b.dataset.mode); });
+  $('fit').onclick = () => { state.isolate = null; state.hidden.clear(); render(); plot.fit(); };
+  $('search').oninput = e => { state.find = e.target.value.toLowerCase().trim(); render(true); };
+  $('side-toggle').onclick = () => $('side').classList.toggle('closed');
+  if (innerWidth <= 820) $('side').classList.add('closed');
+  addEventListener('keydown', e => {
+    if (e.target.matches('input, select, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
+    const key = e.key.toLowerCase();
+    if (key === '/') { e.preventDefault(); $('search').focus(); }
+    else if (key === 'v') setMode('pan'); else if (key === 'b') setMode('box'); else if (key === 'l') setMode('lasso');
+    else if (key === 'f') $('fit').click();
+    else if (key === 'x') { [state.x, state.y] = [state.y, state.x]; [state.xLog, state.yLog] = [state.yLog, state.xLog]; render(); plot.fit(); }
+    else if (key === 'escape') { $('sel-clear').click(); $('pop').hidden = true; inspected = null; renderDrawer(); }
+  });
+  renderViews();
+  render();
+  plot.view = { ...plot.fitView }; plot.draw();
+  window.__plot = plot; window.__ready = true;
+})();
+</script>
+</body>
+</html>

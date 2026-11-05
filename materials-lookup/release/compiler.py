@@ -91,7 +91,7 @@ def compile_data(database):
     properties = []
     for p in data["properties"]:
         units = [asdict(u) for u in conversions_for(p["quantity_kind"])]
-        properties.append(dict(p, units=units, metric_unit="GPa" if p["id"] == "youngs_modulus" else units[0]["unit"]))
+        properties.append(dict(p, units=units, metric_unit="GPa" if p["id"] in {"youngs_modulus", "flexural_modulus"} else units[0]["unit"]))
     index = {"version": VERSION, "contract_version": "0.1.0", "counts": data["dataset"]["expected_counts"],
         "entities": entities, "taxa": data["taxa"], "properties": properties, "property_groups": data["property_groups"],
         "conditions": data["conditions"], "legacy_targets": extras["legacy_targets"], "property_aliases": PROPERTY_IDS}

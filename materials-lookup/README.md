@@ -8,8 +8,8 @@ any other tool.
 Adding a material happens here, not anywhere else. The project this came from
 is closed; nothing upstream is maintained.
 
-Current contents: **222 material identities, 92 named states, 1,593
-observations, 10 registered properties and references to 28 source documents**.
+Current contents: **1,453 material identities, 101 named states, 6,410
+observations, 12 registered properties and references to 585 sources**.
 The generated site has no runtime dependencies, backend, accounts, or network
 search service.
 
@@ -139,6 +139,70 @@ python3 materials-lookup/builder/import_reference_tables.py --pdf-dir private-so
 
 Omit `--check` to regenerate the reviewed authoring files. The importer rejects
 changed PDF snapshots and never downloads or redistributes documents.
+
+The September 2026 Ashby chart batch adds 66 identities across composites,
+wood, ceramics, foams, elastomers, and glasses. Its importer can reconstruct
+just those additions while preserving the earlier records:
+
+```sh
+python3.13 materials-lookup/builder/import_ashby_families.py --pdf-dir private-sources --check
+```
+
+See [the batch review](docs/ashby-families-review.md) for source selection,
+conversions, and property coverage. The complete reference-table importer
+requires the archived originals for every earlier batch too.
+
+The October 2026 catalog batch adds **1,072 identities and 4,033 observations**
+across eight classes. It uses manufacturer datasheets, manufacturer comparison
+tables, CDA alloy references, and the USDA Wood Handbook. No aliases, taxonomy
+nodes, or named test states count toward those additions. See the
+[source review and exclusions](docs/catalog-expansion-2026-10-batch-review.md).
+
+Reconstruct this batch from the private snapshots with:
+
+```sh
+python3.13 materials-lookup/builder/import_catalog_expansion.py --source-dir private-sources --check
+```
+
+The default command writes a candidate outside the repository. Use `--apply`
+only after reviewing it. The full reference-table importer also includes this
+batch; it needs all earlier source archives plus the October snapshots.
+
+The October 2026 chart staples batch adds **15 identities and 73 observations**,
+and gives 8 existing aluminium and steel grades the values they needed to appear
+on the stiffness chart. Reconstruct it from the private snapshots with:
+
+```sh
+python3 materials-lookup/builder/import_chart_staples.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/chart-staples-2026-10-batch-review.md).
+
+The October 2026 concrete batch adds a compressive strength property, a Concrete
+family, **12 identities and 46 observations**. Reconstruct it with:
+
+```sh
+python3 materials-lookup/builder/import_concrete.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/concrete-2026-10-batch-review.md).
+
+The gathered documents batch adds **66 identities and 198 observations**. Reconstruct it with:
+
+```sh
+python3 materials-lookup/builder/import_gathered.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/gathered-2026-10-batch-review.md).
+
+The wood batch adds **235 observations to the 107 existing species** and no new
+identities. Reconstruct it with:
+
+```bash
+python3 materials-lookup/builder/import_wood.py --source-dir private-sources --check
+```
+
+See [the batch review](docs/wood-2026-10-batch-review.md).
 
 ## Layout
 

@@ -1,0 +1,54 @@
+# Ashby Chart roadmap
+
+## October 31 rebuild
+
+- [x] Move from Plotly to a canvas chart, with data from a table of compatible rows.
+- [x] Studio as the default view, with formula axes and colour and size by property.
+- [x] One Ashby oval per family, single-material tags, draggable label boxes, and a movable box.
+- [x] Selection stack, design brief and Parallel view on one filter chain.
+- [x] Save the chart as an image, since Plotly's download went with it.
+- [ ] Try pinch zoom and label dragging on a real phone, and a final look in real Safari.
+- [ ] Compare search clicks for a few weeks after release.
+
+## October 3 catalog expansion
+
+- [x] Add at least 1,000 distinct, sourced materials across multiple classes.
+- [x] Preserve source literals, conditions, citations, and earlier records.
+- [x] Exclude duplicate variants and ambiguous source cells before publication.
+- [x] Verify the expanded catalog in the lookup, chart, and export flows.
+
+Added 1,072 materials and 4,033 observations, bringing the catalog to 1,360
+materials. Sources and exclusions are recorded in the
+[October batch review](../../materials-lookup/docs/catalog-expansion-2026-10-batch-review.md).
+
+## October 2 grouping review
+
+- [x] Default to one outline per broad family, with individual grades visible.
+- [x] Add a visible Family / Subgroup / Points only control and keep the
+      outline-shape choice separate.
+- [x] Retain the subgroup prototypes and support earlier points-only links.
+
+## September 30 review
+
+- [x] Rename the public tool and metadata to lead with Ashby Chart.
+- [x] Add at least ten distinct sourced grades in each requested family:
+      synthetic composites, wood, ceramics, foams, elastomers, and glasses.
+- [x] Include titanium in room-temperature comparisons without losing the
+      density and modulus test temperatures.
+- [x] Replace the current layout with a chart-first workspace, compact controls,
+      and a side inspector. Preserve inspectable alternatives.
+- [x] Replace inflated family hulls with reviewed subgroup envelopes; keep
+      point-only and alternate envelope methods available for comparison.
+
+Completed October 1: 66 additions, 288 total materials. Verification: full
+Python suite, source-rebuild and release checks, group geometry checks, and
+browser checks for the chart, lookup, and preserved prototype pages.
+
+- [x] Use the Materials lookup catalog for Ashby charts and source inspection.
+- [x] Consolidate the old selector URL into one public chart tool.
+- [x] Preserve grade, state, condition, range, and specified-limit distinctions.
+- [x] Compute rankings and isolines from the shared Python index library.
+- [x] Search grades, show data coverage, and share or export the displayed case.
+- [ ] Expand curated coverage for material families and properties currently missing.
+- [ ] Add explicit test-condition selection beyond temperature and basis filters.
+- [ ] Migrate remaining legacy data ingestion and Python APIs to the observation catalog.

@@ -1,6 +1,45 @@
 # Materials data consolidation
 Date: 2026-09-11
-Status: Plan for review; nothing implemented
+Status: Chart consolidation implemented on 2026-09-30, extended 2026-10-30; broader data/API migration remains proposed
+
+## Progress on 2026-10-30
+
+A readiness audit found the default stiffness chart had no aluminium, carbon
+steel, or magnesium, and that 447 of its 503 metal points were copper alloys.
+The chart staples batch fills part of that gap from pinned sources; see
+`materials-lookup/docs/chart-staples-2026-10-batch-review.md` for what was
+added and what remains off the chart. The tool also moved to
+`/tools/ashby-chart/`, and `/tools/materials-explorer/` now redirects there.
+
+Released to production on 2026-10-30 as `a429e5f` (Netlify published it at
+01:16 UTC on 2026-10-31). Live checks passed: the homepage, chart, Materials
+tool, and one unchanged tool (Beam Bending) loaded with no console errors; the
+chart reported 1,047 of 1,375 materials; a 7075 search found the new record in
+both tools; the old URL redirected with its search preserved; `sitemap.xml`
+lists the new URL only; and the private source documents return 404.
+
+## Progress on 2026-09-30
+
+Materials Explorer (now Ashby Chart) uses a generated observation projection from the
+Materials lookup catalog. The former Ashby selector URL pointed to it, and
+the catalog lists one chart tool. States, conditions, source citations,
+intervals, and specified limits remain attached to each plotted value.
+`pycalcs/material_indices.py` supplies ranking equations and isolines.
+
+The legacy 60-material dataset, seven-material Python API, ingestion scripts,
+and historical prototypes remain available to their existing callers. They
+no longer supply the public chart. The migration proposed below has not been
+completed; the inventory describes the situation when this plan was written.
+
+The implementation is on `task/ashby-materials-database`. Verification on
+2026-09-30: 1,657 Python tests and 2,611 subtests passed; the Materials release
+verifier checked all 776 generated artifacts; lookup search tests and the site
+build passed. Browser checks covered light/dark themes, mobile sizing,
+source inspection, CSV and shared links, state/condition filters, the old URL
+redirect, data-version mismatch and retry, stale offline caches, and the three
+retained prototypes using the shared chart component.
+
+## Original proposal
 
 Three materials datasets now live in this repository. This plan reduces them to
 one without changing any tool, using the existing `pycalcs/material_db.py`
