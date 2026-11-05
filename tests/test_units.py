@@ -24,8 +24,10 @@ EXPECTED_QUANTITIES = [
     "capacitance",
     "current",
     "density",
+    "dynamic_viscosity",
     "energy",
     "force",
+    "kinematic_viscosity",
     "length",
     "linear_stiffness",
     "magnetic_flux_density",
@@ -611,6 +613,197 @@ class TestPowerUnits:
         """1 MW = 1000 kW."""
         result = units.convert_value("power", "MW", "kW", 1.0)
         assert result == pytest.approx(1000.0, rel=1e-10)
+
+
+# =============================================================================
+# Test Viscosity Units
+# =============================================================================
+
+VISCOSITY_REFERENCE_FACTORS = [
+    ("dynamic_viscosity", "Pa·s", "Pa·s", 1.0),
+    ("dynamic_viscosity", "mPa·s", "Pa·s", 1e-3),
+    ("dynamic_viscosity", "µPa·s", "Pa·s", 1e-6),
+    ("dynamic_viscosity", "cP", "Pa·s", 1e-3),
+    ("dynamic_viscosity", "P", "Pa·s", 0.1),
+    ("dynamic_viscosity", "kg/(m·s)", "Pa·s", 1.0),
+    ("dynamic_viscosity", "g/(cm·s)", "Pa·s", 0.1),
+    ("dynamic_viscosity", "lb/(ft·s)", "Pa·s", 1.488164),
+    ("dynamic_viscosity", "lbf·s/ft^2", "Pa·s", 47.88026),
+    ("kinematic_viscosity", "m^2/s", "m^2/s", 1.0),
+    ("kinematic_viscosity", "mm^2/s", "m^2/s", 1e-6),
+    ("kinematic_viscosity", "cm^2/s", "m^2/s", 1e-4),
+    ("kinematic_viscosity", "cSt", "m^2/s", 1e-6),
+    ("kinematic_viscosity", "St", "m^2/s", 1e-4),
+    ("kinematic_viscosity", "ft^2/s", "m^2/s", 0.09290304),
+    ("kinematic_viscosity", "in^2/s", "m^2/s", 0.00064516),
+]
+
+
+class TestViscosityUnits:
+    """Dynamic and kinematic viscosity remain separate unit quantities."""
+
+    @pytest.mark.parametrize(
+        ("quantity", "alias", "canonical", "base_unit"),
+        [
+            ("dynamic_viscosity", "Pa*s", "Pa·s", "Pa·s"),
+            ("dynamic_viscosity", "mPa*s", "mPa·s", "Pa·s"),
+            ("dynamic_viscosity", "uPa*s", "µPa·s", "Pa·s"),
+            ("dynamic_viscosity", "μPa·s", "µPa·s", "Pa·s"),
+            ("dynamic_viscosity", "kg/(m*s)", "kg/(m·s)", "Pa·s"),
+            ("dynamic_viscosity", "g/(cm*s)", "g/(cm·s)", "Pa·s"),
+            ("dynamic_viscosity", "lb/(ft*s)", "lb/(ft·s)", "Pa·s"),
+            ("dynamic_viscosity", "lbf*s/ft^2", "lbf·s/ft^2", "Pa·s"),
+            ("kinematic_viscosity", "m²/s", "m^2/s", "m^2/s"),
+            ("kinematic_viscosity", "mm²/s", "mm^2/s", "m^2/s"),
+            ("kinematic_viscosity", "cm²/s", "cm^2/s", "m^2/s"),
+            ("kinematic_viscosity", "ft²/s", "ft^2/s", "m^2/s"),
+            ("kinematic_viscosity", "in²/s", "in^2/s", "m^2/s"),
+        ],
+    )
+    def test_aliases(self, quantity, alias, canonical, base_unit):
+        """Plain-text and Unicode spellings work in both directions."""
+        result = units.convert_units(quantity, alias, base_unit, 2.5)
+        assert result == units.convert_units(quantity, canonical, base_unit, 2.5)
+        restored = units.convert_value(
+            quantity, base_unit, alias, result["converted_value"]
+        )
+        assert restored == pytest.approx(2.5)
+        assert units.conversion_factor(quantity, canonical, alias) == 1.0
+        assert alias not in units.get_unit_catalog()[quantity]
+
+    @pytest.mark.parametrize(
+        ("system", "quantity", "symbol", "factor"),
+        [
+            ("MKS", "dynamic_viscosity", "Pa·s", 1.0),
+            ("MKS", "kinematic_viscosity", "m^2/s", 1.0),
+            ("MMGS", "dynamic_viscosity", "mPa·s", 0.001),
+            ("MMGS", "kinematic_viscosity", "mm^2/s", 1e-6),
+            ("IPS", "dynamic_viscosity", "lbf·s/ft^2", 47.88025898033584),
+            ("IPS", "kinematic_viscosity", "ft^2/s", 0.09290304),
+        ],
+    )
+    def test_unit_system_metadata(self, system, quantity, symbol, factor):
+        """Each unit system exports the same SI factors used by Python."""
+        assert units.get_unit_systems()[system][quantity] == symbol
+        entry = units.get_unit_systems_for_js()[system][quantity]
+        assert entry["unit"] == symbol
+        assert entry["toSI"] == pytest.approx(factor, rel=1e-14)
+        assert entry["fromSI"] == pytest.approx(1 / factor, rel=1e-14)
+
+    @pytest.mark.parametrize(
+        ("quantity", "symbol", "base_unit", "factor"),
+        VISCOSITY_REFERENCE_FACTORS,
+    )
+    def test_reference_factors(self, quantity, symbol, base_unit, factor):
+        """NIST SP 811 B.9 factors, with exact SI/CGS decimal prefixes.
+
+        Imperial dynamic factors use the seven-digit values in NIST's table.
+        Squared lengths use the exact international foot and inch definitions.
+        """
+        result = units.convert_value(quantity, symbol, base_unit, 1.0)
+        assert result == pytest.approx(factor, rel=1e-7)
+        assert units.conversion_factor(quantity, symbol, base_unit) == result
+
+    @pytest.mark.parametrize(
+        ("quantity", "from_unit", "to_unit", "expected"),
+        [
+            ("dynamic_viscosity", "cP", "mPa·s", 1.0),
+            ("dynamic_viscosity", "P", "g/(cm·s)", 1.0),
+            ("dynamic_viscosity", "Pa·s", "kg/(m·s)", 1.0),
+            ("dynamic_viscosity", "P", "cP", 100.0),
+            ("dynamic_viscosity", "mPa·s", "µPa·s", 1000.0),
+            ("kinematic_viscosity", "cSt", "mm^2/s", 1.0),
+            ("kinematic_viscosity", "St", "cm^2/s", 1.0),
+            ("kinematic_viscosity", "St", "cSt", 100.0),
+            ("kinematic_viscosity", "ft^2/s", "in^2/s", 144.0),
+        ],
+    )
+    def test_equivalent_units_and_cgs_prefixes(
+        self, quantity, from_unit, to_unit, expected
+    ):
+        """Centi- units are 1/100 of poise or stokes, not their SI bases."""
+        result = units.convert_value(quantity, from_unit, to_unit, 1.0)
+        assert result == pytest.approx(expected, rel=1e-14)
+
+    @pytest.mark.parametrize(
+        ("quantity", "from_unit", "to_unit", "value", "expected", "factor"),
+        [
+            ("dynamic_viscosity", "cP", "Pa·s", 1250.0, 1.25, 0.001),
+            ("kinematic_viscosity", "cSt", "m^2/s", 250.0, 0.00025, 1e-6),
+        ],
+    )
+    def test_structured_results(
+        self, quantity, from_unit, to_unit, value, expected, factor
+    ):
+        """UI metadata reports the matching SI base and linear multiplier."""
+        result = units.convert_units(quantity, from_unit, to_unit, value)
+        assert result["converted_value"] == pytest.approx(expected)
+        assert result["base_value"] == pytest.approx(expected)
+        assert result["multiplier"] == pytest.approx(factor)
+        assert result["has_multiplier_only"] is True
+
+    @pytest.mark.parametrize(
+        ("quantity", "from_unit", "to_unit"),
+        [
+            ("dynamic_viscosity", "cP", "cSt"),
+            ("dynamic_viscosity", "cSt", "cP"),
+            ("kinematic_viscosity", "cSt", "cP"),
+            ("kinematic_viscosity", "cP", "cSt"),
+        ],
+    )
+    def test_cross_quantity_conversions_are_rejected(
+        self, quantity, from_unit, to_unit
+    ):
+        """Converting dynamic to kinematic viscosity requires density."""
+        with pytest.raises(ValueError, match="not valid"):
+            units.convert_value(quantity, from_unit, to_unit, 1)
+        with pytest.raises(ValueError, match="not valid"):
+            units.convert_units(quantity, from_unit, to_unit, 1)
+        with pytest.raises(ValueError, match="not valid"):
+            units.conversion_factor(quantity, from_unit, to_unit)
+
+    @pytest.mark.parametrize("value", [0.0, 1e-12, 123.456, 1e12])
+    @pytest.mark.parametrize(
+        ("quantity", "symbol", "base_unit", "factor"),
+        VISCOSITY_REFERENCE_FACTORS,
+    )
+    def test_round_trip(self, quantity, symbol, base_unit, factor, value):
+        """All listed units retain small and large values through the SI base."""
+        base = units.convert_value(quantity, symbol, base_unit, value)
+        result = units.convert_value(quantity, base_unit, symbol, base)
+        assert result == pytest.approx(value, rel=1e-14, abs=0)
+
+    @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+    @pytest.mark.parametrize(
+        ("quantity", "from_unit", "to_unit"),
+        [
+            ("dynamic_viscosity", "cP", "Pa·s"),
+            ("kinematic_viscosity", "cSt", "m^2/s"),
+        ],
+    )
+    def test_nonfinite_values_are_rejected(
+        self, quantity, from_unit, to_unit, value
+    ):
+        """A nonfinite input cannot produce a usable engineering conversion."""
+        with pytest.raises(ValueError, match="finite"):
+            units.convert_value(quantity, from_unit, to_unit, value)
+        with pytest.raises(ValueError, match="finite"):
+            units.convert_units(quantity, from_unit, to_unit, value)
+
+    @pytest.mark.parametrize(
+        ("quantity", "from_unit", "to_unit"),
+        [
+            ("dynamic_viscosity", "lbf·s/ft^2", "Pa·s"),
+            ("dynamic_viscosity", "Pa·s", "µPa·s"),
+            ("kinematic_viscosity", "m^2/s", "cSt"),
+        ],
+    )
+    def test_finite_input_that_overflows_is_rejected(
+        self, quantity, from_unit, to_unit
+    ):
+        """Neither an infinite SI intermediate nor output reaches the UI."""
+        with pytest.raises(ValueError, match="finite"):
+            units.convert_units(quantity, from_unit, to_unit, 1e308)
 
 
 # =============================================================================

@@ -1,4 +1,6 @@
 const BASE_UNITS = {
+  dynamic_viscosity: "Pa·s",
+  kinematic_viscosity: "m^2/s",
   length: "m",
   area: "m^2",
   volume: "m^3",
@@ -25,6 +27,8 @@ const BASE_UNITS = {
 };
 
 const QUANTITY_LABELS = {
+  dynamic_viscosity: "Dynamic viscosity",
+  kinematic_viscosity: "Kinematic viscosity",
   length: "Length",
   area: "Area",
   volume: "Volume",
@@ -51,6 +55,8 @@ const QUANTITY_LABELS = {
 };
 
 const DIMENSION_MAP = {
+  dynamic_viscosity: "M·L⁻¹·T⁻¹",
+  kinematic_viscosity: "L²·T⁻¹",
   length: "L",
   area: "L²",
   volume: "L³",
@@ -77,6 +83,8 @@ const DIMENSION_MAP = {
 };
 
 const QUANTITY_SYMBOLS = {
+  dynamic_viscosity: "μ",
+  kinematic_viscosity: "ν",
   length: "L",
   area: "A",
   volume: "V",
@@ -103,6 +111,8 @@ const QUANTITY_SYMBOLS = {
 };
 
 const PROPERTY_NATURE = {
+  dynamic_viscosity: "Intensive",
+  kinematic_viscosity: "Intensive",
   length: "Extensive",
   area: "Extensive",
   volume: "Extensive",
@@ -129,6 +139,11 @@ const PROPERTY_NATURE = {
 };
 
 const ABSOLUTE_TEMPERATURE_UNITS = new Set(["K", "°R"]);
+
+const QUANTITY_HELP = {
+  dynamic_viscosity: "Dynamic viscosity measures resistance to shear. Use this category for Pa·s, cP, and poise. Converting to kinematic viscosity requires the fluid density at the same temperature.",
+  kinematic_viscosity: "Kinematic viscosity is dynamic viscosity divided by density. Use this category for m²/s, cSt, and stokes. Converting to dynamic viscosity requires the fluid density at the same temperature.",
+};
 
 const COMPARABLES = {
   length: [
@@ -618,6 +633,15 @@ export function initDualConverter({
     const list = refs.comparisons;
     list.innerHTML = "";
     const quantityKey = state.quantity;
+    const heading = list.closest(".info-card")?.querySelector("h3");
+    if (heading) heading.textContent = QUANTITY_HELP[quantityKey] ? "About viscosity" : "Comparables";
+    if (QUANTITY_HELP[quantityKey]) {
+      const explanation = document.createElement("p");
+      explanation.className = "comparison-empty";
+      explanation.textContent = QUANTITY_HELP[quantityKey];
+      list.appendChild(explanation);
+      return;
+    }
     const comparables = COMPARABLES[quantityKey];
     if (!comparables || comparables.length === 0) {
       const empty = document.createElement("p");

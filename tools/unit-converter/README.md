@@ -29,6 +29,21 @@ Python callers can also use `BTU/h`, `Btu/h`, `Btu/hr`, corresponding
 `kBTU`/`kBtu` and `MMBTU`/`MMBtu` spellings, `kcal/h`, or `TR`. The browser
 shows one entry per unit.
 
+## Viscosity
+
+Choose **Dynamic viscosity** for Pa·s, mPa·s, µPa·s, centipoise (cP),
+poise (P), kg/(m·s), g/(cm·s), lb/(ft·s), and lbf·s/ft².
+The pound-mass and pound-force units are distinct.
+
+Choose **Kinematic viscosity** for m²/s, mm²/s, cm²/s, centistokes (cSt),
+stokes (St), ft²/s, and in²/s.
+
+One cP equals one mPa·s; one cSt equals one mm²/s. These factors follow
+[NIST SP 811, Appendix B.8](https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors/nist-guide-si-appendix-b8).
+The two viscosity categories stay separate because converting between them
+requires fluid density at the same temperature. The converter changes units
+within each category; it does not estimate fluid properties or density.
+
 ## Requirements
 
 - Allow the user to select a quantity family (length, mass, temperature, etc.)

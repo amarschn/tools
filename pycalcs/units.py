@@ -306,6 +306,33 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
         "gal_us/h": _linear_unit("gal_us/h", "US gallon per hour", 3.785411784e-3 / 3600.0),
         "gal_imp/min": _linear_unit("gal_imp/min", "Imperial gallon per minute", 4.54609e-3 / 60.0),
     },
+    # NIST SP 811 Appendix B.8: viscosity factors use SI, CGS, and
+    # international-foot / avoirdupois-pound definitions.
+    "dynamic_viscosity": {
+        "Pa·s": _linear_unit("Pa·s", "pascal second", 1.0),
+        "mPa·s": _linear_unit("mPa·s", "millipascal second", 1e-3),
+        "µPa·s": _linear_unit("µPa·s", "micropascal second", 1e-6),
+        "cP": _linear_unit("cP", "centipoise", 1e-3),
+        "P": _linear_unit("P", "poise", 0.1),
+        "kg/(m·s)": _linear_unit("kg/(m·s)", "kilogram per metre second", 1.0),
+        "g/(cm·s)": _linear_unit("g/(cm·s)", "gram per centimetre second", 0.1),
+        "lb/(ft·s)": _linear_unit(
+            "lb/(ft·s)", "pound mass per foot second", 0.45359237 / 0.3048,
+        ),
+        "lbf·s/ft^2": _linear_unit(
+            "lbf·s/ft^2", "pound-force second per square foot",
+            4.4482216152605 / 0.3048**2,
+        ),
+    },
+    "kinematic_viscosity": {
+        "m^2/s": _linear_unit("m^2/s", "square metre per second", 1.0),
+        "mm^2/s": _linear_unit("mm^2/s", "square millimetre per second", 1e-6),
+        "cm^2/s": _linear_unit("cm^2/s", "square centimetre per second", 1e-4),
+        "cSt": _linear_unit("cSt", "centistokes", 1e-6),
+        "St": _linear_unit("St", "stokes", 1e-4),
+        "ft^2/s": _linear_unit("ft^2/s", "square foot per second", 0.3048**2),
+        "in^2/s": _linear_unit("in^2/s", "square inch per second", 0.0254**2),
+    },
     "mass_flow_rate": {
         "kg/s": _linear_unit("kg/s", "kilogram per second", 1.0),
         "kg/h": _linear_unit("kg/h", "kilogram per hour", 1.0 / 3600.0),
@@ -321,6 +348,23 @@ QUANTITY_DEFINITIONS: Dict[str, Dict[str, UnitDefinition]] = {
 
 # Alternate spellings are accepted by Python without duplicating catalog rows.
 UNIT_ALIASES: dict[str, dict[str, str]] = {
+    "dynamic_viscosity": {
+        "Pa*s": "Pa·s",
+        "mPa*s": "mPa·s",
+        "uPa*s": "µPa·s",
+        "μPa·s": "µPa·s",
+        "kg/(m*s)": "kg/(m·s)",
+        "g/(cm*s)": "g/(cm·s)",
+        "lb/(ft*s)": "lb/(ft·s)",
+        "lbf*s/ft^2": "lbf·s/ft^2",
+    },
+    "kinematic_viscosity": {
+        "m²/s": "m^2/s",
+        "mm²/s": "mm^2/s",
+        "cm²/s": "cm^2/s",
+        "ft²/s": "ft^2/s",
+        "in²/s": "in^2/s",
+    },
     "power": {
         "BTU/h": "BTU/hr",
         "Btu/h": "BTU/hr",
@@ -386,6 +430,8 @@ UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
         "rotational_stiffness": "N·m/rad",
         "volumetric_flow_rate": "m^3/s",
         "mass_flow_rate": "kg/s",
+        "dynamic_viscosity": "Pa·s",
+        "kinematic_viscosity": "m^2/s",
     },
     "MMGS": {
         # Millimetre-gram-second (common in mechanical CAD)
@@ -409,6 +455,8 @@ UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
         "rotational_stiffness": "N·m/rad",
         "volumetric_flow_rate": "L/min",
         "mass_flow_rate": "kg/h",
+        "dynamic_viscosity": "mPa·s",
+        "kinematic_viscosity": "mm^2/s",
     },
     "IPS": {
         # Inch-pound-second (US customary)
@@ -432,6 +480,8 @@ UNIT_SYSTEMS: Dict[str, Dict[str, str]] = {
         "rotational_stiffness": "lbf·ft/deg",
         "volumetric_flow_rate": "CFM",
         "mass_flow_rate": "lb/h",
+        "dynamic_viscosity": "lbf·s/ft^2",
+        "kinematic_viscosity": "ft^2/s",
     },
 }
 
@@ -519,8 +569,13 @@ def convert_value(quantity: str, from_unit: str, to_unit: str, value: float) -> 
     definition_from = units[from_unit]
     definition_to = units[to_unit]
 
+    if not math.isfinite(value):
+        raise ValueError("Value must be a finite number.")
     base_value = definition_from.to_base(value)
-    return definition_to.from_base(base_value)
+    converted_value = definition_to.from_base(base_value)
+    if not math.isfinite(base_value) or not math.isfinite(converted_value):
+        raise ValueError("Conversion must produce finite values; reduce the magnitude.")
+    return converted_value
 
 
 def conversion_factor(quantity: str, from_unit: str, to_unit: str) -> float:
