@@ -85,6 +85,37 @@ IP_Q_CONVERSION = 3.412142  # W → BTU/hr
 IP_Q_FLUX_CONVERSION = 0.317101  # W/m² → BTU/(hr·ft²)
 
 
+def _wall_number(value: float, name: str, *, positive: bool = False) -> float:
+    """Return a finite wall input as a float, optionally requiring positivity.
+
+    Raises ValueError for booleans, nonnumeric values, infinity, NaN, or a
+    nonpositive value when ``positive`` is true. No physical equation is used.
+
+    ---Parameters---
+    value : float
+        Numeric input to validate and convert to a float.
+    name : str
+        Input label used in error messages.
+    positive : bool
+        Require a value strictly greater than zero when true.
+
+    ---Returns---
+    number : float
+        Validated finite numeric value.
+    """
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite number.")
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(f"{name} must be a finite number.") from error
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be a finite number.")
+    if positive and number <= 0:
+        raise ValueError(f"{name} must be greater than zero.")
+    return number
+
+
 def composite_wall_analysis(
     area: float,
     interior_temperature: float,
@@ -93,30 +124,34 @@ def composite_wall_analysis(
     layer_conductivities: Iterable[float],
     interior_convection_coefficient: float | None = None,
     exterior_convection_coefficient: float | None = None,
-) -> dict[str, float | List[float] | Dict[str, float] | List[Dict[str, float | str]]]:
+) -> dict[str, object]:
     """
     Evaluate steady one-dimensional heat transfer through a layered wall.
 
-    This helper assembles a one-dimensional thermal-resistance network with
-    optional convection films on each side and a stack of conduction layers in
-    between. It returns not only the overall heat transfer rate and U-value, but
-    also the individual resistances, interface temperature profile, and
-    conversions to the inch–pound unit system so that envelope calculations can
-    be cross-checked against building-code tables.
+    Layers have constant conductivity and a common area, with no internal heat
+    generation or parallel heat paths. Positive heat flow is from interior to
+    exterior; reversed temperatures produce negative heat flow. Optional
+    convection films connect ambient temperatures to the wall surfaces. Without
+    a film, the boundary temperature is the corresponding surface temperature.
+    Whole-wall resistance (K/W) is distinct from area-normalized R-value
+    (m²·K/W). Only the latter is the reciprocal of the U-value. All inputs and
+    calculated outputs must be finite; invalid inputs raise ValueError.
 
     ---Parameters---
     area : float
         Exposed wall area in square metres (m^2). Must be greater than zero.
     interior_temperature : float
-        Ambient temperature on the hot side in degrees Celsius (°C).
+        Interior ambient temperature in °C when an interior film is present;
+        otherwise the interior surface temperature. May be colder than exterior.
     exterior_temperature : float
-        Ambient temperature on the cold side in degrees Celsius (°C).
+        Exterior ambient temperature in °C when an exterior film is present;
+        otherwise the exterior surface temperature.
     layer_thicknesses : iterable of float
         Thickness of each solid layer in metres (m). Length must match
         ``layer_conductivities``. All values must be greater than zero.
     layer_conductivities : iterable of float
         Thermal conductivity for each layer in watts per metre-kelvin (W/m·K).
-        Length must match ``layer_thicknesses`` and all values must be greater than zero.
+        Length must match ``layer_thicknesses`` and all values must be positive.
     interior_convection_coefficient : float, optional
         Interior heat transfer coefficient (h_i) in W/m^2·K. When provided it
         models an interior film resistance of 1/(h_i·A). Must be greater than zero.
@@ -126,7 +161,7 @@ def composite_wall_analysis(
 
     ---Returns---
     heat_transfer_rate : float
-        Overall heat transfer rate (Q) in watts (W).
+        Signed heat transfer rate (Q) in watts (W), positive toward the exterior.
     heat_flux : float
         Heat flux (q'') in watts per square metre (W/m^2).
     heat_flux_ip : float
@@ -138,9 +173,11 @@ def composite_wall_analysis(
     overall_u_value_ip : float
         Overall heat transfer coefficient expressed in BTU/(hr·ft^2·°F).
     total_thermal_resistance : float
-        Total thermal resistance (R_total) in kelvin per watt (K/W).
+        Whole-wall thermal resistance (R_total) in kelvin per watt (K/W).
+    total_r_value_si : float
+        Area-normalized R-value in m²·K/W; equals A times R_total and 1/U.
     total_r_value_ip : float
-        Total thermal resistance expressed in (hr·ft^2·°F)/BTU.
+        Area-normalized R-value expressed in (hr·ft²·°F)/BTU.
     layer_resistances : list
         Thermal resistance contributed by each conduction layer in K/W.
     film_resistances : dict
@@ -149,25 +186,19 @@ def composite_wall_analysis(
     temperature_profile : list
         Ordered list of dictionaries describing the temperature (°C) after each
         resistance element. Each entry contains the keys ``name``,
-        ``type`` (ambient, convection, conduction), ``temperature_c``, and
-        ``resistance_k_per_w``.
+        ``type`` (ambient, surface, convection, conduction), ``temperature_c``,
+        and the preceding element's ``resistance_k_per_w``. Each node also has
+        ``cumulative_resistance_k_per_w`` from the interior boundary and
+        ``distance_m`` from the interior surface. Films have zero physical
+        thickness, so their ambient and surface nodes share a distance.
     interface_temperatures : list
-        Temperatures at the interior surface, each layer interface, and exterior
-        surface in degrees Celsius (°C). The list starts at the interior surface
-        (after the interior film, if present) and ends at the exterior ambient.
-
-    ---LaTeX---
-    R_\\text{film,i} = \\frac{1}{h_i A},\\quad
-    R_j = \\frac{L_j}{k_j A},\\quad
-    R_\\text{film,o} = \\frac{1}{h_o A} \\\\
-    R_\\text{total} = R_\\text{film,i} + \\sum_j R_j + R_\\text{film,o} \\\\
-    Q = \\frac{T_i - T_o}{R_\\text{total}},\\quad
-    q'' = \\frac{Q}{A},\\quad
-    U = \\frac{1}{A R_\\text{total}}
-
-    ---References---
-    Incropera, F. P., DeWitt, D. P., Bergman, T. L., & Lavine, A. S. (2007).
-    *Fundamentals of Heat and Mass Transfer* (6th ed.). Wiley.
+        Legacy list of temperatures in °C after each conduction layer, preceded
+        by the interior surface when an interior film is present. Exterior
+        ambient is excluded. Use temperature_profile for all boundary nodes.
+    subst_total_thermal_resistance : str
+        Substituted equation for whole-wall resistance in K/W.
+    subst_total_r_value_si : str
+        Substituted equation for area-normalized R-value in m²·K/W.
     subst_total_r_value_ip : str
         Symbolic substitution used to derive ``total_r_value_ip``.
     subst_heat_transfer_rate : str
@@ -187,6 +218,16 @@ def composite_wall_analysis(
     subst_film_resistances : dict
         Symbolic substitutions for the film resistances (if supplied).
 
+    ---LaTeX---
+    R_\\text{film} = \\frac{1}{h A}
+    R_j = \\frac{L_j}{k_j A}
+    R_\\text{total} = R_\\text{film,i} + \\sum_j R_j + R_\\text{film,o}
+    R_A = A R_\\text{total} = \\frac{1}{U}
+    Q = \\frac{T_i - T_o}{R_\\text{total}}
+    q'' = \\frac{Q}{A}
+    U = \\frac{1}{A R_\\text{total}}
+    T_n = T_i - Q \\sum_{j=1}^{n} R_j
+
     ---References---
     Incropera, F. P., DeWitt, D. P., Bergman, T. L., & Lavine, A. S. (2007).
         *Fundamentals of Heat and Mass Transfer* (6th ed.). Wiley.
@@ -195,20 +236,26 @@ def composite_wall_analysis(
     Cengel, Y. A., & Ghajar, A. J. (2015). *Heat and Mass Transfer*
         (5th ed.). McGraw-Hill Education.
     """
-    if area <= 0:
-        raise ValueError("Area must be greater than zero.")
-
-    thicknesses = [float(value) for value in layer_thicknesses]
-    conductivities = [float(value) for value in layer_conductivities]
+    area = _wall_number(area, "Area", positive=True)
+    interior_temperature = _wall_number(
+        interior_temperature, "Interior temperature"
+    )
+    exterior_temperature = _wall_number(
+        exterior_temperature, "Exterior temperature"
+    )
+    thicknesses = [
+        _wall_number(value, f"Layer {index} thickness", positive=True)
+        for index, value in enumerate(layer_thicknesses, start=1)
+    ]
+    conductivities = [
+        _wall_number(value, f"Layer {index} conductivity", positive=True)
+        for index, value in enumerate(layer_conductivities, start=1)
+    ]
 
     if not thicknesses:
         raise ValueError("At least one solid layer is required.")
     if len(thicknesses) != len(conductivities):
         raise ValueError("Layer thickness and conductivity lists must be the same length.")
-    if any(value <= 0 for value in thicknesses):
-        raise ValueError("All layer thicknesses must be greater than zero.")
-    if any(value <= 0 for value in conductivities):
-        raise ValueError("All layer conductivities must be greater than zero.")
 
     resistances: list[tuple[str, float, str]] = []
     conduction_resistances: List[float] = []
@@ -217,9 +264,12 @@ def composite_wall_analysis(
     film_substitutions: Dict[str, str] = {}
 
     if interior_convection_coefficient is not None:
-        if interior_convection_coefficient <= 0:
-            raise ValueError("Interior convection coefficient must be greater than zero.")
-        interior_film_resistance = 1.0 / (interior_convection_coefficient * area)
+        interior_convection_coefficient = _wall_number(
+            interior_convection_coefficient,
+            "Interior convection coefficient",
+            positive=True,
+        )
+        interior_film_resistance = (1.0 / interior_convection_coefficient) / area
         film_resistances["interior"] = interior_film_resistance
         film_substitutions["interior"] = (
             f"R_{{\\text{{film,i}}}} = \\frac{{1}}{{{interior_convection_coefficient} \\times {area}}} = {interior_film_resistance:.6f}"
@@ -228,8 +278,10 @@ def composite_wall_analysis(
             ("interior_film", interior_film_resistance, "convection")
         )
 
-    for index, (thickness, conductivity) in enumerate(zip(thicknesses, conductivities), start=1):
-        resistance = thickness / (conductivity * area)
+    for index, (thickness, conductivity) in enumerate(
+        zip(thicknesses, conductivities), start=1
+    ):
+        resistance = (thickness / conductivity) / area
         conduction_resistances.append(resistance)
         conduction_substitutions.append(
             f"R_{{\\text{{cond,{index}}}}} = \\frac{{{thickness}}}{{{conductivity} \\times {area}}} = {resistance:.6f}"
@@ -237,9 +289,12 @@ def composite_wall_analysis(
         resistances.append((f"layer_{index}", resistance, "conduction"))
 
     if exterior_convection_coefficient is not None:
-        if exterior_convection_coefficient <= 0:
-            raise ValueError("Exterior convection coefficient must be greater than zero.")
-        exterior_film_resistance = 1.0 / (exterior_convection_coefficient * area)
+        exterior_convection_coefficient = _wall_number(
+            exterior_convection_coefficient,
+            "Exterior convection coefficient",
+            positive=True,
+        )
+        exterior_film_resistance = (1.0 / exterior_convection_coefficient) / area
         film_resistances["exterior"] = exterior_film_resistance
         film_substitutions["exterior"] = (
             f"R_{{\\text{{film,o}}}} = \\frac{{1}}{{{exterior_convection_coefficient} \\times {area}}} = {exterior_film_resistance:.6f}"
@@ -248,38 +303,63 @@ def composite_wall_analysis(
             ("exterior_film", exterior_film_resistance, "convection")
         )
 
+    if any(not math.isfinite(r) or r <= 0 for _, r, _ in resistances):
+        raise ValueError("Inputs produce resistance outside the numeric range.")
     total_resistance = sum(resistance for _, resistance, _ in resistances)
+    total_r_value_si = total_resistance * area
+    if not math.isfinite(total_r_value_si) or total_r_value_si <= 0:
+        raise ValueError("Inputs produce total resistance outside the numeric range.")
     delta_temperature = interior_temperature - exterior_temperature
 
     heat_transfer_rate = delta_temperature / total_resistance
     heat_transfer_rate_ip = heat_transfer_rate * IP_Q_CONVERSION
     heat_flux = heat_transfer_rate / area
     heat_flux_ip = heat_flux * IP_Q_FLUX_CONVERSION
-    overall_u_value = 1.0 / (total_resistance * area)
+    overall_u_value = 1.0 / total_r_value_si
     overall_u_value_ip = overall_u_value * IP_U_CONVERSION
-    total_r_value_ip = total_resistance * IP_R_CONVERSION
+    total_r_value_ip = total_r_value_si * IP_R_CONVERSION
+
+    outputs = (
+        total_resistance, total_r_value_si, total_r_value_ip,
+        heat_transfer_rate, heat_transfer_rate_ip, heat_flux, heat_flux_ip,
+        overall_u_value, overall_u_value_ip,
+    )
+    if not all(math.isfinite(value) for value in outputs):
+        raise ValueError("Inputs produce results outside the numeric range.")
 
     temperature_profile: List[Dict[str, float | str]] = [
         {
-            "name": "Interior ambient",
-            "type": "ambient",
+            "name": (
+                "Interior ambient" if interior_convection_coefficient is not None
+                else "Interior surface"
+            ),
+            "type": (
+                "ambient" if interior_convection_coefficient is not None
+                else "surface"
+            ),
             "temperature_c": float(interior_temperature),
             "resistance_k_per_w": 0.0,
+            "cumulative_resistance_k_per_w": 0.0,
+            "distance_m": 0.0,
         }
     ]
     running_temperature = interior_temperature
     num_layers = len(thicknesses)
+    cumulative_resistance = 0.0
+    distance = 0.0
 
     interface_temperatures: List[float] = []
 
     for label, resistance, resistance_type in resistances:
         temperature_drop = heat_transfer_rate * resistance
         running_temperature -= temperature_drop
+        cumulative_resistance += resistance
 
         if label == "interior_film":
             name = "Interior surface (after h_i)"
         elif label.startswith("layer_"):
             index = int(label.split("_")[1])
+            distance += thicknesses[index - 1]
             if index == num_layers:
                 name = f"Exterior surface after layer {index}"
             else:
@@ -295,11 +375,16 @@ def composite_wall_analysis(
                 "type": resistance_type,
                 "temperature_c": round(running_temperature, 6),
                 "resistance_k_per_w": resistance,
+                "cumulative_resistance_k_per_w": cumulative_resistance,
+                "distance_m": distance,
             }
         )
 
         if resistance_type == "conduction" or label == "interior_film":
             interface_temperatures.append(round(running_temperature, 6))
+
+    if not math.isfinite(distance):
+        raise ValueError("Layer thicknesses exceed the supported numeric range.")
 
     subst_total_resistance = (
         "R_{\\text{total}} = "
@@ -309,7 +394,12 @@ def composite_wall_analysis(
                 for _, resistance, _ in resistances
             ]
         )
-        + f" = {total_resistance:.6f}"
+        + f" = {total_resistance:.6f}\\;\\mathrm{{K/W}}"
+    )
+    subst_total_r_value_si = (
+        f"R_A = A R_{{\\text{{total}}}} = {area:g} \\times "
+        f"{total_resistance:.6g} = {total_r_value_si:.6g}"
+        "\\;\\mathrm{m^2\\,K/W}"
     )
     subst_heat_rate = (
         f"\\dot{{Q}} = \\frac{{{interior_temperature} - {exterior_temperature}}}{{{total_resistance:.6f}}} = {heat_transfer_rate:.3f}"
@@ -330,7 +420,9 @@ def composite_wall_analysis(
         f"U_{{\\text{{IP}}}} = {overall_u_value:.3f} \\times {IP_U_CONVERSION:.6f} = {overall_u_value_ip:.3f}"
     )
     subst_total_r_value_ip = (
-        f"R_{{\\text{{total,IP}}}} = {total_resistance:.6f} \\times {IP_R_CONVERSION:.3f} = {total_r_value_ip:.3f}"
+        f"R_{{A,\\text{{IP}}}} = {total_r_value_si:.6g} \\times "
+        f"{IP_R_CONVERSION:.6f} = {total_r_value_ip:.6g}"
+        "\\;\\mathrm{hr\\,ft^2\\,{}^\\circ F/BTU}"
     )
 
     return {
@@ -341,12 +433,14 @@ def composite_wall_analysis(
         "overall_u_value": float(overall_u_value),
         "overall_u_value_ip": float(overall_u_value_ip),
         "total_thermal_resistance": float(total_resistance),
+        "total_r_value_si": float(total_r_value_si),
         "total_r_value_ip": float(total_r_value_ip),
         "layer_resistances": conduction_resistances,
         "film_resistances": film_resistances,
         "temperature_profile": temperature_profile,
         "interface_temperatures": interface_temperatures,
         "subst_total_thermal_resistance": subst_total_resistance,
+        "subst_total_r_value_si": subst_total_r_value_si,
         "subst_heat_transfer_rate": subst_heat_rate,
         "subst_heat_transfer_rate_ip": subst_heat_rate_ip,
         "subst_heat_flux": subst_heat_flux,

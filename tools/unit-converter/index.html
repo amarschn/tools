@@ -14,17 +14,17 @@
     </script>
 
     <title>Engineering Unit Converter</title>
-    <meta name="description" content="Translate engineering quantities across SI, imperial, and mixed unit systems using a shared conversion library.">
-    <link rel="canonical" href="https://transparent.tools/tools/unit-converter/">
+    <meta name="description" content="Convert engineering units across SI and imperial systems, including watts, BTU/hr, refrigeration tons, pressure, flow, and temperature.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Engineering Unit Converter">
-    <meta property="og:description" content="Translate engineering quantities across SI, imperial, and mixed unit systems using a shared conversion library.">
+    <meta property="og:description" content="Convert engineering units across SI and imperial systems, including watts, BTU/hr, refrigeration tons, pressure, flow, and temperature.">
     <meta property="og:url" content="https://transparent.tools/tools/unit-converter/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Engineering Unit Converter">
-    <meta name="twitter:description" content="Translate engineering quantities across SI, imperial, and mixed unit systems using a shared conversion library.">
+    <meta name="twitter:description" content="Convert engineering units across SI and imperial systems, including watts, BTU/hr, refrigeration tons, pressure, flow, and temperature.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
+    <link rel="canonical" href="https://transparent.tools/tools/unit-converter/">
     <script src="/shared/analytics-autotrack.js" defer></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <style>
@@ -90,6 +90,33 @@
             margin: 0;
             line-height: 1.6;
         }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: grid;
+            place-content: center;
+            gap: 16px;
+            padding: 24px;
+            background: var(--bg-primary);
+            color: var(--text);
+            text-align: center;
+        }
+
+        .loading-overlay[hidden] { display: none; }
+        .loading-overlay [hidden] { display: none; }
+        .loading-spinner {
+            width: 36px;
+            height: 36px;
+            margin: auto;
+            border: 3px solid var(--border);
+            border-top-color: var(--text);
+            border-radius: 50%;
+            animation: loading-spin 0.8s linear infinite;
+        }
+        .loading-overlay.failed .loading-spinner { display: none; }
+        @keyframes loading-spin { to { transform: rotate(360deg); } }
 
         header.navbar {
             background: var(--bg-secondary);
@@ -629,6 +656,11 @@
     <script src="/shared/json-ld.js"></script>
 </head>
 <body data-theme="system">
+    <div class="loading-overlay" id="loading-overlay" role="status" aria-live="polite">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <p id="loading-text">Loading unit converter...</p>
+        <button class="btn-secondary" id="loading-retry" type="button" hidden>Retry</button>
+    </div>
     <header class="navbar">
         <nav class="nav-container">
             <a href="../../index.html" class="nav-brand">Engineering Tools</a>
@@ -660,13 +692,13 @@
                 </div>
                 <div class="setting-row">
                     <div>
-                        <div class="setting-label">Precision</div>
-                        <div class="setting-help">Decimal places in results.</div>
+                        <div class="setting-label">Display precision</div>
+                        <div class="setting-help">Significant figures in details and comparisons. Value fields keep full precision.</div>
                     </div>
                     <div class="segmented" role="group" aria-label="Precision">
-                        <button type="button" data-precision="4">4 dp</button>
-                        <button type="button" data-precision="6">6 dp</button>
-                        <button type="button" data-precision="8">8 dp</button>
+                        <button type="button" data-precision="4">4 sig</button>
+                        <button type="button" data-precision="6">6 sig</button>
+                        <button type="button" data-precision="8">8 sig</button>
                     </div>
                 </div>
             </div>
@@ -681,12 +713,13 @@
         <section class="dual-panel dual-panel-quantity">
             <div class="dual-panel-header">
                 <h1>Unit Converter</h1>
-                <p>All the essentials—clean typography, quick filtering, and dual inputs that stay synchronised while you work.</p>
+                <p>Choose a quantity and two units. Edit either value to convert in that direction.</p>
+                <button class="btn-secondary" data-role="copy-link" data-track="export" type="button" disabled>Copy conversion link</button>
             </div>
 
             <div class="quantity-panel-group">
                 <span class="panel-label">Quantity</span>
-                <p class="panel-helper">Choose the measurement family you want to work with, then set your values to the right.</p>
+                <p class="panel-helper">For BTU/hr, watts, or refrigeration tons, choose Power / heat rate.</p>
                 <div class="quantity-chip-row" data-role="quantity-row"></div>
             </div>
         </section>
@@ -699,11 +732,11 @@
 
             <div class="value-stack">
                 <label for="left-value">From value</label>
-                <input id="left-value" data-role="value-input" data-side="left" type="number" value="1" step="any">
+                <input id="left-value" data-role="value-input" data-side="left" type="number" value="1" step="any" title="Enter the source value. The target value updates as you type.">
             </div>
 
             <div class="search-stack">
-                <input type="search" data-role="search-input" data-side="left" placeholder="Filter source units…" autocomplete="off">
+                <input type="search" data-role="search-input" data-side="left" placeholder="Filter source units…" autocomplete="off" aria-label="Filter source units" title="Filter by unit symbol or name, such as BTU or refrigeration.">
             </div>
 
             <ul class="unit-list" data-role="unit-list" data-side="left"></ul>
@@ -712,16 +745,16 @@
         <section class="dual-panel" data-side="right">
             <div class="dual-panel-header">
                 <h1>To value</h1>
-                <p>Switch units or edit the number directly—results and comparisons update instantly for both perspectives.</p>
+                <p>Choose the target unit, or edit this value to convert back.</p>
             </div>
 
             <div class="value-stack">
                 <label for="right-value">To value</label>
-                <input id="right-value" data-role="value-input" data-side="right" type="number" value="1" step="any">
+                <input id="right-value" data-role="value-input" data-side="right" type="number" value="1" step="any" title="Enter the target value to convert back to the source unit.">
             </div>
 
             <div class="search-stack">
-                <input type="search" data-role="search-input" data-side="right" placeholder="Filter target units…" autocomplete="off">
+                <input type="search" data-role="search-input" data-side="right" placeholder="Filter target units…" autocomplete="off" aria-label="Filter target units" title="Filter by unit symbol or name, such as BTU or refrigeration.">
             </div>
 
             <ul class="unit-list" data-role="unit-list" data-side="right"></ul>
@@ -780,7 +813,7 @@
     </footer>
 
     <script type="module">
-        import { initDualConverter } from "./shared/dual-core.js";
+        import { initDualConverter } from "./shared/dual-core.js?v=13e6194ca9a26965";
 
         // Settings management
         const STORAGE_KEY = 'unit-converter-settings';
@@ -789,6 +822,7 @@
             precision: 6,
         };
         let settings = { ...defaultSettings };
+        let converter;
 
         function saveSettings() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -813,9 +847,11 @@
         }
 
         function applySettings() {
+            settings.precision = [4, 6, 8].includes(Number(settings.precision)) ? Number(settings.precision) : 6;
             document.body.dataset.theme = settings.theme;
             setSegmentedActive('.settings-panel [data-theme]', settings.theme, 'theme');
             setSegmentedActive('.settings-panel [data-precision]', settings.precision, 'precision');
+            converter?.setPrecision(settings.precision);
         }
 
         function toggleSettingsPanel(open) {
@@ -865,10 +901,9 @@
         // Initialize converter
         document.addEventListener("DOMContentLoaded", () => {
             const container = document.querySelector("[data-dual]");
-            initDualConverter({ container });
+            converter = initDualConverter({ container, precision: settings.precision });
         });
     </script>
-    <script src="/shared/url-state.js" defer></script>
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/service-worker.js').catch(() => {});

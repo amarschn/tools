@@ -153,17 +153,120 @@ def test_scores_and_isolines_use_actual_observations(selection):
             assert math.sqrt(y) / x == pytest.approx(index)
 
 
+def assert_projection_matches(actual, expected, path=()):
+    """Compare exactly except for adjacent floats in computed isoline endpoints.
+
+    Fractional powers in get_isoline_points can differ by one representable
+    float across platform math libraries. Only coordinates at
+    charts/<chart>/points/<point>/isolines/<index>/<endpoint>/<axis> permit
+    that roundoff; source values, scores, citations and structure remain exact.
+    """
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict), path
+        assert actual.keys() == expected.keys(), path
+        for key in expected:
+            assert_projection_matches(actual[key], expected[key], (*path, key))
+    elif isinstance(expected, list):
+        assert isinstance(actual, list), path
+        assert len(actual) == len(expected), path
+        for position, (left, right) in enumerate(zip(actual, expected)):
+            assert_projection_matches(left, right, (*path, position))
+    elif (len(path) == 8 and path[0] == "charts" and path[2] == "points"
+          and path[4] == "isolines" and path[6] in (0, 1) and path[7] in (0, 1)):
+        assert type(actual) in (int, float) and type(expected) in (int, float), path
+        assert math.isfinite(actual) and math.isfinite(expected), path
+        assert (
+            math.nextafter(expected, -math.inf)
+            <= actual <= math.nextafter(expected, math.inf)
+        ), (path, actual, expected)
+    else:
+        assert actual == expected, (path, actual, expected)
+
+
 def test_generated_projection_matches_published_source_and_keeps_citations(selection):
     generated = json.loads((ROOT / "data/materials/selection.json").read_text())
     manifest = json.loads((ROOT / "tools/materials/release-manifest.json").read_text())
     assert generated.pop("source_build_id") == manifest["build_id"]
     assert generated.pop("source_sha256") == manifest["files"][manifest["catalog"]]["sha256"]
-    assert generated == selection
+    assert_projection_matches(generated, selection)
     for source in selection["sources"].values():
         assert source["organization"] and source["title"] and source["sha256"]
     payload = json.dumps(selection).lower()
     assert ".pdf" not in payload
     assert "http://" not in payload and "https://" not in payload
+
+
+@pytest.fixture
+def projection_sample():
+    """Small projection for testing the scope of the roundoff allowance."""
+    return {
+        "observations": {"rho": {"plot_value": 2700.0}},
+        "sources": {"source": {"title": "Reference", "sha256": "original"}},
+        "charts": {"density|youngs_modulus": {
+            "properties": ["density", "youngs_modulus"],
+            "points": [{
+                "observations": ["rho", "e"],
+                "conditions": {"temperature_K": 293.15},
+                "scores": {"stiff_light_beam": 42.0},
+                "isolines": {"stiff_light_beam": [[100.0, 200.0], [400.0, 800.0]]},
+            }],
+        }},
+    }
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+def test_projection_comparison_accepts_only_adjacent_endpoint_floats(
+    projection_sample, axis, direction
+):
+    expected = deepcopy(projection_sample)
+    endpoint = projection_sample["charts"]["density|youngs_modulus"]["points"][0][
+        "isolines"]["stiff_light_beam"][1]
+    endpoint[axis] = math.nextafter(endpoint[axis], direction)
+    assert_projection_matches(projection_sample, expected)
+    endpoint[axis] = math.nextafter(endpoint[axis], direction)
+    with pytest.raises(AssertionError):
+        assert_projection_matches(projection_sample, expected)
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf, True, "800"])
+def test_projection_comparison_rejects_invalid_endpoint_values(projection_sample, value):
+    expected = deepcopy(projection_sample)
+    projection_sample["charts"]["density|youngs_modulus"]["points"][0][
+        "isolines"]["stiff_light_beam"][1][1] = value
+    with pytest.raises(AssertionError):
+        assert_projection_matches(projection_sample, expected)
+
+
+@pytest.mark.parametrize("change", [
+    "observation", "score", "condition", "citation", "source_hash",
+    "missing_line", "extra_line", "missing_endpoint", "point_reference",
+])
+def test_projection_comparison_keeps_source_data_and_structure_exact(
+    projection_sample, change
+):
+    expected = deepcopy(projection_sample)
+    point = projection_sample["charts"]["density|youngs_modulus"]["points"][0]
+    if change == "observation":
+        projection_sample["observations"]["rho"]["plot_value"] = math.nextafter(2700.0, math.inf)
+    elif change == "score":
+        point["scores"]["stiff_light_beam"] = math.nextafter(42.0, math.inf)
+    elif change == "condition":
+        point["conditions"]["temperature_K"] = math.nextafter(293.15, math.inf)
+    elif change == "citation":
+        projection_sample["sources"]["source"]["title"] = "Changed reference"
+    elif change == "source_hash":
+        projection_sample["sources"]["source"]["sha256"] = "changed"
+    elif change == "missing_line":
+        del point["isolines"]["stiff_light_beam"]
+    elif change == "extra_line":
+        point["isolines"]["extra"] = [[100.0, 200.0], [400.0, 800.0]]
+    elif change == "missing_endpoint":
+        point["isolines"]["stiff_light_beam"].pop()
+    else:
+        point["observations"][0] = "another-observation"
+    with pytest.raises(AssertionError):
+        assert_projection_matches(projection_sample, expected)
 
 
 def chart_files(selection):
