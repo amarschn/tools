@@ -14,19 +14,23 @@
     </script>
 
     <title>Natural Frequency Quick Checker - Engineering Tools</title>
-    <meta name="description" content="Check natural frequencies of beams, plates, and rings with support choices, dimensioned diagrams, and animated vibration modes.">
+    <meta name="description" content="Check beam, plate, and ring natural frequencies with cantilever tip masses, material presets, and animated mode shapes.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Natural Frequency Quick Checker - Engineering Tools">
-    <meta property="og:description" content="Check natural frequencies of beams, plates, and rings with support choices, dimensioned diagrams, and animated vibration modes.">
+    <meta property="og:description" content="Check beam, plate, and ring natural frequencies with cantilever tip masses, material presets, and animated mode shapes.">
     <meta property="og:url" content="https://transparent.tools/tools/structural-resonance/">
     <meta property="og:image" content="https://transparent.tools/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Natural Frequency Quick Checker - Engineering Tools">
-    <meta name="twitter:description" content="Check natural frequencies of beams, plates, and rings with support choices, dimensioned diagrams, and animated vibration modes.">
+    <meta name="twitter:description" content="Check beam, plate, and ring natural frequencies with cantilever tip masses, material presets, and animated mode shapes.">
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
     <link rel="canonical" href="https://transparent.tools/tools/structural-resonance/">
     <script src="/shared/analytics-autotrack.js" defer></script>
     
+    <script>
+        // Dynamic equations are rendered through the page's serialized queue.
+        window.MathJax = { startup: { typeset: false } };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
@@ -313,6 +317,18 @@
                 font-size: 0.8rem;
                 margin-top: 12px;
             }
+            .material-notes {
+                margin-top: 10px;
+                font-size: 0.8rem;
+                color: var(--text-light);
+                overflow-wrap: anywhere;
+            }
+            .material-notes p {
+                margin: 6px 0 0;
+            }
+            .material-notes summary {
+                padding: 10px 0;
+            }
             details {
                 border-top: 1px solid var(--border-color);
                 margin-top: 18px;
@@ -579,6 +595,14 @@
             #mode-options {
                 margin-top: 12px;
             }
+            .beam-setup.has-tip-mass {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 0.7fr);
+            }
+            @media (max-width: 600px) {
+                .beam-setup.has-tip-mass {
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                }
+            }
             .beam-dimensions {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -712,7 +736,7 @@
                                 Beam fixed at one end and free at the other.
                             </p>
                             <div id="beam-geometry">
-                                <div class="input-row">
+                                <div class="input-row beam-setup" id="beam-setup">
                                     <div class="input-group">
                                         <label for="beam_support">Supports</label
                                         ><select id="beam_support" aria-describedby="model-hint">
@@ -737,7 +761,21 @@
                                             <option value="box">Rectangular tube</option>
                                         </select>
                                     </div>
+                                    <div class="input-group" id="beam-tip-mass-group">
+                                        <label for="beam_tip_mass_kg">Tip mass (kg)</label>
+                                        <input
+                                            id="beam_tip_mass_kg"
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value="0"
+                                            aria-describedby="beam-tip-mass-help"
+                                        />
+                                    </div>
                                 </div>
+                                <p class="help" id="beam-tip-mass-help">
+                                    Attached at the free end; 0 means no added mass.
+                                </p>
                                 <div class="beam-dimensions">
                                     <div class="input-group">
                                         <label for="beam_length_mm">Length, L (mm)</label
@@ -881,6 +919,10 @@
                                 </p>
                             </div>
                             <p id="material-summary" class="material-summary"></p>
+                            <details id="material-notes" class="material-notes" hidden>
+                                <summary>Preset notes and sources</summary>
+                                <div id="material-notes-content"></div>
+                            </details>
                             <div id="custom-properties" hidden>
                                 <div class="input-row">
                                     <div class="input-group">
@@ -1166,6 +1208,13 @@
                                 inertia.
                             </p>
                             <p>
+                                A cantilever can include a point mass at its free end. The model
+                                includes its translational inertia, without rotary inertia,
+                                eccentricity, or a gravity-induced axial load. A real attachment
+                                with an offset or finite dimensions may require a more detailed
+                                model.
+                            </p>
+                            <p>
                                 The plate model assumes a thin, uniform rectangular plate with all
                                 four edges simply supported. The edges cannot move out of plane but
                                 are free to rotate. This differs from a clamped cover or a plate
@@ -1309,16 +1358,36 @@
                     proxy.destroy();
                 }
             }
-            // Keep MathJax work in order when tabs, details, and result updates overlap.
+            // The async library can finish before or after the calculator initializes.
+            const mathJaxReady = new Promise((resolve) => {
+                const finish = () => {
+                    const math = window.MathJax;
+                    if (!math?.startup?.promise) {
+                        resolve(null);
+                        return;
+                    }
+                    math.startup.promise.then(() => resolve(math), () => resolve(null));
+                };
+                if (window.MathJax?.startup?.promise) finish();
+                else {
+                    $('MathJax-script').addEventListener('load', finish, { once: true });
+                    $('MathJax-script').addEventListener('error', () => resolve(null), {
+                        once: true,
+                    });
+                    // Also settle if the CDN failed before these listeners were attached.
+                    window.addEventListener('load', finish, { once: true });
+                }
+            });
+            // Serialize both DOM replacement and typesetting after MathJax startup.
             let mathQueue = Promise.resolve();
             function queueMath(task) {
-                mathQueue = mathQueue.then(task).catch(() => {});
+                mathQueue = mathQueue.then(async () => task(await mathJaxReady)).catch(() => {});
                 return mathQueue;
             }
             function typeset(element) {
-                return queueMath(async () => {
-                    if (element.isConnected && window.MathJax?.typesetPromise) {
-                        await MathJax.typesetPromise([element]);
+                return queueMath(async (math) => {
+                    if (element.isConnected && math?.typesetPromise) {
+                        await math.typesetPromise([element]);
                     }
                 });
             }
@@ -1435,6 +1504,32 @@
                     .querySelectorAll('input,select')
                     .forEach((input) => (input.disabled = !enabled));
             }
+            function renderMaterialNotes(material) {
+                const container = $('material-notes');
+                const body = $('material-notes-content');
+                const content = document.createDocumentFragment();
+                const notes = material?.notes || [];
+                if (notes.length) {
+                    const paragraph = document.createElement('p');
+                    paragraph.textContent = notes.join(' ');
+                    content.append(paragraph);
+                }
+                const sources = material?.sources || [];
+                if (sources.length) {
+                    const paragraph = document.createElement('p');
+                    paragraph.append(document.createTextNode('Sources: '));
+                    sources.forEach((source, index) => {
+                        if (index) paragraph.append(document.createTextNode('; '));
+                        const link = document.createElement('a');
+                        link.href = source.url;
+                        link.textContent = source.title;
+                        paragraph.append(link);
+                    });
+                    content.append(paragraph);
+                }
+                body.replaceChildren(content);
+                container.hidden = !body.childElementCount;
+            }
             function syncForm() {
                 const geometry = $('geometry_type').value;
                 const beam = geometry === 'beam',
@@ -1446,6 +1541,10 @@
                 const rectangle = ['rectangular', 'box'].includes(section);
                 const hollow = ['circular_hollow', 'box'].includes(section);
                 enableGroup('beam-geometry', beam);
+                const cantilever = beam && $('beam_support').value === 'cantilever';
+                enableGroup('beam-tip-mass-group', cantilever);
+                $('beam-tip-mass-help').hidden = !cantilever;
+                $('beam-setup').classList.toggle('has-tip-mass', cantilever);
                 enableGroup('plate-geometry', plate);
                 $('plate-size-help').hidden = !plate;
                 enableGroup('ring-geometry', ring);
@@ -1492,6 +1591,7 @@
                 $('material-summary').textContent = material
                     ? `E = ${material.elastic_modulus_gpa} GPa · ρ = ${material.density_kg_m3} kg/m³ · ν = ${material.poisson_ratio}`
                     : '';
+                renderMaterialNotes(material);
             }
             [
                 'geometry_type',
@@ -1609,9 +1709,15 @@
                     const section = $('beam_section').value;
                     const rectangle = ['rectangular', 'box'].includes(section),
                         hollow = ['circular_hollow', 'box'].includes(section);
+                    const tipMass =
+                        $('beam_support').value === 'cantilever'
+                            ? numberInput('beam_tip_mass_kg', 'Tip mass')
+                            : 0;
+                    if (tipMass < 0) throw new Error('Tip mass must be zero or greater.');
                     return {
                         ...materialInputs,
                         geometry_type: geometry,
+                        tip_mass_kg: tipMass,
                         support_type: $('beam_support').value,
                         section_type: section,
                         length_mm: numberInput('beam_length_mm', 'Beam length', { positive: true }),
@@ -1698,6 +1804,7 @@
                                   values.custom_e_gpa,
                                   values.custom_rho_kg_m3,
                                   values.custom_nu,
+                                  values.tip_mass_kg,
                               )
                             : pyModule[TOOL_FUNCTION_NAME](
                                   values.geometry_type,
@@ -1765,6 +1872,9 @@
                         ['Bending rigidity EI', `${format(r.bending_rigidity_n_m2)} N·m²`],
                         ['Mass per length', `${format(r.mass_per_length_kg_m)} kg/m`],
                         ['Beam mass', `${format(r.beam_mass_kg)} kg`],
+                        ['Tip mass', `${format(r.tip_mass_kg)} kg`],
+                        ['Total mass', `${format(r.total_mass_kg)} kg`],
+                        ['Tip / beam mass ratio', format(r.tip_mass_ratio)],
                         ['Mode eigenvalue', format(r.eigenvalue)],
                     );
                 else rows.push([r.stiffness_label, `${format(r.flexural_rigidity_n_m)} N·m`]);
@@ -1825,6 +1935,8 @@
                             : r.subst_flexural_rigidity_n_m,
                     ],
                     ['Mass per unit length', r.subst_mass_per_length_kg_m],
+                    ['Tip / beam mass ratio', r.subst_tip_mass_ratio],
+                    ['Mode frequency root', r.subst_eigenvalue],
                     ['Extensional wave speed', r.subst_wave_velocity_m_s],
                 ];
                 const markup = items
@@ -1834,16 +1946,16 @@
                             `<section class="equation-card"><strong>${escapeHtml(title)}</strong>${equationMarkup(latex)}<p class="legend">${symbolLegend()}</p></section>`,
                     )
                     .join('');
-                queueMath(async () => {
+                queueMath(async (math) => {
                     const element = $('derivation-content');
-                    if (window.MathJax?.typesetClear) MathJax.typesetClear([element]);
+                    if (math?.typesetClear) math.typesetClear([element]);
                     element.innerHTML = markup;
                     if (
                         !$('results').hidden &&
                         $('calculation-steps').open &&
-                        window.MathJax?.typesetPromise
+                        math?.typesetPromise
                     ) {
-                        await MathJax.typesetPromise([element]);
+                        await math.typesetPromise([element]);
                     }
                 });
             }
@@ -1860,7 +1972,7 @@
                     ['Beam bending', beamDocumentation],
                     ['Plate and ring', documentation],
                 ];
-                $('equations').innerHTML = groups
+                const markup = groups
                     .map(([title, doc]) => {
                         const lines = (doc?.latex || '')
                             .split('\n')
@@ -1889,7 +2001,14 @@
                         $('source-references').append(link);
                     } else $('source-references').append(document.createTextNode(piece));
                 });
-                if (!$('background').hidden) typeset($('equations'));
+                queueMath(async (math) => {
+                    const element = $('equations');
+                    if (math?.typesetClear) math.typesetClear([element]);
+                    element.innerHTML = markup;
+                    if (!$('background').hidden && math?.typesetPromise) {
+                        await math.typesetPromise([element]);
+                    }
+                });
             }
             function csvCell(value) {
                 let s = String(value ?? '');
@@ -1913,6 +2032,7 @@
                         ['Supports', v.support_type, ''],
                         ['Cross-section', v.section_type, ''],
                         ['Length', v.length_mm, 'mm'],
+                        ['Tip mass', r.tip_mass_kg, 'kg'],
                         ['Bending direction', v.bending_axis, ''],
                         ['Mode number', v.mode_number, ''],
                     );
@@ -1951,6 +2071,8 @@
                         ['Bending rigidity EI', r.bending_rigidity_n_m2, 'N·m²'],
                         ['Mass per length', r.mass_per_length_kg_m, 'kg/m'],
                         ['Beam mass', r.beam_mass_kg, 'kg'],
+                        ['Total mass', r.total_mass_kg, 'kg'],
+                        ['Tip / beam mass ratio', r.tip_mass_ratio, ''],
                         ['Eigenvalue', r.eigenvalue, ''],
                     );
                 else rows.push([r.stiffness_label, r.flexural_rigidity_n_m, 'N·m']);
@@ -1966,6 +2088,11 @@
                 if (r.applicability_notes?.length) {
                     rows.push([], ['Applicability notes']);
                     r.applicability_notes.forEach((note) => rows.push([note]));
+                }
+                const materialSources = materials[v.material]?.sources || [];
+                if (materialSources.length) {
+                    rows.push([], ['Material references'], ['Source', 'URL']);
+                    materialSources.forEach((source) => rows.push([source.title, source.url]));
                 }
                 const blob = new Blob(
                     ['\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n')],

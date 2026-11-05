@@ -25,14 +25,22 @@ The initial case is an aluminum cantilever: length 300 mm, width 25 mm, depth
 direction control selects deflection through the depth or width. The section
 inset shows that direction. The two directions can have different frequencies.
 
+Cantilevers can also include a tip mass in kg; zero means no added mass. It is a
+point mass at the free end with translational inertia only. Rotary inertia,
+eccentricity, and gravity-induced axial load are excluded. The backend solves the
+mass-dependent characteristic equation for each mode and returns the changed mode
+shape. The input is hidden and disabled for other supports, while its value is
+retained for switching back and in shared links.
+
 Beam modes 1–5 are available. A compact list of the first five bending frequencies
 can be expanded in Results; selecting one calculates that mode and updates its
 shape. The list is disabled when inputs change so an old frequency cannot be
 mistaken for a result from the edited beam.
 
-This model omits shear deformation, rotary inertia, axial prestress, attached
-masses, and joint flexibility. It calculates transverse bending, not axial or
-torsional modes. Thin, slender geometry is an assumption, not a safety verdict.
+This model omits shear deformation, rotary inertia, axial prestress, and joint
+flexibility. Added masses away from the cantilever tip are outside its scope.
+It calculates transverse bending, not axial or torsional modes. Thin, slender
+geometry is an assumption, not a safety verdict.
 
 ### Plate bending
 
@@ -61,6 +69,12 @@ only the dimensions that apply. The material presets come from Python; selecting
 Custom reveals elastic modulus, density, and Poisson's ratio. Presets are
 representative values rather than specifications for a particular batch or service
 temperature.
+
+Plastic presets include ABS, polycarbonate, acetal, and nylon 6. Their material
+notes and manufacturer links are available under Preset notes and sources,
+collapsed below the properties. These notes come from the Python material record
+and also appear in the result limits and CSV. Use Custom for measured properties
+at your operating conditions.
 
 Mode and bending-direction settings are expandable. Beam, plate, and ring modes
 have independent controls. Switching from a plate to a ring therefore selects
@@ -104,9 +118,10 @@ wave speed in a three-dimensional bulk solid.
 
 ## Validation
 
-Dimensions must be finite and positive. Hollow sections require positive internal
-dimensions. Mode indices are integers rather than values silently rounded or
-clamped; beams support modes 1–5. Custom materials require positive modulus and
+Dimensions must be finite and positive. An active cantilever tip mass must be
+finite and nonnegative. Hollow sections require positive internal dimensions.
+Mode indices are integers rather than values silently rounded or clamped; beams
+support modes 1–5. Custom materials require positive modulus and
 density, with −1 < ν < 0.5. Ring thickness must be smaller than its mean diameter.
 
 Useful checks for aluminum with E = 69 GPa, ρ = 2700 kg/m³, and ν = 0.33:
@@ -131,9 +146,10 @@ plain visits now default to the cantilever. Earlier ring links using
 fragments open the Background tab.
 
 CSV contains the calculated geometry, supports, section, selected mode, effective
-material properties, frequency, intermediate values, and model notes. For beams
-it also includes the first five bending frequencies. Numeric values retain
-calculation precision; export uses the last successful calculation.
+material properties, frequency, intermediate values, and model notes. Beam results
+also include effective tip mass, total mass, tip-to-beam mass ratio, and the first
+five bending frequencies. Numeric values retain calculation precision; export
+uses the last successful calculation.
 
 The loading overlay remains visible while Pyodide and the Python files load.
 Initialization errors provide a retry button. A retry reloads the model without
@@ -143,9 +159,14 @@ module and needs a static server plus access to the Pyodide CDN on first load.
 ## Browser checks
 
 1. Verify the default cantilever, every support type, and all four sections.
+   Add a positive tip mass and confirm that frequencies and mode shapes update;
+   compare against zero mass. Check negative/invalid mass errors and retention
+   when switching away from and back to a cantilever.
 2. Change the bending direction of a nonsquare rectangle and check that frequency
    and the section inset agree. Select modes 1–5 from the control and result list.
 3. Check plate and ring calculations, including breathing and custom materials.
+   Select each plastic preset and verify its properties, notes, source links,
+   calculated frequency, and CSV material notes.
 4. Confirm invalid dimensions and fractional modes give errors; hidden fields
    should not block a valid model.
 5. Open shared beam, legacy plate, and legacy ring links, including a Background

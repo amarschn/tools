@@ -1,5 +1,5 @@
 """
-Natural-frequency estimates for simply supported thin plates and free thin rings.
+Natural-frequency estimates for uniform beams, thin plates, and free thin rings.
 These idealized models do not predict forced-response amplitude or the modes of
 an assembled motor housing, laminated stator, or constrained cylindrical shell.
 """
@@ -13,6 +13,16 @@ if __package__:
     from .beam_analysis import compute_section_properties
 else:  # Standalone Pyodide modules are loaded beside each other.
     from beam_analysis import compute_section_properties
+
+_PLASTIC_MODEL_NOTES = (
+    "Poisson ratio is an assumed modeling value, not reported by the linked "
+    "manufacturer source. It affects the plate model only.",
+    "Tensile-test modulus is a starting estimate for vibration. Plastic stiffness "
+    "depends on temperature, loading rate and moisture; use measured dynamic "
+    "properties for the operating conditions when available.",
+    "These presets represent solid, unfilled material. Filled or 3D-printed "
+    "parts may require direction-dependent properties outside this isotropic model.",
+)
 
 MATERIALS = {
     "steel": {
@@ -38,6 +48,84 @@ MATERIALS = {
         "elastic_modulus_gpa": 116.0,
         "density_kg_m3": 4430.0,
         "poisson_ratio": 0.34,
+    },
+    "abs": {
+        "display": "ABS (unfilled)",
+        "elastic_modulus_gpa": 1.7,
+        "density_kg_m3": 1040.0,
+        "poisson_ratio": 0.35,
+        "notes": [
+            "Representative grade: Ensinger TECARAN ABS grey. Modulus is from a "
+            "tensile test at 1 mm/min (ISO 527-2); the listed test temperature "
+            "and conditioning are unspecified.",
+            *_PLASTIC_MODEL_NOTES,
+        ],
+        "sources": [{
+            "title": "Ensinger TECARAN ABS grey: tensile modulus and density",
+            "url": "https://www.ensingerplastics.com/en-gb/shapes/tecaran-abs-grey",
+            "properties": ["elastic_modulus_gpa", "density_kg_m3"],
+        }],
+    },
+    "polycarbonate": {
+        "display": "Polycarbonate (PC)",
+        "elastic_modulus_gpa": 2.4,
+        "density_kg_m3": 1200.0,
+        "poisson_ratio": 0.37,
+        "notes": [
+            "Representative grade: Covestro Makrolon 2805. Tensile modulus is "
+            "measured at 23 °C and 50% relative humidity, at 1 mm/min "
+            "(ISO 527-1/-2); density is reported at 23 °C.",
+            *_PLASTIC_MODEL_NOTES,
+        ],
+        "sources": [{
+            "title": "Covestro Makrolon 2805: tensile modulus and density",
+            "url": (
+                "https://solutions.covestro.com/en/products/makrolon/"
+                "makrolon-2805_000000000057534382"
+            ),
+            "properties": ["elastic_modulus_gpa", "density_kg_m3"],
+        }],
+    },
+    "acetal": {
+        "display": "Acetal (POM-C)",
+        "elastic_modulus_gpa": 2.8,
+        "density_kg_m3": 1410.0,
+        "poisson_ratio": 0.35,
+        "notes": [
+            "Representative grade: Ensinger TECAFORM AH natural, unfilled POM-C. "
+            "Modulus is from a tensile test at 1 mm/min (ISO 527-2); the listed "
+            "test temperature and conditioning are unspecified.",
+            *_PLASTIC_MODEL_NOTES,
+        ],
+        "sources": [{
+            "title": "Ensinger TECAFORM AH natural: tensile modulus and density",
+            "url": (
+                "https://www.ensingerplastics.com/en-gb/shapes/"
+                "acetal-tecaform-ah-natural"
+            ),
+            "properties": ["elastic_modulus_gpa", "density_kg_m3"],
+        }],
+    },
+    "nylon6": {
+        "display": "Nylon 6 (PA6, dry)",
+        "elastic_modulus_gpa": 3.5,
+        "density_kg_m3": 1130.0,
+        "poisson_ratio": 0.39,
+        "notes": [
+            "Representative grade: BASF Ultramid B3S R03, uncoloured PA6 at "
+            "23 °C. This preset uses the dry tensile modulus. Moisture "
+            "conditioning substantially lowers stiffness; use custom material "
+            "properties for conditioned parts.",
+            *_PLASTIC_MODEL_NOTES,
+        ],
+        "sources": [{
+            "title": "BASF Ultramid B3S R03: dry tensile modulus and density",
+            "url": (
+                "https://download.basf.com/p1/8a8082587fd4b608017fd66339d424db/"
+                "en/ULTRAMID%25C2%25AE_B3S_R03"
+            ),
+            "properties": ["elastic_modulus_gpa", "density_kg_m3"],
+        }],
     },
 }
 
@@ -230,8 +318,9 @@ def calculate_structural_resonance(
         breathing and integer n>=2 is in-plane bending. n=1 is a rigid-body
         translation in the bending family and is excluded from this calculator.
     material : str
-        Preset key steel, aluminum, cast_iron, titanium, or custom. Presets are
-        representative isotropic properties, not certified grade data.
+        A preset key from MATERIALS, or custom. Presets are representative
+        isotropic properties; optional notes and sources describe the grade,
+        test conditions and assumed properties.
     custom_e_gpa : float
         Positive finite Young's modulus E in GPa; used only for custom material.
     custom_rho_kg_m3 : float
@@ -267,7 +356,8 @@ def calculate_structural_resonance(
     model_assumptions : list
         Boundary conditions and mechanical assumptions for the active model.
     applicability_notes : list
-        Limits needed to interpret the estimate; no safety certification implied.
+        Model limits and selected preset material notes, including relevant
+        test conditions and property assumptions.
     diagram_data : dict
         Selected physical mode shape, normalized to unit maximum displacement.
         kind is plate or ring; geometry holds dimensions in mm. Plate x and y
@@ -434,6 +524,7 @@ def calculate_structural_resonance(
             1, "This is a free ring, not a finite-length cylindrical shell "
             "or assembled stator model."
         )
+    notes.extend(MATERIALS.get(material, {}).get("notes", []))
 
     return {
         "natural_frequency_hz": freq,
@@ -478,18 +569,96 @@ BEAM_ROOTS = {
 }
 
 
+def _tip_mass_characteristic(eigenvalue: float, mass_ratio: float) -> float:
+    r"""Return the overflow-scaled point-tip-mass characteristic residual.
+
+    Inputs are dimensionless lambda and r=M/(rho*A*L), both nonnegative.
+    The returned value is F/[cosh(lambda)*max(1,r)], with
+    F=1+cos(lambda)cosh(lambda)+r*lambda*(cos(lambda)sinh(lambda)
+    -sin(lambda)cosh(lambda)). The positive scale preserves every root.
+    A power series avoids cancellation near lambda=0; dividing by r for
+    large masses avoids overflow. Source: NACA TN3459, equation (13).
+    """
+    if eigenvalue < 0.25:
+        fourth = eigenvalue**4
+        # cos(lambda)*cosh(lambda) = sum (-4)^k lambda^(4k)/(4k)!.
+        base = 2.0
+        mass_term = 0.0
+        for k in range(1, 5):
+            term = (-4.0)**k * fourth**k / math.factorial(4 * k)
+            base += term
+            mass_term += 4 * k * term
+        value = (
+            base / mass_ratio + mass_term if mass_ratio >= 1
+            else base + mass_ratio * mass_term
+        )
+        return value / math.cosh(eigenvalue)
+    c, s = math.cos(eigenvalue), math.sin(eigenvalue)
+    base = c + 1 / math.cosh(eigenvalue)
+    mass_term = eigenvalue * (c * math.tanh(eigenvalue) - s)
+    return (
+        base / mass_ratio + mass_term if mass_ratio >= 1
+        else base + mass_ratio * mass_term
+    )
+
+
+def _tip_mass_roots(mass_ratio: float) -> tuple[float, ...]:
+    """Find the first five elastic cantilever roots for a point tip mass.
+
+    The input r is finite and nonnegative. Returns dimensionless roots of the
+    NACA TN3459 equation implemented by _tip_mass_characteristic. The first
+    branch is bracketed from zero using the heavy-mass scale (3/r)^(1/4);
+    later branches lie between (n-1)*pi and their unloaded roots. Bisection
+    uses relative interval convergence, retaining small roots at large r.
+    At exactly zero mass, the established unloaded root constants are returned.
+    """
+    if mass_ratio == 0:
+        return BEAM_ROOTS["cantilever"]
+    roots = []
+    for index, unloaded in enumerate(BEAM_ROOTS["cantilever"]):
+        lower = index * math.pi
+        upper = unloaded + 1e-12
+        if index == 0 and mass_ratio >= 1:
+            upper = min(upper, 2 * (3 / mass_ratio)**0.25)
+        f_lower = _tip_mass_characteristic(lower, mass_ratio)
+        f_upper = _tip_mass_characteristic(upper, mass_ratio)
+        if (f_lower > 0) == (f_upper > 0):
+            raise ValueError("Unable to bracket the cantilever tip-mass mode.")
+        for _ in range(100):
+            midpoint = (lower + upper) / 2
+            if midpoint == lower or midpoint == upper:
+                break
+            f_mid = _tip_mass_characteristic(midpoint, mass_ratio)
+            if f_mid == 0:
+                lower = upper = midpoint
+                break
+            if (f_mid > 0) == (f_lower > 0):
+                lower, f_lower = midpoint, f_mid
+            else:
+                upper = midpoint
+            if upper - lower <= 4e-16 * upper:
+                break
+        roots.append(min(unloaded, (lower + upper) / 2))
+    return tuple(roots)
+
+
 def _beam_mode_value(
-    support_type: str, eigenvalue: float, xi: float, derivative: int = 0
+    support_type: str, eigenvalue: float, xi: float, derivative: int = 0,
+    mass_ratio: float = 0.0,
 ) -> float:
     r"""Evaluate a beam eigenfunction or its derivative with respect to x/L.
 
     Inputs are a supported boundary condition, its dimensionless root lambda,
-    normalized position xi, and derivative order 0..3. Returns an unnormalized
-    scalar mode value. Simply supported modes use sin(lambda*xi). Clamped-left
+    normalized position xi, derivative order 0..3, and optional tip/beam mass
+    ratio. Returns an unnormalized scalar mode value. Simply supported modes
+    use sin(lambda*xi). Clamped-left
     modes use cosh(z)-cos(z)-sigma*(sinh(z)-sin(z)); sigma has plus signs at a
     free end and minus signs at a clamped end. See the beam solver references.
     Derivatives allow direct checks of displacement, slope, moment and shear
     boundary conditions without finite-difference approximations.
+    Small cantilever roots use the equivalent scaled function phi/lambda².
+    For heavy tip masses, the exact tip-displacement identity obtained from
+    the characteristic equation avoids subtracting nearly equal terms.
     """
     if derivative not in (0, 1, 2, 3):
         raise ValueError("Mode derivative order must be 0, 1, 2, or 3.")
@@ -497,6 +666,35 @@ def _beam_mode_value(
     if support_type == "simply_supported":
         terms = (math.sin(z), math.cos(z), -math.sin(z), -math.cos(z))
         return eigenvalue**derivative * terms[derivative]
+    if (support_type == "cantilever" and eigenvalue >= 0.25
+            and mass_ratio > 1e6 and xi == 1 and derivative == 0):
+        return (
+            2 * (math.cos(eigenvalue) + 1 / math.cosh(eigenvalue))
+            / (math.tanh(eigenvalue) + math.sin(eigenvalue) / math.cosh(eigenvalue))
+            / eigenvalue / mass_ratio
+        )
+    if support_type == "cantilever" and eigenvalue < 0.25:
+        # Return phi/lambda²: arbitrary modal scaling keeps the heavy-tip-mass
+        # shape finite as lambda tends to zero. Differentiate this same series.
+        fourth = eigenvalue**4
+        numerator = sum(fourth**k / math.factorial(4 * k) for k in range(5))
+        denominator = sum(fourth**k / math.factorial(4 * k + 1) for k in range(5))
+        ratio = numerator / denominator
+        value = 0.0
+        for k in range(5):
+            power = 4 * k + 2
+            if power >= derivative:
+                value += (
+                    2 * fourth**k * xi**(power - derivative)
+                    / math.factorial(power - derivative)
+                )
+            power += 1
+            if power >= derivative:
+                value -= (
+                    2 * ratio * fourth**k * xi**(power - derivative)
+                    / math.factorial(power - derivative)
+                )
+        return value
     sign = 1 if support_type == "cantilever" else -1
     sigma = (
         (math.cosh(eigenvalue) + sign * math.cos(eigenvalue))
@@ -526,13 +724,17 @@ def calculate_beam_resonance(
     custom_e_gpa: float = 200.0,
     custom_rho_kg_m3: float = 7850.0,
     custom_nu: float = 0.3,
+    tip_mass_kg: float = 0.0,
 ) -> dict[str, Any]:
     r"""Calculate bending natural frequencies and a uniform beam's selected mode.
 
     Euler-Bernoulli theory assumes a straight prismatic slender beam, linear
     isotropic elasticity, small deflection, no axial load, and ideal supports.
-    Shear deformation, rotary inertia, damping, added masses, and elastic
-    support compliance are omitted. The first five elastic bending modes in
+    A cantilever may carry a point mass at its tip centerline. Its translational
+    inertia changes the end-shear condition and all five frequency roots.
+    Tip rotational inertia, eccentricity, axial gravity loading, distributed
+    attachments, shear deformation, damping, and support compliance are omitted.
+    The first five elastic bending modes in
     the selected bending plane are returned; torsion and axial modes are not.
     These are natural frequencies, not predictions of forced-response amplitude.
     Section geometry is evaluated by beam_analysis.compute_section_properties,
@@ -566,8 +768,9 @@ def calculate_beam_resonance(
     mode_number : int
         Integer selected elastic bending mode from 1 through 5.
     material : str
-        steel, aluminum, cast_iron, titanium, or custom; presets are representative
-        isotropic properties, shared with the plate and ring calculators.
+        A preset key from MATERIALS, or custom. Representative isotropic
+        properties and optional material notes and sources are shared with
+        the plate and ring calculators.
     custom_e_gpa : float
         Positive finite custom Young's modulus E in GPa; otherwise ignored.
     custom_rho_kg_m3 : float
@@ -575,6 +778,10 @@ def calculate_beam_resonance(
     custom_nu : float
         Custom isotropic Poisson ratio, -1 < nu < 0.5. It is reported but does
         not enter this Euler-Bernoulli frequency model; otherwise ignored.
+    tip_mass_kg : float
+        Finite nonnegative point mass M at the cantilever tip centerline, in kg.
+        Zero recovers the unloaded beam. Ignored for other support conditions.
+        Rotational inertia, eccentricity and axial gravity loading are excluded.
 
     ---Returns---
     natural_frequency_hz : float
@@ -587,17 +794,28 @@ def calculate_beam_resonance(
         Uniform beam mass per unit length mu=rho*A, in kg/m.
     beam_mass_kg : float
         Beam-only mass mu*L, in kg; attachments are not included.
+    tip_mass_kg : float
+        Effective cantilever tip mass, in kg; zero for other support conditions.
+    tip_mass_ratio : float
+        Effective tip mass divided by beam-only mass, r=M/(rho*A*L).
+    total_mass_kg : float
+        Beam-only mass plus the effective point tip mass, in kg.
     bending_rigidity_n_m2 : float
         Beam bending rigidity EI in N·m².
     eigenvalue : float
         Selected dimensionless positive frequency root lambda=beta*L.
+    eigenvalue_residual : float
+        Selected characteristic residual. For a cantilever it is divided by
+        cosh(lambda)*max(1,r); for fixed-fixed by cosh(lambda). For pinned ends
+        it is sin(lambda). This scaled dimensionless residual should be near zero.
     mode_frequencies : list
         First five bending modes, each with mode_number, eigenvalue, and
         natural_frequency_hz. All use the selected bending plane and supports.
     diagram_data : dict
         kind=beam, available=true, physical geometry in mm, support_type,
-        section_type, bending_axis and mode_label. x is normalized position
-        x/L from 0 to 1; displacement is the selected normalized transverse
+        section_type, bending_axis, mode_label and effective tip_mass_kg.
+        x is normalized position x/L from 0 to 1; displacement is the selected
+        normalized transverse
         eigenfunction at 201 stations, with maximum sampled absolute value 1.
         Shape amplitude is arbitrary, not a predicted displacement in mm.
     wave_velocity_m_s : float
@@ -620,7 +838,8 @@ def calculate_beam_resonance(
     model_assumptions : list
         Mechanical idealizations and boundary conditions for the selected beam.
     applicability_notes : list
-        Limits of the thin-beam model and of interpreting a modal frequency.
+        Limits of the thin-beam model, modal-frequency interpretation, and
+        selected material preset, including property assumptions.
     subst_natural_frequency_hz : str
         Fully substituted selected natural-frequency equation in LaTeX.
     subst_bending_rigidity_n_m2 : str
@@ -629,13 +848,20 @@ def calculate_beam_resonance(
         Fully substituted extensional wave-speed equation in LaTeX.
     subst_mass_per_length_kg_m : str
         Fully substituted mass-per-unit-length equation in LaTeX.
+    subst_tip_mass_ratio : str
+        Substituted effective tip-mass ratio and total-mass equations in LaTeX.
+    subst_eigenvalue : str
+        Selected numeric root, effective mass ratio, and scaled residual in LaTeX.
 
     ---LaTeX---
     \mu = \rho A
     B = EI
     c_e = \sqrt{\frac{E}{\rho}}
     f_n = \frac{\lambda_n^2}{2\pi L^2}\sqrt{\frac{EI}{\rho A}}
-    \cos\lambda_n\cosh\lambda_n = -1\quad\text{(cantilever)}
+    \cos\lambda_n\cosh\lambda_n = -1\quad\text{(cantilever, M=0)}
+    r = \frac{M}{\rho A L}
+    F(\lambda;r) = 1+\cos\lambda\cosh\lambda+r\lambda(\cos\lambda\sinh\lambda-\sin\lambda\cosh\lambda)=0
+    \phi''(1)=0,\quad\phi'''(1)+r\lambda^4\phi(1)=0\quad\text{(cantilever tip)}
     \lambda_n = n\pi\quad\text{(simply supported)}
     \cos\lambda_n\cosh\lambda_n = 1\quad\text{(fixed-fixed)}
     \phi_n(\xi) = \cosh(\lambda_n\xi)-\cos(\lambda_n\xi)-\sigma_n[\sinh(\lambda_n\xi)-\sin(\lambda_n\xi)]
@@ -650,7 +876,11 @@ def calculate_beam_resonance(
     free span (m); n: selected elastic mode number; λ: dimensionless
     frequency root βL; β: wave number (1/m); ξ: position x/L;
     φ: eigenfunction before normalization; σ: support-specific shape
-    coefficient; f: frequency (Hz); cₑ: extensional wave speed (m/s).
+    coefficient; f: frequency (Hz); cₑ: extensional wave speed (m/s);
+    M: point tip mass (kg); r: tip mass / beam mass; m_total: combined mass (kg);
+    F: cantilever characteristic function; primes: derivatives with respect
+    to ξ; ε: scaled characteristic residual, F/[cosh(λ) max(1,r)] for the
+    cantilever, sin(λ) for pinned ends, cos(λ)-1/cosh(λ) for fixed-fixed ends.
 
     ---References---
     Georgia Institute of Technology, AE Resources, Beam Bending Example,
@@ -663,6 +893,9 @@ def calculate_beam_resonance(
     for use toward mass sensing applications, University of Alberta,
     section 2.2.1, equations (2.5)-(2.7), clamped-clamped frequency equation.
     https://sites.ualberta.ca/~freemanm/theses/Vince_thesis.pdf
+    NACA TN3459 (1955), Beams With a Mass at the Tip, p. 17, equations
+    (13)-(14), exact cantilever point-mass frequency relation and mode shape.
+    https://ntrs.nasa.gov/citations/19930084187
     """
     if support_type not in BEAM_ROOTS:
         raise ValueError("Support must be cantilever, simply_supported, or fixed_fixed.")
@@ -674,6 +907,11 @@ def calculate_beam_resonance(
     e_gpa, rho, nu, material_label = _material_properties(
         material, custom_e_gpa, custom_rho_kg_m3, custom_nu
     )
+    effective_tip_mass = 0.0
+    if support_type == "cantilever":
+        effective_tip_mass = _finite_number(tip_mass_kg, "Tip mass")
+        if effective_tip_mass < 0:
+            raise ValueError("Tip mass must be nonnegative.")
     span_mm = _finite_number(length_mm, "Beam span", positive=True)
     geometry = {
         "length_mm": span_mm, "width_mm": 0.0, "depth_mm": 0.0,
@@ -712,12 +950,20 @@ def calculate_beam_resonance(
         e_pa = e_gpa * 1e9
         mass_per_length = rho * area
         beam_mass = mass_per_length * span
+        mass_ratio = effective_tip_mass / beam_mass
+        total_mass = beam_mass + effective_tip_mass
+        if not math.isfinite(mass_ratio) or not math.isfinite(total_mass):
+            raise ValueError("Tip mass produces results outside the supported numeric range.")
         rigidity = e_pa * inertia
         wave_speed = math.sqrt(e_pa / rho)
         scale = math.sqrt(rigidity / mass_per_length) / (2 * math.pi * span**2)
+        roots = (
+            _tip_mass_roots(mass_ratio) if support_type == "cantilever"
+            else BEAM_ROOTS[support_type]
+        )
         frequencies = [
             {"mode_number": i, "eigenvalue": root, "natural_frequency_hz": root**2 * scale}
-            for i, root in enumerate(BEAM_ROOTS[support_type], 1)
+            for i, root in enumerate(roots, 1)
         ]
         numbers = [area, inertia, mass_per_length, beam_mass, rigidity, wave_speed]
         numbers.extend(row["natural_frequency_hz"] for row in frequencies)
@@ -727,19 +973,33 @@ def calculate_beam_resonance(
         raise ValueError("Inputs produce results outside the supported numeric range.") from error
     selected = frequencies[mode - 1]
     root, frequency = selected["eigenvalue"], selected["natural_frequency_hz"]
+    if support_type == "cantilever":
+        root_residual = _tip_mass_characteristic(root, mass_ratio)
+    elif support_type == "simply_supported":
+        root_residual = math.sin(root)
+    else:
+        root_residual = math.cos(root) - 1 / math.cosh(root)
     x = [i / 200 for i in range(201)]
-    shape = [_beam_mode_value(support_type, root, xi) for xi in x]
+    shape = [
+        _beam_mode_value(support_type, root, xi, mass_ratio=mass_ratio) for xi in x
+    ]
     shape[0] = 0.0
     if support_type != "cantilever":
         shape[-1] = 0.0
     normalization = max(abs(value) for value in shape)
+    if not math.isfinite(normalization) or normalization <= 0:
+        raise ValueError("Mode shape is outside the supported numeric range.")
     displacement = [value / normalization for value in shape]
     support_label = {
         "cantilever": "Cantilever", "simply_supported": "Simply Supported",
         "fixed_fixed": "Fixed-Fixed",
     }[support_type]
     support_description = {
-        "cantilever": "Left end fixed; right end free of bending moment and shear.",
+        "cantilever": (
+            "Left end fixed; tip bending moment is zero and tip shear balances point-mass inertia."
+            if effective_tip_mass else
+            "Left end fixed; right end free of bending moment and shear."
+        ),
         "simply_supported": "Both ends pinned: zero deflection and bending moment.",
         "fixed_fixed": "Both ends fixed: zero deflection and slope.",
     }[support_type]
@@ -754,13 +1014,18 @@ def calculate_beam_resonance(
         "second_moment_m4": inertia,
         "mass_per_length_kg_m": mass_per_length,
         "beam_mass_kg": beam_mass,
+        "tip_mass_kg": effective_tip_mass,
+        "tip_mass_ratio": mass_ratio,
+        "total_mass_kg": total_mass,
         "bending_rigidity_n_m2": rigidity,
         "eigenvalue": root,
+        "eigenvalue_residual": root_residual,
         "mode_frequencies": frequencies,
         "diagram_data": {
             "kind": "beam", "available": True, "geometry": geometry,
             "support_type": support_type, "section_type": section_type,
             "bending_axis": bending_axis, "mode_label": f"Bending mode {mode}",
+            "tip_mass_kg": effective_tip_mass,
             "x": x, "displacement": displacement,
         },
         "wave_velocity_m_s": wave_speed,
@@ -773,14 +1038,16 @@ def calculate_beam_resonance(
             support_description,
             "Straight uniform beam; homogeneous isotropic material; small deflections.",
             "Euler-Bernoulli bending; no axial load, shear deformation, or rotary inertia.",
+            "Tip mass acts at the centerline without rotational inertia, eccentricity, or axial gravity loading.",
         ],
         "applicability_notes": [
             f"Section size along deflection / span = {thickness_ratio:.4g}. "
             "Slender-beam theory requires both section dimensions small relative "
             "to span and bending wavelength.",
             "These are bending modes in the selected plane, not a complete structure's spectrum.",
-            "Attachments, elastic supports, joints and axial stress can shift the frequencies.",
+            "Distributed attachments, elastic supports, joints and axial stress can shift the frequencies.",
             "Normalized mode amplitude is arbitrary; forcing and damping set real response amplitude.",
+            *MATERIALS.get(material, {}).get("notes", []),
         ],
         "subst_natural_frequency_hz": (
             f"f_{{{mode}}} = \\frac{{({_latex_number(root)})^2}}"
@@ -802,5 +1069,16 @@ def calculate_beam_resonance(
         "subst_mass_per_length_kg_m": (
             f"\\mu = ({_latex_number(rho)})({_latex_number(area)})"
             f" = {_latex_number(mass_per_length)}\\;\\mathrm{{kg/m}}"
+        ),
+        "subst_tip_mass_ratio": (
+            f"r = \\frac{{{_latex_number(effective_tip_mass)}}}"
+            f"{{{_latex_number(beam_mass)}}} = {_latex_number(mass_ratio)},\\quad "
+            f"m_{{\\mathrm{{total}}}} = {_latex_number(beam_mass)}"
+            f"+{_latex_number(effective_tip_mass)} = {_latex_number(total_mass)}\\;\\mathrm{{kg}}"
+        ),
+        "subst_eigenvalue": (
+            f"r = {_latex_number(mass_ratio)},\\quad "
+            f"\\lambda_{{{mode}}} = {_latex_number(root)},\\quad "
+            f"\\varepsilon = {_latex_number(root_residual)}"
         ),
     }

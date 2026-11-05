@@ -49,7 +49,12 @@
             'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...extra,
         }, parent);
     }
-    const format = value => Number(value).toLocaleString(undefined, { maximumSignificantDigits: 5 });
+    const format = value => {
+        const number = Number(value), magnitude = Math.abs(number);
+        return magnitude !== 0 && (magnitude < 1e-3 || magnitude >= 1e6)
+            ? number.toExponential(3)
+            : number.toLocaleString(undefined, { maximumSignificantDigits: 5 });
+    };
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
     function dimension(parent, start, end, text, offset = [0, 0]) {
@@ -79,6 +84,7 @@
     function drawBeam(instance) {
         const { data, base, moving } = instance;
         const g = data.geometry, round = data.section_type.startsWith('circular');
+        const tipMass = data.support_type === 'cantilever' ? (data.tip_mass_kg || 0) : 0;
         const activeDepth = round ? g.outer_diameter_mm : data.bending_axis === 'width' ? g.width_mm : g.depth_mm;
         const x0 = 80, x1 = 510, center = 148;
         const depth = clamp(activeDepth / g.length_mm * (x1 - x0), 6, 55);
@@ -91,7 +97,16 @@
             clampSupport(base, x0, center);
             if (data.support_type === 'fixed_fixed') clampSupport(base, x1, center, 1);
         }
-        label(base, (x0 + x1) / 2, 55, data.support_type === 'cantilever' ? 'Fixed end → free end' : data.support_type === 'fixed_fixed' ? 'Both ends fixed' : 'Pinned end → roller support');
+        label(base, (x0 + x1) / 2, 55, data.support_type === 'cantilever' ? (tipMass > 0 ? 'Fixed end → attached tip mass' : 'Fixed end → free end') : data.support_type === 'fixed_fixed' ? 'Both ends fixed' : 'Pinned end → roller support');
+        let massMarker = null;
+        if (tipMass > 0) {
+            massMarker = svgNode('circle', {
+                cx: x1, cy: center, r: 9, fill: 'var(--bg-card)',
+                stroke: 'var(--text-light)', 'stroke-width': 1.5,
+                'data-tip-mass': 'geometry',
+            }, base);
+            label(base, x1, 224, `M = ${format(tipMass)} kg`, 'fv-dimension', 'end');
+        }
         line(base, x0, center + 47, x0, 267, { stroke: 'var(--border-color)' });
         line(base, x1, center + 47, x1, 267, { stroke: 'var(--border-color)' });
         dimension(base, [x0, 254], [x1, 254], `L = ${format(g.length_mm)} mm`);
@@ -124,9 +139,18 @@
         else arrow(section, cx, 91, cx, 69);
         instance.update = phase => {
             moving.replaceChildren();
+            if (massMarker) massMarker.setAttribute('stroke', instance.view === 'geometry' ? 'var(--accent-color)' : 'var(--text-light)');
             if (instance.view !== 'mode' || !data.available) return;
             const points = data.x.map((x, i) => [x0 + x * (x1 - x0), center - phase * 48 * data.displacement[i]]);
             path(moving, points, { 'stroke-width': 3 });
+            if (tipMass > 0) {
+                const end = points[points.length - 1];
+                svgNode('circle', {
+                    cx: end[0], cy: end[1], r: 9, fill: 'var(--bg-card)',
+                    stroke: 'var(--accent-color)', 'stroke-width': 2.5,
+                    'data-tip-mass': 'mode',
+                }, moving);
+            }
         };
     }
 
@@ -284,7 +308,8 @@
         stop(instance); instance.data = data; instance.phase = 1;
         instance.view = data.available ? 'mode' : 'geometry';
         instance.base.replaceChildren(); instance.moving.replaceChildren();
-        instance.title.textContent = data.mode_label || `${data.kind} natural-frequency model`;
+        const massLabel = data.kind === 'beam' && data.tip_mass_kg > 0 ? ` with ${format(data.tip_mass_kg)} kg point mass at the tip` : '';
+        instance.title.textContent = (data.mode_label || `${data.kind} natural-frequency model`) + massLabel;
         instance.description.textContent = 'Dimensioned structural model and selected normalized mode shape. Supports and bending direction are shown. Animation is optional.';
         instance.modeButton.disabled = !data.available;
         if (data.kind === 'beam') drawBeam(instance);

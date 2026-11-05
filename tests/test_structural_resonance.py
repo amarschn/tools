@@ -129,6 +129,87 @@ def test_preset_matches_explicit_custom_properties(material):
         assert preset[key] == custom[key]
 
 
+@pytest.mark.parametrize("material, modulus_mpa, density_g_cm3, nu, grade, host", [
+    ("abs", 1700, 1.04, 0.35, "TECARAN ABS grey", "www.ensingerplastics.com"),
+    ("polycarbonate", 2400, 1.20, 0.37, "Makrolon 2805", "solutions.covestro.com"),
+    ("acetal", 2800, 1.41, 0.35, "TECAFORM AH natural", "www.ensingerplastics.com"),
+    ("nylon6", 3500, 1.13, 0.39, "Ultramid B3S R03", "download.basf.com"),
+])
+def test_plastic_presets_match_manufacturer_data_and_label_assumed_nu(
+    material, modulus_mpa, density_g_cm3, nu, grade, host
+):
+    """Manufacturer tensile data, distinct from flexural or conditioned modulus.
+
+    Source URLs live with each preset. E and density are source-backed;
+    Poisson ratios are deliberately identified as assumed modeling inputs.
+    """
+    properties = MATERIALS[material]
+    assert properties["elastic_modulus_gpa"] == pytest.approx(modulus_mpa / 1000)
+    assert properties["density_kg_m3"] == pytest.approx(density_g_cm3 * 1000)
+    assert properties["poisson_ratio"] == nu
+    notes = " ".join(properties["notes"])
+    assert grade in notes
+    assert "Poisson ratio is an assumed modeling value" in notes
+    assert "not reported" in notes
+    assert "dynamic" in notes and "3D-printed" in notes
+    for source in properties["sources"]:
+        assert grade in source["title"]
+        assert source["url"].startswith(f"https://{host}/")
+        assert set(source["properties"]) == {"elastic_modulus_gpa", "density_kg_m3"}
+
+
+@pytest.mark.parametrize("material", list(MATERIALS))
+@pytest.mark.parametrize("family", ["ring", "beam", "loaded_beam"])
+def test_presets_give_finite_modes_and_match_custom_across_models(material, family):
+    """All presets satisfy the physical domain and work with each solver family."""
+    properties = MATERIALS[material]
+    assert math.isfinite(properties["elastic_modulus_gpa"])
+    assert properties["elastic_modulus_gpa"] > 0
+    assert math.isfinite(properties["density_kg_m3"])
+    assert properties["density_kg_m3"] > 0
+    assert -1 < properties["poisson_ratio"] < 0.5
+    solver = ring if family == "ring" else calculate_beam_resonance
+    inputs = {"tip_mass_kg": 0.1} if family == "loaded_beam" else {}
+    preset = solver(material=material, **inputs)
+    custom = solver(
+        material="custom", custom_e_gpa=properties["elastic_modulus_gpa"],
+        custom_rho_kg_m3=properties["density_kg_m3"],
+        custom_nu=properties["poisson_ratio"], **inputs,
+    )
+    assert math.isfinite(preset["natural_frequency_hz"])
+    assert preset["natural_frequency_hz"] > 0
+    for key in (
+        "natural_frequency_hz", "wave_velocity_m_s", "elastic_modulus_gpa",
+        "density_kg_m3", "poisson_ratio",
+    ):
+        assert preset[key] == custom[key]
+    if family != "ring":
+        assert preset["mode_frequencies"] == custom["mode_frequencies"]
+        assert all(
+            math.isfinite(item["natural_frequency_hz"])
+            and item["natural_frequency_hz"] > 0
+            for item in preset["mode_frequencies"]
+        )
+    for result in (preset, calculate(material=material)):
+        for note in properties.get("notes", []):
+            assert note in result["applicability_notes"]
+
+
+def test_nylon_preset_explicitly_uses_dry_modulus():
+    """BASF B3S R03 lists 3500 MPa dry versus 1200 MPa conditioned at 23 °C."""
+    properties = MATERIALS["nylon6"]
+    assert "dry" in properties["display"]
+    assert any("conditioning" in note for note in properties["notes"])
+    dry = calculate_beam_resonance(material="nylon6")
+    conditioned = calculate_beam_resonance(
+        material="custom", custom_e_gpa=1.2, custom_rho_kg_m3=1130,
+        custom_nu=0.39,
+    )
+    assert conditioned["natural_frequency_hz"] / dry["natural_frequency_hz"] == (
+        pytest.approx(math.sqrt(1.2 / 3.5))
+    )
+
+
 def test_material_scaling_and_auxetic_plate():
     baseline = calculate(material="custom")["natural_frequency_hz"]
     assert calculate(material="custom", custom_e_gpa=800)["natural_frequency_hz"] == (
@@ -437,3 +518,123 @@ def test_unresolvable_diagram_modes_keep_geometry_and_frequency():
         assert not diagram["available"] and diagram["reason"]
         assert diagram["geometry"]
         assert "displacement" not in diagram and "radial" not in diagram
+
+
+def tip_loaded(ratio, **overrides):
+    """Create the default beam with the specified independent mass ratio."""
+    beam_mass = 0.10125  # 2700 kg/m³ × 0.025 m × 0.005 m × 0.3 m.
+    return calculate_beam_resonance(tip_mass_kg=ratio * beam_mass, **overrides)
+
+
+def test_zero_tip_mass_preserves_unloaded_results():
+    assert calculate_beam_resonance() == calculate_beam_resonance(tip_mass_kg=0)
+    result = calculate_beam_resonance()
+    assert result["tip_mass_kg"] == result["tip_mass_ratio"] == 0
+    assert result["total_mass_kg"] == result["beam_mass_kg"]
+
+
+@pytest.mark.parametrize("ratio, expected_roots, expected_midspan", [
+    (0.1, [1.7227415205932591, 4.3995228161560123, 7.4510566733038960,
+           10.5217847559525095, 13.6141876601176608], 0.3314472144512327),
+    (1, [1.2479174096064695, 4.0311394367149595, 7.1341322409397458,
+         10.2566210737140291, 13.3877563259679714], 0.3175717145652935),
+    (10, [0.7357819193896505, 3.9384658332518129, 7.0756163670317049,
+          10.2150464784260205, 13.3554985899525396], 0.3131072774455432),
+])
+def test_tip_mass_characteristic_against_high_precision_reference(
+    ratio, expected_roots, expected_midspan
+):
+    """NACA TN3459 Eq13 roots, independently evaluated at 75 decimal digits.
+
+    Reference values use Decimal Taylor evaluation and bracketed roots, rather
+    than the floating-point characteristic/shape implementation under test.
+    """
+    result = tip_loaded(ratio)
+    roots = [row["eigenvalue"] for row in result["mode_frequencies"]]
+    assert roots == pytest.approx(expected_roots, rel=2e-14)
+    assert result["diagram_data"]["displacement"][100] == pytest.approx(
+        expected_midspan, rel=2e-13
+    )
+    assert result["tip_mass_ratio"] == pytest.approx(ratio)
+    assert result["total_mass_kg"] == pytest.approx(0.10125 * (1 + ratio))
+    assert result["diagram_data"]["tip_mass_kg"] == result["tip_mass_kg"]
+
+
+def test_loaded_frequency_for_tip_mass_equal_to_beam_mass():
+    result = tip_loaded(1)
+    assert result["natural_frequency_hz"] == pytest.approx(20.09422930702)
+    assert abs(result["eigenvalue_residual"]) < 1e-13
+
+
+def test_tip_mass_reduces_each_frequency_and_preserves_mode_order():
+    previous = [row["natural_frequency_hz"] for row in tip_loaded(0)["mode_frequencies"]]
+    for ratio in (1e-8, 0.01, 0.1, 1, 10, 1e4, 1e12):
+        result = tip_loaded(ratio)
+        frequencies = [row["natural_frequency_hz"] for row in result["mode_frequencies"]]
+        assert all(new < old for new, old in zip(frequencies, previous))
+        assert frequencies == sorted(frequencies)
+        previous = frequencies
+
+
+@pytest.mark.parametrize("ratio", [0.1, 1, 10, 1e8, 1e100])
+def test_tip_mass_modes_obey_moment_and_inertial_shear_boundary(ratio):
+    """The tip moment is zero; EI*phi'''=-M*omega²*phi replaces zero shear."""
+    result = tip_loaded(ratio)
+    for row in result["mode_frequencies"]:
+        root = row["eigenvalue"]
+        def value(x, derivative=0):
+            return _beam_mode_value("cantilever", root, x, derivative, mass_ratio=ratio)
+        assert value(0) == pytest.approx(0, abs=1e-12)
+        assert value(0, 1) == pytest.approx(0, abs=1e-12)
+        assert value(1, 2) / max(1, root**2) == pytest.approx(0, abs=2e-8)
+        shear = value(1, 3)
+        # Multiply the tiny displacement by the mass first to retain precision.
+        inertial = (ratio * value(1)) * root**4
+        assert shear + inertial == pytest.approx(0, abs=max(1, abs(shear)) * 2e-8)
+
+
+@pytest.mark.parametrize("ratio", [1e8, 1e100, 1e300])
+def test_heavy_tip_mass_spring_limit_and_finite_mode_shape(ratio):
+    result = tip_loaded(ratio)
+    spring_frequency = (
+        math.sqrt(3 * result["bending_rigidity_n_m2"] / result["tip_mass_kg"] / 0.3**3)
+        / (2 * math.pi)
+    )
+    assert result["natural_frequency_hz"] == pytest.approx(spring_frequency, rel=2e-8)
+    shape = result["diagram_data"]["displacement"]
+    assert all(math.isfinite(value) for value in shape)
+    assert shape[100] == pytest.approx(0.3125, rel=1e-8)
+    assert shape[-1] == 1
+    fifth = tip_loaded(ratio, mode_number=5)["diagram_data"]["displacement"]
+    assert all(math.isfinite(value) for value in fifth)
+    assert max(abs(value) for value in fifth) == pytest.approx(1)
+    assert abs(fifth[-1]) < 1e-8
+
+
+def test_tiny_tip_mass_limit_is_continuous():
+    loaded = tip_loaded(1e-300)
+    bare = tip_loaded(0)
+    assert loaded["natural_frequency_hz"] == pytest.approx(bare["natural_frequency_hz"], rel=1e-14)
+    assert loaded["diagram_data"]["displacement"] == pytest.approx(
+        bare["diagram_data"]["displacement"], abs=1e-13
+    )
+
+
+@pytest.mark.parametrize("mass", [-1, float("nan"), float("inf"), True, None])
+def test_invalid_active_tip_mass(mass):
+    with pytest.raises(ValueError):
+        calculate_beam_resonance(tip_mass_kg=mass)
+
+
+@pytest.mark.parametrize("support", ["simply_supported", "fixed_fixed"])
+@pytest.mark.parametrize("mass", [-1, float("nan"), float("inf"), True, None, 100])
+def test_non_cantilever_supports_ignore_tip_mass(support, mass):
+    result = calculate_beam_resonance(support_type=support, tip_mass_kg=mass)
+    bare = calculate_beam_resonance(support_type=support)
+    assert result == bare
+    assert result["tip_mass_kg"] == result["tip_mass_ratio"] == 0
+
+
+def test_tip_mass_ratio_overflow_fails_clearly():
+    with pytest.raises(ValueError, match="numeric range"):
+        calculate_beam_resonance(tip_mass_kg=1e308)
