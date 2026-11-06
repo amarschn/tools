@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="noindex">
+<script>window.MathJax = {tex: {inlineMath: [["\\(", "\\)"]]}, startup: {typeset: false}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+<link rel="stylesheet" href="proto.css"><link rel="stylesheet" href="v2/drawing.css"><link rel="stylesheet" href="v2/app.css">
+<title>Option D: Guided build</title></head>
+<body>
+<main class="wrap">
+  <h1 class="ptitle">Build your house, one layer of detail at a time</h1>
+  <p class="plede" style="margin-bottom:10px">It starts as a plain box. Each step replaces an assumption with something real, so the drawing fills in and the estimate tightens.</p>
+  <nav class="rail" id="rail" aria-label="Steps"></nav>
+  <div class="build">
+    <aside class="panel" id="step"></aside>
+    <div>
+      <section class="panel"><div class="strip" id="strip"></div></section>
+      <div class="model-error" id="model-error" role="alert" hidden></div>
+      <section class="panel" id="sheet-panel"></section>
+      <section class="panel" id="study-panel" hidden></section>
+      <section class="panel" id="learn-panel"><div id="fit-wide" hidden style="margin-bottom:14px"></div><div class="learn-grid"><div class="learn" id="learn"></div><div id="ladder"></div></div></section>
+      <details class="panel" id="math-panel"><summary style="cursor:pointer;font-weight:600;min-height:28px">Show the math</summary><div id="drill" style="margin-top:10px"></div></details>
+    </div>
+  </div>
+</main>
+<script src="proto-shared.js"></script><script src="v2/model.js"></script><script src="v2/drawing.js"></script><script src="v2/core.js"></script><script src="v2/shared-ui.js"></script><script src="v2/study.js"></script>
+<script>
+(async function () {
+  const P = Proto; const C = Core; const M = HouseModel; const U = SharedUI;
+  const $ = (id) => document.getElementById(id);
+  const fmt = C.fmt; const esc = C.esc;
+  P.nav('option-d');
+  const STEPS = [
+    { id: 'box', title: 'A box', head: 'Start with a box', lede: 'Two answers are enough for a first estimate. The house is a plain box, and everything about it is assumed.', els: [], tool: 'select', custom: true },
+    { id: 'shape', title: 'Shape', head: 'Give it a shape and an age', lede: 'Drag the outside walls on the plan, or type the size. Then say when it was built, the single most useful answer so far.', els: ['shape'], tool: 'shell' },
+    { id: 'shell', title: 'Insulation', head: 'What are the surfaces made of?', lede: 'Each surface now has a real resistance to heat flow. Layers on the section follow what you choose.', els: ['walls', 'ceiling', 'floor'], tool: 'select' },
+    { id: 'openings', title: 'Windows', head: 'Place the windows and doors', lede: 'Dashed windows are a guess. Add your own on the plan, and the guesses are replaced by what you draw.', els: ['openings'], tool: 'openings', season: 'summer' },
+    { id: 'air', title: 'Air and ducts', head: 'Where does the air go?', lede: 'These are the largest unknowns in most houses, and neither is visible by looking.', els: ['air', 'ducts'], tool: 'select' },
+    { id: 'rooms', title: 'Rooms', head: 'Divide it into rooms', lede: 'So far the house is one space. Rooms tell you how much air each one needs, and rooms peak at different hours.', els: ['rooms'], tool: 'rooms', overlay: true },
+    { id: 'system', title: 'Equipment', head: 'What are you sizing?', lede: 'Choose what will heat and cool the house, then test a size against the load.', els: [], tool: 'select', system: true },
+    { id: 'study', title: 'Stress test', head: 'Test what you are unsure about', lede: 'You have a complete model. Now ask how wrong it could be, and whether your equipment choice survives.', els: [], study: true },
+  ];
+  await C.start();
+  let index = 0;
+  const visited = new Set(['box']);
+  $('sheet-panel').innerHTML = C.sheetHtml();
+  C.bindDrawing();
+  C.bindInspector($('step'));
+  const drill = P.Drill($('drill'));
+  C.drillPanel = drill;
+  let drawSystem = null;
+  Study.bind($('study-panel'));
+
+  const stepLabel = (i) => STEPS[i] ? STEPS[i].title : '';
+  function rail() {
+    $('rail').innerHTML = STEPS.map((s, i) => `<button type="button" data-step="${i}" class="${i === index ? 'on' : ''} ${visited.has(s.id) && i !== index ? 'done' : ''}"><span class="n">${i + 1}</span>${esc(s.title)}</button>`).join('');
+  }
+  function stepCard() {
+    const s = STEPS[index];
+    const tagged = (id) => {
+      const on = C.confirmed.has(id);
+      return `<div class="el-head"><h4>${esc(C.ELEMENTS[id].title)}</h4><span class="tag ${on ? 'solid' : ''}">${on ? 'Confirmed' : 'Assumed'}</span></div>${C.elementHtml(id)}`;
+    };
+    let body = '';
+    if (s.custom) {
+      body = C.elementHtml('site') + C.field('area', 'About how big is it?', Math.round(M.area(C.model)), { unit: 'ft²', help: 'Conditioned floor area. A rough number is fine for now.' });
+    } else if (s.system) {
+      body = '<div id="system"></div>';
+    } else if (s.study) {
+      body = '<p class="note">Each chart runs the whole calculation again. Nothing is estimated from the base case.</p>';
+    } else {
+      body = s.els.map(tagged).join('');
+    }
+    const hasAssumed = s.els.some((id) => !C.confirmed.has(id));
+    const next = STEPS[index + 1];
+    $('step').innerHTML = `<div class="note" style="margin-bottom:3px">Step ${index + 1} of ${STEPS.length}</div><h2>${esc(s.head)}</h2><p class="lede">${esc(s.lede)}</p>${body}
+      <div class="stepnav">${index > 0 ? '<button type="button" class="btn" data-nav="-1">Back</button>' : ''}
+      ${hasAssumed ? '<button type="button" class="btn" data-confirm-step>These are right</button>' : ''}
+      ${next ? `<button type="button" class="btn primary" data-nav="1">${hasAssumed ? 'Keep assumptions, next' : 'Next'}: ${esc(next.title)}</button>` : ''}</div>`;
+    if (s.system) {
+      drawSystem = P.buildSystem($('system'), () => { C.confirm('system'); C.update(); });
+      drawSystem(C.result);
+    }
+  }
+  const surfaceTable = (r) => {
+    const inp = P.inputs(); const dt = r.heating.delta_t;
+    const rows = [['Window', inp.window_u], ['Door', 0.4], ['Wall', inp.wall_u], ['Ceiling', inp.ceiling_u]].map(([n, u]) => [n, u * dt]);
+    const max = Math.max(...rows.map((x) => x[1]));
+    return `<table class="flux"><tbody>${rows.map(([n, q]) => `<tr><td>${n}</td><td style="width:55%"><div class="bar" style="width:${q / max * 100}%"></div></td><td class="n">${fmt(q, 1)} Btu/h per ft²</td></tr>`).join('')}</tbody></table>`;
+  };
+  const OWNER = { ach50: 'Air and ducts', duct_leakage_pct: 'Air and ducts', duct_r: 'Air and ducts', wall_u: 'Insulation', ceiling_u: 'Insulation', window_u: 'Windows', window_shgc: 'Windows', window_pct_of_floor: 'Windows', occupants: 'Rooms', heating_design_f: 'A box', cooling_design_f: 'A box' };
+  function nextUp() {
+    const b = C.band; const s = STEPS[index];
+    if (!C.eraConfirmed) return s.id === 'shape' ? '' : `<div class="nextup"><strong>Worth doing next:</strong> say when the house was built. It is the biggest single reason the range is so wide.</div>`;
+    if (!b || !b.terms) return '';
+    const open = b.terms.filter((t) => !t.known).slice(0, 1)[0];
+    if (!open) return '<div class="nextup">Every major input is confirmed.</div>';
+    const swing = Math.max(open.heat_high - open.heat_low, open.cool_high - open.cool_low);
+    const where = OWNER[open.key];
+    return `<div class="nextup"><strong>Biggest open question:</strong> ${esc(open.label.toLowerCase())}, which could move the answer by ${fmt(swing)} Btu/h.${where && where !== s.title ? ` You can settle it in ${esc(where)}.` : ''}</div>`;
+  }
+  function learn() {
+    const r = C.result; const m = C.model; const s = STEPS[index]; if (!r) return;
+    const h = r.heating.components; const c = r.cooling.components; const dt = r.heating.delta_t;
+    let html = '';
+    const pct = (a, b) => Math.round(100 * a / Math.max(b, 1));
+    if (s.id === 'box') {
+      const b = C.band;
+      html = `<p><strong>Every load calculation starts from one idea.</strong> Heat flow is how leaky the shell is, times the temperature difference across it.</p>
+        <div class="formula">q = UA × Δt = ${fmt(r.heat_loss_coefficient)} × ${fmt(dt, 1)} = ${fmt(r.heating_total)} Btu/h</div>
+        <p>Your weather sets Δt: ${fmt(r.design.indoor_heating_f)} °F inside, ${fmt(r.design.heating_f)} °F outside. UA is the unknown, and that is why ${b ? `this could be anywhere from ${fmt(b.heating_low, 0)} to ${fmt(b.heating_high, 0)} Btu/h` : 'the range is wide'}: the same box can be a drafty 1940s house or a tight new one.</p>`;
+    } else if (s.id === 'shape') {
+      const wall = 2 * (m.w + m.d) * m.height * m.stories; const roof = m.w * m.d;
+      html = `<p><strong>Shape decides how much surface there is to lose heat through.</strong> This house has ${fmt(wall)} ft² of wall and ${fmt(roof)} ft² of ceiling.</p>
+        <div class="formula">Perimeter ${fmt(2 * (m.w + m.d))} ft × ${fmt(m.height)} ft × ${m.stories} ${m.stories === 1 ? 'story' : 'stories'} = ${fmt(wall)} ft² of wall</div>
+        <p>A long, thin house has more wall than a square one of the same floor area. Try dragging a wall and watch the heating number.</p>`;
+    } else if (s.id === 'shell') {
+      const worst = ['walls', 'windows', 'ceiling', 'floor'].sort((a, b) => h[b] - h[a])[0];
+      html = `<p><strong>One square foot of each surface does not lose the same heat.</strong> On your design hour, with Δt of ${fmt(dt, 1)} °F:</p>${surfaceTable(r)}
+        <p style="margin-top:7px">Added up over their areas, <strong>${{ walls: 'walls', windows: 'windows', ceiling: 'the ceiling', floor: 'the floor' }[worst]}</strong> lose the most: ${fmt(h[worst])} Btu/h, ${pct(h[worst], r.heating_total)}% of the total.</p>`;
+    } else if (s.id === 'openings') {
+      const glass = M.glassArea(m); const wall = 2 * (m.w + m.d) * m.height * m.stories;
+      html = `<p><strong>Windows punch above their area, especially in summer.</strong> They are ${pct(glass, wall)}% of your wall area, ${pct(h.windows, r.heating_total)}% of heating, and ${pct(c.windows, r.cooling_sensible)}% of sensible cooling.</p>
+        <div class="formula">${fmt(glass)} ft² of glass, ${fmt(h.windows)} Btu/h winter, ${fmt(c.windows)} Btu/h at the summer peak</div>
+        <p>Use the summer hour slider to watch the load move through the day. West glass peaks late. Then rotate the house and see if it matters here.</p>`;
+    } else if (s.id === 'air') {
+      html = `<p><strong>Air carries heat straight past your insulation.</strong> Leakage is ${pct(h.infiltration, r.heating_total)}% of heating and ducts are ${pct(h.ducts, r.heating_total)}%.</p>
+        <div class="formula">${fmt(r.heating.air.combined)} cfm leaking × ${fmt(1.08, 2)} × ${fmt(dt, 1)} °F = ${fmt(h.infiltration)} Btu/h</div>
+        <p>${P.SYSTEMS[P.state.system].ducted ? `Ducts add ${fmt(h.ducts)} Btu/h in winter and ${fmt(c.ducts)} Btu/h in summer. Change where they run and watch them move on the section.` : 'This system has no ducts, so nothing is lost on the way to the rooms.'}</p>`;
+    } else if (s.id === 'rooms') {
+      const rooms = r.rooms; if (rooms.length > 1) {
+        const hours = rooms.map((x) => x.peak_hour); const big = rooms.slice().sort((a, b) => b.heating / b.area - a.heating / a.area)[0];
+        const sum = rooms.reduce((a, x) => a + x.cooling, 0);
+        html = `<p><strong>Rooms peak at different times.</strong> Yours peak between solar hour ${Math.min(...hours)} and ${Math.max(...hours)}. Added up, room peaks come to ${fmt(sum)} Btu/h, but the whole house only needs ${fmt(r.cooling_sensible)} Btu/h of sensible cooling at once.</p>
+          <p><strong>${esc(big.name)}</strong> needs the most heat per square foot: ${fmt(big.heating / big.area, 1)} Btu/h per ft². It gets ${fmt(big.heating_cfm)} cfm of supply air.</p>
+          <p>Size the equipment from the whole-house load, and size each room's air from its own.</p>`;
+      } else html = `<p><strong>One big space hides the differences.</strong> Add a wall, or start from a typical layout, then turn on "Rooms by load" above the drawing to see which rooms work hardest.</p>`;
+    } else if (s.id === 'system') {
+      const sys = P.SYSTEMS[P.state.system]; const sizes = P.sizes(r); const eq = C.eq;
+      html = `<p style="margin-top:0"><strong>A rated size is not what you get.</strong> ${sys.hp ? 'A heat pump' : 'An AC'} rated ${sizes.tons} ton (${fmt(sizes.tons * 12000)} Btu/h) delivers about ${fmt(eq.cooling_capacity_total)} Btu/h on your design day.${sys.hp ? ` At ${fmt(r.design.heating_f)} °F it makes about ${fmt(eq.hp_capacity_at_design)} Btu/h of heat, so its balance point is ${eq.balance_point_f === null ? 'below the range' : fmt(eq.balance_point_f) + ' °F'}.` : ''}</p>`;
+    }
+    $('learn').innerHTML = html + nextUp();
+    // The equipment step puts the fit chart across the whole panel.
+    const wide = $('fit-wide');
+    if (s.id === 'system') { wide.hidden = false; wide.innerHTML = `<h3>Does it fit?</h3>${U.fitChart()}<p class="note" style="margin:4px 0 0">The shaded bar is the range on the load. The dashed box is the size range that fits it. The marker is what this equipment delivers on your design day, not its rated size.</p>`; } else wide.hidden = true;
+    $('ladder').innerHTML = `<h3>How the estimate has tightened</h3>${U.ladder(STEPS.slice(0, -1).map((x) => x.id))}`;
+  }
+  function strip() { $('strip').innerHTML = U.readouts(); }
+  function enter() {
+    const s = STEPS[index]; const v = C.view;
+    visited.add(s.id);
+    v.tool = s.tool || 'select';
+    v.splitting = false; v.preview = null;
+    if (s.season) { v.season = s.season; }
+    if (s.overlay !== undefined) { v.overlay = true; }
+    if (s.study || s.system) v.overlay = false;
+    const overlayBox = $('dwg-overlay'); if (overlayBox) overlayBox.checked = v.overlay;
+    $('sheet-panel').hidden = !!s.study;
+    $('study-panel').hidden = !s.study;
+    $('learn-panel').hidden = !!s.study;
+    rail(); stepCard(); C.applyLayout(); C.draw(); learn(); strip();
+    if (s.study) { $('study-panel').innerHTML = '<p class="note">Running the sweeps...</p>'; setTimeout(() => Study.render($('study-panel')), 30); }
+  }
+  C.onChange(({ light, bandOnly, selection, math } = {}) => {
+    if (math) { $('math-panel').open = true; $('math-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; }
+    if (bandOnly) { C.recordHistory(STEPS[index].id); strip(); learn(); return; }
+    C.applyLayout();
+    C.draw();
+    strip();
+    if (light) { if (STEPS[index].id !== 'system') learn(); return; }
+    const focus = document.activeElement && document.activeElement.id;
+    stepCard();
+    if (focus && $(focus)) $(focus).focus();
+    learn();
+    if (selection) return;
+    if ($('math-panel').open) drill.draw();
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.step !== undefined) { index = Number(b.dataset.step); enter(); }
+    if (b.dataset.nav) { C.recordHistory(STEPS[index].id); index = Math.max(0, Math.min(STEPS.length - 1, index + Number(b.dataset.nav))); enter(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (b.dataset.confirmStep !== undefined) { STEPS[index].els.forEach((id) => C.confirm(id)); C.update(); }
+  });
+  $('math-panel').addEventListener('toggle', () => { if ($('math-panel').open) drill.draw(); });
+  P.onTheme = () => { C.draw(); strip(); };
+  C.computeBand(); C.recordHistory('box');
+  enter();
+  window.__build = { STEPS, go: (i) => { index = i; enter(); } };
+  document.getElementById('p-loading').classList.add('done');
+})();
+</script></body></html>

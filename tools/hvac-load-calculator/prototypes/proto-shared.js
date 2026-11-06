@@ -36,6 +36,7 @@
   };
 
   let callPy = null;
+  let engineInputs = new Set();
   let presets = null;
   let stations = [];
   let zipTable = null;
@@ -63,8 +64,9 @@
         ground_amp_f: (Math.max(...m) - Math.min(...m)) / 2,
       });
     }
+    // Only names the engine accepts. Interface-only fields, such as wall layers, stay here.
     Object.entries(state.fields).forEach(([k, v]) => {
-      if (['wall_preset', 'ceiling_preset', 'window_preset'].includes(k) || v === '' || v === null) return;
+      if (!engineInputs.has(k) || v === '' || v === null || v === undefined) return;
       out[k] = v;
     });
     if (!sys.ducted) out.duct_location = 'conditioned';
@@ -113,7 +115,9 @@
       const needed = probe.backup_kw_at_design || 0;
       payload.aux_kw = sys.furnace ? 0 : (state.aux_kw ?? Math.ceil(needed / 5 - 1e-6) * 5);
     }
-    return callPy('evaluate_equipment', payload);
+    const out = callPy('evaluate_equipment', payload);
+    out.installed_aux_kw = payload.aux_kw || 0;
+    return out;
   }
 
   // -------------------------------------------------------------- location
@@ -372,7 +376,7 @@
     const header = document.createElement('header');
     header.className = 'pnav';
     header.innerHTML = `<a class="brand" href="../../../index.html">transparent<wbr>.tools</a><span class="tag">Prototype</span>
-      <div class="links">${[['option-a-cutaway.html', 'A: Cutaway'], ['option-b-floorplan.html', 'B: Floor plan'], ['option-c-sizing-board.html', 'C: Sizing board']].map(([h, t]) => `<a href="${h}" class="${h.startsWith(active) ? 'on' : ''}">${t}</a>`).join('')}<button type="button" id="p-theme">Theme</button></div>`;
+      <div class="links">${[['option-d-guided-build.html', 'D: Guided build'], ['option-e-workbench.html', 'E: Workbench'], ['option-a-cutaway.html', 'A'], ['option-b-floorplan.html', 'B'], ['option-c-sizing-board.html', 'C']].map(([h, t]) => `<a href="${h}" class="${h.startsWith(active) ? 'on' : ''}">${t}</a>`).join('')}<button type="button" id="p-theme">Theme</button></div>`;
     document.body.prepend(header);
     const cover = document.createElement('div');
     cover.className = 'loading'; cover.id = 'p-loading'; cover.textContent = 'Loading the real calculation engine...';
@@ -394,17 +398,21 @@ def _call(name, payload):
     return json.dumps(getattr(hvac_loads, name)(**json.loads(payload)))
 def _presets():
     return json.dumps(hvac_loads.get_presets())
+def _inputs():
+    return json.dumps(sorted(hvac_loads.DEFAULTS))
 `);
     const fn = py.globals.get('_call');
     callPy = (name, payload) => JSON.parse(fn(name, JSON.stringify(payload)));
     presets = JSON.parse(py.globals.get('_presets')());
+    engineInputs = new Set(JSON.parse(py.globals.get('_inputs')()));
     const climate = await fetch('../data/stations.json').then((r) => r.json());
     stations = climate.stations; binWidth = climate.bin_width_f;
     await locate(state.zip);
-    $('p-loading').classList.add('done');
+    if (!window.Core) $('p-loading').classList.add('done');
   }
 
   window.Proto = {
+    call: (name, payload) => callPy(name, payload), inputs, get presets() { return presets; }, locate,
     state, fmt, esc, cssVar, COMPONENTS, SYSTEMS, TONS, nav, start, calc, equipment, sizes, buildLevels, buildSystem,
     updateConfidence, fitStrip, keyHtml, Drill, Tree, get station() { return station; }, get binWidth() { return binWidth; },
     lastResult: null, onTheme: null,

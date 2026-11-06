@@ -2594,6 +2594,346 @@ def calculate_hvac_loads(inputs: Dict[str, Any], known_inputs: Optional[List[str
 
 
 # =============================================================================
+# ASSEMBLY DETAIL AND SENSITIVITY STUDIES
+# =============================================================================
+
+
+def assembly_u(
+    cavity_r: float,
+    framing_fraction: float = 0.25,
+    continuous_r: float = 0.0,
+    stud_r: float = 4.4,
+    other_layers_r: float = 2.5,
+) -> Dict[str, float]:
+    """
+    U-factor of a framed assembly by the parallel path method.
+
+    Heat takes two routes through a framed wall: through the insulated cavity and
+    through the studs, which conduct far better. The whole-wall value is the
+    area-weighted sum of both, so framing lowers performance below the cavity label.
+
+    ---Parameters---
+    cavity_r : float
+        Insulation in the cavity (ft²·h·°F/Btu).
+    framing_fraction : float
+        Share of the wall that is framing, 0 to 1. About 0.25 for 16 inch spacing.
+    continuous_r : float
+        Continuous insulation outside the framing (ft²·h·°F/Btu).
+    stud_r : float
+        Resistance through the framing member. 4.4 for a 2x4, 6.9 for a 2x6.
+    other_layers_r : float
+        Siding, sheathing, gypsum, and air films together (ft²·h·°F/Btu).
+
+    ---Returns---
+    u_value : float
+        Whole-assembly U-factor (Btu/h·ft²·°F).
+    effective_r : float
+        Whole-assembly R-value, one over the U-factor.
+    u_cavity_path : float
+        U-factor through the insulated path.
+    u_framing_path : float
+        U-factor through the framing path.
+
+    ---LaTeX---
+    U = \\frac{f}{R_o + R_c + R_s} + \\frac{1 - f}{R_o + R_c + R_{cav}}
+    """
+    if cavity_r < 0 or continuous_r < 0 or stud_r <= 0 or other_layers_r <= 0:
+        raise ValueError("Assembly R-values must be positive.")
+    if not 0 <= framing_fraction <= 1:
+        raise ValueError("Framing fraction must be between 0 and 1.")
+    u_cavity = 1.0 / (other_layers_r + continuous_r + cavity_r)
+    u_framing = 1.0 / (other_layers_r + continuous_r + stud_r)
+    u_value = framing_fraction * u_framing + (1 - framing_fraction) * u_cavity
+    return {
+        "u_value": u_value,
+        "effective_r": 1.0 / u_value,
+        "u_cavity_path": u_cavity,
+        "u_framing_path": u_framing,
+    }
+
+
+# name: (label, unit, what it is, range as a function of the current value)
+SWEEP_PARAMETERS: Dict[str, Dict[str, Any]] = {
+    "ach50": {
+        "label": "Air leakage", "unit": "ACH50",
+        "about": "Air changes per hour at 50 Pa. Only a blower door test measures this.",
+        "range": lambda v: (max(1.0, round(v * 0.4, 1)), round(max(v * 2.0, 5.0), 1)),
+    },
+    "wall_r": {
+        "label": "Wall insulation", "unit": "R (whole wall)",
+        "about": "Whole-wall R-value including framing. Hidden inside the wall in most houses.",
+        "range": lambda v: (max(2.0, round(v * 0.55, 1)), round(v * 1.8, 1)),
+    },
+    "ceiling_r": {
+        "label": "Ceiling insulation", "unit": "R",
+        "about": "Insulation at the attic floor or in the roof. Settled or missing insulation is common.",
+        "range": lambda v: (max(3.0, round(v * 0.5, 1)), round(v * 2.0, 1)),
+    },
+    "window_scale_pct": {
+        "label": "Window area", "unit": "% of entered",
+        "about": "Scales all window area, for when the takeoff is approximate.",
+        "range": lambda v: (60.0, 140.0),
+    },
+    "window_u": {
+        "label": "Window U-factor", "unit": "Btu/h·ft²·°F",
+        "about": "Whole-window heat flow. Unrated older windows are often uncertain.",
+        "range": lambda v: (round(max(0.15, v * 0.6), 2), round(min(1.3, v * 1.5), 2)),
+    },
+    "window_shgc": {
+        "label": "Window solar gain", "unit": "SHGC",
+        "about": "Share of sunlight that becomes heat inside. Coatings are invisible to the eye.",
+        "range": lambda v: (round(max(0.15, v * 0.6), 2), round(min(0.85, v * 1.4), 2)),
+    },
+    "duct_leakage_pct": {
+        "label": "Duct leakage", "unit": "% per side",
+        "about": "Leakage on each of the supply and return sides. Only a duct test measures this.",
+        "range": lambda v: (2.0, max(round(v * 2.0), 15.0)),
+    },
+    "duct_r": {
+        "label": "Duct insulation", "unit": "R",
+        "about": "Insulation on ducts in unconditioned space.",
+        "range": lambda v: (0.0, 12.0),
+    },
+    "occupants": {
+        "label": "People at home", "unit": "people",
+        "about": "Occupants at the design hour, which also sets typical internal gains.",
+        "range": lambda v: (1.0, max(round(v * 2.0), 6.0)),
+    },
+    "heating_design_f": {
+        "label": "Winter design temperature", "unit": "°F",
+        "about": "Choosing a colder design temperature adds margin for cold snaps.",
+        "range": lambda v: (round(v - 15.0), round(v + 8.0)),
+    },
+    "cooling_design_f": {
+        "label": "Summer design temperature", "unit": "°F",
+        "about": "Hotter sites, or a more cautious design, push this up.",
+        "range": lambda v: (round(v - 5.0), round(v + 8.0)),
+    },
+    "indoor_heating_f": {
+        "label": "Winter thermostat", "unit": "°F",
+        "about": "What the household actually keeps it at in winter.",
+        "range": lambda v: (62.0, 76.0),
+    },
+    "indoor_cooling_f": {
+        "label": "Summer thermostat", "unit": "°F",
+        "about": "What the household actually keeps it at in summer.",
+        "range": lambda v: (70.0, 80.0),
+    },
+    "temperature_swing_f": {
+        "label": "Allowed temperature swing", "unit": "°F",
+        "about": "How far the room may drift above the thermostat at the peak.",
+        "range": lambda v: (0.0, 5.0),
+    },
+    "rotation_deg": {
+        "label": "House orientation", "unit": "degrees",
+        "about": "Rotates the house clockwise, for production plans or an uncertain bearing.",
+        "range": lambda v: (0.0, 315.0),
+    },
+}
+
+
+def _sweep_current(p: Dict[str, Any], name: str) -> float:
+    if name == "wall_r":
+        return 1.0 / p["wall_u"]
+    if name == "ceiling_r":
+        return 1.0 / p["ceiling_u"]
+    if name == "window_scale_pct":
+        return 100.0
+    return float(p[name])
+
+
+def _sweep_apply(p: Dict[str, Any], name: str, value: float) -> Dict[str, Any]:
+    if name == "wall_r":
+        return _with_change(p, "wall_u", 1.0 / max(value, 0.1))
+    if name == "ceiling_r":
+        return _with_change(p, "ceiling_u", 1.0 / max(value, 0.1))
+    if name == "window_scale_pct":
+        base = p["window_pct_of_floor"] or 1.0
+        return _with_change(p, "window_pct_of_floor", base * value / 100.0)
+    return _with_change(p, name, value)
+
+
+def _sweep_point(p: Dict[str, Any]) -> Dict[str, float]:
+    run = _run(p)
+    return {
+        "heating": run["heating"]["total"],
+        "cooling_total": run["cooling"]["total"],
+        "cooling_sensible": run["cooling"]["sensible"],
+        "cooling_latent": run["cooling"]["latent"],
+    }
+
+
+def get_sweep_parameters(inputs: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Every variable a study can sweep, with its current value and a starting range."""
+    p = _normalize(inputs)
+    out = {}
+    for name, spec in SWEEP_PARAMETERS.items():
+        current = _sweep_current(p, name)
+        low, high = spec["range"](current)
+        out[name] = {
+            "label": spec["label"], "unit": spec["unit"], "about": spec["about"],
+            "current": current, "low": min(low, current), "high": max(high, current),
+        }
+    return out
+
+
+def _evenly(low: float, high: float, points: int) -> List[float]:
+    if points < 2:
+        raise ValueError("A sweep needs at least two points.")
+    if high <= low:
+        raise ValueError("The top of a sweep range must be above the bottom.")
+    return [low + (high - low) * i / (points - 1) for i in range(points)]
+
+
+def sensitivity_sweep(
+    inputs: Dict[str, Any],
+    parameter: str,
+    low: Optional[float] = None,
+    high: Optional[float] = None,
+    points: int = 11,
+) -> Dict[str, Any]:
+    """
+    Recalculate the whole house across a range of one uncertain variable.
+
+    Each point is a full calculation with only that variable changed, so curved
+    responses and interactions with the rest of the house are captured. No result
+    is extrapolated from the base case.
+
+    ---Parameters---
+    inputs : dict
+        The same input dictionary as calculate_hvac_loads.
+    parameter : str
+        A name from SWEEP_PARAMETERS, such as ach50 or wall_r.
+    low : float
+        Bottom of the range. Blank uses a starting range for this variable.
+    high : float
+        Top of the range. Blank uses a starting range for this variable.
+    points : int
+        Number of calculations across the range.
+
+    ---Returns---
+    values : list
+        The swept values.
+    heating : list
+        Design heat loss at each value (Btu/h).
+    cooling_total : list
+        Total cooling load at each value (Btu/h).
+    base_heating : float
+        Design heat loss at the current value (Btu/h).
+    base_cooling : float
+        Total cooling load at the current value (Btu/h).
+
+    ---LaTeX---
+    q_j = f(x_1, \\ldots, x_i = v_j, \\ldots, x_n), \\quad j = 1 \\ldots N
+    """
+    if parameter not in SWEEP_PARAMETERS:
+        raise ValueError(f"Unknown sweep variable '{parameter}'.")
+    p = _normalize(inputs)
+    spec = SWEEP_PARAMETERS[parameter]
+    current = _sweep_current(p, parameter)
+    default_low, default_high = spec["range"](current)
+    start = default_low if low is None else float(low)
+    stop = default_high if high is None else float(high)
+    values = _evenly(start, stop, int(points))
+    rows = [_sweep_point(_sweep_apply(p, parameter, v)) for v in values]
+    base = _sweep_point(_sweep_apply(p, parameter, current))
+    return {
+        "parameter": parameter, "label": spec["label"], "unit": spec["unit"], "about": spec["about"],
+        "values": values, "current": current,
+        "heating": [r["heating"] for r in rows],
+        "cooling_total": [r["cooling_total"] for r in rows],
+        "cooling_sensible": [r["cooling_sensible"] for r in rows],
+        "base_heating": base["heating"],
+        "base_cooling": base["cooling_total"],
+    }
+
+
+def sensitivity_grid(
+    inputs: Dict[str, Any],
+    parameter_x: str,
+    parameter_y: str,
+    low_x: Optional[float] = None,
+    high_x: Optional[float] = None,
+    low_y: Optional[float] = None,
+    high_y: Optional[float] = None,
+    points: int = 7,
+) -> Dict[str, Any]:
+    """
+    Recalculate the whole house across two uncertain variables at once.
+
+    Shows how two unknowns combine, which a one-at-a-time sweep cannot.
+
+    ---Parameters---
+    inputs : dict
+        The same input dictionary as calculate_hvac_loads.
+    parameter_x : str
+        Variable for the horizontal axis, from SWEEP_PARAMETERS.
+    parameter_y : str
+        Variable for the vertical axis, from SWEEP_PARAMETERS.
+    low_x : float
+        Bottom of the x range.
+    high_x : float
+        Top of the x range.
+    low_y : float
+        Bottom of the y range.
+    high_y : float
+        Top of the y range.
+    points : int
+        Calculations along each axis.
+
+    ---Returns---
+    x : list
+        Values along the horizontal axis.
+    y : list
+        Values along the vertical axis.
+    heating : list
+        Design heat loss, indexed by y then x (Btu/h).
+    cooling_total : list
+        Total cooling load, indexed by y then x (Btu/h).
+
+    ---LaTeX---
+    q_{jk} = f(x_a = v_j,\\ x_b = v_k,\\ \\ldots)
+    """
+    for name in (parameter_x, parameter_y):
+        if name not in SWEEP_PARAMETERS:
+            raise ValueError(f"Unknown sweep variable '{name}'.")
+    if parameter_x == parameter_y:
+        raise ValueError("Choose two different variables.")
+    p = _normalize(inputs)
+    cx, cy = _sweep_current(p, parameter_x), _sweep_current(p, parameter_y)
+    dx = SWEEP_PARAMETERS[parameter_x]["range"](cx)
+    dy = SWEEP_PARAMETERS[parameter_y]["range"](cy)
+    xs = _evenly(dx[0] if low_x is None else float(low_x), dx[1] if high_x is None else float(high_x), int(points))
+    ys = _evenly(dy[0] if low_y is None else float(low_y), dy[1] if high_y is None else float(high_y), int(points))
+    heating: List[List[float]] = []
+    cooling: List[List[float]] = []
+    for y in ys:
+        at_y = _sweep_apply(p, parameter_y, y)
+        row = [_sweep_point(_sweep_apply(at_y, parameter_x, x)) for x in xs]
+        heating.append([r["heating"] for r in row])
+        cooling.append([r["cooling_total"] for r in row])
+    return {
+        "parameter_x": parameter_x, "parameter_y": parameter_y,
+        "label_x": SWEEP_PARAMETERS[parameter_x]["label"], "label_y": SWEEP_PARAMETERS[parameter_y]["label"],
+        "unit_x": SWEEP_PARAMETERS[parameter_x]["unit"], "unit_y": SWEEP_PARAMETERS[parameter_y]["unit"],
+        "x": xs, "y": ys, "current_x": cx, "current_y": cy, "heating": heating, "cooling_total": cooling,
+    }
+
+
+def threshold_crossings(values: Sequence[float], loads: Sequence[float], capacity: float) -> List[float]:
+    """Values of a swept variable where the load equals a capacity, by interpolation."""
+    crossings = []
+    for (x0, y0), (x1, y1) in zip(zip(values, loads), zip(values[1:], loads[1:])):
+        if (y0 - capacity) == 0:
+            crossings.append(x0)
+        elif (y0 - capacity) * (y1 - capacity) < 0:
+            crossings.append(x0 + (x1 - x0) * (capacity - y0) / (y1 - y0))
+    if loads and loads[-1] == capacity:
+        crossings.append(values[-1])
+    return crossings
+
+
+# =============================================================================
 # EQUIPMENT CHECK
 # =============================================================================
 

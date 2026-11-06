@@ -789,3 +789,108 @@ class TestDerivationTree:
         sun = run()["cooling"]["sun"]
         assert len(sun) == 24
         assert sun[12]["altitude"] > 60 and sun[0]["altitude"] < 0
+
+
+class TestAssemblyU:
+    def test_hand_calculated_parallel_path(self):
+        result = h.assembly_u(13, 0.25, stud_r=4.4, other_layers_r=2.5)
+        expected = 0.25 / 6.9 + 0.75 / 15.5
+        assert result["u_value"] == pytest.approx(expected)
+        assert result["effective_r"] == pytest.approx(1 / expected)
+
+    def test_common_wall_lands_near_the_published_value(self):
+        # ASHRAE Chapter 17 lists about U 0.09 for a 2x4 wall with R-13.
+        assert h.assembly_u(13, 0.25)["u_value"] == pytest.approx(0.09, abs=0.008)
+
+    def test_framing_makes_a_wall_worse_than_its_label(self):
+        assert h.assembly_u(13, 0.25)["effective_r"] < 13 + 2.5
+
+    def test_continuous_insulation_helps_both_paths(self):
+        plain, foam = h.assembly_u(19, 0.25, stud_r=6.9), h.assembly_u(19, 0.25, continuous_r=5, stud_r=6.9)
+        assert foam["u_framing_path"] < plain["u_framing_path"]
+        assert foam["u_value"] < plain["u_value"]
+
+    @pytest.mark.parametrize("kwargs", [dict(cavity_r=-1), dict(cavity_r=13, framing_fraction=2), dict(cavity_r=13, stud_r=0)])
+    def test_rejects_bad_values(self, kwargs):
+        with pytest.raises(ValueError):
+            h.assembly_u(**kwargs)
+
+
+class TestSensitivity:
+    def test_every_parameter_runs_and_stays_finite(self):
+        table = h.get_sweep_parameters({})
+        assert set(table) == set(h.SWEEP_PARAMETERS)
+        for name in table:
+            result = h.sensitivity_sweep({}, name, points=3)
+            assert len(result["values"]) == 3
+            assert all(math.isfinite(v) and v > 0 for v in result["heating"] + result["cooling_total"]), name
+
+    def test_every_parameter_also_runs_on_a_room_model(self):
+        for name in h.SWEEP_PARAMETERS:
+            result = h.sensitivity_sweep({"rooms": TestRooms.rooms}, name, points=3)
+            assert all(math.isfinite(v) for v in result["cooling_total"]), name
+
+    def test_current_value_reproduces_the_main_calculation(self):
+        base = h.calculate_hvac_loads({"ach50": 7}, detail=False)
+        result = h.sensitivity_sweep({"ach50": 7}, "ach50", 2, 14, points=13)
+        assert result["base_heating"] == pytest.approx(base["heating_total"])
+        assert result["base_cooling"] == pytest.approx(base["cooling_total"])
+        assert result["heating"][5] == pytest.approx(base["heating_total"])
+
+    def test_leakage_and_insulation_move_load_the_right_way(self):
+        leak = h.sensitivity_sweep({}, "ach50", 2, 20, points=5)["heating"]
+        assert leak == sorted(leak)
+        wall = h.sensitivity_sweep({}, "wall_r", 5, 25, points=5)["heating"]
+        assert wall == sorted(wall, reverse=True)
+
+    def test_solar_gain_moves_cooling_and_not_heating(self):
+        result = h.sensitivity_sweep({}, "window_shgc", 0.2, 0.7, points=3)
+        assert result["cooling_total"][2] > result["cooling_total"][0]
+        assert result["heating"][2] == pytest.approx(result["heating"][0])
+
+    def test_window_scale_matches_a_direct_change(self):
+        result = h.sensitivity_sweep({"window_pct_of_floor": 10}, "window_scale_pct", 50, 150, points=3)
+        direct = h.calculate_hvac_loads({"window_pct_of_floor": 15}, detail=False)
+        assert result["heating"][2] == pytest.approx(direct["heating_total"])
+
+    def test_window_scale_works_on_rooms(self):
+        result = h.sensitivity_sweep({"rooms": TestRooms.rooms}, "window_scale_pct", 50, 150, points=3)
+        assert result["heating"][2] > result["heating"][0]
+
+    def test_grid_matches_single_calculations_at_a_corner(self):
+        grid = h.sensitivity_grid({}, "ach50", "wall_r", 2, 10, 8, 20, points=3)
+        direct = h.calculate_hvac_loads({"ach50": 10, "wall_u": 1 / 20}, detail=False)
+        assert grid["heating"][2][2] == pytest.approx(direct["heating_total"])
+        assert grid["cooling_total"][2][2] == pytest.approx(direct["cooling_total"])
+
+    def test_grid_sees_an_interaction_a_single_sweep_cannot(self):
+        # Duct gains scale with everything else, so the two effects do not simply add.
+        grid = h.sensitivity_grid({}, "ach50", "duct_leakage_pct", 2, 14, 2, 20, points=2)["heating"]
+        assert (grid[1][1] - grid[1][0]) != pytest.approx(grid[0][1] - grid[0][0], rel=0.01)
+
+    def test_crossings_are_interpolated(self):
+        assert h.threshold_crossings([0, 10], [100, 200], 150) == [5.0]
+        assert h.threshold_crossings([0, 10, 20], [100, 200, 100], 150) == [5.0, 15.0]
+        assert h.threshold_crossings([0, 10], [100, 200], 500) == []
+
+    @pytest.mark.parametrize("call", [
+        lambda: h.sensitivity_sweep({}, "not_a_variable"),
+        lambda: h.sensitivity_sweep({}, "ach50", 10, 5),
+        lambda: h.sensitivity_sweep({}, "ach50", points=1),
+        lambda: h.sensitivity_grid({}, "ach50", "ach50"),
+        lambda: h.sensitivity_grid({}, "ach50", "nope"),
+    ])
+    def test_rejects_bad_requests(self, call):
+        with pytest.raises(ValueError):
+            call()
+
+    def test_full_grid_is_fast_enough_for_a_browser(self):
+        import time
+        start = time.perf_counter()
+        h.sensitivity_grid({"rooms": TestRooms.rooms}, "ach50", "duct_leakage_pct", points=7)
+        assert time.perf_counter() - start < 2.0
+
+    @pytest.mark.parametrize("function", ["sensitivity_sweep", "sensitivity_grid", "assembly_u"])
+    def test_docstrings_parse(self, function):
+        doc = utils.get_documentation("pycalcs.hvac_loads", function)
+        assert doc["parameters"] and doc["returns"]
