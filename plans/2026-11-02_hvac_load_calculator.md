@@ -1,7 +1,7 @@
 # HVAC Load and Heat Pump Sizing Calculator
 
 Date: 2026-11-02
-Status: Built on `task/hvac-load-calculator`
+Status: Released as a guided build on 2026-11-08
 
 ## Goal
 
@@ -38,3 +38,10 @@ BTU calculator.
   Planner and Search Console after launch.
 
 See `tools/hvac-load-calculator/ROADMAP.md` for next steps.
+
+## Guided build (2026-11-08)
+
+Drew picked the guided build from five prototypes. The page now builds one house
+model in eight steps, from a box to rooms and equipment, ending in a sensitivity
+study. Plan, section, and 3D are views of that model. Released without a full
+review, by request, to be adjusted from use.

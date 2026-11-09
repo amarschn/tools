@@ -19,6 +19,37 @@
     system: { title: 'Equipment', known: [] },
   };
 
+  // Help for inputs that exist only in the interface. Engine inputs use their docstrings.
+  const UI_TIPS = {
+    wall_preset: 'Pick the closest match. Values count the framing, so 2x4 walls with R-13 batts perform like about R-11.',
+    ceiling_preset: 'Insulation on the attic floor, or in the roof for a cathedral ceiling.',
+    window_preset: 'Typical whole-window values. If you have the NFRC sticker, enter its numbers under Shading and the rating label.',
+    zip: 'Finds the nearest of about 2,700 NOAA weather stations with a long record. Design temperatures come from 2011 to 2025 hourly data.',
+    area: 'Heated and cooled floor area, measured to the outside of exterior walls. Changing it scales the drawing.',
+    m_w: 'East to west length of the house, outside to outside.',
+    m_d: 'North to south depth of the house, outside to outside.',
+    stories: 'Stories above grade. Each copies the floor below until you divide it into rooms.',
+    height: 'Floor to floor height, which sets wall area and air volume.',
+    era: 'Sets typical insulation, windows, air leakage, and ducts for that period. Every one of those can be replaced later.',
+    design_basis: 'The 99% temperature is colder than all but about 88 hours a year, and the 99.6% value all but about 35.',
+    cavity_r: 'R-value printed on the insulation in the wall cavity.',
+    stud: 'Framing depth. Wood conducts heat far better than insulation, so framing lowers the whole-wall value.',
+    framing: 'Share of the wall that is framing. About 25% for studs every 16 inches with plates and headers.',
+    cont_r: 'Rigid foam outside the framing. It covers the studs too, so it helps more than its R-value suggests.',
+    air_quick: 'A rough guess at leakage. The range on the answer stays wide until a blower door measures it.',
+    op_width: 'Width of the selected opening, frame included.',
+    op_height: 'Height of the selected opening, frame included.',
+    rotation: 'Turns the house clockwise from north. Useful for production plans or an uncertain bearing.',
+    room_name: 'Any name you like.',
+    room_type: 'Kitchens and living rooms take more of the internal gains from people and appliances.',
+    bill_usage: 'Fuel used in a full month of steady heating, from a bill. The coldest month gives the cleanest signal.',
+    bill_fuel: 'The fuel and unit printed on the bill.',
+    bill_month: 'Sets typical degree days from your weather station.',
+    bill_hdd: 'Heating degree days for that period. Many gas bills print the actual figure, which beats the typical one.',
+    bill_eff: 'Equipment efficiency, AFUE: about 80 for older furnaces, 95 for condensing ones, 100 for resistance heat.',
+    bill_base: 'Fuel used for water heating and cooking in the same period. A summer bill is a good estimate.',
+  };
+
   const Core = {
     ELEMENTS, model: null, result: null, eq: null, band: null, confirmed: new Set(), history: {},
     view: { level: 0, season: 'winter', hour: 17, layout: 'both', overlay: false, cut: null, tool: 'select', splitting: false, selected: { room: null, opening: null, wall: null, wallAxis: null }, rotation: 0, addKind: 'window', transform: null, preview: null, guide: null, guideAxis: null, liveText: null },
@@ -396,9 +427,13 @@
     },
 
     // ---------------------------------------------------------------- inspectors
+    tip(key) {
+      const text = UI_TIPS[key] || (P().docs || {})[key];
+      return text ? `<span class="tip" tabindex="0" role="note" aria-label="${esc(text)}" data-tip="${esc(text)}">?</span>` : '';
+    },
     field(key, label, value, opts = {}) {
-      if (opts.options) return `<div class="fld"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" data-set="${key}">${opts.options.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>${opts.help ? `<div class="help">${esc(opts.help)}</div>` : ''}</div>`;
-      return `<div class="fld"><label for="f-${key}">${esc(label)}${opts.unit ? `<span>${esc(opts.unit)}</span>` : ''}</label><input id="f-${key}" data-set="${key}" type="${opts.text ? 'text' : 'number'}" step="any" value="${esc(value ?? '')}"${opts.placeholder ? ` placeholder="${esc(opts.placeholder)}"` : ''}>${opts.help ? `<div class="help">${esc(opts.help)}</div>` : ''}</div>`;
+      if (opts.options) return `<div class="fld"><label for="f-${key}">${esc(label)}${this.tip(key)}</label><select id="f-${key}" data-set="${key}">${opts.options.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>${opts.help ? `<div class="help">${esc(opts.help)}</div>` : ''}</div>`;
+      return `<div class="fld"><label for="f-${key}">${esc(label)}${opts.unit ? `<span>${esc(opts.unit)}</span>` : ''}${this.tip(key)}</label><input id="f-${key}" data-set="${key}" type="${opts.text ? 'text' : 'number'}" step="any" value="${esc(value ?? '')}"${opts.placeholder ? ` placeholder="${esc(opts.placeholder)}"` : ''}>${opts.help ? `<div class="help">${esc(opts.help)}</div>` : ''}</div>`;
     },
     elementHtml(id) {
       const s = P().state; const f = s.fields; const pre = P().presets; const era = pre.eras[s.era]; const m = this.model; const v = this.view;
@@ -566,6 +601,26 @@
         heat: [this.band.heating_low, this.result.heating_total, this.band.heating_high],
         cool: [this.band.cooling_low, this.result.cooling_total, this.band.cooling_high],
       };
+    },
+    /** Everything needed to rebuild this house, for share links and saved files. */
+    serialize() {
+      const s = P().state;
+      return { v: 1, model: this.model, fields: s.fields, zip: s.zip, era: s.era, eraConfirmed: this.eraConfirmed, floor_type: s.floor_type, system: s.system, hpType: s.hpType, tons: s.tons, furnace: s.furnace, aux_kw: s.aux_kw, confirmed: [...this.confirmed], known: [...s.known], rotation: this.view.rotation };
+    },
+    async restore(saved) {
+      if (!saved || saved.v !== 1 || !saved.model || !Array.isArray(saved.model.levels)) throw new Error('That is not a saved house from this tool.');
+      const s = P().state;
+      this.model = M().adopt(saved.model);
+      const problems = M().check(this.model);
+      if (problems.length) throw new Error('The saved house is damaged: ' + problems[0]);
+      Object.assign(s, { fields: saved.fields || {}, zip: saved.zip || s.zip, era: saved.era || s.era, floor_type: saved.floor_type || s.floor_type, system: saved.system || s.system, hpType: saved.hpType || s.hpType, tons: saved.tons ?? null, furnace: saved.furnace ?? null, aux_kw: saved.aux_kw ?? null, known: new Set(saved.known || []) });
+      this.eraConfirmed = !!saved.eraConfirmed;
+      this.confirmed = new Set(saved.confirmed || []);
+      this.view.rotation = saved.rotation || 0;
+      this.view.level = 0;
+      this.view.cut = { axis: this.model.w >= this.model.d ? 'x' : 'y', at: (this.model.w >= this.model.d ? this.model.w : this.model.d) / 2 };
+      await P().locate(s.zip);
+      this.compute();
     },
     fmt, esc,
   };

@@ -9,14 +9,19 @@ ACCA-approved software and does not satisfy a permit that requires it.
 
 ## What it does
 
-- **Quick estimate:** ZIP, floor area, stories, build era, and foundation.
-- **Details:** walls, ceiling, windows, air leakage, ventilation, ducts, and floors.
-- **Rooms:** per-room loads, peak hour, and airflow.
-- **Equipment:** cooling at design conditions, heat pump balance point, backup heat,
-  annual compressor share, and hours below minimum modulation.
-- **Fuel bill check:** a measured heat-loss coefficient from a winter bill.
-- **Ranges:** a load range that narrows as assumptions are replaced, a ranking of what
-  to measure next, and retrofit savings.
+The house is built as one model in eight steps, each replacing assumptions:
+
+1. A box from a ZIP code and floor area, with the range that implies.
+2. Shape, by dragging the outside walls, and the age of the house.
+3. Walls, ceiling, and floor, down to wall layers if wanted.
+4. Windows and doors placed on the plan.
+5. Air leakage and ducts.
+6. Rooms, made by adding and dragging walls.
+7. The system being sized, against what it delivers on the design day.
+8. A stress test: sweeps and two-variable grids of uncertain inputs, a fuel bill
+   check, and export.
+
+Plan, section, and 3D are views of the same model. Assumed parts are drawn dashed.
 
 ## Requirements
 
@@ -36,16 +41,22 @@ calculator", and "what size ac for 2000 sq ft". It says "Manual J alternative", 
 
 ## Files
 
-- `index.html`: inputs, results layout, and background copy.
-- `tool.js`: form handling, room table, rendering, and export.
-- `charts.js`: Plotly charts.
+- `index.html`: the step flow, the sizing guide, and background copy.
+- `app/model.js`: the house geometry. Rooms always tile the shell, because walls
+  move and rooms follow. Windows cannot overlap.
+- `app/drawing.js`: plan, section, and 3D views of the model.
+- `app/core.js`: assumptions, confirmations, plan editing, and the running estimate.
+- `app/study.js`: sensitivity sweeps and grids, each point a full engine run.
+- `app/engine.js`: loads Pyodide and the engine, and holds the system choices.
+- `app/page.js`: settings, share links, fuel bill check, and export.
 - `data/stations.json`: design conditions and temperature bins by NOAA station.
 - `data/zips.txt`: US ZIP centroids from the Census ZCTA gazetteer.
-- `test-cases/`: published houses, loadable with "Load inputs".
+- `test-cases/`: published houses as engine inputs, for checking the engine.
 
 ## Validation
 
 `tests/test_hvac_loads.py` checks the Atlanta example from ASHRAE Fundamentals
 Chapter 17 and the Sacramento Manual J report, ASHRAE's driving-force and duct tables,
 the moist air equations, and the conduction solver against a finite-difference march.
-`tests/browser/hvac-load-calculator.cjs` drives the page.
+`tests/browser/hvac-model.cjs` fuzzes the geometry with 9,000 random edits, and
+`tests/browser/hvac-load-calculator.cjs` drives the page with real pointer drags.

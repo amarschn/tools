@@ -27,1212 +27,70 @@
     <meta name="twitter:image" content="https://transparent.tools/og-image.png">
     <script src="/shared/analytics-autotrack.js" defer></script>
 
+    <script>
+      // Apply the saved theme before first paint, so there is no flash of the wrong one.
+      (function () {
+        var choice = 'system';
+        try { choice = JSON.parse(localStorage.getItem('hvac-load-calculator-settings') || '{}').theme || 'system'; } catch (e) {}
+        var dark = choice === 'dark' || (choice === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
     <script>window.MathJax = {tex: {inlineMath: [["\\(", "\\)"]]}, startup: {typeset: false}};</script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script src="/shared/verdict.js"></script>
-
-    <style>
-        /* =================================================================
-           1. CSS VARIABLES & RESET
-           ================================================================= */
-        :root {
-            --primary-color: #0b0d12;
-            --primary-light: #f4f5f7;
-            --secondary-color: #4b5563;
-            --accent-color: #111827;
-            --success-color: #0f766e;
-            --warning-color: #b45309;
-            --danger-color: #b91c1c;
-            --text-color: #111827;
-            --text-light: #6b7280;
-            --border-color: #e5e7eb;
-            --bg-color: #f8f9fb;
-            --bg-card: #ffffff;
-            --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.18);
-            --border-radius: 8px;
-            --font-sans: 'Helvetica Neue', 'Avenir Next', 'Univers', 'Helvetica', system-ui, sans-serif;
-            --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
-            /* Light mode specific colors */
-            --btn-primary-bg: #111827;
-            --btn-primary-text: #ffffff;
-            --tooltip-bg: #111827;
-            --tooltip-text: #ffffff;
-            --callout-info-bg: #dbeafe;
-            --callout-info-border: #3b82f6;
-            --callout-warning-bg: #fef3c7;
-            --callout-warning-border: #f59e0b;
-            --callout-danger-bg: #fef2f2;
-            --callout-danger-border: #ef4444;
-            --callout-success-bg: #d1fae5;
-            --callout-success-border: #22c55e;
-        }
-        /* Dark theme */
-        body[data-theme="dark"] {
-            --primary-color: #f9fafb;
-            --primary-light: #1f2937;
-            --secondary-color: #9ca3af;
-            --accent-color: #f9fafb;
-            --success-color: #34d399;
-            --warning-color: #fbbf24;
-            --danger-color: #f87171;
-            --text-color: #f9fafb;
-            --text-light: #9ca3af;
-            --border-color: #374151;
-            --bg-color: #0b0d12;
-            --bg-card: #111827;
-            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-            --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
-            /* Dark mode specific colors */
-            --btn-primary-bg: #3b82f6;
-            --btn-primary-text: #ffffff;
-            --tooltip-bg: #1f2937;
-            --tooltip-text: #f9fafb;
-            --callout-info-bg: #1e3a5f;
-            --callout-info-border: #3b82f6;
-            --callout-warning-bg: #422006;
-            --callout-warning-border: #f59e0b;
-            --callout-danger-bg: #450a0a;
-            --callout-danger-border: #ef4444;
-            --callout-success-bg: #052e16;
-            --callout-success-border: #22c55e;
-        }
-        /* System theme - follows OS preference */
-        @media (prefers-color-scheme: dark) {
-            body[data-theme="system"] {
-                --primary-color: #f9fafb;
-                --primary-light: #1f2937;
-                --secondary-color: #9ca3af;
-                --accent-color: #f9fafb;
-                --success-color: #34d399;
-                --warning-color: #fbbf24;
-                --danger-color: #f87171;
-                --text-color: #f9fafb;
-                --text-light: #9ca3af;
-                --border-color: #374151;
-                --bg-color: #0b0d12;
-                --bg-card: #111827;
-                --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-                --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
-                /* Dark mode specific colors */
-                --btn-primary-bg: #3b82f6;
-                --btn-primary-text: #ffffff;
-                --tooltip-bg: #1f2937;
-                --tooltip-text: #f9fafb;
-                --callout-info-bg: #1e3a5f;
-                --callout-info-border: #3b82f6;
-                --callout-warning-bg: #422006;
-                --callout-warning-border: #f59e0b;
-                --callout-danger-bg: #450a0a;
-                --callout-danger-border: #ef4444;
-                --callout-success-bg: #052e16;
-                --callout-success-border: #22c55e;
-            }
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
-        body {
-            font-family: var(--font-sans);
-            line-height: 1.6;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            transition: background-color 0.2s ease, color 0.2s ease;
-        }
-
-        /* =================================================================
-           2. LOADING OVERLAY
-           ================================================================= */
-        .loading-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: var(--bg-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            transition: background-color 0.2s ease;
-        }
-        .loading-overlay.hidden { display: none; }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid var(--border-color);
-            border-top-color: var(--accent-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text {
-            margin-top: 16px;
-            font-weight: 600;
-            color: var(--text-color);
-        }
-
-        /* =================================================================
-           3. LAYOUT & CONTAINERS
-           ================================================================= */
-        .container { width: 92%; max-width: 1400px; margin: 0 auto; padding: 24px 0; }
-        .navbar { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 5%; }
-        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 64px; max-width: 1400px; margin: 0 auto; }
-        .nav-brand { font-size: 1.35rem; font-weight: 600; color: var(--text-color); text-decoration: none; }
-        .nav-brand:hover { text-decoration: none; }
-        .nav-actions { display: flex; align-items: center; gap: 12px; }
-        .settings-button {
-            border: 1px solid var(--border-color);
-            background: var(--bg-card);
-            color: var(--text-color);
-            font-weight: 600;
-            font-size: 0.85rem;
-            padding: 8px 14px;
-            border-radius: 999px;
-            cursor: pointer;
-            transition: background-color 0.15s ease;
-        }
-        .settings-button:hover { background: var(--primary-light); }
-
-        main.container { flex-grow: 1; }
-        h1 { font-size: 2.25rem; letter-spacing: -0.02em; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; }
-        h2 { font-size: 1.375rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 0; margin-bottom: 1rem; }
-        h3 { font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem; }
-        h4 { font-size: 0.95rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; }
-        p { margin-bottom: 1em; color: var(--text-light); }
-        a { color: var(--accent-color); text-decoration: none; }
-        a:hover { text-decoration: underline; }
-
-        .tool-description { font-size: 1.05rem; max-width: 80ch; margin-bottom: 1.5rem; }
-        .tool-layout {
-            display: grid;
-            grid-template-columns: minmax(360px, 0.9fr) minmax(480px, 1.1fr);
-            gap: 28px;
-            align-items: start;
-        }
-        .card {
-            background-color: var(--bg-card);
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow);
-            padding: 24px;
-        }
-
-        /* =================================================================
-           4. PURPOSE/README SECTION
-           ================================================================= */
-        details > summary { list-style: none; cursor: pointer; }
-        details > summary::-webkit-details-marker { display: none; }
-        .purpose-section { margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--bg-card); }
-        .purpose-section summary { padding: 16px 24px; font-size: 1.1rem; font-weight: 600; color: var(--secondary-color); }
-        .purpose-section summary::after { content: '[Expand]'; float: right; font-size: 0.9rem; font-weight: 500; color: var(--text-light); }
-        .purpose-section[open] > summary::after { content: '[Collapse]'; }
-        .purpose-content { padding: 0 24px 24px 24px; border-top: 1px solid var(--border-color); }
-        .purpose-content h3 { margin-top: 1rem; }
-        .purpose-content ul { padding-left: 20px; margin-bottom: 1rem; }
-        .purpose-content code { background-color: var(--primary-light); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
-
-        /* =================================================================
-           5. INPUT SECTION
-           ================================================================= */
-        .tool-inputs h2 { margin-top: 0; }
-        .input-group { margin-bottom: 1.1rem; position: relative; }
-        .input-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.875rem; color: var(--text-color); }
-        .input-group input[type="number"],
-        .input-group input[type="text"],
-        .input-group select {
-            width: 100%;
-            padding: 11px 14px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            font-size: 0.95rem;
-            font-family: var(--font-sans);
-            background: var(--bg-card);
-            color: var(--text-color);
-            transition: border-color 0.15s ease;
-        }
-        .input-group input:focus, .input-group select:focus {
-            outline: none;
-            border-color: var(--text-color);
-        }
-        .input-group input[type="number"]::-webkit-inner-spin-button,
-        .input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
-        .input-group input[type="number"] { -moz-appearance: textfield; }
-
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-        /* Checkbox styling */
-        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-bottom: 1.1rem; }
-        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
-        .checkbox-group label { margin-bottom: 0; cursor: pointer; }
-
-        /* Tooltip */
-        .tooltip-trigger {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 18px; height: 18px;
-            background-color: var(--primary-light);
-            border: 1px solid var(--border-color);
-            color: var(--text-light);
-            border-radius: 50%;
-            font-size: 11px; font-weight: bold;
-            cursor: help;
-            position: absolute; right: 10px; top: 36px;
-        }
-        .tooltip-trigger::after {
-            content: attr(data-tooltip);
-            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
-            background-color: var(--tooltip-bg); color: var(--tooltip-text);
-            padding: 10px 14px; border-radius: 8px;
-            font-size: 12px; font-weight: 400; line-height: 1.5;
-            white-space: normal; width: 240px;
-            opacity: 0; visibility: hidden;
-            transition: opacity 0.2s, visibility 0.2s;
-            z-index: 10; box-shadow: var(--shadow-lg);
-        }
-        .tooltip-trigger:hover::after { opacity: 1; visibility: visible; }
-
-        /* Slider tooltip override - inline positioning */
-        .tooltip-trigger.slider-tooltip {
-            position: relative;
-            top: auto;
-            right: auto;
-            margin-left: 6px;
-            vertical-align: middle;
-        }
-
-        /* Expert Mode Toggle - Prominent placement */
-        .expert-mode-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 14px;
-            background: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            margin-bottom: 16px;
-        }
-        .expert-mode-label {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--text-color);
-        }
-        .expert-mode-hint {
-            font-size: 0.8rem;
-            color: var(--text-light);
-            margin-left: 8px;
-            font-weight: 400;
-        }
-        .expert-toggle {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-        .expert-toggle input {
-            width: 40px;
-            height: 22px;
-            appearance: none;
-            -webkit-appearance: none;
-            background: var(--border-color);
-            border-radius: 999px;
-            position: relative;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-        .expert-toggle input::before {
-            content: '';
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            background: var(--bg-card);
-            border-radius: 50%;
-            top: 3px;
-            left: 3px;
-            transition: transform 0.2s ease;
-            box-shadow: var(--shadow);
-        }
-        .expert-toggle input:checked {
-            background: var(--success-color);
-        }
-        .expert-toggle input:checked::before {
-            transform: translateX(18px);
-        }
-        .expert-toggle-label {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-color);
-        }
-
-        /* Advanced Section Toggle */
-        .advanced-section {
-            display: none;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px dashed var(--border-color);
-        }
-        .advanced-section h4 { margin-bottom: 12px; color: var(--secondary-color); font-size: 0.9rem; }
-
-        /* Show advanced section when expert mode is on */
-        body.expert-mode .advanced-section { display: block; }
-
-        /* Slider */
-        .slider-group {
-            margin: 0 0 1.5rem 0;
-            padding: 16px;
-            background: var(--primary-light);
-            border-radius: var(--border-radius);
-        }
-        .slider-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500; font-size: 0.875rem; }
-        .slider-value { font-family: var(--font-mono); font-weight: 600; color: var(--accent-color); }
-        .slider-group input[type="range"] {
-            width: 100%; height: 6px; -webkit-appearance: none;
-            background: var(--border-color); border-radius: 3px; outline: none;
-        }
-        .slider-group input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 18px; height: 18px;
-            background: var(--accent-color); border-radius: 50%; cursor: pointer;
-        }
-        .slider-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-light); margin-top: 4px; }
-
-        /* Buttons */
-        .btn { display: inline-block; padding: 12px 16px; font-size: 1rem; font-weight: 600; border: none; border-radius: var(--border-radius); cursor: pointer; text-align: center; transition: background-color 0.15s, opacity 0.15s; }
-        .btn-primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); width: 100%; }
-        .btn-primary:hover { opacity: 0.9; }
-        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
-        .btn-secondary:hover { background-color: var(--primary-light); }
-
-        /* =================================================================
-           6. TABS
-           ================================================================= */
-        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 4px; flex-wrap: wrap; }
-        .tab-link {
-            padding: 12px 16px; cursor: pointer;
-            background-color: transparent; border: none;
-            font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
-            color: var(--text-light);
-            border-bottom: 2px solid transparent; margin-bottom: -2px;
-            transition: color 0.2s ease;
-        }
-        .tab-link:hover { color: var(--text-color); }
-        .tab-link.active { color: var(--text-color); border-bottom-color: var(--accent-color); }
-        .tab-content { display: none; animation: fadeIn 0.4s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* =================================================================
-           7. RESULTS SECTION
-           ================================================================= */
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 14px;
-            margin-bottom: 20px;
-        }
-        .result-item {
-            background: var(--bg-color);
-            padding: 16px;
-            border-radius: var(--border-radius);
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-        .result-item:hover { border-color: var(--border-color); }
-        .result-item.expanded { border-color: var(--accent-color); background: var(--primary-light); }
-        .result-item.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
-        .result-item .label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
-        .result-item .value { font-size: 1.25rem; font-weight: 600; font-family: var(--font-mono); }
-        .result-item .unit { font-size: 0.8rem; color: var(--text-light); margin-left: 2px; }
-        .result-item .icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.4; }
-
-        /* Derivation Panel */
-        .derivation-panel {
-            display: none;
-            background: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .derivation-panel.visible { display: block; animation: fadeIn 0.3s ease; }
-        .derivation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .derivation-title { font-weight: 600; font-size: 1rem; }
-        .derivation-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-light); }
-        .derivation-close:hover { color: var(--text-color); }
-        .derivation-step { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
-        .derivation-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-        .derivation-step .step-title { font-weight: 500; margin-bottom: 8px; color: var(--text-color); font-size: 0.9rem; }
-        .derivation-step .equation { background: var(--bg-card); padding: 12px; border-radius: 6px; font-size: 0.95rem; overflow-x: auto; }
-        .derivation-step .inputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        .derivation-step .input-tag { background: var(--bg-card); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-color); }
-        .derivation-step .result-box { background: var(--accent-color); color: white; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-family: var(--font-mono); font-size: 1rem; }
-        .derivation-step .result-box.good { background: var(--success-color); }
-        .derivation-step .result-box.warning { background: var(--warning-color); color: var(--text-color); }
-        .derivation-step .result-box.bad { background: var(--danger-color); }
-
-        /* =================================================================
-           8. SAFETY GAUGES
-           ================================================================= */
-        .safety-section { margin-top: 24px; }
-        .safety-section h4 { margin-bottom: 16px; color: var(--secondary-color); }
-        .safety-gauge {
-            display: flex; align-items: center; gap: 14px;
-            margin-bottom: 12px; padding: 12px 16px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-        }
-        .gauge-label { min-width: 120px; font-weight: 600; font-size: 0.85rem; }
-        .gauge-bar-container { flex: 1; height: 8px; background: var(--border-color); border-radius: 4px; position: relative; overflow: visible; }
-        .gauge-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-        .gauge-bar.success { background: var(--success-color); }
-        .gauge-bar.warning { background: var(--warning-color); }
-        .gauge-bar.danger { background: var(--danger-color); }
-        .gauge-value { min-width: 70px; text-align: right; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
-        .gauge-value.success { color: var(--success-color); }
-        .gauge-value.warning { color: var(--warning-color); }
-        .gauge-value.danger { color: var(--danger-color); }
-        .gauge-threshold { position: absolute; width: 2px; height: 16px; background: var(--text-color); top: -4px; }
-
-        /* Gauge Explainer Panels */
-        .gauge-explainer {
-            display: none;
-            background: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: 16px;
-            margin-bottom: 12px;
-            animation: fadeIn 0.3s ease;
-        }
-        .gauge-explainer.visible { display: block; }
-        .gauge-explainer .explainer-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .gauge-explainer p { font-size: 0.9rem; margin-bottom: 10px; }
-        .gauge-explainer .explainer-equation {
-            background: var(--bg-card);
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            font-size: 0.95rem;
-        }
-        .gauge-explainer .explainer-values {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .gauge-explainer .value-tag {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-family: var(--font-mono);
-            color: var(--text-color);
-        }
-        .gauge-explainer .explainer-guidance {
-            font-size: 0.85rem;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 0;
-        }
-        .gauge-explainer .explainer-guidance.good {
-            background: var(--callout-success-bg);
-            color: var(--success-color);
-        }
-        .gauge-explainer .explainer-guidance.marginal {
-            background: var(--callout-warning-bg);
-            color: var(--warning-color);
-        }
-        .gauge-explainer .explainer-guidance.bad {
-            background: var(--callout-danger-bg);
-            color: var(--danger-color);
-        }
-
-        /* =================================================================
-           9. STATUS BANNER
-           ================================================================= */
-        .status-banner { padding: 18px 24px; border-radius: var(--border-radius); margin-top: 24px; display: flex; align-items: flex-start; gap: 14px; }
-        .status-banner .icon { font-size: 1.25rem; }
-        .status-banner .content h4 { margin-bottom: 4px; }
-        .status-banner .content p { margin-bottom: 0; font-size: 0.9rem; }
-        .status-banner.acceptable { background: #ecfdf5; border: 1px solid var(--success-color); }
-        .status-banner.acceptable h4 { color: var(--success-color); }
-        .status-banner.marginal { background: #fffbeb; border: 1px solid var(--warning-color); }
-        .status-banner.marginal h4 { color: var(--warning-color); }
-        .status-banner.unacceptable { background: #fef2f2; border: 1px solid var(--danger-color); }
-        .status-banner.unacceptable h4 { color: var(--danger-color); }
-        .recommendations { margin-top: 8px; padding-left: 20px; }
-        .recommendations li { font-size: 0.85rem; margin-bottom: 4px; color: var(--text-color); }
-
-        /* =================================================================
-           10. CHARTS
-           ================================================================= */
-        .chart-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 18px; margin-bottom: 20px; }
-        .chart-container h4 { margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
-        .chart-plot { width: 100%; min-height: 350px; height: 350px; }
-        .chart-explanation { margin-top: 12px; font-size: 0.85rem; color: var(--text-light); line-height: 1.5; padding: 10px; background: var(--primary-light); border-radius: 6px; }
-        .chart-explanation strong { color: var(--text-color); }
-        .charts-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
-
-        /* =================================================================
-           11. BACKGROUND TAB
-           ================================================================= */
-        .toc-card { background: var(--primary-light); padding: 16px 20px; border-radius: 8px; margin-bottom: 24px; }
-        .toc-card strong { color: var(--primary-color); }
-        .toc-card ol { margin: 10px 0 0 20px; color: var(--text-light); font-size: 0.9rem; }
-        .toc-card a { color: var(--accent-color); }
-
-        .bg-section { margin-bottom: 32px; }
-        .bg-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; margin-bottom: 16px; }
-        .bg-section h4 { margin-top: 20px; color: var(--secondary-color); }
-
-        .equation-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px 20px; margin: 16px 0; }
-        .equation-card strong { display: block; margin-bottom: 8px; color: var(--secondary-color); font-size: 0.9rem; }
-        .equation-card .equation-expression { display: block; margin-bottom: 10px; font-size: 1.05rem; }
-        .equation-card ul { list-style: none; padding-left: 0; display: grid; gap: 6px; font-size: 0.85rem; color: var(--text-light); }
-
-        /* Callout boxes */
-        .callout-info { background: var(--callout-info-bg); border-left: 4px solid var(--callout-info-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
-        .callout-info strong { color: var(--callout-info-border); }
-        .callout-warning { background: var(--callout-warning-bg); border-left: 4px solid var(--callout-warning-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
-        .callout-warning strong { color: var(--callout-warning-border); }
-        .callout-danger { background: var(--callout-danger-bg); border-left: 4px solid var(--callout-danger-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
-        .callout-danger strong { color: var(--callout-danger-border); }
-        .callout-success { background: var(--callout-success-bg); border-left: 4px solid var(--callout-success-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; color: var(--text-color); }
-        .callout-success strong { color: var(--callout-success-border); }
-
-        /* =================================================================
-           12. SETTINGS PANEL
-           ================================================================= */
-        .settings-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.2s ease, visibility 0.2s ease;
-            z-index: 1000;
-        }
-        .settings-overlay.open { opacity: 1; visibility: visible; }
-        .settings-panel {
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 360px;
-            height: 100vh;
-            background: var(--bg-card);
-            border-left: 1px solid var(--border-color);
-            box-shadow: var(--shadow-lg);
-            transform: translateX(100%);
-            transition: transform 0.25s ease;
-            z-index: 1001;
-            display: flex;
-            flex-direction: column;
-        }
-        .settings-panel.open { transform: translateX(0); }
-        .settings-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 18px 24px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .settings-header h3 { margin: 0; font-size: 1.1rem; }
-        .settings-close {
-            background: none;
-            border: none;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--text-light);
-            cursor: pointer;
-        }
-        .settings-close:hover { color: var(--text-color); }
-        .settings-content { padding: 20px 24px; overflow-y: auto; flex: 1; }
-        .settings-section { margin-bottom: 24px; }
-        .settings-section h4 { margin-bottom: 14px; font-size: 0.95rem; color: var(--secondary-color); }
-        .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-        .setting-label { font-weight: 600; font-size: 0.9rem; color: var(--text-color); }
-        .setting-help { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
-        .settings-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); }
-
-        /* Toggle Switch */
-        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .switch .slider-toggle {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: var(--border-color);
-            transition: 0.2s;
-            border-radius: 999px;
-        }
-        .switch .slider-toggle::before {
-            position: absolute;
-            content: '';
-            height: 18px; width: 18px;
-            left: 3px; bottom: 3px;
-            background-color: var(--bg-card);
-            transition: 0.2s;
-            border-radius: 50%;
-            box-shadow: var(--shadow);
-        }
-        .switch input:checked + .slider-toggle { background-color: var(--accent-color); }
-        .switch input:checked + .slider-toggle::before { transform: translateX(20px); }
-
-        /* Segmented Control */
-        .segmented {
-            display: inline-flex;
-            gap: 4px;
-            background: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: 999px;
-            padding: 4px;
-        }
-        .segmented button {
-            border: none;
-            background: transparent;
-            color: var(--text-light);
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 6px 10px;
-            border-radius: 999px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        .segmented button:hover { color: var(--text-color); }
-        .segmented button.active {
-            background: var(--accent-color);
-            color: var(--bg-card);
-        }
-
-        /* =================================================================
-           13. COMPACT DENSITY MODE
-           ================================================================= */
-        /* Layout & Cards */
-        body[data-density="compact"] .container { padding: 16px 0; }
-        body[data-density="compact"] .card { padding: 12px; }
-        body[data-density="compact"] .tool-layout { gap: 16px; }
-
-        /* Typography */
-        body[data-density="compact"] h1 { font-size: 1.7rem; margin-bottom: 0.25rem; }
-        body[data-density="compact"] h2 { font-size: 1.1rem; padding-bottom: 8px; margin-bottom: 10px; }
-        body[data-density="compact"] .tool-description { font-size: 0.9rem; margin-bottom: 1rem; }
-
-        /* Inputs */
-        body[data-density="compact"] .input-group { margin-bottom: 10px; }
-        body[data-density="compact"] .input-group label { font-size: 0.78rem; margin-bottom: 3px; }
-        body[data-density="compact"] .input-group input,
-        body[data-density="compact"] .input-group select { padding: 6px 10px; font-size: 0.85rem; }
-        body[data-density="compact"] .input-group .tooltip-trigger { top: 28px; }
-        body[data-density="compact"] .input-row { gap: 10px; }
-        body[data-density="compact"] .slider-group { padding: 8px 12px; margin-bottom: 10px; }
-        body[data-density="compact"] .slider-header { margin-bottom: 6px; font-size: 0.8rem; }
-        body[data-density="compact"] .slider-labels { font-size: 0.7rem; }
-        body[data-density="compact"] .expert-mode-bar { padding: 8px 12px; margin-bottom: 10px; }
-        body[data-density="compact"] .expert-mode-label { font-size: 0.82rem; }
-        body[data-density="compact"] .expert-mode-hint { font-size: 0.75rem; }
-        body[data-density="compact"] .advanced-section { margin-top: 10px; padding-top: 10px; }
-        body[data-density="compact"] .btn-primary { padding: 10px 20px; font-size: 0.9rem; }
-
-        /* Results */
-        body[data-density="compact"] .tabs { margin-bottom: 12px; }
-        body[data-density="compact"] .tab-btn { padding: 8px 14px; font-size: 0.85rem; }
-        body[data-density="compact"] .result-item { padding: 8px 12px; margin-bottom: 8px; }
-        body[data-density="compact"] .result-item .label { font-size: 0.78rem; }
-        body[data-density="compact"] .result-item .value { font-size: 1rem; }
-        body[data-density="compact"] .result-item .unit { font-size: 0.8rem; }
-        body[data-density="compact"] .derivation-panel { padding: 10px 12px; }
-
-        /* Safety Gauges */
-        body[data-density="compact"] .safety-gauge { padding: 8px 12px; margin-bottom: 8px; }
-        body[data-density="compact"] .gauge-label { font-size: 0.78rem; }
-        body[data-density="compact"] .gauge-value { font-size: 0.85rem; }
-        body[data-density="compact"] .gauge-explainer { padding: 10px 12px; }
-
-        /* Status Banner */
-        body[data-density="compact"] .status-banner { padding: 12px 14px; margin-bottom: 12px; }
-        body[data-density="compact"] .status-title { font-size: 0.95rem; }
-        body[data-density="compact"] .status-message { font-size: 0.82rem; }
-        body[data-density="compact"] .recommendations { font-size: 0.78rem; }
-        body[data-density="compact"] .recommendations li { margin-bottom: 2px; }
-
-        /* Callouts & Background */
-        body[data-density="compact"] .callout { padding: 10px 12px; margin-bottom: 12px; }
-        body[data-density="compact"] .callout-title { font-size: 0.82rem; }
-        body[data-density="compact"] .callout p { font-size: 0.82rem; }
-        body[data-density="compact"] .equation-card { padding: 12px; margin-bottom: 12px; }
-        body[data-density="compact"] .toc { padding: 12px; }
-
-        /* =================================================================
-           14. FOOTER
-           ================================================================= */
-        .footer { text-align: center; padding: 20px 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.9rem; margin-top: 30px; }
-
-        /* =================================================================
-           15. RESPONSIVE
-           ================================================================= */
-        @media (max-width: 1000px) {
-            .tool-layout { grid-template-columns: 1fr; }
-            .charts-grid { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 720px) {
-            .settings-panel { width: 100%; }
-            .settings-button { padding: 8px 12px; font-size: 0.8rem; }
-        }
-        @media (max-width: 600px) {
-            .input-row { grid-template-columns: 1fr; }
-            .results-grid { grid-template-columns: 1fr; }
-            .safety-gauge { flex-direction: column; align-items: flex-start; }
-            .gauge-bar-container { width: 100%; }
-            .tabs { flex-direction: column; }
-            .segmented { flex-wrap: wrap; }
-        }
-    
-    .support-link {
-      color: inherit;
-      font-weight: 600;
-      text-decoration: none;
-    }
-
-    .support-link:hover {
-      text-decoration: underline;
-    }
-        /* =================================================================
-           HVAC LOAD CALCULATOR
-           ================================================================= */
-        :root {
-            --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a;
-            --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
-            --bar-heat: #eb6834; --bar-cool: #2a78d6;
-        }
-        body[data-theme="dark"] {
-            --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
-            --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-            --bar-heat: #d95926; --bar-cool: #3987e5;
-        }
-        @media (prefers-color-scheme: dark) {
-            body[data-theme="system"] {
-                --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
-                --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-                --bar-heat: #d95926; --bar-cool: #3987e5;
-            }
-        }
-        .tool-outputs { min-width: 0; }
-        .tool-inputs { min-width: 0; }
-        .visually-hidden {
-            position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
-            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-        }
-        .step-tabs { margin-bottom: 18px; }
-        .step-tabs .tab-link, .output-tabs .tab-link { min-height: 44px; }
-        .step-panel { display: none; }
-        .step-panel.active { display: block; animation: fadeIn 0.25s ease; }
-        .step-lede { color: var(--text-light); font-size: 0.9rem; margin: 0 0 16px; line-height: 1.5; }
-        .group-title { margin: 22px 0 10px; font-size: 0.95rem; color: var(--text-color); }
-        .group-note { color: var(--text-light); font-size: 0.82rem; line-height: 1.45; margin: 0 0 10px; }
-        .station-note { font-size: 0.82rem; color: var(--text-light); line-height: 1.45; margin: -6px 0 16px; min-height: 1.2em; }
-        .station-note.warn { color: var(--warning-color); }
-        .conditional[hidden] { display: none; }
-        .calc-bar {
-            position: sticky; bottom: 0; background: var(--bg-card); padding: 12px 0 2px; margin-top: 8px;
-            border-top: 1px solid var(--border-color); z-index: 5;
-        }
-        .calc-bar .btn { width: 100%; min-height: 44px; }
-        .stale-note { margin: 8px 0 0; font-size: 0.82rem; color: var(--warning-color); text-align: center; }
-        .error-box {
-            margin-top: 12px; padding: 12px 14px; border: 1px solid var(--danger-color); color: var(--danger-color);
-            border-radius: var(--border-radius); font-size: 0.88rem; line-height: 1.45;
-        }
-        .summary-sentence { font-size: 1.02rem; line-height: 1.55; margin: 0 0 18px; color: var(--text-color); }
-        .result-card {
-            background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--border-radius);
-            padding: 16px; text-align: left;
-        }
-        .result-card.highlight { background: var(--primary-light); border-left: 3px solid var(--accent-color); }
-        .result-card .label { font-size: 0.82rem; color: var(--text-light); margin-bottom: 6px; font-weight: 500; }
-        .result-card .value { font-size: 1.3rem; font-weight: 600; font-family: var(--font-mono); color: var(--text-color); overflow-wrap: anywhere; }
-        .result-card .unit { font-size: 0.82rem; color: var(--text-light); margin-left: 4px; font-weight: 400; font-family: var(--font-sans); }
-        .result-card .range { font-size: 0.8rem; color: var(--text-light); margin-top: 6px; line-height: 1.4; }
-        .results-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 18px; }
-        .confidence {
-            border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 14px 16px; margin-bottom: 22px;
-            font-size: 0.88rem; line-height: 1.5; color: var(--text-color);
-        }
-        .confidence strong { font-weight: 600; }
-        .table-scroll { overflow-x: auto; margin-bottom: 18px; }
-        .data-table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
-        .data-table th, .data-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-color); text-align: right; vertical-align: top; color: var(--text-color); }
-        .data-table th:first-child, .data-table td:first-child { text-align: left; }
-        .data-table thead th { font-weight: 600; color: var(--text-light); font-size: 0.78rem; white-space: nowrap; }
-        .data-table tbody th { font-weight: 500; }
-        .data-table td { font-family: var(--font-mono); white-space: nowrap; }
-        .data-table tfoot th, .data-table tfoot td { font-weight: 700; border-top: 2px solid var(--border-color); border-bottom: 0; }
-        #bg-others .data-table td, #bg-others .data-table th { white-space: normal; text-align: left; font-family: var(--font-sans); }
-        .cell-note { font-size: 0.76rem; color: var(--text-light); font-weight: 400; margin-top: 2px; white-space: normal; min-width: 150px; }
-        .component-row { cursor: pointer; }
-        .component-row:hover th, .component-row:hover td { background: var(--primary-light); }
-        .component-row:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
-        .component-row .row-mark { color: var(--text-light); font-size: 0.7rem; margin-left: 6px; }
-        .inline-bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; vertical-align: middle; margin-right: 8px; }
-        .inline-bar.heat { background: var(--bar-heat); }
-        .inline-bar.cool { background: var(--bar-cool); }
-        .bar-cell { min-width: 150px; text-align: left !important; }
-        .bar-cell .num { display: inline-block; min-width: 56px; }
-        .deriv-row td { white-space: normal; font-family: var(--font-sans); text-align: left; background: var(--primary-light); padding: 14px; }
-        .deriv-block { margin-bottom: 14px; min-width: 0; }
-        .deriv-block:last-child { margin-bottom: 0; }
-        .deriv-block h5 { margin: 0 0 6px; font-size: 0.82rem; color: var(--text-light); font-weight: 600; }
-        .deriv-eq { overflow-x: auto; font-size: 0.92rem; padding: 2px 0; max-width: 100%; }
-        .deriv-legend { font-size: 0.8rem; color: var(--text-light); line-height: 1.45; margin-top: 4px; }
-        .swing-note { font-size: 0.85rem; color: var(--text-light); line-height: 1.5; margin: -6px 0 22px; }
-        .tornado-row { display: grid; grid-template-columns: minmax(120px, 170px) 1fr 1fr; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
-        .tornado-head { font-size: 0.78rem; color: var(--text-light); font-weight: 600; }
-        .tornado-label .known { display: block; font-size: 0.74rem; color: var(--text-light); }
-        .tornado-cell { min-width: 0; }
-        .tornado-track { position: relative; height: 10px; background: var(--primary-light); border-radius: 5px; }
-        .tornado-bar { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
-        .tornado-bar.heat { background: var(--bar-heat); }
-        .tornado-bar.cool { background: var(--bar-cool); }
-        .tornado-mid { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--text-light); left: 50%; }
-        .tornado-value { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-light); margin-top: 3px; white-space: nowrap; }
-        .export-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
-        .export-row .btn { min-height: 44px; flex: 1 1 140px; width: auto; }
-        .file-label { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; position: relative; text-align: center; }
-        .chart-short { min-height: 240px; }
-        .chart-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; color: var(--text-color); margin-bottom: 8px; }
-        .key-item { display: inline-flex; align-items: center; gap: 6px; }
-        .key-swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-        .key-line { width: 20px; border-top: 2px dashed var(--text-color); display: inline-block; }
-        .chart-plot { min-width: 0; }
-        .room-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-        .room-actions .btn { width: auto; flex: 1 1 150px; min-height: 44px; font-size: 0.85rem; }
-        .room-card { border: 1px solid var(--border-color); border-radius: var(--border-radius); margin-bottom: 8px; }
-        .room-card summary { padding: 11px 14px; cursor: pointer; font-weight: 500; font-size: 0.9rem; list-style-position: inside; }
-        .room-card summary .room-sub { color: var(--text-light); font-weight: 400; font-size: 0.8rem; margin-left: 6px; }
-        .room-body { padding: 4px 14px 14px; }
-        .room-body label { font-size: 0.8rem; display: block; margin-bottom: 4px; }
-        .room-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .compass-grid { display: grid; grid-template-columns: 62px repeat(4, minmax(0, 1fr)); gap: 6px; align-items: center; font-size: 0.8rem; margin-bottom: 10px; }
-        .compass-grid .head { text-align: center; color: var(--text-light); font-weight: 600; }
-        .room-body input[type="number"], .room-body input[type="text"], .room-body select {
-            width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px;
-            background: var(--bg-card); color: var(--text-color); font-size: 0.87rem; min-width: 0;
-        }
-        .room-flags { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 0.82rem; }
-        .room-flags label { display: inline-flex; gap: 6px; align-items: center; margin: 0; min-height: 32px; }
-        .room-remove { margin-left: auto; background: none; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 0.8rem; min-height: 36px; }
-        .status-mark { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.82rem; }
-        .status-mark.ok { color: var(--success-color); }
-        .status-mark.warn { color: var(--warning-color); }
-        .status-mark.bad { color: var(--danger-color); }
-        .orient-row { display: grid; grid-template-columns: 64px 1fr 92px; gap: 10px; align-items: center; font-size: 0.85rem; padding: 4px 0; }
-        .orient-track { background: var(--primary-light); border-radius: 0 4px 4px 0; height: 12px; }
-        .orient-bar { background: var(--bar-cool); height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
-        .orient-value { font-family: var(--font-mono); text-align: right; font-size: 0.8rem; }
-        .empty-state { border: 1px dashed var(--border-color); border-radius: var(--border-radius); padding: 20px; color: var(--text-light); font-size: 0.9rem; line-height: 1.5; margin-bottom: 18px; }
-        .link-button { background: none; border: none; color: var(--text-color); text-decoration: underline; cursor: pointer; padding: 0; font: inherit; }
-        .bill-card { border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 14px 16px; margin-bottom: 22px; font-size: 0.9rem; line-height: 1.5; }
-        .bill-card h4 { margin: 0 0 6px; }
-        .tab-content h3 { margin-top: 26px; }
-        .tab-content > .summary-sentence + .results-grid { margin-top: 0; }
-        .equation-card .equation-expression { overflow-x: auto; }
-        .equation-card p { font-size: 0.86rem; color: var(--text-light); margin: 10px 0 0; }
-        mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
-        .callout-warning, .callout-warning strong { color: #111827; }
-        @media (max-width: 1000px) {
-            .tool-layout { grid-template-columns: minmax(0, 1fr); }
-            .calc-bar { position: static; }
-        }
-        .tooltip-trigger:focus::after { opacity: 1; visibility: visible; }
-        .tool-inputs .tooltip-trigger::after { display: none; width: min(260px, 72vw); left: auto; right: 0; bottom: calc(100% + 8px); transform: none; white-space: normal; }
-        .tool-inputs .tooltip-trigger:hover::after, .tool-inputs .tooltip-trigger:focus::after { display: block; }
-        @media (max-width: 600px) {
-            .tabs { flex-direction: row; }
-            .step-tabs .tab-link, .output-tabs .tab-link { flex: 1 1 auto; padding-left: 8px; padding-right: 8px; font-size: 0.85rem; }
-            .tornado-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-            .tornado-label { grid-column: 1 / -1; }
-            .data-table { font-size: 0.8rem; }
-            .bar-cell { min-width: 112px; }
-            .inline-bar { display: none; }
-            .card { padding: 16px; }
-            .container { width: 100%; box-sizing: border-box; padding-left: 16px; padding-right: 16px; }
-        }
-        /* Native number spinners and select arrows follow the page theme. */
-        body[data-theme="dark"] input, body[data-theme="dark"] select { color-scheme: dark; }
-        @media (prefers-color-scheme: dark) {
-            body[data-theme="system"] input, body[data-theme="system"] select { color-scheme: dark; }
-        }
-        body[data-theme="light"] input, body[data-theme="light"] select { color-scheme: light; }
-        .guide { margin-top: 28px; }
-        .guide > * { max-width: 900px; }
-        .guide h2 { margin-top: 0; }
-        .guide h3 { margin-top: 24px; color: var(--text-color); }
-        .guide p { line-height: 1.6; }
-        .table-caption { caption-side: top; text-align: left; font-size: 0.82rem; color: var(--text-light); padding-bottom: 8px; }
-        @media print {
-            .navbar, .tool-inputs, .tabs, .guide, .export-row, .footer, .settings-panel, .loading-overlay, #tab-background, .swing-note + h3 + .group-note { display: none !important; }
-            .tool-layout { display: block; }
-            .tab-content { display: block !important; }
-            .card { box-shadow: none; border: 0; }
-        }
-
-    </style>
+    <link rel="stylesheet" href="app/base.css">
+    <link rel="stylesheet" href="app/drawing.css">
+    <link rel="stylesheet" href="app/app.css">
     <script src="/shared/json-ld.js"></script>
     <script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "What size AC do I need for a 2,000 sq ft house?", "acceptedAnswer": {"@type": "Answer", "text": "The same 2,000 ft² house needs about 2.1 tons in Chicago and 3.1 tons in Phoenix for typical 1980s and 1990s construction. Climate, windows, air leakage, and ducts matter more than floor area, so enter your own house for a real number."}}, {"@type": "Question", "name": "What size heat pump do I need?", "acceptedAnswer": {"@type": "Answer", "text": "In cold climates heating sets the size. Compare your heating load with the capacity the heat pump delivers at your winter design temperature, not its rated size, then check the balance point and the backup heat needed."}}, {"@type": "Question", "name": "What is a Manual J load calculation?", "acceptedAnswer": {"@type": "Answer", "text": "Manual J is ACCA's residential load calculation procedure. It estimates the heat a house loses in winter and gains in summer, for the whole house and each room. This tool does the same job using ASHRAE methods, not ACCA's tables, so its numbers will differ somewhat from Manual J software."}}, {"@type": "Question", "name": "What is Manual S, and how is it different from Manual J?", "acceptedAnswer": {"@type": "Answer", "text": "Manual J finds the load. Manual S picks equipment that meets it, by comparing the load with capacity at your actual design temperatures. This tool's Equipment tab does the same kind of check, with oversizing limits treated as advisory."}}, {"@type": "Question", "name": "Can this replace a Manual J report for a permit?", "acceptedAnswer": {"@type": "Answer", "text": "No. It is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report. Use it to understand your house or check a contractor's report."}}, {"@type": "Question", "name": "How many BTU per square foot do I need?", "acceptedAnswer": {"@type": "Answer", "text": "There is no single number. For the same 2,000 ft² house, cooling here ranges from about 10 Btu/h per ft² in Seattle to 19 in Phoenix, and heating from 6 in Miami to 34 in Minneapolis."}}]}</script>
 </head>
-
-<body data-theme="system" data-density="comfortable">
-    <div class="loading-overlay" id="loading-overlay">
-        <div class="spinner"></div>
-        <div class="loading-text" id="loading-text">Loading the calculator...</div>
+<body>
+<div class="loading" id="p-loading" role="status">Loading the calculation engine...</div>
+<header class="site-nav">
+  <a class="brand" href="../../index.html">transparent<wbr>.tools</a>
+  <div class="nav-actions"><button type="button" class="nav-btn" id="settings-button" aria-haspopup="dialog">Tool Settings</button></div>
+</header>
+<div class="settings-overlay" id="settings-overlay" hidden></div>
+<aside class="settings" id="settings" role="dialog" aria-modal="true" aria-label="Tool settings" hidden>
+  <div class="settings-head"><h2>Tool Settings</h2><button type="button" class="btn" id="settings-close">Close</button></div>
+  <div class="setting"><div><strong>Theme</strong><div class="note">Light, dark, or follow the system.</div></div>
+    <div class="dwg-tabs" role="group" aria-label="Theme"><button type="button" data-theme-choice="light">Light</button><button type="button" data-theme-choice="dark">Dark</button><button type="button" data-theme-choice="system">Auto</button></div></div>
+  <button type="button" class="btn" id="settings-reset" style="width:100%;margin-top:16px">Reset to defaults</button>
+</aside>
+<div class="tool-inputs" hidden><input type="text" id="model_json" name="model_json" value="" aria-hidden="true" tabindex="-1"></div>
+<main class="wrap">
+  <h1 class="ptitle">HVAC Load Calculator: Free Manual J Alternative</h1>
+  <p class="plede tool-description">Find what size AC, furnace, or heat pump your house needs. Build the house step by step, from a plain box to rooms, and the estimate tightens as you go. It does the job of a Manual J load calculation and the equipment check of Manual S, with no account and every equation shown. It uses ASHRAE methods and is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report.</p>
+  <nav class="rail" id="rail" aria-label="Steps"></nav>
+  <div class="build">
+    <aside class="panel step-card" id="step"></aside>
+    <div class="main-col">
+      <section class="panel strip-panel"><div class="strip" id="strip"></div></section>
+      <div class="model-error" id="model-error" role="alert" hidden></div>
+      <section class="panel sheet-panel" id="sheet-panel"></section>
+      <section class="panel study-panel" id="study-panel" hidden></section>
+      <section class="panel learn-panel" id="learn-panel"><div id="fit-wide" hidden style="margin-bottom:14px"></div><div class="learn-grid"><div class="learn" id="learn"></div><div id="ladder"></div></div></section>
+      <details class="panel math-panel" id="math-panel"><summary style="cursor:pointer;font-weight:600;min-height:28px">Show the math</summary><div id="drill" style="margin-top:10px"></div></details>
     </div>
-
-    <header class="navbar">
-        <nav class="nav-container">
-            <a href="../../index.html" class="nav-brand">transparent<wbr>.tools</a>
-            <div class="nav-actions">
-                <button class="settings-button" id="settings-button" type="button">Tool Settings</button>
-            </div>
-        </nav>
-    </header>
-
-    <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
-    <aside class="settings-panel" id="settings-panel" aria-hidden="true">
-        <div class="settings-header">
-            <h3>Tool Settings</h3>
-            <button class="settings-close" id="settings-close" type="button">Close</button>
-        </div>
-        <div class="settings-content">
-            <div class="settings-section">
-                <h4>Appearance</h4>
-                <div class="setting-row">
-                    <div><div class="setting-label">Theme</div><div class="setting-help">Light, dark, or system default.</div></div>
-                    <div class="segmented" role="group" aria-label="Theme">
-                        <button type="button" data-theme="light">Light</button>
-                        <button type="button" data-theme="dark">Dark</button>
-                        <button type="button" data-theme="system">System</button>
-                    </div>
-                </div>
-                <div class="setting-row">
-                    <div><div class="setting-label">Density</div><div class="setting-help">Adjust spacing and sizing.</div></div>
-                    <div class="segmented" role="group" aria-label="Density">
-                        <button type="button" data-density="comfortable">Comfort</button>
-                        <button type="button" data-density="compact">Compact</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="settings-footer">
-            <button class="btn btn-secondary full-width" id="settings-reset" type="button">Reset to Defaults</button>
-        </div>
-    </aside>
-
-    <main class="container">
-        <h1>HVAC Load Calculator: Free Manual J Alternative</h1>
-        <p class="tool-description">Find what size AC, furnace, or heat pump your house needs. This free online tool does the job of a Manual J load calculation, room by room, and the equipment check of Manual S, with no account and every equation shown. It uses ASHRAE methods and is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report.</p>
-
-        <div class="tool-layout">
-            <section class="tool-inputs card" aria-label="Inputs">
-                <form id="calc-form" novalidate>
-                    <div class="tabs step-tabs" role="tablist" aria-label="Input steps">
-                        <button class="tab-link active" type="button" data-step="house" role="tab">House</button>
-                        <button class="tab-link" type="button" data-step="details" role="tab">Details</button>
-                        <button class="tab-link" type="button" data-step="rooms" role="tab">Rooms</button>
-                        <button class="tab-link" type="button" data-step="equipment" role="tab">Equipment</button>
-                        <button class="tab-link" type="button" data-step="bills" role="tab">Fuel bill</button>
-                    </div>
-                    <div class="step-panel active" id="step-house">
-<p class="step-lede">Five answers give a useful first estimate. The later tabs replace assumptions with what you know, and the range on the result narrows as you do.</p>
-<div class="input-group"><label for="location_query">ZIP code or weather station</label>
-<input type="text" id="location_query" name="location_query" value="60601" autocomplete="postal-code" placeholder="ZIP, or a city in the US or Canada">
-<span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Finds the nearest of about 2,000 NOAA weather stations. Outside the US, type a city name or enter design conditions by hand on the Details tab.">?</span></div>
-<div class="input-group"><label for="station_id">Weather station used</label>
-<select id="station_id" name="station_id"><option value="">Waiting for location...</option></select>
-<span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="The closest stations to your location. A nearer station is not always better: pick one at a similar elevation, and on the same side of any mountains or large lake.">?</span></div>
-<p class="station-note" id="station-note" role="status"></p>
-<div class="input-group"><label for="design_basis">Winter design basis</label><select id="design_basis" name="design_basis"><option value="99" selected>99% (standard for sizing)</option><option value="99.6">99.6% (colder, consider for heat pumps)</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="The 99% temperature is exceeded in all but about 88 hours a year, and the 99.6% temperature in all but about 35. ASHRAE suggests considering the colder value because cold snaps can last days.">?</span></div>
-<div class="input-row"><div class="input-group"><label for="floor_area_ft2">Conditioned floor area (ft²)</label><input type="number" id="floor_area_ft2" name="floor_area_ft2" value="2000" step="1" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="stories">Stories above grade</label><select id="stories" name="stories"><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-group"><label for="era">When was it built?</label><select id="era" name="era"><option value="pre1950">Before 1950, mostly original</option><option value="1950s_70s">1950 to 1979</option><option value="1980s_90s" selected>1980 to 1999</option><option value="2000s">2000 to 2015</option><option value="new_code">2016 or newer</option><option value="high_perf">High performance or deep retrofit</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Fills in typical walls, ceiling, windows, air leakage, and ducts for that period. These are assumptions, and the Details tab shows and changes each one.">?</span></div>
-<div class="input-row"><div class="input-group"><label for="floor_type">Foundation</label><select id="floor_type" name="floor_type"><option value="slab" selected>Slab on grade</option><option value="crawl_vented">Vented crawlspace</option><option value="crawl_sealed">Sealed crawlspace</option><option value="basement_conditioned">Heated basement</option><option value="basement_unconditioned">Unheated basement</option><option value="over_garage">Over a garage</option><option value="over_ambient">Open below (piers)</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="bedrooms">Bedrooms</label><input type="number" id="bedrooms" name="bedrooms" value="3" step="1" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-</div>
-                    <div class="step-panel" id="step-details">
-<h4 class="group-title">Design weather</h4>
-<p class="group-note">Filled in from the station on the House tab. Type over any value, or enter them by hand if you are outside the US and Canada.</p>
-<div class="input-row"><div class="input-group"><label for="heating_design_f">Winter design (°F)</label><input type="number" id="heating_design_f" name="heating_design_f" value="10" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="cooling_design_f">Summer design (°F)</label><input type="number" id="cooling_design_f" name="cooling_design_f" value="90" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="cooling_wet_bulb_f">Summer wet bulb (°F)</label><input type="number" id="cooling_wet_bulb_f" name="cooling_wet_bulb_f" value="74" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="daily_range_f">Daily range (°F)</label><input type="number" id="daily_range_f" name="daily_range_f" value="18" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="latitude">Latitude (°N)</label><input type="number" id="latitude" name="latitude" value="40" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="elevation_ft">Elevation (ft)</label><input type="number" id="elevation_ft" name="elevation_ft" value="500" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-
-<h4 class="group-title">Walls</h4>
-<div class="input-group"><label for="wall_preset">Wall type</label><select id="wall_preset" name="wall_preset"><option value="2x4_none">2x4, no insulation (often pre-1960)</option><option value="2x4_r11">2x4, R-11 cavity</option><option value="2x4_r13" selected>2x4, R-13 cavity</option><option value="2x4_r15">2x4, R-15 cavity</option><option value="2x6_r19">2x6, R-19 cavity</option><option value="2x6_r21">2x6, R-21 cavity</option><option value="2x6_r21_ci5">2x6, R-21 + R-5 foam sheathing</option><option value="brick_r13">Brick veneer over 2x4, R-13</option><option value="cmu_none">Block or brick masonry, no insulation</option><option value="cmu_r10">Block with R-10 interior insulation</option><option value="icf">Insulated concrete forms</option><option value="custom">Custom U-factor</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Pick the closest match. U-factors include framing, which is why 2x4 with R-13 insulation performs like about R-11.">?</span></div>
-<div class="input-row"><div class="input-group"><label for="wall_u">Wall U-factor</label><input type="number" id="wall_u" name="wall_u" value="0.09" step="any" min="0.001" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="wall_absorptance">Exterior color</label><select id="wall_absorptance" name="wall_absorptance"><option value="0.40">Light</option><option value="0.60" selected>Medium</option><option value="0.90">Dark</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Darker walls absorb more sun. Light is about 40% absorbed, dark about 90%.">?</span></div></div>
-
-<h4 class="group-title">Ceiling and roof</h4>
-<div class="input-row"><div class="input-group"><label for="ceiling_type">Ceiling type</label><select id="ceiling_type" name="ceiling_type"><option value="attic" selected>Under a vented attic</option><option value="cathedral">Cathedral or flat roof</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="ceiling_preset">Ceiling insulation</label><select id="ceiling_preset" name="ceiling_preset"><option value="none">No insulation</option><option value="r11">R-11</option><option value="r19">R-19</option><option value="r30" selected>R-30</option><option value="r38">R-38</option><option value="r49">R-49</option><option value="r60">R-60</option><option value="custom">Custom U-factor</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Insulation on the attic floor or in the roof assembly.">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="ceiling_u">Ceiling U-factor</label><input type="number" id="ceiling_u" name="ceiling_u" value="0.032" step="any" min="0.001" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="roof_color">Roof surface</label><select id="roof_color" name="roof_color"><option value="white">White coating</option><option value="light">Light shingle</option><option value="medium" selected>Medium shingle</option><option value="dark">Dark shingle</option><option value="metal_light">Light metal</option><option value="tile_light">Light tile</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-
-<h4 class="group-title">Windows</h4>
-<div class="input-group"><label for="window_preset">Window type</label><select id="window_preset" name="window_preset"><option value="single_clear">Single pane, wood frame</option><option value="single_alum">Single pane, aluminum frame</option><option value="single_storm">Single pane with storm window</option><option value="double_clear_alum">Double clear, aluminum frame</option><option value="double_clear" selected>Double clear, vinyl or wood</option><option value="double_lowe_low">Double low-e, low solar gain</option><option value="double_lowe_high">Double low-e, high solar gain</option><option value="triple_lowe">Triple low-e</option><option value="custom">Custom U-factor</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Whole-window values from ASHRAE Fundamentals Chapter 17, Table 2. If you have the NFRC sticker, type its numbers below.">?</span></div>
-<div class="input-row"><div class="input-group"><label for="window_u">Window U-factor</label><input type="number" id="window_u" name="window_u" value="0.51" step="any" min="0.01" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="window_shgc">Window SHGC</label><input type="number" id="window_shgc" name="window_shgc" value="0.57" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-group"><label for="window_pct_of_floor">Window area (% of floor area)</label><input type="number" id="window_pct_of_floor" name="window_pct_of_floor" value="14" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div>
-<div class="input-row"><div class="input-group"><label for="interior_shade">Interior shades</label><select id="interior_shade" name="interior_shade"><option value="none">None</option><option value="light_blinds_half">Light blinds, half closed</option><option value="drapes_half" selected>Drapes, half closed</option><option value="blinds_closed">Blinds, closed</option><option value="cellular_closed">Cellular shades, closed</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="insect_screen">Insect screens</label><select id="insect_screen" name="insect_screen"><option value="none">None</option><option value="half" selected>On half the windows</option><option value="full">On all windows</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="overhang_depth_ft">Eave overhang (ft)</label><input type="number" id="overhang_depth_ft" name="overhang_depth_ft" value="1" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="site_shade_fraction">Blocked by trees (0 to 1)</label><input type="number" id="site_shade_fraction" name="site_shade_fraction" value="0" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-
-<h4 class="group-title">Air leakage</h4>
-<div class="input-group"><label for="ach50">Air changes at 50 Pa (ACH50)</label><input type="number" id="ach50" name="ach50" value="7" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div>
-<p class="group-note">From a blower door test if you have one. It is the most valuable single measurement for an older house. New code homes test near 3, a typical 1980s house near 7, and a drafty old house 15 or more.</p>
-<div class="input-row"><div class="input-group"><label for="ventilation_type">Mechanical ventilation</label><select id="ventilation_type" name="ventilation_type"><option value="none" selected>None</option><option value="exhaust">Exhaust fan, continuous</option><option value="supply">Supply fan, continuous</option><option value="balanced">Balanced, no recovery</option><option value="hrv">HRV (heat recovery)</option><option value="erv">ERV (heat and moisture)</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="ventilation_cfm">Ventilation flow (cfm)</label><input type="number" id="ventilation_cfm" name="ventilation_cfm" value="0" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-
-<h4 class="group-title">Ducts</h4>
-<div class="input-row"><div class="input-group"><label for="duct_location">Where the ducts run</label><select id="duct_location" name="duct_location"><option value="attic" selected>Attic</option><option value="conditioned">Inside conditioned space</option><option value="vented_crawl">Vented crawlspace</option><option value="sealed_crawl">Sealed crawlspace</option><option value="basement">Basement</option><option value="garage">Garage</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="heating_system">Heating system</label><select id="heating_system" name="heating_system"><option value="furnace" selected>Furnace</option><option value="heat_pump">Heat pump</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="duct_r">Duct insulation (R)</label><input type="number" id="duct_r" name="duct_r" value="6" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="duct_leakage_pct">Leakage per side (%)</label><input type="number" id="duct_leakage_pct" name="duct_leakage_pct" value="10" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-
-<h4 class="group-title conditional" data-floor="slab crawl_vented crawl_sealed basement_conditioned basement_unconditioned over_garage over_ambient">Floor</h4>
-<div class="conditional" data-floor="slab"><div class="input-row"><div class="input-group"><label for="slab_edge">Slab edge insulation</label><select id="slab_edge" name="slab_edge"><option value="none" selected>None</option><option value="r5">R-5</option><option value="r10">R-10</option><option value="r15">R-15</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="floor_cover">Floor covering</label><select id="floor_cover" name="floor_cover"><option value="carpet" selected>Mostly carpet</option><option value="hard">Mostly hard floor</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div></div>
-<div class="conditional" data-floor="crawl_vented crawl_sealed basement_unconditioned over_garage over_ambient"><div class="input-group"><label for="floor_u">Floor U-factor</label><input type="number" id="floor_u" name="floor_u" value="0.05" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="conditional" data-floor="crawl_sealed"><div class="input-group"><label for="crawl_wall_r">Crawlspace wall insulation (R)</label><input type="number" id="crawl_wall_r" name="crawl_wall_r" value="10" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="conditional" data-floor="basement_conditioned basement_unconditioned"><div class="input-row"><div class="input-group"><label for="basement_depth_ft">Basement depth below grade (ft)</label><input type="number" id="basement_depth_ft" name="basement_depth_ft" value="7" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="basement_wall_r">Basement wall insulation (R)</label><input type="number" id="basement_wall_r" name="basement_wall_r" value="0" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div></div>
-
-<div class="expert-mode-bar">
-  <div><span class="expert-mode-label">Expert Mode</span><span class="expert-mode-hint">Show every assumption</span></div>
-  <label class="expert-toggle"><input type="checkbox" id="expert-mode-toggle"><span class="expert-toggle-label" id="expert-mode-status">Off</span></label>
-</div>
-<div class="advanced-section">
-  <h4 class="group-title">Indoor conditions and control</h4>
-  <div class="input-row"><div class="input-group"><label for="indoor_heating_f">Winter indoor (°F)</label><input type="number" id="indoor_heating_f" name="indoor_heating_f" value="70" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="indoor_cooling_f">Summer indoor (°F)</label><input type="number" id="indoor_cooling_f" name="indoor_cooling_f" value="75" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="indoor_rh_pct">Summer indoor RH (%)</label><input type="number" id="indoor_rh_pct" name="indoor_rh_pct" value="50" step="any" min="20" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="temperature_swing_f">Allowed swing (°F)</label><input type="number" id="temperature_swing_f" name="temperature_swing_f" value="3" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="construction_mass">Thermal mass</label><select id="construction_mass" name="construction_mass"><option value="light" selected>Light (frame)</option><option value="medium">Medium (hard floors, slab)</option><option value="heavy">Heavy (masonry)</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="design_month">Sun position month</label><select id="design_month" name="design_month"><option value="5">May</option><option value="6">June</option><option value="7" selected>July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <h4 class="group-title">Geometry</h4>
-  <div class="input-row"><div class="input-group"><label for="ceiling_height_ft">Floor-to-floor height (ft)</label><input type="number" id="ceiling_height_ft" name="ceiling_height_ft" value="8" step="any" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="aspect_ratio">Length / width</label><input type="number" id="aspect_ratio" name="aspect_ratio" value="1.5" step="any" min="0.1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="door_area_ft2">Door area (ft²)</label><input type="number" id="door_area_ft2" name="door_area_ft2" value="40" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="door_u">Door U-factor</label><input type="number" id="door_u" name="door_u" value="0.4" step="any" min="0.01" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="occupants">Occupants</label><input type="number" id="occupants" name="occupants" value="" step="any" min="0" placeholder="Bedrooms + 1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="rotation_deg">Rotate house (degrees)</label><input type="number" id="rotation_deg" name="rotation_deg" value="0" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <h4 class="group-title">Windows by direction (ft²)</h4>
-  <p class="group-note">Fill any of these to replace the even split above. Blank sides count as zero.</p>
-  <div class="input-row"><div class="input-group"><label for="window_area_n">North</label><input type="number" id="window_area_n" name="window_area_n" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="window_area_e">East</label><input type="number" id="window_area_e" name="window_area_e" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="window_area_s">South</label><input type="number" id="window_area_s" name="window_area_s" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="window_area_w">West</label><input type="number" id="window_area_w" name="window_area_w" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="window_height_ft">Window height (ft)</label><input type="number" id="window_height_ft" name="window_height_ft" value="5" step="any" min="0.1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="overhang_gap_ft">Window top to eave (ft)</label><input type="number" id="overhang_gap_ft" name="overhang_gap_ft" value="1" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <h4 class="group-title">Attic and construction</h4>
-  <div class="input-row"><div class="input-group"><label for="roof_pitch">Roof pitch (rise per 12)</label><input type="number" id="roof_pitch" name="roof_pitch" value="6" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="attic_vent_cfm_per_ft2">Attic vent (cfm/ft²)</label><input type="number" id="attic_vent_cfm_per_ft2" name="attic_vent_cfm_per_ft2" value="0.3" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="radiant_barrier">Radiant barrier</label><select id="radiant_barrier" name="radiant_barrier"><option value="false" selected>No</option><option value="true">Yes</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="A foil layer under the roof deck cuts radiant heat from the roof into the attic.">?</span></div><div class="input-group"><label for="wall_layers">Wall build-up</label><select id="wall_layers" name="wall_layers"><option value="frame" selected>Wood frame</option><option value="brick_veneer">Brick veneer</option><option value="cmu">Concrete block</option><option value="concrete">Insulated concrete</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <h4 class="group-title">Other gains and ground</h4>
-  <div class="input-row"><div class="input-group"><label for="internal_sensible_btuh">Internal sensible (Btu/h)</label><input type="number" id="internal_sensible_btuh" name="internal_sensible_btuh" value="" step="any" placeholder="ASHRAE equation" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="internal_latent_btuh">Internal latent (Btu/h)</label><input type="number" id="internal_latent_btuh" name="internal_latent_btuh" value="" step="any" placeholder="ASHRAE equation" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="ventilation_effectiveness">HRV/ERV sensible eff.</label><input type="number" id="ventilation_effectiveness" name="ventilation_effectiveness" value="0.7" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="ventilation_latent_effectiveness">ERV latent eff.</label><input type="number" id="ventilation_latent_effectiveness" name="ventilation_latent_effectiveness" value="0.5" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-row"><div class="input-group"><label for="ground_mean_f">Mean annual temp (°F)</label><input type="number" id="ground_mean_f" name="ground_mean_f" value="52" step="any" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="ground_amp_f">Seasonal amplitude (°F)</label><input type="number" id="ground_amp_f" name="ground_amp_f" value="22" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-  <div class="input-group"><label for="cooling_coil_dt_f">Cooling air temperature drop (°F)</label><input type="number" id="cooling_coil_dt_f" name="cooling_coil_dt_f" value="20" step="any" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div>
-  <div class="input-group"><label for="flue_fraction">Flue share of leakage (0 to 1)</label><input type="number" id="flue_fraction" name="flue_fraction" value="0" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div>
-</div>
-</div>
-                    <div class="step-panel" id="step-rooms">
-<p class="step-lede">This is the room-by-room part of a Manual J style calculation. Room loads size the supply air to each room. They also change the answer: a west room peaks hours after an east room, and the system only has to meet them together.</p>
-<div class="room-actions">
-  <button type="button" class="btn btn-secondary" id="room-typical">Start from a typical layout</button>
-  <button type="button" class="btn btn-secondary" id="room-add">Add a room</button>
-  <button type="button" class="btn btn-secondary" id="room-clear">Clear rooms</button>
-</div>
-<p class="group-note" id="room-area-note" role="status">No rooms yet, so the house is treated as one block.</p>
-<div id="room-list"></div>
-<input type="text" id="rooms_json" name="rooms_json" value="" class="visually-hidden" tabindex="-1" aria-hidden="true">
-</div>
-                    <div class="step-panel" id="step-equipment">
-<p class="step-lede">This is the job Manual S does. Enter what you have been quoted, or try a size. Rated tonnage is measured at conditions your house will not have, so capacity is converted to your design day.</p>
-<div class="room-actions"><button type="button" class="btn btn-secondary" id="equip-suggest">Try a cold-climate heat pump for this house</button></div>
-<h4 class="group-title">Cooling</h4>
-<div class="input-row"><div class="input-group"><label for="cooling_rated_tons">Rated size</label><select id="cooling_rated_tons" name="cooling_rated_tons"><option value="" selected>None</option><option value="1">1 ton</option><option value="1.5">1.5 ton</option><option value="2">2 ton</option><option value="2.5">2.5 ton</option><option value="3">3 ton</option><option value="3.5">3.5 ton</option><option value="4">4 ton</option><option value="5">5 ton</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Nominal size on the quote. One ton is 12,000 Btu/h at 95 °F outdoors and 80 °F, 67 °F wet bulb indoors.">?</span></div><div class="input-group"><label for="cooling_stages">Compressor</label><select id="cooling_stages" name="cooling_stages"><option value="single" selected>Single speed</option><option value="two">Two speed</option><option value="variable">Variable speed</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<h4 class="group-title">Heat pump heating</h4>
-<div class="input-group"><label for="hp_preset">Starting point</label><select id="hp_preset" name="hp_preset"><option value="" selected>None or custom</option><option value="standard">Standard single-speed</option><option value="variable">Variable speed</option><option value="cold">Cold-climate variable speed</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Fills generic capacities from the rated size above. Replace them with your unit&#x27;s listing: the NEEP cold-climate database and AHRI certificates publish these numbers.">?</span></div>
-<div class="input-row"><div class="input-group"><label for="hp_cap_47">Max capacity at 47 °F (Btu/h)</label><input type="number" id="hp_cap_47" name="hp_cap_47" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="hp_cap_17">Max capacity at 17 °F (Btu/h)</label><input type="number" id="hp_cap_17" name="hp_cap_17" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="hp_cap_5">Max capacity at 5 °F (Btu/h)</label><input type="number" id="hp_cap_5" name="hp_cap_5" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="hp_min_47">Minimum capacity at 47 °F (Btu/h)</label><input type="number" id="hp_min_47" name="hp_min_47" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="hp_cop_47">COP at 47 °F</label><input type="number" id="hp_cop_47" name="hp_cop_47" value="3.5" step="any" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="hp_cop_17">COP at 17 °F</label><input type="number" id="hp_cop_17" name="hp_cop_17" value="2.3" step="any" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="hp_lockout_f">Compressor lockout (°F)</label><input type="number" id="hp_lockout_f" name="hp_lockout_f" value="" step="any" placeholder="None" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="aux_kw">Backup electric heat (kW)</label><input type="number" id="aux_kw" name="aux_kw" value="0" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-<h4 class="group-title">Furnace</h4>
-<div class="input-group"><label for="furnace_output_btuh">Furnace output (Btu/h)</label><input type="number" id="furnace_output_btuh" name="furnace_output_btuh" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Input times AFUE. An 80,000 Btu/h input furnace at 95% AFUE has 76,000 Btu/h of output.">?</span></div>
-<div class="expert-only advanced-section">
-  <h4 class="group-title">Manufacturer data at your design conditions</h4>
-  <div class="input-group"><label for="cooling_shr">Equipment sensible heat ratio</label><input type="number" id="cooling_shr" name="cooling_shr" value="0.75" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div>
-  <div class="input-row"><div class="input-group"><label for="cooling_total_at_design">Total capacity (Btu/h)</label><input type="number" id="cooling_total_at_design" name="cooling_total_at_design" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div><div class="input-group"><label for="cooling_sensible_at_design">Sensible capacity (Btu/h)</label><input type="number" id="cooling_sensible_at_design" name="cooling_sensible_at_design" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Loading...">?</span></div></div>
-</div>
-</div>
-                    <div class="step-panel" id="step-bills">
-<p class="step-lede">A fuel bill measures your real house, leaks and ducts included, and needs no assumptions about insulation. It is an independent check on everything above.</p>
-<div class="input-row"><div class="input-group"><label for="bill_usage">Fuel used in a cold month</label><input type="number" id="bill_usage" name="bill_usage" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="From a bill for a full month of steady heating. The coldest month gives the cleanest signal.">?</span></div><div class="input-group"><label for="bill_fuel">Unit</label><select id="bill_fuel" name="bill_fuel"><option value="gas_therm" selected>Natural gas, therms</option><option value="gas_ccf">Natural gas, CCF</option><option value="propane_gal">Propane, gallons</option><option value="oil_gal">Heating oil, gallons</option><option value="electric_kwh">Electric resistance, kWh</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="The fuel and unit printed on the bill.">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="bill_month">Billing month</label><select id="bill_month" name="bill_month"><option value="1" selected>January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Sets typical degree days from your weather station.">?</span></div><div class="input-group"><label for="bill_degree_days">Heating degree days (base 65)</label><input type="number" id="bill_degree_days" name="bill_degree_days" value="" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Typical value for that month. For a better answer, type the actual figure for your billing dates. Many gas bills print it.">?</span></div></div>
-<div class="input-row"><div class="input-group"><label for="bill_efficiency_pct">Equipment efficiency (%)</label><input type="number" id="bill_efficiency_pct" name="bill_efficiency_pct" value="90" step="any" min="1" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="AFUE from the furnace label: about 80 for older units, 95 for condensing units, 100 for resistance heat.">?</span></div><div class="input-group"><label for="bill_baseline">Non-heating use, same period</label><input type="number" id="bill_baseline" name="bill_baseline" value="0" step="any" min="0" ><span class="tooltip-trigger" tabindex="0" role="note" data-tooltip="Water heating, cooking, and the like. A summer month&#x27;s use is a good estimate.">?</span></div></div>
-</div>
-                    <div class="calc-bar">
-                        <button type="submit" class="btn btn-primary" id="calculate-btn" disabled>Loading...</button>
-                        <p class="stale-note" id="stale-note" role="status" hidden>Inputs changed. Press Calculate to update.</p>
-                    </div>
-                </form>
-                <div class="error-box" id="error-box" role="alert" hidden></div>
-            </section>
-
-            <section class="tool-outputs card" aria-label="Results">
-                <div class="tabs output-tabs" role="tablist" aria-label="Results views">
-                    <button class="tab-link active" type="button" data-output="results" role="tab">Results</button>
-                    <button class="tab-link" type="button" data-output="day" role="tab">Design day</button>
-                    <button class="tab-link" type="button" data-output="rooms" role="tab">Rooms</button>
-                    <button class="tab-link" type="button" data-output="equip" role="tab">Equipment</button>
-                    <button class="tab-link" type="button" data-output="background" role="tab">Background</button>
-                </div>
-
-                <div class="tab-content" id="tab-results" style="display:block">
-                    <p class="summary-sentence" id="summary-sentence"></p>
-                    <div class="results-grid" id="results-grid"></div>
-                    <div class="confidence" id="confidence"></div>
-                    <div id="bill-result"></div>
-                    <h3>Where the load comes from</h3>
-                    <p class="group-note">Select a row to see its equation with your numbers.</p>
-                    <div class="table-scroll"><table class="data-table component-table" id="component-table"></table></div>
-                    <div class="swing-note" id="swing-note"></div>
-                    <h3>What to measure next</h3>
-                    <p class="group-note" id="tornado-note">Change in load if each unconfirmed input sits at the end of its plausible range.</p>
-                    <div id="tornado"></div>
-                    <h3>What would shrink the load</h3>
-                    <p class="group-note">Each upgrade applied alone. Do these before buying equipment, because a smaller load means a smaller system.</p>
-                    <div class="table-scroll"><table class="data-table" id="upgrade-table"></table></div>
-                    <div class="export-row">
-                        <button type="button" class="btn btn-secondary" id="export-csv" data-track="export">Download CSV</button>
-                        <button type="button" class="btn btn-secondary" id="export-json" data-track="export">Save inputs (JSON)</button>
-                        <label class="btn btn-secondary file-label">Load inputs<input type="file" id="import-json" accept="application/json" class="visually-hidden"></label>
-                        <button type="button" class="btn btn-secondary" id="export-print" data-track="export">Print report</button>
-                    </div>
-                </div>
-
-                <div class="tab-content" id="tab-day">
-                    <div class="chart-container"><h4>Cooling load through the design day</h4>
-                        <div class="chart-key" id="hourly-key"></div>
-                        <div id="chart-hourly" class="chart-plot" role="img" aria-label="Stacked bars of hourly cooling load by source"></div>
-                        <div class="chart-explanation" id="hourly-explanation"></div></div>
-                    <div class="chart-container"><h4>Outdoor and attic temperature</h4>
-                        <div id="chart-temps" class="chart-plot chart-short" role="img" aria-label="Lines of outdoor and attic temperature through the day"></div>
-                        <div class="chart-explanation"><strong>What this shows:</strong> the design-day outdoor temperature and the attic temperature from a heat balance. <strong>Key insight:</strong> attic air stays hot into the evening, so ceilings and attic ducts keep adding load after the sun drops.</div></div>
-                    <div class="chart-container"><h4>Which way the house faces</h4>
-                        <div id="orientation"></div>
-                        <div class="chart-explanation"><strong>What this shows:</strong> total cooling load if the same house were rotated, in clockwise degrees from how you entered it. <strong>Key insight:</strong> a small spread means orientation does not matter for this house. A large spread means east and west glass is driving the load.</div></div>
-                </div>
-
-                <div class="tab-content" id="tab-rooms">
-                    <div id="rooms-output"></div>
-                </div>
-
-                <div class="tab-content" id="tab-equip">
-                    <div id="verdict"></div>
-                    <div id="equip-empty"></div>
-                    <div class="results-grid" id="equip-grid"></div>
-                    <div class="chart-container" id="balance-card" hidden><h4>Heat pump capacity against house load</h4>
-                        <div id="chart-balance" class="chart-plot" role="img" aria-label="Heat pump capacity and house heat load against outdoor temperature"></div>
-                        <div class="chart-explanation" id="balance-explanation"></div></div>
-                    <div class="chart-container" id="bins-card" hidden><h4>Hours per year at each outdoor temperature</h4>
-                        <div id="chart-bins" class="chart-plot chart-short" role="img" aria-label="Histogram of annual hours by outdoor temperature"></div>
-                        <div class="chart-explanation"><strong>What this shows:</strong> how long this station spends at each temperature, from NOAA observations. <strong>Key insight:</strong> compare it with the chart above. A balance point can look high and still cost little if few hours fall below it.</div></div>
-                    <div id="equip-checks"></div>
-                </div>
-
-                <div class="tab-content" id="tab-background">
+  </div>
+<section class="panel guide" aria-labelledby="guide-title">
+            <h2 id="guide-title">Manual J and HVAC sizing questions</h2>
+            <h3>What size AC do I need for a 2,000 sq ft house?</h3>
+            <p>It depends far more on climate and construction than on floor area. The same 2,000 ft² house needs 2.1 tons in Chicago and 3.1 tons in Phoenix. The table is one-story 1980s and 1990s construction with typical windows and attic ducts, calculated with this tool from each city's NOAA design weather. Build your own house above for your own number.</p><div class="table-scroll"><table class="data-table" id="guide-cooling"><caption class="table-caption">Cooling load in tons, then the smallest common unit that meets it</caption><thead><tr><th scope="col">City</th><th scope="col">1,000 ft²</th><th scope="col">1,500 ft²</th><th scope="col">2,000 ft²</th><th scope="col">2,500 ft²</th><th scope="col">3,000 ft²</th></tr></thead><tbody><tr><th scope="row">Minneapolis</th><td>1.2 (1.5 ton)</td><td>1.7 (2 ton)</td><td>2.1 (2.5 ton)</td><td>2.5 (2.5 ton)</td><td>2.9 (3 ton)</td></tr><tr><th scope="row">Chicago</th><td>1.3 (1.5 ton)</td><td>1.7 (2 ton)</td><td>2.1 (2.5 ton)</td><td>2.6 (3 ton)</td><td>3.0 (3 ton)</td></tr><tr><th scope="row">Seattle</th><td>1.0 (1.5 ton)</td><td>1.3 (1.5 ton)</td><td>1.6 (2 ton)</td><td>2.0 (2 ton)</td><td>2.3 (2.5 ton)</td></tr><tr><th scope="row">Atlanta</th><td>1.3 (1.5 ton)</td><td>1.8 (2 ton)</td><td>2.2 (2.5 ton)</td><td>2.7 (3 ton)</td><td>3.1 (3.5 ton)</td></tr><tr><th scope="row">Dallas</th><td>1.6 (2 ton)</td><td>2.2 (2.5 ton)</td><td>2.7 (3 ton)</td><td>3.3 (3.5 ton)</td><td>3.8 (5 ton)</td></tr><tr><th scope="row">Phoenix</th><td>1.9 (2.5 ton)</td><td>2.5 (3.5 ton)</td><td>3.1 (4 ton)</td><td>3.7 (5 ton)</td><td>4.4 (over 5 ton)</td></tr><tr><th scope="row">Miami</th><td>1.4 (1.5 ton)</td><td>1.9 (2 ton)</td><td>2.4 (2.5 ton)</td><td>2.9 (3 ton)</td><td>3.4 (3.5 ton)</td></tr></tbody></table></div><p>The unit size is often larger than the load because a rated ton delivers less on your design day, and sizes come in steps. A tight new home can need half as much as these figures, and an older leaky one can need more.</p>
+            <h3>What size heat pump do I need?</h3>
+            <p>In cold climates, heating sets the size. Start from the heating load below, then compare it with what the heat pump delivers at your winter design temperature, not its rated size. Most heat pumps lose capacity as it gets colder. The equipment step finds the balance point, the backup heat you need, and how much of the year's heat the compressor covers.</p><div class="table-scroll"><table class="data-table" id="guide-heating"><caption class="table-caption">Heating load in thousands of Btu/h</caption><thead><tr><th scope="col">City</th><th scope="col">1,000 ft²</th><th scope="col">1,500 ft²</th><th scope="col">2,000 ft²</th><th scope="col">2,500 ft²</th><th scope="col">3,000 ft²</th></tr></thead><tbody><tr><th scope="row">Minneapolis</th><td>42</td><td>55</td><td>68</td><td>80</td><td>92</td></tr><tr><th scope="row">Chicago</th><td>35</td><td>46</td><td>56</td><td>66</td><td>75</td></tr><tr><th scope="row">Seattle</th><td>20</td><td>27</td><td>33</td><td>38</td><td>44</td></tr><tr><th scope="row">Atlanta</th><td>21</td><td>27</td><td>33</td><td>39</td><td>45</td></tr><tr><th scope="row">Dallas</th><td>21</td><td>28</td><td>34</td><td>40</td><td>46</td></tr><tr><th scope="row">Phoenix</th><td>14</td><td>18</td><td>22</td><td>25</td><td>29</td></tr><tr><th scope="row">Miami</th><td>7</td><td>9</td><td>11</td><td>13</td><td>15</td></tr></tbody></table></div>
+            <h3>What is a Manual J load calculation?</h3>
+            <p>Manual J is the residential load calculation procedure from the Air Conditioning Contractors of America (ACCA). It estimates the heat a house loses in winter and gains in summer, for the whole house and each room, from its size, construction, windows, air leakage, ducts, and local climate. This tool does the same job using ASHRAE's published methods and physics, not ACCA's tables, so its numbers will differ somewhat from Manual J software.</p>
+            <h3>What is Manual S, and how is it different from Manual J?</h3>
+            <p>Manual J finds the load. Manual S picks equipment that meets it. A Manual S selection compares the load with the equipment's capacity at your actual design temperatures, then checks that it is neither too small nor oversized. The equipment step does this same kind of check for AC, heat pumps, and furnaces. Its oversizing limits are commonly cited values, not read from the current standard, so treat them as advisory.</p>
+            <h3>Can this replace a Manual J report for a permit?</h3>
+            <p>No. It is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report. Use it to understand your house, compare it with a contractor's report, or decide what to fix first. If you need a permit report, use approved software or hire a designer.</p>
+            <h3>How many BTU per square foot do I need?</h3>
+            <p>There is no single number, which is why the rule of thumb fails. For the same 2,000 ft² house above, cooling runs from 10 Btu/h per ft² in Seattle to 19 in Phoenix, and heating from 6 in Miami to 34 in Minneapolis. The old 500 ft² per ton rule would give every one of those houses 4 tons.</p>
+            <p class="group-note">Manual J and Manual S are trademarks of ACCA. This tool is not affiliated with or approved by ACCA.</p>
+        </section>
+  <details class="panel about" id="about"><summary>How this calculation works, and its limits</summary><div class="about-body">
 <div class="toc-card"><strong>Contents</strong><ol>
 <li><a href="#bg-what">What this calculates</a></li>
 <li><a href="#bg-manuals">Manual J, S, T, and D</a></li>
@@ -1296,11 +154,11 @@
 <p>The solver finds the smallest steady capacity that keeps \(\theta_a\) within the allowed swing, 3 °F by default, which is the control assumption behind ASHRAE's residential method.</p></div>
 <div class="equation-card"><strong>Equation (12): latent load</strong><span class="equation-expression">\( q_l = C_l Q \Delta W + (68 + 0.07 A_{cf} + 41 N_{oc}) + q_{duct,l} \)</span>
 <ul><li>\(C_l\): 4,840 Btu/h·cfm at sea level</li><li>\(\Delta W\): outdoor minus indoor humidity ratio, lb/lb</li><li>\(A_{cf}\): conditioned floor area, ft²</li><li>\(N_{oc}\): occupants</li><li>\(q_{duct,l}\): humid air drawn in by return duct leaks</li></ul></div>
-<p>Each result line opens to show its equation with your numbers. Click any row in the load table.</p>
+<p>Each result line opens to show its equation with your numbers. Open Show the math under the drawing, or select any band on the section.</p>
 </div>
 
 <div id="bg-weather" class="bg-section"><h3>5. Where the weather comes from</h3>
-<p>Design conditions are computed from <a href="https://registry.opendata.aws/noaa-isd/" rel="noopener">NOAA ISD-Lite</a> hourly observations for 2011 through 2025, using ASHRAE's definitions: the 99% heating temperature is exceeded in 99% of the hours of the year, the 1% cooling temperature in 1% of them, and the wet bulb is the average during hours near that temperature. The data are public, and <code>scripts/build_hvac_climate.py</code> rebuilds every number. Because the record is recent, values can differ from older published tables. For Atlanta this method gives 91.9 °F, a 73.7 °F wet bulb, and a 16.5 °F daily range, against 91.5, 74, and 16.7 in ASHRAE's example, but its winter value is 28.9 °F against 26.5. Recent winters have been milder, so winter values usually run warmer than the numbers on older reports. Switch to the 99.6% basis on the House tab if that worries you.</p>
+<p>Design conditions are computed from <a href="https://registry.opendata.aws/noaa-isd/" rel="noopener">NOAA ISD-Lite</a> hourly observations for 2011 through 2025, using ASHRAE's definitions: the 99% heating temperature is exceeded in 99% of the hours of the year, the 1% cooling temperature in 1% of them, and the wet bulb is the average during hours near that temperature. The data are public, and <code>scripts/build_hvac_climate.py</code> rebuilds every number. Because the record is recent, values can differ from older published tables. For Atlanta this method gives 91.9 °F, a 73.7 °F wet bulb, and a 16.5 °F daily range, against 91.5, 74, and 16.7 in ASHRAE's example, but its winter value is 28.9 °F against 26.5. Recent winters have been milder, so winter values usually run warmer than the numbers on older reports. Switch to the 99.6% basis under Change the design weather in the first step if that worries you.</p>
 <p>ZIP codes map to the nearest station using US Census ZIP centroids. Elevation is the station's. In mountains or near large water, check that the station resembles your site.</p>
 </div>
 
@@ -1313,13 +171,13 @@
 <p>Both houses below were entered from their published inputs. Sensible cooling is shown because the two sources treat duct moisture differently. Values are in Btu/h.</p>
 <div class="table-scroll"><table class="data-table"><thead><tr><th scope="col">House</th><th scope="col">Heating, published</th><th scope="col">Heating, this tool</th><th scope="col">Difference</th><th scope="col">Sensible cooling, published</th><th scope="col">Sensible cooling, this tool</th><th scope="col">Difference</th></tr></thead><tbody><tr><th scope="row">Atlanta, GA<div class="cell-note">ASHRAE Fundamentals Ch. 17 example. Used once to set thermal mass.</div></th><td>27,301</td><td>26,960</td><td>-1%</td><td>14,453</td><td>14,030</td><td>-3%</td></tr><tr><th scope="row">Sacramento, CA<div class="cell-note">EnergyGauge Manual J 8 sample report. Independent check.</div></th><td>30,850</td><td>31,971</td><td>+4%</td><td>21,863</td><td>20,358</td><td>-7%</td></tr></tbody></table></div>
 <p>Atlanta sets one number: the thermal mass was chosen so the room load before ducts matches ASHRAE's example. Heating was not tuned. Sacramento was never used for tuning. The Manual J report's cooling is higher mainly because it gives no credit for the slab's heat sink and carries larger ceiling, air leakage, and internal gain lines, while this tool's wall line is higher. Duct gains nearly match. ASHRAE's example prints a total latent load of 2,565 Btu/h, while its own stated terms (3,122 and 378) add to 3,500, so the test suite uses the terms.</p>
-<div class="callout-warning"><strong>What this does not show:</strong> two houses are not a field validation. We have not compared this tool against measured peak loads in real houses. The fuel bill check on the input panel is the way to test it against your own.</div>
+<div class="callout-warning"><strong>What this does not show:</strong> two houses are not a field validation. We have not compared this tool against measured peak loads in real houses. The fuel bill check in the last step is the way to test it against your own.</div>
 </div>
 
 <div id="bg-limits" class="bg-section"><h3>8. Limits</h3>
 <ul>
 <li><strong>Not ACCA-approved.</strong> Do not submit it where a permit requires approved Manual J software.</li>
-<li><strong>Clear-sky July by default.</strong> Houses with large south-facing glass in mild climates can peak in fall. Change the sun position month in Expert Mode to check.</li>
+<li><strong>Clear-sky July by default.</strong> Houses with large south-facing glass in mild climates can peak in fall. This version checks July sun only, so treat those houses with care.</li>
 <li><strong>Low-rise detached houses.</strong> ASHRAE warns that simple infiltration models do not apply to most apartments.</li>
 <li><strong>One thermal zone for the swing.</strong> Rooms share a thermostat here. Zoned systems need separate checks.</li>
 <li><strong>Equipment limits are advisory.</strong> ACCA sets a 90% lower limit and upper limits by compressor type. The upper values shown are commonly cited rather than read from the current Manual S, so check its Section N2 before relying on them.</li>
@@ -1336,7 +194,7 @@
 <tr><th scope="row">Room by room</th><td>Yes</td><td>Whole house only</td><td>Yes</td></tr>
 <tr><th scope="row">ACCA recognition</th><td>No</td><td>No, it states it is unaccredited</td><td>Recognized by ACCA in 2015</td></tr>
 <tr><th scope="row">Accepted for permits</th><td>No</td><td>Check locally</td><td>Where ACCA-recognized software is accepted</td></tr>
-<tr><th scope="row">Geometry entry</th><td>Numbers and room table</td><td>Numbers</td><td>Satellite trace, floor plan upload, LiDAR, sketching</td></tr>
+<tr><th scope="row">Geometry entry</th><td>A drawn plan with walls you drag</td><td>Numbers</td><td>Satellite trace, floor plan upload, LiDAR, sketching</td></tr>
 <tr><th scope="row">Duct design</th><td>Not yet</td><td>No</td><td>Yes</td></tr>
 </tbody></table></div>
 <p>If you need a permit report or a duct design today, a paid ACCA-recognized tool is the right choice.</p>
@@ -1356,37 +214,190 @@
 <li>NOAA NCEI: Integrated Surface Database, ISD-Lite. US Census Bureau: ZCTA gazetteer files.</li>
 </ol>
 </div>
-</div>
-            </section>
-        </div>
+</div></details>
+</main>
+<footer class="site-foot">transparent.tools · <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></footer>
 
-        <section class="card guide" aria-labelledby="guide-title">
-            <h2 id="guide-title">Manual J and HVAC sizing questions</h2>
-            <h3>What size AC do I need for a 2,000 sq ft house?</h3>
-            <p>It depends far more on climate and construction than on floor area. The same 2,000 ft² house needs 2.1 tons in Chicago and 3.1 tons in Phoenix. The table is one-story 1980s and 1990s construction with typical windows and attic ducts, calculated with this tool from each city's NOAA design weather. Enter your house above for your own number.</p><div class="table-scroll"><table class="data-table" id="guide-cooling"><caption class="table-caption">Cooling load in tons, then the smallest common unit that meets it</caption><thead><tr><th scope="col">City</th><th scope="col">1,000 ft²</th><th scope="col">1,500 ft²</th><th scope="col">2,000 ft²</th><th scope="col">2,500 ft²</th><th scope="col">3,000 ft²</th></tr></thead><tbody><tr><th scope="row">Minneapolis</th><td>1.2 (1.5 ton)</td><td>1.7 (2 ton)</td><td>2.1 (2.5 ton)</td><td>2.5 (2.5 ton)</td><td>2.9 (3 ton)</td></tr><tr><th scope="row">Chicago</th><td>1.3 (1.5 ton)</td><td>1.7 (2 ton)</td><td>2.1 (2.5 ton)</td><td>2.6 (3 ton)</td><td>3.0 (3 ton)</td></tr><tr><th scope="row">Seattle</th><td>1.0 (1.5 ton)</td><td>1.3 (1.5 ton)</td><td>1.6 (2 ton)</td><td>2.0 (2 ton)</td><td>2.3 (2.5 ton)</td></tr><tr><th scope="row">Atlanta</th><td>1.3 (1.5 ton)</td><td>1.8 (2 ton)</td><td>2.2 (2.5 ton)</td><td>2.7 (3 ton)</td><td>3.1 (3.5 ton)</td></tr><tr><th scope="row">Dallas</th><td>1.6 (2 ton)</td><td>2.2 (2.5 ton)</td><td>2.7 (3 ton)</td><td>3.3 (3.5 ton)</td><td>3.8 (5 ton)</td></tr><tr><th scope="row">Phoenix</th><td>1.9 (2.5 ton)</td><td>2.5 (3.5 ton)</td><td>3.1 (4 ton)</td><td>3.7 (5 ton)</td><td>4.4 (over 5 ton)</td></tr><tr><th scope="row">Miami</th><td>1.4 (1.5 ton)</td><td>1.9 (2 ton)</td><td>2.4 (2.5 ton)</td><td>2.9 (3 ton)</td><td>3.4 (3.5 ton)</td></tr></tbody></table></div><p>The unit size is often larger than the load because a rated ton delivers less on your design day, and sizes come in steps. A tight new home can need half as much as these figures, and an older leaky one can need more.</p>
-            <h3>What size heat pump do I need?</h3>
-            <p>In cold climates, heating sets the size. Start from the heating load below, then compare it with what the heat pump delivers at your winter design temperature, not its rated size. Most heat pumps lose capacity as it gets colder. The Equipment tab finds the balance point, the backup heat you need, and how much of the year's heat the compressor covers.</p><div class="table-scroll"><table class="data-table" id="guide-heating"><caption class="table-caption">Heating load in thousands of Btu/h</caption><thead><tr><th scope="col">City</th><th scope="col">1,000 ft²</th><th scope="col">1,500 ft²</th><th scope="col">2,000 ft²</th><th scope="col">2,500 ft²</th><th scope="col">3,000 ft²</th></tr></thead><tbody><tr><th scope="row">Minneapolis</th><td>42</td><td>55</td><td>68</td><td>80</td><td>92</td></tr><tr><th scope="row">Chicago</th><td>35</td><td>46</td><td>56</td><td>66</td><td>75</td></tr><tr><th scope="row">Seattle</th><td>20</td><td>27</td><td>33</td><td>38</td><td>44</td></tr><tr><th scope="row">Atlanta</th><td>21</td><td>27</td><td>33</td><td>39</td><td>45</td></tr><tr><th scope="row">Dallas</th><td>21</td><td>28</td><td>34</td><td>40</td><td>46</td></tr><tr><th scope="row">Phoenix</th><td>14</td><td>18</td><td>22</td><td>25</td><td>29</td></tr><tr><th scope="row">Miami</th><td>7</td><td>9</td><td>11</td><td>13</td><td>15</td></tr></tbody></table></div>
-            <h3>What is a Manual J load calculation?</h3>
-            <p>Manual J is the residential load calculation procedure from the Air Conditioning Contractors of America (ACCA). It estimates the heat a house loses in winter and gains in summer, for the whole house and each room, from its size, construction, windows, air leakage, ducts, and local climate. This tool does the same job using ASHRAE's published methods and physics, not ACCA's tables, so its numbers will differ somewhat from Manual J software.</p>
-            <h3>What is Manual S, and how is it different from Manual J?</h3>
-            <p>Manual J finds the load. Manual S picks equipment that meets it. A Manual S selection compares the load with the equipment's capacity at your actual design temperatures, then checks that it is neither too small nor oversized. The Equipment tab does this same kind of check for AC, heat pumps, and furnaces. Its oversizing limits are commonly cited values, not read from the current standard, so treat them as advisory.</p>
-            <h3>Can this replace a Manual J report for a permit?</h3>
-            <p>No. It is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report. Use it to understand your house, compare it with a contractor's report, or decide what to fix first. If you need a permit report, use approved software or hire a designer.</p>
-            <h3>How many BTU per square foot do I need?</h3>
-            <p>There is no single number, which is why the rule of thumb fails. For the same 2,000 ft² house above, cooling runs from 10 Btu/h per ft² in Seattle to 19 in Phoenix, and heating from 6 in Miami to 34 in Minneapolis. The old 500 ft² per ton rule would give every one of those houses 4 tons.</p>
-            <p class="group-note">Manual J and Manual S are trademarks of ACCA. This tool is not affiliated with or approved by ACCA.</p>
-        </section>
-    </main>
+<script src="app/engine.js"></script>
+<script src="app/model.js"></script>
+<script src="app/drawing.js"></script>
+<script src="app/core.js"></script>
+<script src="app/shared-ui.js"></script>
+<script src="app/study.js"></script>
+<script src="app/page.js"></script>
+<script>
+(async function () {
+  const P = Proto; const C = Core; const M = HouseModel; const U = SharedUI;
+  const $ = (id) => document.getElementById(id);
+  const fmt = C.fmt; const esc = C.esc;
+  Page.start();
+  const STEPS = [
+    { id: 'box', title: 'A box', head: 'Start with a box', lede: 'Two answers are enough for a first estimate. The house is a plain box, and everything about it is assumed.', els: [], tool: 'select', custom: true },
+    { id: 'shape', title: 'Shape', head: 'Give it a shape and an age', lede: 'Drag the outside walls on the plan, or type the size. Then say when it was built, the single most useful answer so far.', els: ['shape'], tool: 'shell' },
+    { id: 'shell', title: 'Insulation', head: 'What are the surfaces made of?', lede: 'Each surface now has a real resistance to heat flow. Layers on the section follow what you choose.', els: ['walls', 'ceiling', 'floor'], tool: 'select' },
+    { id: 'openings', title: 'Windows', head: 'Place the windows and doors', lede: 'Dashed windows are a guess. Add your own on the plan, and the guesses are replaced by what you draw.', els: ['openings'], tool: 'openings', season: 'summer' },
+    { id: 'air', title: 'Air and ducts', head: 'Where does the air go?', lede: 'These are the largest unknowns in most houses, and neither is visible by looking.', els: ['air', 'ducts'], tool: 'select' },
+    { id: 'rooms', title: 'Rooms', head: 'Divide it into rooms', lede: 'So far the house is one space. Rooms tell you how much air each one needs, and rooms peak at different hours.', els: ['rooms'], tool: 'rooms', overlay: true },
+    { id: 'system', title: 'Equipment', head: 'What are you sizing?', lede: 'Choose what will heat and cool the house, then test a size against the load.', els: [], tool: 'select', system: true },
+    { id: 'study', title: 'Stress test', head: 'Test what you are unsure about', lede: 'You have a complete model. Now ask how wrong it could be, whether your equipment choice survives, and whether a fuel bill agrees.', els: [], study: true },
+  ];
+  await C.start();
+  let index = 0;
+  const visited = new Set(['box']);
+  $('sheet-panel').innerHTML = C.sheetHtml();
+  C.bindDrawing();
+  C.bindInspector($('step'));
+  const drill = P.Drill($('drill'));
+  C.drillPanel = drill;
+  let drawSystem = null;
+  Study.bind($('study-panel'));
 
-    <footer class="footer"><p>Engineering Tools · <a class="support-link" href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></p></footer>
-
-    <script src="charts.js"></script>
-    <script src="tool.js"></script>
-    <script src="/shared/url-state.js" defer></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-      }
-    </script>
+  const stepLabel = (i) => STEPS[i] ? STEPS[i].title : '';
+  function rail() {
+    $('rail').innerHTML = STEPS.map((s, i) => `<button type="button" data-step="${i}" class="${i === index ? 'on' : ''} ${visited.has(s.id) && i !== index ? 'done' : ''}"><span class="n">${i + 1}</span>${esc(s.title)}</button>`).join('');
+  }
+  function stepCard() {
+    const s = STEPS[index];
+    const tagged = (id) => {
+      const on = C.confirmed.has(id);
+      return `<div class="el-head"><h4>${esc(C.ELEMENTS[id].title)}</h4><span class="tag ${on ? 'solid' : ''}">${on ? 'Confirmed' : 'Assumed'}</span></div>${C.elementHtml(id)}`;
+    };
+    let body = '';
+    if (s.custom) {
+      body = C.elementHtml('site') + C.field('area', 'About how big is it?', Math.round(M.area(C.model)), { unit: 'ft²', help: 'Conditioned floor area. A rough number is fine for now.' });
+    } else if (s.system) {
+      body = '<div id="system"></div>';
+    } else if (s.study) {
+      body = '<p class="note">Each chart runs the whole calculation again. Nothing is estimated from the base case.</p>' + Page.billHtml() + Page.exportHtml();
+    } else {
+      body = s.els.map(tagged).join('');
+    }
+    const hasAssumed = s.els.some((id) => !C.confirmed.has(id));
+    const next = STEPS[index + 1];
+    $('step').innerHTML = `<div class="note" style="margin-bottom:3px">Step ${index + 1} of ${STEPS.length}</div><h2>${esc(s.head)}</h2><p class="lede">${esc(s.lede)}</p>${body}
+      <div class="stepnav">${index > 0 ? '<button type="button" class="btn" data-nav="-1">Back</button>' : ''}
+      ${hasAssumed ? '<button type="button" class="btn" data-confirm-step>These are right</button>' : ''}
+      ${next ? `<button type="button" class="btn primary" data-nav="1">${hasAssumed ? 'Keep assumptions, next' : 'Next'}: ${esc(next.title)}</button>` : ''}</div>`;
+    if (s.system) {
+      drawSystem = P.buildSystem($('system'), () => { C.confirm('system'); C.update(); });
+      drawSystem(C.result);
+    }
+  }
+  const surfaceTable = (r) => {
+    const inp = P.inputs(); const dt = r.heating.delta_t;
+    const rows = [['Window', inp.window_u], ['Door', 0.4], ['Wall', inp.wall_u], ['Ceiling', inp.ceiling_u]].map(([n, u]) => [n, u * dt]);
+    const max = Math.max(...rows.map((x) => x[1]));
+    return `<table class="flux"><tbody>${rows.map(([n, q]) => `<tr><td>${n}</td><td style="width:55%"><div class="bar" style="width:${q / max * 100}%"></div></td><td class="n">${fmt(q, 1)} Btu/h per ft²</td></tr>`).join('')}</tbody></table>`;
+  };
+  const OWNER = { ach50: 'Air and ducts', duct_leakage_pct: 'Air and ducts', duct_r: 'Air and ducts', wall_u: 'Insulation', ceiling_u: 'Insulation', window_u: 'Windows', window_shgc: 'Windows', window_pct_of_floor: 'Windows', occupants: 'Rooms', heating_design_f: 'A box', cooling_design_f: 'A box' };
+  function nextUp() {
+    const b = C.band; const s = STEPS[index];
+    if (!C.eraConfirmed) return s.id === 'shape' ? '' : `<div class="nextup"><strong>Worth doing next:</strong> say when the house was built. It is the biggest single reason the range is so wide.</div>`;
+    if (!b || !b.terms) return '';
+    const open = b.terms.filter((t) => !t.known).slice(0, 1)[0];
+    if (!open) return '<div class="nextup">Every major input is confirmed.</div>';
+    const swing = Math.max(open.heat_high - open.heat_low, open.cool_high - open.cool_low);
+    const where = OWNER[open.key];
+    return `<div class="nextup"><strong>Biggest open question:</strong> ${esc(open.label.toLowerCase())}, which could move the answer by ${fmt(swing)} Btu/h.${where && where !== s.title ? ` You can settle it in ${esc(where)}.` : ''}</div>`;
+  }
+  function learn() {
+    const r = C.result; const m = C.model; const s = STEPS[index]; if (!r) return;
+    const h = r.heating.components; const c = r.cooling.components; const dt = r.heating.delta_t;
+    let html = '';
+    const pct = (a, b) => Math.round(100 * a / Math.max(b, 1));
+    if (s.id === 'box') {
+      const b = C.band;
+      html = `<p><strong>Every load calculation starts from one idea.</strong> Heat flow is how leaky the shell is, times the temperature difference across it.</p>
+        <div class="formula">q = UA × Δt = ${fmt(r.heat_loss_coefficient)} × ${fmt(dt, 1)} = ${fmt(r.heating_total)} Btu/h</div>
+        <p>Your weather sets Δt: ${fmt(r.design.indoor_heating_f)} °F inside, ${fmt(r.design.heating_f)} °F outside. UA is the unknown, and that is why ${b ? `this could be anywhere from ${fmt(b.heating_low, 0)} to ${fmt(b.heating_high, 0)} Btu/h` : 'the range is wide'}: the same box can be a drafty 1940s house or a tight new one.</p>`;
+    } else if (s.id === 'shape') {
+      const wall = 2 * (m.w + m.d) * m.height * m.stories; const roof = m.w * m.d;
+      html = `<p><strong>Shape decides how much surface there is to lose heat through.</strong> This house has ${fmt(wall)} ft² of wall and ${fmt(roof)} ft² of ceiling.</p>
+        <div class="formula">Perimeter ${fmt(2 * (m.w + m.d))} ft × ${fmt(m.height)} ft × ${m.stories} ${m.stories === 1 ? 'story' : 'stories'} = ${fmt(wall)} ft² of wall</div>
+        <p>A long, thin house has more wall than a square one of the same floor area. Try dragging a wall and watch the heating number.</p>`;
+    } else if (s.id === 'shell') {
+      const worst = ['walls', 'windows', 'ceiling', 'floor'].sort((a, b) => h[b] - h[a])[0];
+      html = `<p><strong>One square foot of each surface does not lose the same heat.</strong> On your design hour, with Δt of ${fmt(dt, 1)} °F:</p>${surfaceTable(r)}
+        <p style="margin-top:7px">Added up over their areas, <strong>${{ walls: 'walls', windows: 'windows', ceiling: 'the ceiling', floor: 'the floor' }[worst]}</strong> lose the most: ${fmt(h[worst])} Btu/h, ${pct(h[worst], r.heating_total)}% of the total.</p>`;
+    } else if (s.id === 'openings') {
+      const glass = M.glassArea(m); const wall = 2 * (m.w + m.d) * m.height * m.stories;
+      html = `<p><strong>Windows punch above their area, especially in summer.</strong> They are ${pct(glass, wall)}% of your wall area, ${pct(h.windows, r.heating_total)}% of heating, and ${pct(c.windows, r.cooling_sensible)}% of sensible cooling.</p>
+        <div class="formula">${fmt(glass)} ft² of glass, ${fmt(h.windows)} Btu/h winter, ${fmt(c.windows)} Btu/h at the summer peak</div>
+        <p>Use the summer hour slider to watch the load move through the day. West glass peaks late. Then rotate the house and see if it matters here.</p>`;
+    } else if (s.id === 'air') {
+      html = `<p><strong>Air carries heat straight past your insulation.</strong> Leakage is ${pct(h.infiltration, r.heating_total)}% of heating and ducts are ${pct(h.ducts, r.heating_total)}%.</p>
+        <div class="formula">${fmt(r.heating.air.combined)} cfm leaking × ${fmt(1.08, 2)} × ${fmt(dt, 1)} °F = ${fmt(h.infiltration)} Btu/h</div>
+        <p>${P.SYSTEMS[P.state.system].ducted ? `Ducts add ${fmt(h.ducts)} Btu/h in winter and ${fmt(c.ducts)} Btu/h in summer. Change where they run and watch them move on the section.` : 'This system has no ducts, so nothing is lost on the way to the rooms.'}</p>`;
+    } else if (s.id === 'rooms') {
+      const rooms = r.rooms; if (rooms.length > 1) {
+        const hours = rooms.map((x) => x.peak_hour); const big = rooms.slice().sort((a, b) => b.heating / b.area - a.heating / a.area)[0];
+        const sum = rooms.reduce((a, x) => a + x.cooling, 0);
+        html = `<p><strong>Rooms peak at different times.</strong> Yours peak between solar hour ${Math.min(...hours)} and ${Math.max(...hours)}. Added up, room peaks come to ${fmt(sum)} Btu/h, but the whole house only needs ${fmt(r.cooling_sensible)} Btu/h of sensible cooling at once.</p>
+          <p><strong>${esc(big.name)}</strong> needs the most heat per square foot: ${fmt(big.heating / big.area, 1)} Btu/h per ft². It gets ${fmt(big.heating_cfm)} cfm of supply air.</p>
+          <p>Size the equipment from the whole-house load, and size each room's air from its own.</p>`;
+      } else html = `<p><strong>One big space hides the differences.</strong> Add a wall, or start from a typical layout, then turn on "Rooms by load" above the drawing to see which rooms work hardest.</p>`;
+    } else if (s.id === 'system') {
+      const sys = P.SYSTEMS[P.state.system]; const sizes = P.sizes(r); const eq = C.eq;
+      html = `<p style="margin-top:0"><strong>A rated size is not what you get.</strong> ${sys.hp ? 'A heat pump' : 'An AC'} rated ${sizes.tons} ton (${fmt(sizes.tons * 12000)} Btu/h) delivers about ${fmt(eq.cooling_capacity_total)} Btu/h on your design day.${sys.hp ? ` At ${fmt(r.design.heating_f)} °F it makes about ${fmt(eq.hp_capacity_at_design)} Btu/h of heat, so its balance point is ${eq.balance_point_f === null ? 'below the range' : fmt(eq.balance_point_f) + ' °F'}.` : ''}</p>`;
+    }
+    $('learn').innerHTML = html + nextUp();
+    // The equipment step puts the fit chart across the whole panel.
+    const wide = $('fit-wide');
+    if (s.id === 'system') { wide.hidden = false; wide.innerHTML = `<h3>Does it fit?</h3>${U.fitChart()}<p class="note" style="margin:4px 0 0">The shaded bar is the range on the load. The dashed box is the size range that fits it. The marker is what this equipment delivers on your design day, not its rated size.</p>`; } else wide.hidden = true;
+    $('ladder').innerHTML = `<h3>How the estimate has tightened</h3>${U.ladder(STEPS.slice(0, -1).map((x) => x.id))}`;
+  }
+  function strip() { $('strip').innerHTML = U.readouts(); }
+  function enter() {
+    const s = STEPS[index]; const v = C.view;
+    visited.add(s.id);
+    v.tool = s.tool || 'select';
+    v.splitting = false; v.preview = null;
+    if (s.season) { v.season = s.season; }
+    if (s.overlay !== undefined) { v.overlay = true; }
+    if (s.study || s.system) v.overlay = false;
+    const overlayBox = $('dwg-overlay'); if (overlayBox) overlayBox.checked = v.overlay;
+    $('sheet-panel').hidden = !!s.study;
+    $('study-panel').hidden = !s.study;
+    $('learn-panel').hidden = !!s.study;
+    rail(); stepCard(); C.applyLayout(); C.draw(); learn(); strip();
+    if (s.study) { $('study-panel').innerHTML = '<p class="note">Running the sweeps...</p>'; setTimeout(() => Study.render($('study-panel')), 30); }
+  }
+  C.onChange(({ light } = {}) => { if (!light) Page.saveState(); });
+  C.onChange(({ light, bandOnly, selection, math } = {}) => {
+    if (math) { $('math-panel').open = true; $('math-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; }
+    if (bandOnly) { C.recordHistory(STEPS[index].id); strip(); learn(); return; }
+    C.applyLayout();
+    C.draw();
+    strip();
+    if (light) { if (STEPS[index].id !== 'system') learn(); return; }
+    const focus = document.activeElement && document.activeElement.id;
+    stepCard();
+    if (focus && $(focus)) $(focus).focus();
+    learn();
+    if (selection) return;
+    if ($('math-panel').open) drill.draw();
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.step !== undefined) { index = Number(b.dataset.step); enter(); }
+    if (b.dataset.nav) { C.recordHistory(STEPS[index].id); index = Math.max(0, Math.min(STEPS.length - 1, index + Number(b.dataset.nav))); enter(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (b.dataset.confirmStep !== undefined) { STEPS[index].els.forEach((id) => C.confirm(id)); C.update(); }
+  });
+  $('math-panel').addEventListener('toggle', () => { if ($('math-panel').open) drill.draw(); });
+  Page.onTheme = () => { C.draw(); strip(); if (STEPS[index].study) Study.render($('study-panel')); };
+  Page.bind(STEPS, () => index);
+  if (await Page.restore()) { index = 1; ['box', 'shape', 'shell', 'openings', 'air', 'rooms', 'system'].forEach((id) => visited.add(id)); }
+  C.computeBand(); C.recordHistory('box');
+  enter();
+  window.__build = { STEPS, go: (i) => { index = i; enter(); } };
+  document.getElementById('p-loading').classList.add('done');
+})();
+</script>
+<script src="/shared/url-state.js" defer></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  }
+</script>
 </body>
 </html>

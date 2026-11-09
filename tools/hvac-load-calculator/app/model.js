@@ -358,7 +358,15 @@
     return problems;
   }
 
+  /** Take a saved model, making sure new ids never collide with its ids. */
+  function adopt(saved) {
+    const ids = [...saved.levels.flatMap((l) => l.rooms.map((r) => r.id)), ...saved.openings.map((o) => o.id)];
+    ids.forEach((x) => { const n = Number(String(x).slice(1)); if (Number.isFinite(n)) nextId = Math.max(nextId, n + 1); });
+    return saved;
+  }
+
   const api = {
+    adopt,
     create, area, setStories, moveShell, scaleToArea, interiorWalls, moveWall, splitRoom, canRemoveWall, removeWall,
     addOpening, moveOpening, resizeOpening, removeOpening, confirmOpenings, autoOpenings, openingArea, glassArea,
     exposure, toEngineRooms, check, roomsOf, sideLength, MIN_ROOM, SNAP, snap,

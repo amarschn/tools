@@ -37,6 +37,7 @@
 
   let callPy = null;
   let engineInputs = new Set();
+  let docs = {};
   let presets = null;
   let stations = [];
   let zipTable = null;
@@ -128,7 +129,7 @@
   };
   async function locate(zip) {
     if (!zipTable) {
-      const text = await fetch('../data/zips.txt').then((r) => r.text());
+      const text = await fetch('data/zips.txt').then((r) => r.text());
       zipTable = new Map();
       text.split('\n').forEach((line) => { const [z, a, o] = line.split(' '); if (z) zipTable.set(z, [Number(a), Number(o)]); });
     }
@@ -390,7 +391,7 @@
   }
   async function start() {
     const py = await loadPyodide();
-    const [u, m] = await Promise.all([fetch('../../../pycalcs/utils.py').then((r) => r.text()), fetch('../../../pycalcs/hvac_loads.py').then((r) => r.text())]);
+    const [u, m] = await Promise.all([fetch('../../pycalcs/utils.py').then((r) => r.text()), fetch('../../pycalcs/hvac_loads.py').then((r) => r.text())]);
     py.FS.writeFile('utils.py', u); py.FS.writeFile('hvac_loads.py', m);
     py.runPython(`
 import json, hvac_loads
@@ -400,12 +401,19 @@ def _presets():
     return json.dumps(hvac_loads.get_presets())
 def _inputs():
     return json.dumps(sorted(hvac_loads.DEFAULTS))
+def _docs():
+    import utils
+    merged = {}
+    for name in ("bill_check", "evaluate_equipment", "calculate_hvac_loads"):
+        merged.update(utils.get_documentation("hvac_loads", name).get("parameters", {}))
+    return json.dumps(merged)
 `);
     const fn = py.globals.get('_call');
     callPy = (name, payload) => JSON.parse(fn(name, JSON.stringify(payload)));
     presets = JSON.parse(py.globals.get('_presets')());
     engineInputs = new Set(JSON.parse(py.globals.get('_inputs')()));
-    const climate = await fetch('../data/stations.json').then((r) => r.json());
+    docs = JSON.parse(py.globals.get('_docs')());
+    const climate = await fetch('data/stations.json').then((r) => r.json());
     stations = climate.stations; binWidth = climate.bin_width_f;
     await locate(state.zip);
     if (!window.Core) $('p-loading').classList.add('done');
@@ -415,6 +423,6 @@ def _inputs():
     call: (name, payload) => callPy(name, payload), inputs, get presets() { return presets; }, locate,
     state, fmt, esc, cssVar, COMPONENTS, SYSTEMS, TONS, nav, start, calc, equipment, sizes, buildLevels, buildSystem,
     updateConfidence, fitStrip, keyHtml, Drill, Tree, get station() { return station; }, get binWidth() { return binWidth; },
-    lastResult: null, onTheme: null,
+    lastResult: null, onTheme: null, get docs() { return docs; }, get stations() { return stations; },
   };
 })();
