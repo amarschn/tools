@@ -2,7 +2,7 @@
 // an overlap, or a room outside the shell. Needs no browser:
 //   node tests/browser/hvac-model.cjs
 const assert = require('assert');
-const M = require('../../tools/hvac-load-calculator/prototypes/v2/model.js');
+const M = require('../../tools/hvac-load-calculator/app/model.js');
 
 let seed = 12345;
 const rand = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };

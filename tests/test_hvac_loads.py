@@ -732,7 +732,7 @@ class TestPublishedGuideTables:
         assert "Manual J" in title
         assert "Manual J Alternative" in html[html.index("<h1"):html.index("</h1>")]
         assert "not ACCA-approved" in html
-        assert "Manual S" in html[html.index('class="tool-description"'):html.index("</main>")]
+        assert "Manual S" in html[html.index("tool-description"):html.index("</main>")]
 
 
 class TestDerivationTree:
