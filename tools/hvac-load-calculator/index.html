@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YG3SBRRZFZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YG3SBRRZFZ');
+    </script>
+
+    <title>Free Manual J Calculator Alternative — HVAC Load &amp; AC Sizing</title>
+    <meta name="description" content="Free online Manual J alternative: room-by-room HVAC load calculation, Manual S style AC and heat pump sizing, with every equation shown.">
+    <link rel="canonical" href="https://transparent.tools/tools/hvac-load-calculator/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Free Manual J Calculator Alternative — HVAC Load &amp; AC Sizing">
+    <meta property="og:description" content="Free online Manual J alternative: room-by-room HVAC load calculation, Manual S style AC and heat pump sizing, with every equation shown.">
+    <meta property="og:url" content="https://transparent.tools/tools/hvac-load-calculator/">
+    <meta property="og:image" content="https://transparent.tools/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Free Manual J Calculator Alternative — HVAC Load &amp; AC Sizing">
+    <meta name="twitter:description" content="Free online Manual J alternative: room-by-room HVAC load calculation, Manual S style AC and heat pump sizing, with every equation shown.">
+    <meta name="twitter:image" content="https://transparent.tools/og-image.png">
+    <script src="/shared/analytics-autotrack.js" defer></script>
+
+    <script>
+      // Apply the saved theme before first paint, so there is no flash of the wrong one.
+      (function () {
+        var choice = 'system';
+        try { choice = JSON.parse(localStorage.getItem('hvac-load-calculator-settings') || '{}').theme || 'system'; } catch (e) {}
+        var dark = choice === 'dark' || (choice === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
+    <script>window.MathJax = {tex: {inlineMath: [["\\(", "\\)"]]}, startup: {typeset: false}};</script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <link rel="stylesheet" href="app/base.css">
+    <link rel="stylesheet" href="app/drawing.css">
+    <link rel="stylesheet" href="app/app.css">
+    <script src="/shared/json-ld.js"></script>
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "What size AC do I need for a 2,000 sq ft house?", "acceptedAnswer": {"@type": "Answer", "text": "The same 2,000 ft² house needs about 2.1 tons in Chicago and 3.1 tons in Phoenix for typical 1980s and 1990s construction. Climate, windows, air leakage, and ducts matter more than floor area, so enter your own house for a real number."}}, {"@type": "Question", "name": "What size heat pump do I need?", "acceptedAnswer": {"@type": "Answer", "text": "In cold climates heating sets the size. Compare your heating load with the capacity the heat pump delivers at your winter design temperature, not its rated size, then check the balance point and the backup heat needed."}}, {"@type": "Question", "name": "What is a Manual J load calculation?", "acceptedAnswer": {"@type": "Answer", "text": "Manual J is ACCA's residential load calculation procedure. It estimates the heat a house loses in winter and gains in summer, for the whole house and each room. This tool does the same job using ASHRAE methods, not ACCA's tables, so its numbers will differ somewhat from Manual J software."}}, {"@type": "Question", "name": "What is Manual S, and how is it different from Manual J?", "acceptedAnswer": {"@type": "Answer", "text": "Manual J finds the load. Manual S picks equipment that meets it, by comparing the load with capacity at your actual design temperatures. This tool's Equipment tab does the same kind of check, with oversizing limits treated as advisory."}}, {"@type": "Question", "name": "Can this replace a Manual J report for a permit?", "acceptedAnswer": {"@type": "Answer", "text": "No. It is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report. Use it to understand your house or check a contractor's report."}}, {"@type": "Question", "name": "How many BTU per square foot do I need?", "acceptedAnswer": {"@type": "Answer", "text": "There is no single number. For the same 2,000 ft² house, cooling here ranges from about 10 Btu/h per ft² in Seattle to 19 in Phoenix, and heating from 6 in Miami to 34 in Minneapolis."}}]}</script>
+</head>
+<body>
+<div class="loading" id="p-loading" role="status">Loading the calculation engine...</div>
+<header class="site-nav">
+  <a class="brand" href="../../index.html">transparent<wbr>.tools</a>
+  <div class="nav-actions"><button type="button" class="nav-btn" id="settings-button" aria-haspopup="dialog">Tool Settings</button></div>
+</header>
+<div class="settings-overlay" id="settings-overlay" hidden></div>
+<aside class="settings" id="settings" role="dialog" aria-modal="true" aria-label="Tool settings" hidden>
+  <div class="settings-head"><h2>Tool Settings</h2><button type="button" class="btn" id="settings-close">Close</button></div>
+  <div class="setting"><div><strong>Theme</strong><div class="note">Light, dark, or follow the system.</div></div>
+    <div class="dwg-tabs" role="group" aria-label="Theme"><button type="button" data-theme-choice="light">Light</button><button type="button" data-theme-choice="dark">Dark</button><button type="button" data-theme-choice="system">Auto</button></div></div>
+  <button type="button" class="btn" id="settings-reset" style="width:100%;margin-top:16px">Reset to defaults</button>
+</aside>
+<div class="tool-inputs" hidden><input type="text" id="model_json" name="model_json" value="" aria-hidden="true" tabindex="-1"></div>
+<main class="wrap">
+  <h1 class="ptitle">HVAC Load Calculator: Free Manual J Alternative</h1>
+  <p class="plede tool-description">Find what size AC, furnace, or heat pump your house needs. Build the house step by step, from a plain box to rooms, and the estimate tightens as you go. It does the job of a Manual J load calculation and the equipment check of Manual S, with no account and every equation shown. It uses ASHRAE methods and is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report.</p>
+  <nav class="rail" id="rail" aria-label="Steps"></nav>
+  <div class="build">
+    <aside class="panel step-card" id="step"></aside>
+    <div class="main-col">
+      <section class="panel strip-panel"><div class="strip" id="strip"></div></section>
+      <div class="model-error" id="model-error" role="alert" hidden></div>
+      <section class="panel sheet-panel" id="sheet-panel"></section>
+      <section class="panel study-panel" id="study-panel" hidden></section>
+      <section class="panel learn-panel" id="learn-panel"><div id="fit-wide" hidden style="margin-bottom:14px"></div><div class="learn-grid"><div class="learn" id="learn"></div><div id="ladder"></div></div></section>
+      <details class="panel math-panel" id="math-panel"><summary style="cursor:pointer;font-weight:600;min-height:28px">Show the math</summary><div id="drill" style="margin-top:10px"></div></details>
+    </div>
+  </div>
+<section class="panel guide" aria-labelledby="guide-title">
+            <h2 id="guide-title">Manual J and HVAC sizing questions</h2>
+            <h3>What size AC do I need for a 2,000 sq ft house?</h3>
+            <p>It depends far more on climate and construction than on floor area. The same 2,000 ft² house needs 2.1 tons in Chicago and 3.1 tons in Phoenix. The table is one-story 1980s and 1990s construction with typical windows and attic ducts, calculated with this tool from each city's NOAA design weather. Build your own house above for your own number.</p><div class="table-scroll"><table class="data-table" id="guide-cooling"><caption class="table-caption">Cooling load in tons, then the smallest common unit that meets it</caption><thead><tr><th scope="col">City</th><th scope="col">1,000 ft²</th><th scope="col">1,500 ft²</th><th scope="col">2,000 ft²</th><th scope="col">2,500 ft²</th><th scope="col">3,000 ft²</th></tr></thead><tbody><tr><th scope="row">Minneapolis</th><td>1.2 (1.5 ton)</td><td>1.7 (2 ton)</td><td>2.1 (2.5 ton)</td><td>2.5 (2.5 ton)</td><td>2.9 (3 ton)</td></tr><tr><th scope="row">Chicago</th><td>1.3 (1.5 ton)</td><td>1.7 (2 ton)</td><td>2.1 (2.5 ton)</td><td>2.6 (3 ton)</td><td>3.0 (3 ton)</td></tr><tr><th scope="row">Seattle</th><td>1.0 (1.5 ton)</td><td>1.3 (1.5 ton)</td><td>1.6 (2 ton)</td><td>2.0 (2 ton)</td><td>2.3 (2.5 ton)</td></tr><tr><th scope="row">Atlanta</th><td>1.3 (1.5 ton)</td><td>1.8 (2 ton)</td><td>2.2 (2.5 ton)</td><td>2.7 (3 ton)</td><td>3.1 (3.5 ton)</td></tr><tr><th scope="row">Dallas</th><td>1.6 (2 ton)</td><td>2.2 (2.5 ton)</td><td>2.7 (3 ton)</td><td>3.3 (3.5 ton)</td><td>3.8 (5 ton)</td></tr><tr><th scope="row">Phoenix</th><td>1.9 (2.5 ton)</td><td>2.5 (3.5 ton)</td><td>3.1 (4 ton)</td><td>3.7 (5 ton)</td><td>4.4 (over 5 ton)</td></tr><tr><th scope="row">Miami</th><td>1.4 (1.5 ton)</td><td>1.9 (2 ton)</td><td>2.4 (2.5 ton)</td><td>2.9 (3 ton)</td><td>3.4 (3.5 ton)</td></tr></tbody></table></div><p>The unit size is often larger than the load because a rated ton delivers less on your design day, and sizes come in steps. A tight new home can need half as much as these figures, and an older leaky one can need more.</p>
+            <h3>What size heat pump do I need?</h3>
+            <p>In cold climates, heating sets the size. Start from the heating load below, then compare it with what the heat pump delivers at your winter design temperature, not its rated size. Most heat pumps lose capacity as it gets colder. The equipment step finds the balance point, the backup heat you need, and how much of the year's heat the compressor covers.</p><div class="table-scroll"><table class="data-table" id="guide-heating"><caption class="table-caption">Heating load in thousands of Btu/h</caption><thead><tr><th scope="col">City</th><th scope="col">1,000 ft²</th><th scope="col">1,500 ft²</th><th scope="col">2,000 ft²</th><th scope="col">2,500 ft²</th><th scope="col">3,000 ft²</th></tr></thead><tbody><tr><th scope="row">Minneapolis</th><td>42</td><td>55</td><td>68</td><td>80</td><td>92</td></tr><tr><th scope="row">Chicago</th><td>35</td><td>46</td><td>56</td><td>66</td><td>75</td></tr><tr><th scope="row">Seattle</th><td>20</td><td>27</td><td>33</td><td>38</td><td>44</td></tr><tr><th scope="row">Atlanta</th><td>21</td><td>27</td><td>33</td><td>39</td><td>45</td></tr><tr><th scope="row">Dallas</th><td>21</td><td>28</td><td>34</td><td>40</td><td>46</td></tr><tr><th scope="row">Phoenix</th><td>14</td><td>18</td><td>22</td><td>25</td><td>29</td></tr><tr><th scope="row">Miami</th><td>7</td><td>9</td><td>11</td><td>13</td><td>15</td></tr></tbody></table></div>
+            <h3>What is a Manual J load calculation?</h3>
+            <p>Manual J is the residential load calculation procedure from the Air Conditioning Contractors of America (ACCA). It estimates the heat a house loses in winter and gains in summer, for the whole house and each room, from its size, construction, windows, air leakage, ducts, and local climate. This tool does the same job using ASHRAE's published methods and physics, not ACCA's tables, so its numbers will differ somewhat from Manual J software.</p>
+            <h3>What is Manual S, and how is it different from Manual J?</h3>
+            <p>Manual J finds the load. Manual S picks equipment that meets it. A Manual S selection compares the load with the equipment's capacity at your actual design temperatures, then checks that it is neither too small nor oversized. The equipment step does this same kind of check for AC, heat pumps, and furnaces. Its oversizing limits are commonly cited values, not read from the current standard, so treat them as advisory.</p>
+            <h3>Can this replace a Manual J report for a permit?</h3>
+            <p>No. It is not ACCA-approved software, so it does not satisfy a permit that requires an approved Manual J report. Use it to understand your house, compare it with a contractor's report, or decide what to fix first. If you need a permit report, use approved software or hire a designer.</p>
+            <h3>How many BTU per square foot do I need?</h3>
+            <p>There is no single number, which is why the rule of thumb fails. For the same 2,000 ft² house above, cooling runs from 10 Btu/h per ft² in Seattle to 19 in Phoenix, and heating from 6 in Miami to 34 in Minneapolis. The old 500 ft² per ton rule would give every one of those houses 4 tons.</p>
+            <p class="group-note">Manual J and Manual S are trademarks of ACCA. This tool is not affiliated with or approved by ACCA.</p>
+        </section>
+  <details class="panel about" id="about"><summary>How this calculation works, and its limits</summary><div class="about-body">
+<div class="toc-card"><strong>Contents</strong><ol>
+<li><a href="#bg-what">What this calculates</a></li>
+<li><a href="#bg-manuals">Manual J, S, T, and D</a></li>
+<li><a href="#bg-heating">Heating equations</a></li>
+<li><a href="#bg-cooling">Cooling equations</a></li>
+<li><a href="#bg-weather">Where the weather comes from</a></li>
+<li><a href="#bg-range">Why the answer is a range</a></li>
+<li><a href="#bg-validation">How it compares with published results</a></li>
+<li><a href="#bg-limits">Limits</a></li>
+<li><a href="#bg-others">Other calculators</a></li>
+<li><a href="#bg-references">References</a></li>
+</ol></div>
+
+<div id="bg-what" class="bg-section"><h3>1. What this calculates</h3>
+<p>A load calculation answers one question: how much heat does this house lose on a cold design day, and how much must be removed on a hot one? Equipment should be chosen from that number, not from floor area or from the size of the old unit.</p>
+<p>Oversized cooling equipment is the common failure. It reaches the thermostat setting before it has run long enough to pull moisture out of the air, so the house feels clammy, and it wears faster from cycling. ASHRAE warns about this directly in its residential chapter.</p>
+<p>The results are design loads, in Btu/h. One ton of cooling is 12,000 Btu/h and one kilowatt is 3,412 Btu/h.</p>
+</div>
+
+<div id="bg-manuals" class="bg-section"><h3>2. Manual J, S, T, and D</h3>
+<p>These are design manuals from the Air Conditioning Contractors of America (ACCA), and they run in order. The letters are not a sequence.</p>
+<ul>
+<li><strong>Manual J:</strong> the heating and cooling load of the house and each room.</li>
+<li><strong>Manual S:</strong> choosing equipment that meets those loads at your design conditions.</li>
+<li><strong>Manual T:</strong> choosing and placing registers and grilles.</li>
+<li><strong>Manual D:</strong> sizing the duct system.</li>
+</ul>
+<p>This tool covers the first job and the core of the second. It answers the same question as Manual J from ASHRAE's published methods and first-principles physics. It does not use ACCA's tables, and its results will differ from Manual J software. Where a permit requires an ACCA-approved report, this page does not satisfy it. Use it to check a contractor's report, to understand your house, or to decide what to fix first.</p>
+<div class="callout-warning"><strong>Trademark note:</strong> Manual J, Manual S, Manual T, and Manual D are trademarks of ACCA. This tool is not affiliated with or approved by ACCA.</div>
+</div>
+
+<div id="bg-heating" class="bg-section"><h3>3. Heating equations</h3>
+<p>Heating uses the long-accepted worst case: the coldest design hour, with no credit for sun, people, or stored heat.</p>
+<div class="equation-card"><strong>Equation (1): opaque surfaces and windows</strong><span class="equation-expression">\( q = U A \Delta t \)</span>
+<ul><li>\(q\): heat flow, Btu/h</li><li>\(U\): U-factor, Btu/h·ft²·°F</li><li>\(A\): area, ft²</li><li>\(\Delta t\): indoor minus outdoor temperature, °F</li></ul></div>
+<div class="equation-card"><strong>Equation (2): slab edge</strong><span class="equation-expression">\( q = F_p P \Delta t \)</span>
+<ul><li>\(F_p\): heat-loss coefficient per foot of edge, Btu/h·ft·°F</li><li>\(P\): exposed perimeter, ft</li></ul></div>
+<div class="equation-card"><strong>Equation (3): below-grade walls</strong><span class="equation-expression">\( U_{avg} = \frac{2k}{\pi z} \ln\left(\frac{z + 2kR/\pi}{2kR/\pi}\right), \quad q = U_{avg} A (t_{in} - t_{gr}) \)</span>
+<ul><li>\(k\): soil conductivity, 0.8 Btu/h·ft·°F</li><li>\(z\): depth, ft</li><li>\(R\): wall and film resistance, ft²·h·°F/Btu</li><li>\(t_{gr}\): ground temperature, the annual mean less the seasonal amplitude, °F</li></ul></div>
+<div class="equation-card"><strong>Equation (4): air leakage</strong><span class="equation-expression">\( A_L = 0.055\,\frac{ACH_{50} V}{60}, \quad IDF = \frac{I_0 + H \Delta t\,I_1}{1000}, \quad Q_i = A_L \, IDF \)</span>
+<ul><li>\(A_L\): effective leakage area, in²</li><li>\(V\): house volume, ft³</li><li>\(H\): stack height, ft</li><li>\(IDF\): infiltration driving force, cfm/in². \(I_0 = 698\) and \(I_1 = 0.81\) for heating at 15 mph, 343 and 0.88 for cooling at 7.5 mph</li></ul></div>
+<div class="equation-card"><strong>Equation (5): air load</strong><span class="equation-expression">\( Q_{vi} = \max(Q_{unbal}, Q_i + 0.5 Q_{unbal}), \quad q = C_s (Q_{vi} + Q_{bal}(1-\varepsilon)) \Delta t \)</span>
+<ul><li>\(C_s\): 1.08 Btu/h·cfm·°F at sea level, reduced with altitude</li><li>\(Q_{unbal}\): exhaust-only or supply-only fan flow, cfm</li><li>\(Q_{bal}\): balanced fan flow, cfm</li><li>\(\varepsilon\): heat recovery effectiveness</li></ul></div>
+<div class="equation-card"><strong>Equation (6): ducts</strong><span class="equation-expression">\( q_d = F_{dl} \sum q \)</span>
+<ul><li>\(F_{dl}\): duct loss factor from ASHRAE Chapter 17 Table 6, interpolated for insulation and leakage, then adjusted to the actual temperatures. Supply leaks do not depend on the surroundings, return leaks follow the room-to-surroundings difference, and conduction follows the supply-air-to-surroundings difference</li></ul></div>
+</div>
+
+<div id="bg-cooling" class="bg-section"><h3>4. Cooling equations</h3>
+<p>Cooling is harder because heat arrives late. Sun that hits a west wall at 3 pm reaches the room hours later, and a room can coast for a while on the heat its walls and furniture absorb. ASHRAE says plainly that methods with a fixed thermostat setting produce unrealistically high residential loads. This tool solves a full 24-hour clear design day instead of using a table.</p>
+<div class="equation-card"><strong>Equation (7): outdoor temperature and sol-air temperature</strong><span class="equation-expression">\( T_o(h) = T_d - x(h)\,DR, \quad T_{sa} = T_o + \alpha E_t / h_o \)</span>
+<ul><li>\(T_d\): design dry bulb, °F</li><li>\(x(h)\): ASHRAE's share of the daily range at each hour</li><li>\(DR\): daily range, °F</li><li>\(\alpha\): surface absorptance</li><li>\(E_t\): clear-sky irradiance on that surface, Btu/h·ft²</li><li>\(h_o\): outside surface conductance, Btu/h·ft²·°F</li></ul></div>
+<div class="equation-card"><strong>Equation (8): conduction through the real wall layers</strong><span class="equation-expression">\( M_j = \begin{pmatrix} \cosh sL & \sinh(sL)/ks \\ ks\sinh sL & \cosh sL \end{pmatrix}, \quad s = \sqrt{i n \omega \rho c / k}, \quad Y_n = 1/\left(\prod_j M_j\right)_{12} \)</span>
+<ul><li>\(L, k, \rho, c\): thickness, conductivity, density, and specific heat of layer \(j\)</li><li>\(\omega\): daily angular frequency, \(2\pi/24\) per hour</li><li>\(Y_n\): the heat that reaches the room per degree of harmonic \(n\) of \(T_{sa}\)</li></ul>
+<p>This is the exact one-dimensional periodic solution, so brick and block get their real time lag. A test in the repository checks it against an independent finite-difference march.</p></div>
+<div class="equation-card"><strong>Equation (9): windows</strong><span class="equation-expression">\( q = A\left[U(T_o - T_i) + T_x\,IAC\,SHGC\left(E_D f_\theta (1 - F_{shd}) + 0.89 E_d\right)\right] \)</span>
+<ul><li>\(T_x\): insect screen transmission</li><li>\(IAC\): interior shade attenuation</li><li>\(E_D, E_d\): direct and diffuse irradiance</li><li>\(f_\theta\): loss of gain at steep sun angles</li><li>\(F_{shd}\): share of the window in the overhang's shadow that hour</li></ul></div>
+<div class="equation-card"><strong>Equation (10): attic heat balance</strong><span class="equation-expression">\( T_{attic} = \frac{U_r T_{sa} + C_s Q_v T_o + U_c T_i}{U_r + C_s Q_v + U_c} \)</span>
+<ul><li>\(U_r\): roof deck coupling per ft² of ceiling</li><li>\(Q_v\): attic ventilation per ft² of ceiling, cfm</li><li>\(U_c\): ceiling U-factor</li></ul></div>
+<div class="equation-card"><strong>Equation (11): room air and thermal mass</strong><span class="equation-expression">\( C_m \frac{d\theta_m}{dt} = G_{rad} - H(\theta_m - \theta_a), \quad 0 = G_{conv} + H(\theta_m - \theta_a) - UA\,\theta_a - Q \)</span>
+<ul><li>\(\theta_a, \theta_m\): air and mass temperature above the thermostat setting, °F</li><li>\(G_{rad}, G_{conv}\): radiant and convective shares of each gain, from ASHRAE Chapter 18 Table 14</li><li>\(C_m, H\): mass capacity and surface conductance</li><li>\(UA\): whole-house conductance</li><li>\(Q\): cooling delivered, capped at the capacity being tested</li></ul>
+<p>The solver finds the smallest steady capacity that keeps \(\theta_a\) within the allowed swing, 3 °F by default, which is the control assumption behind ASHRAE's residential method.</p></div>
+<div class="equation-card"><strong>Equation (12): latent load</strong><span class="equation-expression">\( q_l = C_l Q \Delta W + (68 + 0.07 A_{cf} + 41 N_{oc}) + q_{duct,l} \)</span>
+<ul><li>\(C_l\): 4,840 Btu/h·cfm at sea level</li><li>\(\Delta W\): outdoor minus indoor humidity ratio, lb/lb</li><li>\(A_{cf}\): conditioned floor area, ft²</li><li>\(N_{oc}\): occupants</li><li>\(q_{duct,l}\): humid air drawn in by return duct leaks</li></ul></div>
+<p>Each result line opens to show its equation with your numbers. Open Show the math under the drawing, or select any band on the section.</p>
+</div>
+
+<div id="bg-weather" class="bg-section"><h3>5. Where the weather comes from</h3>
+<p>Design conditions are computed from <a href="https://registry.opendata.aws/noaa-isd/" rel="noopener">NOAA ISD-Lite</a> hourly observations for 2011 through 2025, using ASHRAE's definitions: the 99% heating temperature is exceeded in 99% of the hours of the year, the 1% cooling temperature in 1% of them, and the wet bulb is the average during hours near that temperature. The data are public, and <code>scripts/build_hvac_climate.py</code> rebuilds every number. Because the record is recent, values can differ from older published tables. For Atlanta this method gives 91.9 °F, a 73.7 °F wet bulb, and a 16.5 °F daily range, against 91.5, 74, and 16.7 in ASHRAE's example, but its winter value is 28.9 °F against 26.5. Recent winters have been milder, so winter values usually run warmer than the numbers on older reports. Switch to the 99.6% basis under Change the design weather in the first step if that worries you.</p>
+<p>ZIP codes map to the nearest station using US Census ZIP centroids. Elevation is the station's. In mountains or near large water, check that the station resembles your site.</p>
+</div>
+
+<div id="bg-range" class="bg-section"><h3>6. Why the answer is a range</h3>
+<p>Each input you have not confirmed carries a plausible range. The tool reruns the whole calculation at both ends of each one, one at a time, and combines the effects as a root sum of squares. Entering a measured value narrows that input's range, so the band shrinks as you learn more. The ranking shows what to measure next.</p>
+<p>The ranges are judgment, not statistics. They show which inputs matter, not a guaranteed confidence interval.</p>
+</div>
+
+<div id="bg-validation" class="bg-section"><h3>7. How it compares with published results</h3>
+<p>Both houses below were entered from their published inputs. Sensible cooling is shown because the two sources treat duct moisture differently. Values are in Btu/h.</p>
+<div class="table-scroll"><table class="data-table"><thead><tr><th scope="col">House</th><th scope="col">Heating, published</th><th scope="col">Heating, this tool</th><th scope="col">Difference</th><th scope="col">Sensible cooling, published</th><th scope="col">Sensible cooling, this tool</th><th scope="col">Difference</th></tr></thead><tbody><tr><th scope="row">Atlanta, GA<div class="cell-note">ASHRAE Fundamentals Ch. 17 example. Used once to set thermal mass.</div></th><td>27,301</td><td>26,960</td><td>-1%</td><td>14,453</td><td>14,030</td><td>-3%</td></tr><tr><th scope="row">Sacramento, CA<div class="cell-note">EnergyGauge Manual J 8 sample report. Independent check.</div></th><td>30,850</td><td>31,971</td><td>+4%</td><td>21,863</td><td>20,358</td><td>-7%</td></tr></tbody></table></div>
+<p>Atlanta sets one number: the thermal mass was chosen so the room load before ducts matches ASHRAE's example. Heating was not tuned. Sacramento was never used for tuning. The Manual J report's cooling is higher mainly because it gives no credit for the slab's heat sink and carries larger ceiling, air leakage, and internal gain lines, while this tool's wall line is higher. Duct gains nearly match. ASHRAE's example prints a total latent load of 2,565 Btu/h, while its own stated terms (3,122 and 378) add to 3,500, so the test suite uses the terms.</p>
+<div class="callout-warning"><strong>What this does not show:</strong> two houses are not a field validation. We have not compared this tool against measured peak loads in real houses. The fuel bill check in the last step is the way to test it against your own.</div>
+</div>
+
+<div id="bg-limits" class="bg-section"><h3>8. Limits</h3>
+<ul>
+<li><strong>Not ACCA-approved.</strong> Do not submit it where a permit requires approved Manual J software.</li>
+<li><strong>Clear-sky July by default.</strong> Houses with large south-facing glass in mild climates can peak in fall. This version checks July sun only, so treat those houses with care.</li>
+<li><strong>Low-rise detached houses.</strong> ASHRAE warns that simple infiltration models do not apply to most apartments.</li>
+<li><strong>One thermal zone for the swing.</strong> Rooms share a thermostat here. Zoned systems need separate checks.</li>
+<li><strong>Equipment limits are advisory.</strong> ACCA sets a 90% lower limit and upper limits by compressor type. The upper values shown are commonly cited rather than read from the current Manual S, so check its Section N2 before relying on them.</li>
+<li><strong>Generic heat pump curves.</strong> Replace the starting point with your unit's published capacities.</li>
+<li><strong>Whole-house geometry is a rectangle</strong> until you enter rooms.</li>
+<li><strong>Your contractor still owns the design.</strong> A wrong input can be an expensive mistake, so review results with someone qualified before buying.</li>
+</ul>
+</div>
+
+<div id="bg-others" class="bg-section"><h3>9. Other calculators</h3>
+<p>From each product's own website as of November 2026. Check them for current details.</p>
+<div class="table-scroll"><table class="data-table"><thead><tr><th scope="col"></th><th scope="col">This tool</th><th scope="col"><a href="https://www.loadcalc.net/" rel="noopener">LoadCalc</a></th><th scope="col"><a href="https://www.coolcalc.com/" rel="noopener">Cool Calc</a></th></tr></thead><tbody>
+<tr><th scope="row">Cost to see results</th><td>Free, no account</td><td>Free, no account</td><td>$45 per project or $50 per month, with an account</td></tr>
+<tr><th scope="row">Room by room</th><td>Yes</td><td>Whole house only</td><td>Yes</td></tr>
+<tr><th scope="row">ACCA recognition</th><td>No</td><td>No, it states it is unaccredited</td><td>Recognized by ACCA in 2015</td></tr>
+<tr><th scope="row">Accepted for permits</th><td>No</td><td>Check locally</td><td>Where ACCA-recognized software is accepted</td></tr>
+<tr><th scope="row">Geometry entry</th><td>A drawn plan with walls you drag</td><td>Numbers</td><td>Satellite trace, floor plan upload, LiDAR, sketching</td></tr>
+<tr><th scope="row">Duct design</th><td>Not yet</td><td>No</td><td>Yes</td></tr>
+</tbody></table></div>
+<p>If you need a permit report or a duct design today, a paid ACCA-recognized tool is the right choice.</p>
+</div>
+
+<div id="bg-references" class="bg-section"><h3>10. References</h3>
+<ol>
+<li>ASHRAE Handbook, Fundamentals, Chapter 17: <a href="https://handbook.ashrae.org/Handbooks/F17/IP/f17_ch17/f17_ch17_ip.aspx" rel="noopener">Residential Cooling and Heating Load Calculations</a>. Infiltration, duct factors, internal gains, and the Atlanta example.</li>
+<li>ASHRAE Handbook, Fundamentals, Chapters 1, 14, 15, and 18: moist air, climate and solar geometry, fenestration, ground heat loss, and radiant fractions.</li>
+<li>Barnaby, C.S., and J.D. Spitler. 2005. Development of the residential load factor method. ASHRAE Transactions 111(1).</li>
+<li>Barnaby, Spitler, and Xiao. 2005. The residential heat balance method. ASHRAE Transactions 111(1).</li>
+<li>Carslaw, H.S., and J.C. Jaeger. Conduction of Heat in Solids. Periodic conduction in layered solids.</li>
+<li>Hyland, R.W., and A. Wexler. 1983. Formulations for the thermodynamic properties of moist air. ASHRAE Transactions 89(2).</li>
+<li>Latta, J.K., and G.G. Boileau. 1969. Heat losses from house basements. Canadian Building 19(10).</li>
+<li><a href="https://www.cheers.org/wp-content/uploads/2023/12/Kwik-Model-Loads-sample-report.pdf" rel="noopener">Kwik Model sample report</a> (EnergyGauge, Manual J 8th edition), the Sacramento benchmark.</li>
+<li>ACCA: <a href="https://www.acca.org/standards/manual-s" rel="noopener">Manual S</a> and <a href="https://www.acca.org/manuals" rel="noopener">technical manuals</a>.</li>
+<li>NOAA NCEI: Integrated Surface Database, ISD-Lite. US Census Bureau: ZCTA gazetteer files.</li>
+</ol>
+</div>
+</div></details>
+</main>
+<footer class="site-foot">transparent.tools · <a href="https://ko-fi.com/transparent_tools" target="_blank" rel="noopener">Support on Ko-fi</a></footer>
+
+<script src="app/engine.js"></script>
+<script src="app/model.js"></script>
+<script src="app/drawing.js"></script>
+<script src="app/core.js"></script>
+<script src="app/shared-ui.js"></script>
+<script src="app/study.js"></script>
+<script src="app/page.js"></script>
+<script>
+(async function () {
+  const P = Proto; const C = Core; const M = HouseModel; const U = SharedUI;
+  const $ = (id) => document.getElementById(id);
+  const fmt = C.fmt; const esc = C.esc;
+  Page.start();
+  const STEPS = [
+    { id: 'box', title: 'A box', head: 'Start with a box', lede: 'Two answers are enough for a first estimate. The house is a plain box, and everything about it is assumed.', els: [], tool: 'select', custom: true },
+    { id: 'shape', title: 'Shape', head: 'Give it a shape and an age', lede: 'Drag the outside walls on the plan, or type the size. Then say when it was built, the single most useful answer so far.', els: ['shape'], tool: 'shell' },
+    { id: 'shell', title: 'Insulation', head: 'What are the surfaces made of?', lede: 'Each surface now has a real resistance to heat flow. Layers on the section follow what you choose.', els: ['walls', 'ceiling', 'floor'], tool: 'select' },
+    { id: 'openings', title: 'Windows', head: 'Place the windows and doors', lede: 'Dashed windows are a guess. Add your own on the plan, and the guesses are replaced by what you draw.', els: ['openings'], tool: 'openings', season: 'summer' },
+    { id: 'air', title: 'Air and ducts', head: 'Where does the air go?', lede: 'These are the largest unknowns in most houses, and neither is visible by looking.', els: ['air', 'ducts'], tool: 'select' },
+    { id: 'rooms', title: 'Rooms', head: 'Divide it into rooms', lede: 'So far the house is one space. Rooms tell you how much air each one needs, and rooms peak at different hours.', els: ['rooms'], tool: 'rooms', overlay: true },
+    { id: 'system', title: 'Equipment', head: 'What are you sizing?', lede: 'Choose what will heat and cool the house, then test a size against the load.', els: [], tool: 'select', system: true },
+    { id: 'study', title: 'Stress test', head: 'Test what you are unsure about', lede: 'You have a complete model. Now ask how wrong it could be, whether your equipment choice survives, and whether a fuel bill agrees.', els: [], study: true },
+  ];
+  await C.start();
+  let index = 0;
+  const visited = new Set(['box']);
+  $('sheet-panel').innerHTML = C.sheetHtml();
+  C.bindDrawing();
+  C.bindInspector($('step'));
+  const drill = P.Drill($('drill'));
+  C.drillPanel = drill;
+  let drawSystem = null;
+  Study.bind($('study-panel'));
+
+  const stepLabel = (i) => STEPS[i] ? STEPS[i].title : '';
+  function rail() {
+    $('rail').innerHTML = STEPS.map((s, i) => `<button type="button" data-step="${i}" class="${i === index ? 'on' : ''} ${visited.has(s.id) && i !== index ? 'done' : ''}"><span class="n">${i + 1}</span>${esc(s.title)}</button>`).join('');
+  }
+  function stepCard() {
+    const s = STEPS[index];
+    const tagged = (id) => {
+      const on = C.confirmed.has(id);
+      return `<div class="el-head"><h4>${esc(C.ELEMENTS[id].title)}</h4><span class="tag ${on ? 'solid' : ''}">${on ? 'Confirmed' : 'Assumed'}</span></div>${C.elementHtml(id)}`;
+    };
+    let body = '';
+    if (s.custom) {
+      body = C.elementHtml('site') + C.field('area', 'About how big is it?', Math.round(M.area(C.model)), { unit: 'ft²', help: 'Conditioned floor area. A rough number is fine for now.' });
+    } else if (s.system) {
+      body = '<div id="system"></div>';
+    } else if (s.study) {
+      body = '<p class="note">Each chart runs the whole calculation again. Nothing is estimated from the base case.</p>' + Page.billHtml() + Page.exportHtml();
+    } else {
+      body = s.els.map(tagged).join('');
+    }
+    const hasAssumed = s.els.some((id) => !C.confirmed.has(id));
+    const next = STEPS[index + 1];
+    $('step').innerHTML = `<div class="note" style="margin-bottom:3px">Step ${index + 1} of ${STEPS.length}</div><h2>${esc(s.head)}</h2><p class="lede">${esc(s.lede)}</p>${body}
+      <div class="stepnav">${index > 0 ? '<button type="button" class="btn" data-nav="-1">Back</button>' : ''}
+      ${hasAssumed ? '<button type="button" class="btn" data-confirm-step>These are right</button>' : ''}
+      ${next ? `<button type="button" class="btn primary" data-nav="1">${hasAssumed ? 'Keep assumptions, next' : 'Next'}: ${esc(next.title)}</button>` : ''}</div>`;
+    if (s.system) {
+      drawSystem = P.buildSystem($('system'), () => { C.confirm('system'); C.update(); });
+      drawSystem(C.result);
+    }
+  }
+  const surfaceTable = (r) => {
+    const inp = P.inputs(); const dt = r.heating.delta_t;
+    const rows = [['Window', inp.window_u], ['Door', 0.4], ['Wall', inp.wall_u], ['Ceiling', inp.ceiling_u]].map(([n, u]) => [n, u * dt]);
+    const max = Math.max(...rows.map((x) => x[1]));
+    return `<table class="flux"><tbody>${rows.map(([n, q]) => `<tr><td>${n}</td><td style="width:55%"><div class="bar" style="width:${q / max * 100}%"></div></td><td class="n">${fmt(q, 1)} Btu/h per ft²</td></tr>`).join('')}</tbody></table>`;
+  };
+  const OWNER = { ach50: 'Air and ducts', duct_leakage_pct: 'Air and ducts', duct_r: 'Air and ducts', wall_u: 'Insulation', ceiling_u: 'Insulation', window_u: 'Windows', window_shgc: 'Windows', window_pct_of_floor: 'Windows', occupants: 'Rooms', heating_design_f: 'A box', cooling_design_f: 'A box' };
+  function nextUp() {
+    const b = C.band; const s = STEPS[index];
+    if (!C.eraConfirmed) return s.id === 'shape' ? '' : `<div class="nextup"><strong>Worth doing next:</strong> say when the house was built. It is the biggest single reason the range is so wide.</div>`;
+    if (!b || !b.terms) return '';
+    const open = b.terms.filter((t) => !t.known).slice(0, 1)[0];
+    if (!open) return '<div class="nextup">Every major input is confirmed.</div>';
+    const swing = Math.max(open.heat_high - open.heat_low, open.cool_high - open.cool_low);
+    const where = OWNER[open.key];
+    return `<div class="nextup"><strong>Biggest open question:</strong> ${esc(open.label.toLowerCase())}, which could move the answer by ${fmt(swing)} Btu/h.${where && where !== s.title ? ` You can settle it in ${esc(where)}.` : ''}</div>`;
+  }
+  function learn() {
+    const r = C.result; const m = C.model; const s = STEPS[index]; if (!r) return;
+    const h = r.heating.components; const c = r.cooling.components; const dt = r.heating.delta_t;
+    let html = '';
+    const pct = (a, b) => Math.round(100 * a / Math.max(b, 1));
+    if (s.id === 'box') {
+      const b = C.band;
+      html = `<p><strong>Every load calculation starts from one idea.</strong> Heat flow is how leaky the shell is, times the temperature difference across it.</p>
+        <div class="formula">q = UA × Δt = ${fmt(r.heat_loss_coefficient)} × ${fmt(dt, 1)} = ${fmt(r.heating_total)} Btu/h</div>
+        <p>Your weather sets Δt: ${fmt(r.design.indoor_heating_f)} °F inside, ${fmt(r.design.heating_f)} °F outside. UA is the unknown, and that is why ${b ? `this could be anywhere from ${fmt(b.heating_low, 0)} to ${fmt(b.heating_high, 0)} Btu/h` : 'the range is wide'}: the same box can be a drafty 1940s house or a tight new one.</p>`;
+    } else if (s.id === 'shape') {
+      const wall = 2 * (m.w + m.d) * m.height * m.stories; const roof = m.w * m.d;
+      html = `<p><strong>Shape decides how much surface there is to lose heat through.</strong> This house has ${fmt(wall)} ft² of wall and ${fmt(roof)} ft² of ceiling.</p>
+        <div class="formula">Perimeter ${fmt(2 * (m.w + m.d))} ft × ${fmt(m.height)} ft × ${m.stories} ${m.stories === 1 ? 'story' : 'stories'} = ${fmt(wall)} ft² of wall</div>
+        <p>A long, thin house has more wall than a square one of the same floor area. Try dragging a wall and watch the heating number.</p>`;
+    } else if (s.id === 'shell') {
+      const worst = ['walls', 'windows', 'ceiling', 'floor'].sort((a, b) => h[b] - h[a])[0];
+      html = `<p><strong>One square foot of each surface does not lose the same heat.</strong> On your design hour, with Δt of ${fmt(dt, 1)} °F:</p>${surfaceTable(r)}
+        <p style="margin-top:7px">Added up over their areas, <strong>${{ walls: 'walls', windows: 'windows', ceiling: 'the ceiling', floor: 'the floor' }[worst]}</strong> lose the most: ${fmt(h[worst])} Btu/h, ${pct(h[worst], r.heating_total)}% of the total.</p>`;
+    } else if (s.id === 'openings') {
+      const glass = M.glassArea(m); const wall = 2 * (m.w + m.d) * m.height * m.stories;
+      html = `<p><strong>Windows punch above their area, especially in summer.</strong> They are ${pct(glass, wall)}% of your wall area, ${pct(h.windows, r.heating_total)}% of heating, and ${pct(c.windows, r.cooling_sensible)}% of sensible cooling.</p>
+        <div class="formula">${fmt(glass)} ft² of glass, ${fmt(h.windows)} Btu/h winter, ${fmt(c.windows)} Btu/h at the summer peak</div>
+        <p>Use the summer hour slider to watch the load move through the day. West glass peaks late. Then rotate the house and see if it matters here.</p>`;
+    } else if (s.id === 'air') {
+      html = `<p><strong>Air carries heat straight past your insulation.</strong> Leakage is ${pct(h.infiltration, r.heating_total)}% of heating and ducts are ${pct(h.ducts, r.heating_total)}%.</p>
+        <div class="formula">${fmt(r.heating.air.combined)} cfm leaking × ${fmt(1.08, 2)} × ${fmt(dt, 1)} °F = ${fmt(h.infiltration)} Btu/h</div>
+        <p>${P.SYSTEMS[P.state.system].ducted ? `Ducts add ${fmt(h.ducts)} Btu/h in winter and ${fmt(c.ducts)} Btu/h in summer. Change where they run and watch them move on the section.` : 'This system has no ducts, so nothing is lost on the way to the rooms.'}</p>`;
+    } else if (s.id === 'rooms') {
+      const rooms = r.rooms; if (rooms.length > 1) {
+        const hours = rooms.map((x) => x.peak_hour); const big = rooms.slice().sort((a, b) => b.heating / b.area - a.heating / a.area)[0];
+        const sum = rooms.reduce((a, x) => a + x.cooling, 0);
+        html = `<p><strong>Rooms peak at different times.</strong> Yours peak between solar hour ${Math.min(...hours)} and ${Math.max(...hours)}. Added up, room peaks come to ${fmt(sum)} Btu/h, but the whole house only needs ${fmt(r.cooling_sensible)} Btu/h of sensible cooling at once.</p>
+          <p><strong>${esc(big.name)}</strong> needs the most heat per square foot: ${fmt(big.heating / big.area, 1)} Btu/h per ft². It gets ${fmt(big.heating_cfm)} cfm of supply air.</p>
+          <p>Size the equipment from the whole-house load, and size each room's air from its own.</p>`;
+      } else html = `<p><strong>One big space hides the differences.</strong> Add a wall, or start from a typical layout, then turn on "Rooms by load" above the drawing to see which rooms work hardest.</p>`;
+    } else if (s.id === 'system') {
+      const sys = P.SYSTEMS[P.state.system]; const sizes = P.sizes(r); const eq = C.eq;
+      html = `<p style="margin-top:0"><strong>A rated size is not what you get.</strong> ${sys.hp ? 'A heat pump' : 'An AC'} rated ${sizes.tons} ton (${fmt(sizes.tons * 12000)} Btu/h) delivers about ${fmt(eq.cooling_capacity_total)} Btu/h on your design day.${sys.hp ? ` At ${fmt(r.design.heating_f)} °F it makes about ${fmt(eq.hp_capacity_at_design)} Btu/h of heat, so its balance point is ${eq.balance_point_f === null ? 'below the range' : fmt(eq.balance_point_f) + ' °F'}.` : ''}</p>`;
+    }
+    $('learn').innerHTML = html + nextUp();
+    // The equipment step puts the fit chart across the whole panel.
+    const wide = $('fit-wide');
+    if (s.id === 'system') { wide.hidden = false; wide.innerHTML = `<h3>Does it fit?</h3>${U.fitChart()}<p class="note" style="margin:4px 0 0">The shaded bar is the range on the load. The dashed box is the size range that fits it. The marker is what this equipment delivers on your design day, not its rated size.</p>`; } else wide.hidden = true;
+    $('ladder').innerHTML = `<h3>How the estimate has tightened</h3>${U.ladder(STEPS.slice(0, -1).map((x) => x.id))}`;
+  }
+  function strip() { $('strip').innerHTML = U.readouts(); }
+  function enter() {
+    const s = STEPS[index]; const v = C.view;
+    visited.add(s.id);
+    v.tool = s.tool || 'select';
+    v.splitting = false; v.preview = null;
+    if (s.season) { v.season = s.season; }
+    if (s.overlay !== undefined) { v.overlay = true; }
+    if (s.study || s.system) v.overlay = false;
+    const overlayBox = $('dwg-overlay'); if (overlayBox) overlayBox.checked = v.overlay;
+    $('sheet-panel').hidden = !!s.study;
+    $('study-panel').hidden = !s.study;
+    $('learn-panel').hidden = !!s.study;
+    rail(); stepCard(); C.applyLayout(); C.draw(); learn(); strip();
+    if (s.study) { $('study-panel').innerHTML = '<p class="note">Running the sweeps...</p>'; setTimeout(() => Study.render($('study-panel')), 30); }
+  }
+  C.onChange(({ light } = {}) => { if (!light) Page.saveState(); });
+  C.onChange(({ light, bandOnly, selection, math } = {}) => {
+    if (math) { $('math-panel').open = true; $('math-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; }
+    if (bandOnly) { C.recordHistory(STEPS[index].id); strip(); learn(); return; }
+    C.applyLayout();
+    C.draw();
+    strip();
+    if (light) { if (STEPS[index].id !== 'system') learn(); return; }
+    const focus = document.activeElement && document.activeElement.id;
+    stepCard();
+    if (focus && $(focus)) $(focus).focus();
+    learn();
+    if (selection) return;
+    if ($('math-panel').open) drill.draw();
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.step !== undefined) { index = Number(b.dataset.step); enter(); }
+    if (b.dataset.nav) { C.recordHistory(STEPS[index].id); index = Math.max(0, Math.min(STEPS.length - 1, index + Number(b.dataset.nav))); enter(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (b.dataset.confirmStep !== undefined) { STEPS[index].els.forEach((id) => C.confirm(id)); C.update(); }
+  });
+  $('math-panel').addEventListener('toggle', () => { if ($('math-panel').open) drill.draw(); });
+  Page.onTheme = () => { C.draw(); strip(); if (STEPS[index].study) Study.render($('study-panel')); };
+  Page.bind(STEPS, () => index);
+  if (await Page.restore()) { index = 1; ['box', 'shape', 'shell', 'openings', 'air', 'rooms', 'system'].forEach((id) => visited.add(id)); }
+  C.computeBand(); C.recordHistory('box');
+  enter();
+  window.__build = { STEPS, go: (i) => { index = i; enter(); } };
+  document.getElementById('p-loading').classList.add('done');
+})();
+</script>
+<script src="/shared/url-state.js" defer></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  }
+</script>
+</body>
+</html>
