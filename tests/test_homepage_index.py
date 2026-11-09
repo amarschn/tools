@@ -76,7 +76,7 @@ def test_homepage_has_production_head_and_relative_assets() -> None:
 
 def test_service_worker_refreshes_homepage_resources() -> None:
     source = (REPO / "service-worker.js").read_text()
-    assert "tt-cache-v3" in source
+    assert "tt-cache-v4" in source
     assert "key.startsWith('tt-cache-')" in source
     assert "request.mode === 'navigate'" in source
     assert "if (isHomepageData(url))" in source

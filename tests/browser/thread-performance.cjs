@@ -95,7 +95,7 @@ for (const path of ['catalog.json', 'data/homepage-tool-meta.json', 'pycalcs/flu
         const legacy = readFileSync('tools/thread-visualizer-sizer/thread-specification.js', 'utf8')
             .replace("['specify', 'load', 'find'].includes(next)", "['specify', 'load', 'explore'].includes(next)");
         await page.evaluate(async ({ url, legacy }) => {
-            const cache = await caches.open('tt-cache-v3');
+            const cache = await caches.open('tt-cache-v4');
             await cache.put(new URL('thread-specification.js', url), new Response(legacy, { headers: { 'Content-Type': 'application/javascript' } }));
         }, { url, legacy });
         const cachedState = await page.evaluate(async (url) => ({
@@ -115,7 +115,7 @@ for (const path of ['catalog.json', 'data/homepage-tool-meta.json', 'pycalcs/flu
         })), { section: 'find', selected: 'true', hidden: false });
         console.log('Find works with the incompatible unversioned controller still cached.');
         await page.evaluate(async (url) => {
-            const cache = await caches.open('tt-cache-v3');
+            const cache = await caches.open('tt-cache-v4');
             await cache.delete(new URL('thread-specification.js', url));
         }, url);
         // Delay revalidation, not cached responses, to model a weak connection
