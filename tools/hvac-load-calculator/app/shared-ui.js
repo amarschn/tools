@@ -11,7 +11,7 @@
       const left = (x) => `${(x / hi * 100).toFixed(1)}%`;
       return `<div class="read"><div class="k">${label}</div><div class="v">${fmt(Math.round(value / 100) * 100)}<small>Btu/h</small></div><div class="span" role="img" aria-label="Range ${fmt(low)} to ${fmt(high)} Btu/h"><b style="left:${left(low)};width:${((high - low) / hi * 100).toFixed(1)}%"></b><i style="left:${left(value)}"></i></div><div class="sub">Could be ${fmt(Math.round(low / 100) * 100)} to ${fmt(Math.round(high / 100) * 100)}${sub ? `. ${sub}` : ''}</div></div>`;
     };
-    const lo = (k, v) => (b ? b[k] : v); 
+    const lo = (k, v) => (b ? b[k] : v);
     const done = Object.keys(c.ELEMENTS).filter((id) => c.confirmed.has(id)).length;
     return row('Heating load', r.heating_total, lo('heating_low', r.heating_total), lo('heating_high', r.heating_total), `${fmt(r.heating_total / 3412.14, 1)} kW`)
       + row('Cooling load', r.cooling_total, lo('cooling_low', r.cooling_total), lo('cooling_high', r.cooling_total), `${fmt(r.cooling_tons, 1)} tons`)
